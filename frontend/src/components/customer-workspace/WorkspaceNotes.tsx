@@ -36,7 +36,7 @@ export function WorkspaceNotes({ customerId }: { customerId: string }) {
     <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={sticky} disabled={add.isPending} onChange={e => setSticky(e.target.checked)} />{tCode("workspace.pin_note")}</label>
     {invalid && <p role="alert" className="text-sm text-destructive">{tCode("workspace.note_invalid")}</p>}
     {add.isError && <p role="alert" className="text-sm text-destructive">{tCode("workspace.note_error")}</p>}
-    {saved && <p role="status" className="text-sm text-muted-foreground">{tCode("workspace.note_saved")}</p>}
+    {saved && <output className="block text-sm text-muted-foreground">{tCode("workspace.note_saved")}</output>}
     <Button type="submit" className="justify-self-start" disabled={add.isPending}>{tCode(add.isPending ? "workspace.saving" : "workspace.save_note")}</Button>
   </form></CardContent></Card>;
 }

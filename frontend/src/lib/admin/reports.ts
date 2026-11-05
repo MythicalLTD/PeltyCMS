@@ -13,14 +13,15 @@ export function monthsBetween(from: string, to: string): string[] {
   return out;
 }
 
+const utcMonthKey = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+
 /** The last `n` months ending with the month of `now` (UTC). */
 export function lastMonths(n: number, now = new Date()): { from: string; to: string } {
-  const f = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-  return { from: f(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (n - 1), 1))), to: f(now) };
+  return { from: utcMonthKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (n - 1), 1))), to: utcMonthKey(now) };
 }
 
 export function currenciesOf(r: Report): string[] {
-  return [...new Set([...r.revenue, ...r.refunds, ...r.mrr].map((p) => p.currency))].sort();
+  return [...new Set([...r.revenue, ...r.refunds, ...r.mrr].map((p) => p.currency))].toSorted();
 }
 
 /** Zero-filled series for one currency (amounts as numbers for charting only). */

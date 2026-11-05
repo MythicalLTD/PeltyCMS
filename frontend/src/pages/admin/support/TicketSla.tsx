@@ -96,7 +96,7 @@ export function SlaPoliciesCard() {
   const { data, isLoading } = useQuery({ queryKey: POLICIES, queryFn: () => api<{ items: SlaPolicy[] }>("/admin/ticket-sla/policies") });
   const del = useMutation({ mutationFn: (id: string) => api(`/admin/ticket-sla/policies/${id}`, { method: "DELETE" }), onSuccess: () => void qc.invalidateQueries({ queryKey: POLICIES }) });
   const dep = (id: string | null) => (id ? deps.find((x) => x.id === id)?.name ?? "-" : t("support.all_departments"));
-  const rows = [...(data?.items ?? [])].sort((a, b) => slaSpecificity(b) - slaSpecificity(a) || dep(a.department_id).localeCompare(dep(b.department_id)));
+  const rows = (data?.items ?? []).toSorted((a, b) => slaSpecificity(b) - slaSpecificity(a) || dep(a.department_id).localeCompare(dep(b.department_id)));
   const escalation = (p: SlaPolicy) => [
     p.escalate_priority && tCode(`tickets.priority.${p.escalate_priority}`),
     p.escalate_to && (staff.find((u) => u.id === p.escalate_to)?.display_name || t("tickets.assignee")),

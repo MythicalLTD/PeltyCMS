@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckIcon, ProhibitIcon, ShieldWarningIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -89,13 +89,16 @@ export function AdminFraudPage() {
   const [note, setNote] = useState("");
   const [approveOrder, setApproveOrder] = useState(false);
   const [decideErr, setDecideErr] = useState<string | null>(null);
-  useEffect(() => {
-    if (!settings.data) return;
-    setF(settings.data);
-    setCountries(settings.data.blocked_countries.join(", "));
-    setDomains(settings.data.disposable_domains.join("\n"));
-    setRanges(settings.data.vpn_ranges.join("\n"));
-  }, [settings.data]);
+  const [seenSettings, setSeenSettings] = useState(settings.data);
+  if (settings.data !== seenSettings) {
+    setSeenSettings(settings.data);
+    if (settings.data) {
+      setF(settings.data);
+      setCountries(settings.data.blocked_countries.join(", "));
+      setDomains(settings.data.disposable_domains.join("\n"));
+      setRanges(settings.data.vpn_ranges.join("\n"));
+    }
+  }
   const save = useMutation({
     mutationFn: (s: FraudSettings) => api<FraudSettings>("/admin/settings/fraud", { method: "PUT", body: s }),
     onSuccess: () => { setErr(null); toast.success(t("fraud.saved")); void qc.invalidateQueries({ queryKey: ["admin", "fraud-settings"] }); },

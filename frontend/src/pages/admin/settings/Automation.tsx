@@ -200,8 +200,12 @@ export function HousekeepingCard() {
   const { t, tCode } = useI18n();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["admin", "housekeeping"], queryFn: () => api<Housekeeping>("/admin/settings/housekeeping") });
-  const [v, setV] = useState<Housekeeping | null>(null);
-  useEffect(() => { if (q.data) setV(q.data); }, [q.data]);
+  const [v, setV] = useState<Housekeeping | null>(q.data ?? null);
+  const [seen, setSeen] = useState(q.data);
+  if (q.data !== seen) {
+    setSeen(q.data);
+    if (q.data !== undefined) setV(q.data);
+  }
   const save = useMutation({
     mutationFn: (b: Housekeeping) => api<Housekeeping>("/admin/settings/housekeeping", { method: "PUT", body: b }),
     onSuccess: (d) => { qc.setQueryData(["admin", "housekeeping"], d); toast.success(t("common.saved")); },
@@ -246,9 +250,14 @@ export function InactiveClientsCard() {
   const { t, tCode, lang } = useI18n();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["admin", "settings", "inactive"], queryFn: () => api<Inactive>("/admin/settings/inactive-clients") });
-  const [v, setV] = useState<Inactive | null>(null);
+  const norm = (d: Inactive): Inactive => ({ ...d, inactive_days: d.inactive_days || 730, max_per_run: d.max_per_run || 50 });
+  const [v, setV] = useState<Inactive | null>(q.data ? norm(q.data) : null);
+  const [seen, setSeen] = useState(q.data);
+  if (q.data !== seen) {
+    setSeen(q.data);
+    if (q.data !== undefined) setV(norm(q.data));
+  }
   const [preview, setPreview] = useState<Candidate[] | null>(null);
-  useEffect(() => { if (q.data) setV({ ...q.data, inactive_days: q.data.inactive_days || 730, max_per_run: q.data.max_per_run || 50 }); }, [q.data]);
   const err = (e: unknown) => toast.error(e instanceof ApiError ? tCode(e.code) : t("error.internal"));
   const save = useMutation({
     mutationFn: (b: Inactive) => api<Inactive>("/admin/settings/inactive-clients", { method: "PUT", body: b }),

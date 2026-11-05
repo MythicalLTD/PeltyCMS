@@ -24,7 +24,7 @@ export function setCsrfToken(t: string | null) {
 
 export async function api<T>(path: string, init: { method?: string; body?: unknown; raw?: Blob; captcha?: boolean; headers?: Record<string, string> } = {}): Promise<T> {
   const method = init.method ?? "GET";
-  const headers: Record<string, string> = { accept: "application/json", ...(init.headers ?? {}) };
+  const headers: Record<string, string> = { accept: "application/json", ...init.headers };
   if (init.raw) headers["content-type"] = init.raw.type || "application/octet-stream";
   else if (init.body !== undefined) headers["content-type"] = "application/json";
   if (method !== "GET" && csrfToken) headers["x-csrf-token"] = csrfToken;

@@ -14,10 +14,10 @@ export function useAddonFilter<K extends keyof HostFilters>(name: K, value: Host
   const sync = applyFilters(name, value, ctx);
   useEffect(() => {
     if (!hasAsyncFilters(name)) return;
-    let live = true;
-    void applyFiltersAsync(name, value, ctx).then((v) => { if (live) setDone({ k, v }); });
-    return () => { live = false; };
-    // `key` stands for value and ctx.
-  }, [name, k]);
+    const captured = k;
+    let cancelled = false;
+    void applyFiltersAsync(name, value, ctx).then((v) => { if (!cancelled) setDone({ k: captured, v }); return v; });
+    return () => { cancelled = true; };
+  }, [name, k, value, ctx]);
   return done && done.k === k && hasAsyncFilters(name) ? done.v : sync;
 }

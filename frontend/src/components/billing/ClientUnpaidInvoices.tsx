@@ -31,7 +31,10 @@ export function ClientUnpaidInvoices() {
   const items = (unpaid.data?.items ?? []).filter(mergeable);
   const selected = items.filter((i) => sel.includes(i.id));
   const canMerge = mergeValid(sel, selected);
-  const currencies = useMemo(() => [...new Set(selected.map((i) => i.currency))], [selected]);
+  const currencies = useMemo(() => {
+    const ids = new Set(sel);
+    return [...new Set((unpaid.data?.items ?? []).filter(mergeable).filter((i) => ids.has(i.id)).map((i) => i.currency))];
+  }, [unpaid.data?.items, sel]);
   const oneCurrency = currencies.length === 1 ? currencies[0] : null;
   const creditAvail = oneCurrency ? creditIn(credit.data, oneCurrency) : "0";
 
@@ -111,7 +114,7 @@ export function ClientUnpaidInvoices() {
             disabled={sel.length === 0 || !oneCurrency || massPay.isPending || merge.isPending}
             onClick={() => {
               if (sel.length === 1) void nav(`/invoices/${sel[0]}/pay`);
-              else void nav(`/invoices/pay-many?ids=${[...sel].sort().join(",")}`);
+              else void nav(`/invoices/pay-many?ids=${[...sel].toSorted().join(",")}`);
             }}
           >
             <CreditCardIcon aria-hidden />{t("client_pay.card")}

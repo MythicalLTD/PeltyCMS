@@ -58,7 +58,7 @@ export function useAuthActions() {
       await clearCache();
       qc.setQueryData(["me"], null);
       qc.removeQueries({ predicate: (q) => q.queryKey[0] !== "me" });
-      if (r?.url && /^https:\/\//.test(r.url)) window.location.assign(r.url);
+      if (r?.url && r.url.startsWith("https://")) window.location.assign(r.url);
     },
   };
 }

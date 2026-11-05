@@ -50,8 +50,8 @@ function GeoCombobox({
           id={id}
           type="button"
           variant="outline"
-          role="combobox"
           aria-expanded={open}
+          aria-haspopup="listbox"
           disabled={disabled}
           className="h-9 w-full justify-between px-3 font-normal dark:bg-input/30"
         >

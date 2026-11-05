@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { blankSlaPolicy, minutesInput, minutesUntil, slaPolicyValid, slaSpecificity, slaStateVariant } from "@/lib/support/support";
 
+const slaRank = (d: string | null, p: string | null) => slaSpecificity({ department_id: d, priority: p });
+
 describe("SLA policy helpers", () => {
   it("validates like the server", () => {
     expect(slaPolicyValid(blankSlaPolicy)).toBe(true);
@@ -18,8 +20,7 @@ describe("SLA policy helpers", () => {
     expect(minutesInput(" 45 ")).toBe(45);
   });
   it("ranks specificity like the server", () => {
-    const r = (d: string | null, p: string | null) => slaSpecificity({ department_id: d, priority: p });
-    expect([r("d", "high"), r("d", null), r(null, "high"), r(null, null)]).toEqual([3, 2, 1, 0]);
+    expect([slaRank("d", "high"), slaRank("d", null), slaRank(null, "high"), slaRank(null, null)]).toEqual([3, 2, 1, 0]);
   });
   it("maps states to badge variants", () => {
     expect(slaStateVariant("breached")).toBe("destructive");

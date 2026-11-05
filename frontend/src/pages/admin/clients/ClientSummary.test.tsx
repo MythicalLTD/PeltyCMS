@@ -35,7 +35,7 @@ function mount(data: CustomerWorkspace, permissions = ["customers.read"], initia
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   client.setQueryData(["me"], { id: "staff", permissions, csrf_token: "csrf" });
   let workspaceAttempts = 0;
-  const fetcher = vi.fn(async (url: string, init?: RequestInit): Promise<Response> => {
+  const fetcher = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async (url: string, init?: RequestInit): Promise<Response> => {
     if (url.includes("/workspace")) {
       if (++workspaceAttempts === 1 && failFirst) return Response.json({ error: { code: "error.internal" } }, { status: 500 });
       return Response.json(url.includes("/c2/") ? workspace("c2", data.access.manage_customer) : data);

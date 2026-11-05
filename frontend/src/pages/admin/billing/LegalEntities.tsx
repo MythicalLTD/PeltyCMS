@@ -21,8 +21,9 @@ function EntityDialog({ e }: { e?: LegalEntity }) {
   const [open, setOpen] = useState(false);
   const init: EntityDraft = e ? { ...e, due_days: e.due_days === null ? "" : String(e.due_days) } : emptyEntity;
   const [d, setD] = useState<EntityDraft>(init);
+  const [utcYear] = useState(() => new Date().getUTCFullYear());
   const body = entityPayload(d);
-  const preview = formatNumber(d.number_format || emptyEntity.number_format, d.invoice_prefix || "INV", new Date().getUTCFullYear(), 1);
+  const preview = formatNumber(d.number_format || emptyEntity.number_format, d.invoice_prefix || "INV", utcYear, 1);
   const m = useMutation({
     mutationFn: () => api(e ? `/admin/legal-entities/${e.id}` : "/admin/legal-entities", { method: e ? "PUT" : "POST", body }),
     onSuccess: () => { setOpen(false); void qc.invalidateQueries({ queryKey: ["admin", "legal-entities"] }); },

@@ -139,7 +139,7 @@ export function AdminSamlPage() {
         ) },
         { header: "", className: "text-right", cell: (i) => (
           <span className="flex justify-end gap-1">
-            <Button size="icon" variant="ghost" aria-label={t("saml.test")} asChild><a href={`${i.sp.login_url}?mode=test`}><FlaskIcon aria-hidden /></a></Button>
+            <Button size="icon" variant="ghost" asChild><a href={`${i.sp.login_url}?mode=test`} aria-label={t("saml.test")}><FlaskIcon aria-hidden /><span className="sr-only">{t("saml.test")}</span></a></Button>
             <Button size="sm" variant="ghost" onClick={() => { setDry(null); setPaste(""); setValidating(i); }}>{t("saml.validate")}</Button>
             <Button size="icon" variant="ghost" aria-label={t("saml.edit")} onClick={() => open(toDraft(i))}><PencilSimpleIcon aria-hidden /></Button>
             {i.sign_requests && (

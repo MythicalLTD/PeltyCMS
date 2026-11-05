@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDownIcon, ArrowUpIcon, CaretLeftIcon, CaretRightIcon, DatabaseIcon, DownloadSimpleIcon, GearSixIcon, LinkSimpleIcon, PaperPlaneTiltIcon, PlusIcon, TrashIcon, UsersThreeIcon } from "@phosphor-icons/react";
@@ -33,7 +33,11 @@ export function CustomizeDashboard({ prefs }: { prefs: Prefs }) {
   const [open, setOpen] = useState(false);
   const [w, setW] = useState(prefs.widgets);
   const [links, setLinks] = useState<QuickLink[]>(prefs.quick_links);
-  useEffect(() => { if (open) { setW(prefs.widgets); setLinks(prefs.quick_links); } }, [open, prefs]);
+  const [gate, setGate] = useState({ open, prefs });
+  if (open !== gate.open || prefs !== gate.prefs) {
+    setGate({ open, prefs });
+    if (open) { setW(prefs.widgets); setLinks(prefs.quick_links); }
+  }
   const save = useMutation({
     mutationFn: () => api("/admin/prefs", { method: "PUT", body: { widgets: w, quick_links: links } }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "prefs"] }); setOpen(false); toast.success(t("common.saved")); },
@@ -137,7 +141,7 @@ function itemLink(x: CalendarItem): string {
 
 export function UpcomingCard() {
   const { t, tCode, lang } = useI18n();
-  const today = new Date().toISOString().slice(0, 10);
+  const [today] = useState(() => new Date().toISOString().slice(0, 10));
   const q = useCalendar(thisMonth());
   const items = (q.data?.items ?? []).filter((x) => x.date >= today).slice(0, 8);
   return (
@@ -205,14 +209,15 @@ export function AdminLoginHistoryPage() {
   );
 }
 
+const backupMutationErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : String(e));
+
 export function AdminBackupsPage() {
   const { t, tCode, lang } = useI18n();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["admin", "backups"], queryFn: () => api<{ items: Backup[] }>("/admin/backups"), refetchInterval: (x) => x.state.data?.items.some((b) => b.status === "queued") ? 3000 : false });
   const inv = () => qc.invalidateQueries({ queryKey: ["admin", "backups"] });
-  const err = (e: unknown) => toast.error(e instanceof ApiError ? e.message : String(e));
-  const create = useMutation({ mutationFn: () => api("/admin/backups", { method: "POST" }), onSuccess: () => { inv(); toast.success(t("ops.backup_queued")); }, onError: err });
-  const del = useMutation({ mutationFn: (id: string) => api(`/admin/backups/${id}`, { method: "DELETE" }), onSuccess: inv, onError: err });
+  const create = useMutation({ mutationFn: () => api("/admin/backups", { method: "POST" }), onSuccess: () => { inv(); toast.success(t("ops.backup_queued")); }, onError: backupMutationErr });
+  const del = useMutation({ mutationFn: (id: string) => api(`/admin/backups/${id}`, { method: "DELETE" }), onSuccess: inv, onError: backupMutationErr });
   return (
     <ListPage title={t("ops.backups")} description={t("ops.backups_hint")} actions={<Button disabled={create.isPending} onClick={() => create.mutate()}><DatabaseIcon aria-hidden />{t("ops.backup_now")}</Button>}
       rows={q.data?.items} loading={q.isLoading} rowKey={(x) => x.id} emptyIcon={DatabaseIcon} emptyTitle={t("ops.no_backups")}

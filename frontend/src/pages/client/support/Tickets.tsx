@@ -3,7 +3,8 @@ import { PageSkeleton } from "@/components/PageSkeleton";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { ArrowLeftIcon, BookOpenIcon, LifebuoyIcon, PlusIcon, StarIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -155,9 +156,11 @@ function RateCard({ ticket }: { ticket: Ticket }) {
         <FormError message={error} />
         <div className="flex gap-1" role="radiogroup" aria-label={t("tickets.rate_title")}>
           {[1, 2, 3, 4, 5].map((n) => (
-            <Button key={n} type="button" size="icon" variant={n <= stars ? "default" : "outline"} aria-label={String(n)} aria-checked={n === stars} role="radio" onClick={() => setStars(n)}>
+            <label key={n} className={cn(buttonVariants({ size: "icon", variant: n <= stars ? "default" : "outline" }), "cursor-pointer")}>
+              <input type="radio" name="ticket-stars" className="sr-only" checked={n === stars} onChange={() => setStars(n)} />
+              <span className="sr-only">{n}</span>
               <StarIcon aria-hidden weight={n <= stars ? "fill" : "regular"} />
-            </Button>
+            </label>
           ))}
         </div>
         <Textarea rows={2} maxLength={2000} placeholder={t("tickets.rate_comment")} value={comment} onChange={(e) => setComment(e.target.value)} />

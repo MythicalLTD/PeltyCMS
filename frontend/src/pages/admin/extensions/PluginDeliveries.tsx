@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { ArrowClockwiseIcon, KeyIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -37,7 +37,11 @@ export function AdminPluginDeliveriesPage() {
   const [secret, setSecret] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const info = useQuery({ queryKey: ["admin", "plugin-webhook", id], queryFn: () => api<WebhookInfo>(`/admin/plugins/${enc}/webhook`) });
-  useEffect(() => setUrl(info.data?.url_override ?? ""), [info.data]);
+  const [seenInfo, setSeenInfo] = useState(info.data);
+  if (info.data !== seenInfo) {
+    setSeenInfo(info.data);
+    if (info.data !== undefined) setUrl(info.data.url_override ?? "");
+  }
   const fail = (e: unknown) => setError(e instanceof ApiError ? tCode(e.code) : t("error.internal"));
   const ok = () => { setError(null); void qc.invalidateQueries({ queryKey: ["admin", "plugin-webhook", id] }); void qc.invalidateQueries({ queryKey: ["admin", "plugin-deliveries", id] }); };
   const save = useMutation({ mutationFn: () => api<void>(`/admin/plugins/${enc}/webhook`, { method: "PUT", body: { url: url.trim() || null } }), onSuccess: ok, onError: fail });

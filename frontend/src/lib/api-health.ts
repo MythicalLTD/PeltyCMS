@@ -48,16 +48,18 @@ function scheduleProbe() {
       .then((res) => {
         if (res.ok) {
           resetApiHealth();
-          return;
+          return undefined;
         }
         failures++;
         probing = false;
         scheduleProbe();
+        return undefined;
       })
       .catch(() => {
         failures++;
         probing = false;
         scheduleProbe();
+        return undefined;
       });
   }, delay);
 }

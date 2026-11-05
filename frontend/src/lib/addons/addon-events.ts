@@ -75,9 +75,10 @@ export function onHost<K extends keyof HostEvents>(name: K, fn: (payload: HostEv
 
 /** Deliver `name` to every matching listener (errors are isolated). */
 export function emit(name: string, payload: unknown = null): void {
-  for (const [pattern, set] of [...listeners]) {
+  // Snapshot so listeners can subscribe/unsubscribe during delivery.
+  for (const [pattern, set] of Array.from(listeners)) {
     if (!matches(pattern, name)) continue;
-    for (const fn of [...set]) {
+    for (const fn of Array.from(set)) {
       try {
         fn(name, payload);
       } catch (e) {
@@ -102,9 +103,7 @@ export function emitFromAddon(plugin: string, name: string, payload: unknown): s
 export function addFilter<K extends keyof HostFilters>(name: K, fn: FilterFn<HostFilters[K]>, priority = 0): () => void {
   const list = filters.get(name) ?? [];
   const entry = { fn: fn as FilterFn<unknown>, priority, id: seq++ };
-  list.push(entry);
-  list.sort((a, b) => a.priority - b.priority || a.id - b.id);
-  filters.set(name, list);
+  filters.set(name, [...list, entry].toSorted((a, b) => a.priority - b.priority || a.id - b.id));
   return () => filters.set(name, (filters.get(name) ?? []).filter((e) => e !== entry));
 }
 
@@ -146,9 +145,7 @@ export function validFilterValue(name: string, v: unknown): boolean {
 export function addAsyncFilter(name: keyof HostFilters, fn: AsyncFilterFn, priority = 0, owner = ""): () => void {
   const list = asyncFilters.get(name) ?? [];
   const entry = { fn, priority, id: seq++, owner };
-  list.push(entry);
-  list.sort((a, b) => a.priority - b.priority || a.id - b.id);
-  asyncFilters.set(name, list);
+  asyncFilters.set(name, [...list, entry].toSorted((a, b) => a.priority - b.priority || a.id - b.id));
   notifyRegistry();
   return () => {
     asyncFilters.set(name, (asyncFilters.get(name) ?? []).filter((e) => e !== entry));
@@ -165,7 +162,7 @@ export function onFilterRegistry(fn: () => void): () => void {
 }
 
 function notifyRegistry() {
-  for (const fn of [...registryWatchers]) {
+  for (const fn of Array.from(registryWatchers)) {
     try { fn(); } catch (e) { console.warn("filter registry watcher failed", e); }
   }
 }
@@ -173,7 +170,7 @@ function notifyRegistry() {
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise((res, rej) => {
     const t = setTimeout(() => rej(new Error("timeout")), ms);
-    p.then((v) => { clearTimeout(t); res(v); }, (e: unknown) => { clearTimeout(t); rej(e); });
+    p.then((v) => { clearTimeout(t); res(v); return v; }, (e: unknown) => { clearTimeout(t); rej(e); throw e; });
   });
 }
 
@@ -182,7 +179,7 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
  *  error or an invalid result. Never rejects. */
 export async function applyFiltersAsync<K extends keyof HostFilters>(name: K, value: HostFilters[K], ctx: Record<string, unknown> = {}, timeoutMs = ASYNC_FILTER_TIMEOUT_MS): Promise<HostFilters[K]> {
   let v: unknown = applyFilters(name, value, ctx);
-  for (const { fn, owner } of [...(asyncFilters.get(name) ?? [])]) {
+  for (const { fn, owner } of Array.from(asyncFilters.get(name) ?? [])) {
     try {
       const copy: unknown = JSON.parse(JSON.stringify(v));
       const out = await withTimeout(Promise.resolve().then(() => fn(copy, { ...ctx })), timeoutMs);

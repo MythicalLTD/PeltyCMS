@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { NotePencilIcon, PlusIcon, TrashIcon, UserCircleIcon, AddressBookIcon } from "@phosphor-icons/react";
@@ -63,9 +63,13 @@ function ProfileCard() {
   const { t, tCode } = useI18n();
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["client", "profile"], queryFn: () => api<Profile>("/client/profile") });
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(data ? blank(data) : null);
+  const [seen, setSeen] = useState(data);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { if (data) setDraft(blank(data)); }, [data]);
+  if (data !== seen) {
+    setSeen(data);
+    if (data !== undefined) setDraft(blank(data));
+  }
   const set = (k: keyof Draft) => (e: React.ChangeEvent<HTMLInputElement>) => setDraft((d) => (d ? { ...d, [k]: e.target.value } : d));
   const save = useMutation({
     mutationFn: () => {

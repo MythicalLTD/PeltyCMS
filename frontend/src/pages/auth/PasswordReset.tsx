@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { BlockSkeleton } from "@/components/PageSkeleton";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Field, FormError } from "@/components/Field";
@@ -42,7 +42,7 @@ export function ForgotPasswordPage() {
       </CardHeader>
       <CardContent>
         {sent ? (
-          <p role="status" data-testid="forgot-sent" className="rounded-md bg-success/10 px-3 py-2 text-sm text-success">{t("auth.forgot.sent")}</p>
+          <output data-testid="forgot-sent" className="block rounded-md bg-success/10 px-3 py-2 text-sm text-success">{t("auth.forgot.sent")}</output>
         ) : (
           <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
             <FormError message={error} />
@@ -115,31 +115,28 @@ export function VerifyEmailPage() {
   const qc = useQueryClient();
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
-  const [state, setState] = useState<"pending" | "ok" | string>("pending");
-  const once = useRef(false);
-  useEffect(() => {
-    if (once.current) return;
-    once.current = true;
-    if (!token) {
-      setState(t("error.invalid_token"));
-      return;
-    }
-    api("/auth/email/verify", { method: "POST", body: { token } })
-      .then(() => {
-        setState("ok");
-        void qc.invalidateQueries({ queryKey: ["me"] });
-      })
-      .catch((e) => setState(msg(e)));
-  }, [token, t, msg, qc]);
+  const verify = useQuery({
+    queryKey: ["auth", "email-verify", token],
+    queryFn: async () => {
+      await api("/auth/email/verify", { method: "POST", body: { token } });
+      void qc.invalidateQueries({ queryKey: ["me"] });
+      return true;
+    },
+    enabled: !!token,
+    retry: false,
+    staleTime: Infinity,
+  });
+  const invalid = !token;
+  const err = invalid ? t("error.invalid_token") : verify.isError ? msg(verify.error) : null;
   return (
     <Card>
       <CardHeader>
         <h1 className="text-2xl font-semibold tracking-tight">{t("auth.verify.title")}</h1>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {state === "pending" && <BlockSkeleton />}
-        {state === "ok" && <p role="status" data-testid="verify-ok" className="rounded-md bg-success/10 px-3 py-2 text-sm text-success">{t("auth.verify.done")}</p>}
-        {state !== "pending" && state !== "ok" && <FormError message={state} />}
+        {!invalid && verify.isPending && <BlockSkeleton />}
+        {verify.isSuccess && <output data-testid="verify-ok" className="block rounded-md bg-success/10 px-3 py-2 text-sm text-success">{t("auth.verify.done")}</output>}
+        {err && <FormError message={err} />}
         <Link to="/" className="text-center text-sm text-primary hover:underline">{t("auth.verify.continue")}</Link>
       </CardContent>
     </Card>

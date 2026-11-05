@@ -68,10 +68,10 @@ export function LoginPage() {
     if (challenge || !pk) return;
     let live = true;
     void conditionalMediationAvailable().then((ok) => {
-      if (!ok || !live) return;
+      if (!ok || !live) return undefined;
       const ac = new AbortController();
       autofill.current = ac;
-      passkeyDiscoverLogin<Me>({ conditional: true, signal: ac.signal }).then(signedIn).catch((e: unknown) => {
+      return passkeyDiscoverLogin<Me>({ conditional: true, signal: ac.signal }).then(signedIn).catch((e: unknown) => {
         if (!ac.signal.aborted && e instanceof ApiError) setError(tCode(e.code));
       });
     });

@@ -27,7 +27,7 @@ function useModulePanel(service: Service, enabled: boolean) {
     mutationFn: (a: string) => api<{ result: Record<string, unknown> }>(`/client/services/${service.id}/module/${a}`, { method: "POST", body: a === "change_password" && pw ? { password: pw } : {} }),
     onSuccess: (r) => {
       const url = typeof r.result?.url === "string" ? r.result.url : null;
-      if (url && /^https:\/\//.test(url)) window.open(url, "_blank", "noopener,noreferrer");
+      if (url && url.startsWith("https://")) window.open(url, "_blank", "noopener,noreferrer");
       else toast.success(t("modx.action_done"));
       setPw("");
       void qc.invalidateQueries({ queryKey: key });

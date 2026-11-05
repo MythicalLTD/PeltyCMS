@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 import type { Icon } from "@phosphor-icons/react";
+import type { RowData } from "@tanstack/react-table";
 import { PageHeader } from "@/components/PageHeader";
 import { ResponsiveTable, type Column } from "@/components/ResponsiveTable";
 import { Card, CardContent } from "@/components/ui/card";
 
 /** Same look as `DataTable` (page header + one table card) for lists that are
  *  already loaded in full (no server paging). Use one of the two for every list page. */
-export function ListPage<T>({ title, description, actions, columns, rows, rowKey, loading, emptyIcon, emptyTitle, emptyDescription, children }: {
+export function ListPage<T extends RowData>({ title, description, actions, columns, rows, rowKey, loading, emptyIcon, emptyTitle, emptyDescription, children }: {
   title: string;
   description?: ReactNode;
   actions?: ReactNode;
@@ -30,7 +31,7 @@ export function ListPage<T>({ title, description, actions, columns, rows, rowKey
 }
 
 /** The table card on its own, for pages with several lists. */
-export function ListCard<T>({ columns, rows, rowKey, loading, emptyIcon, emptyTitle, emptyDescription }: {
+export function ListCard<T extends RowData>({ columns, rows, rowKey, loading, emptyIcon, emptyTitle, emptyDescription }: {
   columns: Column<T>[]; rows: T[] | undefined; rowKey: (row: T) => string | number; loading?: boolean; emptyIcon?: Icon; emptyTitle?: string; emptyDescription?: string;
 }) {
   return (

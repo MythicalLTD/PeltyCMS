@@ -193,7 +193,7 @@ export function categoryForPath(scope: NavScope, pathname: string): { cat: NavCa
     const cat = navTree(scope).find((c) => c.id === hubId);
     return cat ? { cat, hub: true } : undefined;
   }
-  const leaf = flatNav(scope).filter((n) => isActive(p, n.to, n.end)).sort((a, b) => b.to.length - a.to.length)[0];
+  const leaf = flatNav(scope).filter((n) => isActive(p, n.to, n.end)).toSorted((a, b) => b.to.length - a.to.length)[0];
   return leaf ? { cat: leaf.category, hub: false } : undefined;
 }
 

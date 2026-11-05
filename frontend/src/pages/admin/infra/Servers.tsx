@@ -177,7 +177,7 @@ export function AdminServersPage() {
         ) },
       ]}
     >
-      {msg && (msg.ok ? <p role="status" className="text-sm text-muted-foreground">{msg.text}</p> : <FormError message={msg.text} />)}
+      {msg && (msg.ok ? <output className="block text-sm text-muted-foreground">{msg.text}</output> : <FormError message={msg.text} />)}
       <ServerGroupsCard />
       <ServerHealthCard />
       <ModuleQueueCard />

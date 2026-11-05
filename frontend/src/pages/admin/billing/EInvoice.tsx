@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -21,9 +21,13 @@ const FIELDS: [Key, number][] = [
 export function EInvoiceCard() {
   const { t, tCode } = useI18n();
   const { data } = useQuery({ queryKey: ["admin", "settings", "einvoice"], queryFn: () => api<EInvoiceSettings>("/admin/settings/einvoice") });
-  const [form, setForm] = useState<EInvoiceSettings>(EMPTY_EINVOICE);
+  const [form, setForm] = useState<EInvoiceSettings>(data ?? EMPTY_EINVOICE);
+  const [seen, setSeen] = useState(data);
+  if (data !== seen) {
+    setSeen(data);
+    if (data !== undefined) setForm(data);
+  }
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { if (data) setForm(data); }, [data]);
   const save = useMutation({
     mutationFn: (b: EInvoiceSettings) => api<EInvoiceSettings>("/admin/settings/einvoice", { method: "PUT", body: b }),
     onSuccess: (b) => { setForm(b); setError(null); toast.success(t("common.saved")); },

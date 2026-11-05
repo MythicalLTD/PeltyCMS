@@ -23,10 +23,11 @@ export interface Campaign { id: string; name: string; subject: string; body: str
 
 export const emptySegment = (): Segment => ({ statuses: ["active"], client_group_id: null, product_ids: [], country: null, currency: null, with_active_service: false });
 
+const segmentCodeOrNull = (v: string | null) => (v && v.trim() ? v.trim().toUpperCase() : null);
+
 /** Normalise a segment for the API: blank strings → null, upper-cased codes. */
 export function cleanSegment(s: Segment): Segment {
-  const blank = (v: string | null) => (v && v.trim() ? v.trim().toUpperCase() : null);
-  return { ...s, country: blank(s.country), currency: blank(s.currency) };
+  return { ...s, country: segmentCodeOrNull(s.country), currency: segmentCodeOrNull(s.currency) };
 }
 
 /** Percentage of recipients processed (sent+failed+skipped). */
@@ -98,7 +99,7 @@ function CampaignDialog({ c, mergeIds, onDone }: { c?: Campaign; mergeIds?: stri
     onSuccess: () => { setOpen(false); onDone?.(); void qc.invalidateQueries({ queryKey: ["admin", "campaigns"] }); },
   });
   return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) onDone?.(); if (o) { setName(c?.name ?? ""); setSubject(c?.subject ?? ""); setBody(c?.body ?? ""); setSeg({ ...emptySegment(), ...(c?.segment ?? {}) }); save.reset(); } }}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) onDone?.(); if (o) { setName(c?.name ?? ""); setSubject(c?.subject ?? ""); setBody(c?.body ?? ""); setSeg({ ...emptySegment(), ...c?.segment }); save.reset(); } }}>
       {!mergeIds?.length && <DialogTrigger asChild>{c ? <Button size="icon" variant="ghost" aria-label={t("common.edit")}><NotePencilIcon aria-hidden /></Button> : <Button><PlusIcon aria-hidden />{t("campaign.new")}</Button>}</DialogTrigger>}
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader><DialogTitle>{c ? c.name : t("campaign.new")}</DialogTitle><DialogDescription>{t("campaign.vars_help")}</DialogDescription></DialogHeader>

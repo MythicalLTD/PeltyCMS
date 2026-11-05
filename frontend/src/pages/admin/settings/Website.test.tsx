@@ -37,11 +37,11 @@ describe("AdminWebsitePage", () => {
   it("pages tab and block editor render", async () => {
     mock({ config: REAL }, { items: [PAGE] }); wrap();
     const tab = screen.getAllByRole("tab")[1]!; fireEvent.mouseDown(tab, { button: 0, ctrlKey: false }); fireEvent.click(tab);
-    await screen.findByText("Home", {}, { timeout: 3000 });
+    expect(await screen.findByText("Home", {}, { timeout: 3000 })).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button", { name: /edit|editeaz/i })[0]!);
-    await screen.findByDisplayValue("home");
+    expect(await screen.findByDisplayValue("home")).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button", { name: /edit|editeaz/i })[0]!);
-    await screen.findByDisplayValue("Hi");
+    expect(await screen.findByDisplayValue("Hi")).toBeTruthy();
   });
   it("saves the config as a JSON object (not a double-encoded string)", async () => {
     mock({ config: REAL, fonts: [] }, { items: [PAGE] }); wrap();

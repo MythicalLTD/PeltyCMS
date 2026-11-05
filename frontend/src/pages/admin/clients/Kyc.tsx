@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { CheckIcon, DownloadSimpleIcon, IdentificationCardIcon, XIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormError } from "@/components/Field";
@@ -31,8 +31,12 @@ function SettingsCard() {
   const qc = useQueryClient();
   const e = useFail();
   const { data } = useQuery({ queryKey: ["admin", "kyc", "settings"], queryFn: () => api<KycSettings>("/admin/kyc/settings") });
-  const [d, setD] = useState<KycSettings | null>(null);
-  useEffect(() => { if (data) setD(data); }, [data]);
+  const [d, setD] = useState<KycSettings | null>(data ?? null);
+  const [seen, setSeen] = useState(data);
+  if (data !== seen) {
+    setSeen(data);
+    if (data !== undefined) setD(data);
+  }
   const save = useMutation({ mutationFn: (b: KycSettings) => api<KycSettings>("/admin/kyc/settings", { method: "PUT", body: b }), onSuccess: (r) => { e.setError(null); qc.setQueryData(["admin", "kyc", "settings"], r); }, onError: e.fail });
   if (!d) return null;
   const toggle = (k: string, on: boolean) => setD({ ...d, required_kinds: on ? [...d.required_kinds, k] : d.required_kinds.filter((x) => x !== k) });
@@ -67,7 +71,7 @@ export function CustomerKycDialog({ customerId, label }: { customerId: string; l
   const { data } = useQuery({ queryKey: key, queryFn: () => api<{ status: KycState; documents: KycDocument[] }>(`/admin/customers/${customerId}/kyc`), enabled: open });
   const done = () => { e.setError(null); void qc.invalidateQueries({ queryKey: key }); void qc.invalidateQueries({ queryKey: ["admin", "kyc", "queue"] }); };
   const review = useMutation({ mutationFn: (p: { id: string; approve: boolean }) => api(`/admin/kyc/documents/${p.id}/review`, { method: "POST", body: { approve: p.approve, note: notes[p.id] ?? "" } }), onSuccess: done, onError: e.fail });
-  const override = useMutation({ mutationFn: () => api(`/admin/customers/${customerId}/kyc`, { method: "PUT", body: { status: ov, note: notes.__override ?? "" } }), onSuccess: done, onError: e.fail });
+  const override = useMutation({ mutationFn: () => api(`/admin/customers/${customerId}/kyc`, { method: "PUT", body: { status: ov, note: notes.overrideNote ?? "" } }), onSuccess: done, onError: e.fail });
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild><Button size="sm" variant="outline"><IdentificationCardIcon aria-hidden />{label}</Button></DialogTrigger>
@@ -82,7 +86,7 @@ export function CustomerKycDialog({ customerId, label }: { customerId: string; l
                 <span className="min-w-0 flex-1 truncate"><span className="font-medium">{tCode(`kyc.kind.${d.kind}`)}</span> · {d.filename} · {Math.ceil(d.size_bytes / 1024)} KB</span>
                 <span className="text-xs text-muted-foreground">{formatDate(d.created_at, lang)}</span>
                 <Badge variant={statusVariant(d.status)}>{tCode(`kyc.doc.${d.status}`)}</Badge>
-                <Button asChild size="icon" variant="ghost" aria-label={t("kyc.download")}><a href={`/api/v1/admin/kyc/documents/${d.id}/download`}><DownloadSimpleIcon aria-hidden /></a></Button>
+                <Button asChild size="icon" variant="ghost"><a href={`/api/v1/admin/kyc/documents/${d.id}/download`} aria-label={t("kyc.download")}><DownloadSimpleIcon aria-hidden /><span className="sr-only">{t("kyc.download")}</span></a></Button>
               </div>
               {d.review_note && <p className="text-xs text-muted-foreground">{d.review_note}</p>}
               {d.status === "pending" && (
@@ -102,7 +106,7 @@ export function CustomerKycDialog({ customerId, label }: { customerId: string; l
               <SelectTrigger id="kyc-ov" className="w-full"><SelectValue placeholder={t("kyc.status")} /></SelectTrigger>
               <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{tCode(`kyc.status.${s}`)}</SelectItem>)}</SelectContent>
             </Select>
-            <Textarea rows={1} aria-label={t("kyc.note")} value={notes.__override ?? ""} onChange={(ev) => setNotes({ ...notes, __override: ev.target.value })} />
+            <Textarea rows={1} aria-label={t("kyc.note")} value={notes.overrideNote ?? ""} onChange={(ev) => setNotes({ ...notes, overrideNote: ev.target.value })} />
             <Button variant="outline" disabled={!ov || override.isPending} onClick={() => override.mutate()}>{t("common.save")}</Button>
           </div>
         </div>

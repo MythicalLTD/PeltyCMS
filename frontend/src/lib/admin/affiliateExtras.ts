@@ -12,5 +12,5 @@ export function materialSnippet(m: Pick<Material, "kind" | "title" | "body" | "i
 
 /** Next tier above the current referral count, if any. */
 export function nextTier(tiers: Tier[], referrals: number): Tier | null {
-  return [...tiers].sort((a, b) => a.min_referrals - b.min_referrals).find((t) => t.min_referrals > referrals) ?? null;
+  return tiers.toSorted((a, b) => a.min_referrals - b.min_referrals).find((t) => t.min_referrals > referrals) ?? null;
 }

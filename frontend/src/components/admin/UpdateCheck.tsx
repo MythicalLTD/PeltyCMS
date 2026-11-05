@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ArrowSquareOutIcon, ArrowsClockwiseIcon, RocketLaunchIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -38,9 +38,13 @@ export function UpdatesCard() {
   const { t, tCode, lang } = useI18n();
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: KEY, queryFn: () => api<UpdateStatus>("/admin/system/updates") });
-  const [url, setUrl] = useState("");
+  const [url, setUrl] = useState(data?.url ?? "");
+  const [seen, setSeen] = useState(data);
+  if (data !== seen) {
+    setSeen(data);
+    if (data !== undefined) setUrl(data.url);
+  }
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => { if (data) setUrl(data.url); }, [data]);
   const onErr = (e: unknown) => setErr(e instanceof ApiError ? tCode(e.code) : t("error.internal"));
   const save = useMutation({ mutationFn: (enabled: boolean) => api<UpdateStatus>("/admin/system/updates", { method: "PUT", body: { enabled, url } }), onSuccess: (r) => { qc.setQueryData(KEY, r); setErr(null); toast.success(t("common.saved")); }, onError: onErr });
   const check = useMutation({ mutationFn: () => api<UpdateStatus>("/admin/system/updates/check", { method: "POST" }), onSuccess: (r) => { qc.setQueryData(KEY, r); setErr(null); }, onError: onErr });

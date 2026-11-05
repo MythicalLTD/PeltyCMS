@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ArrowsClockwiseIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -37,7 +37,11 @@ export function PriceSyncCard() {
   const [registrar, setRegistrar] = useState("");
   const [result, setResult] = useState<SyncResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { if (rules.data) setRows(rules.data); }, [rules.data]);
+  const [seenRules, setSeenRules] = useState(rules.data);
+  if (rules.data !== seenRules) {
+    setSeenRules(rules.data);
+    if (rules.data !== undefined) setRows(rules.data);
+  }
   const save = useMutation({
     mutationFn: () => api<MarginRule[]>("/admin/domains/margins", { method: "PUT", body: rows }),
     onSuccess: (r) => { setRows(r); setError(null); toast.success(t("common.saved")); qc.invalidateQueries({ queryKey: ["admin", "tld-margins"] }); },
@@ -117,7 +121,11 @@ function PremiumCard() {
   const q = useQuery({ queryKey: ["admin", "premium-settings"], queryFn: () => api<Premium>("/admin/domains/premium-settings") });
   const [v, setV] = useState<Premium | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { if (q.data) setV(q.data); }, [q.data]);
+  const [seenPremium, setSeenPremium] = useState(q.data);
+  if (q.data !== seenPremium) {
+    setSeenPremium(q.data);
+    if (q.data !== undefined) setV(q.data);
+  }
   const save = useMutation({
     mutationFn: () => api<Premium>("/admin/domains/premium-settings", { method: "PUT", body: v }),
     onSuccess: () => { setError(null); toast.success(t("common.saved")); },

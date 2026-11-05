@@ -8,6 +8,9 @@ function mem(init: Record<string, string> = {}) {
 const A = "11111111-1111-4111-8111-111111111111";
 const B = "22222222-2222-4222-9222-222222222222";
 
+const orderField = (o: Partial<OrderField>): OrderField => ({ id: "f", name: "Host", description: "", kind: "text", choices: [], pattern: "", required: false, ...o });
+const readOnlyStorage = (v: string | null) => ({ getItem: () => v });
+
 describe("cart token", () => {
   it("creates and keeps a v4 id", () => {
     const s = mem();
@@ -52,15 +55,14 @@ describe("pricing helpers", () => {
 });
 
 describe("custom order fields", () => {
-  const f = (o: Partial<OrderField>): OrderField => ({ id: "f", name: "Host", description: "", kind: "text", choices: [], pattern: "", required: false, ...o });
   it("flags missing required values and bad patterns", () => {
-    const fields = [f({ id: "a", required: true }), f({ id: "b", pattern: "[a-z]+\\.[a-z]+" }), f({ id: "c" })];
+    const fields = [orderField({ id: "a", required: true }), orderField({ id: "b", pattern: "[a-z]+\\.[a-z]+" }), orderField({ id: "c" })];
     expect(fieldErrors(fields, {})).toEqual({ a: "required" });
     expect(fieldErrors(fields, { a: " x ", b: "Bad Host" })).toEqual({ b: "pattern" });
     expect(fieldErrors(fields, { a: "x", b: "my.host" })).toEqual({});
   });
   it("leaves an invalid admin regex to the server", () => {
-    expect(fieldErrors([f({ id: "a", pattern: "(" })], { a: "x" })).toEqual({});
+    expect(fieldErrors([orderField({ id: "a", pattern: "(" })], { a: "x" })).toEqual({});
   });
 });
 
@@ -75,16 +77,15 @@ describe("order status stage", () => {
 });
 
 describe("mayExistOnServer", () => {
-  const A = "11111111-1111-4111-8111-111111111111";
-  const B = "22222222-2222-4222-8222-222222222222";
-  const mem = (v: string | null) => ({ getItem: () => v });
+  const savedId = "11111111-1111-4111-8111-111111111111";
+  const otherId = "22222222-2222-4222-8222-222222222222";
   it("skips the request for an id that was never saved", () => {
-    expect(mayExistOnServer(mem(""), A, "")).toBe(false);
-    expect(mayExistOnServer(mem(B), A, "")).toBe(false);
+    expect(mayExistOnServer(readOnlyStorage(""), savedId, "")).toBe(false);
+    expect(mayExistOnServer(readOnlyStorage(otherId), savedId, "")).toBe(false);
   });
   it("asks for saved ids, shared links and ids from before the marker", () => {
-    expect(mayExistOnServer(mem(A), A, "")).toBe(true);
-    expect(mayExistOnServer(mem(""), A, `?c=${A}`)).toBe(true);
-    expect(mayExistOnServer(mem(null), A, "")).toBe(true);
+    expect(mayExistOnServer(readOnlyStorage(savedId), savedId, "")).toBe(true);
+    expect(mayExistOnServer(readOnlyStorage(""), savedId, `?c=${savedId}`)).toBe(true);
+    expect(mayExistOnServer(readOnlyStorage(null), savedId, "")).toBe(true);
   });
 });

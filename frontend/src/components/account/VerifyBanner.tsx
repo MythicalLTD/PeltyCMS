@@ -24,7 +24,7 @@ export function VerifyBanner() {
   // Staff accounts are managed by admins, so the reminder is client-only.
   if (!me || me.email_verified !== false || isStaff(me) || dismissed) return null;
   return (
-    <div role="status" data-testid="verify-banner" className="mb-4 flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 py-1 pr-1 pl-3 text-sm">
+    <output data-testid="verify-banner" className="mb-4 flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 py-1 pr-1 pl-3 text-sm">
       <EnvelopeSimpleIcon aria-hidden className="size-4 shrink-0" />
       <span className="min-w-0 flex-1 truncate sm:whitespace-normal">
         {state === "sent" || state === "error" ? t(state === "sent" ? "auth.verify.resent" : "common.error") : (
@@ -70,6 +70,6 @@ export function VerifyBanner() {
       >
         <XIcon aria-hidden />
       </Button>
-    </div>
+    </output>
   );
 }

@@ -32,7 +32,7 @@ export function parseTags(input: string): string[] {
     const t = raw.trim().toLowerCase().replace(/ /g, "-");
     if (/^[a-z0-9][a-z0-9_-]{0,39}$/.test(t)) out.add(t);
   }
-  return [...out].sort();
+  return [...out].toSorted();
 }
 
 /** Percentage of responded tickets within SLA, or null when no SLA / no data. */

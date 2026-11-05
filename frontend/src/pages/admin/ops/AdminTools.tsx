@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircleIcon, PlusIcon, TrashIcon, WarningIcon, XCircleIcon } from "@phosphor-icons/react";
@@ -79,7 +79,11 @@ export function AdminMyNotesPage() {
   const { t } = useI18n();
   const q = useQuery({ queryKey: ["admin", "my-notes"], queryFn: () => api<{ body: string }>("/admin/my-notes") });
   const [body, setBody] = useState("");
-  useEffect(() => { if (q.data) setBody(q.data.body); }, [q.data]);
+  const [seen, setSeen] = useState(q.data);
+  if (q.data !== seen) {
+    setSeen(q.data);
+    if (q.data !== undefined) setBody(q.data.body);
+  }
   const save = useMutation({
     mutationFn: () => api("/admin/my-notes", { method: "PUT", body: { body } }),
     onSuccess: () => toast.success(t("common.saved")),

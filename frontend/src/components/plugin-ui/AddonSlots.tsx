@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useI18n } from "@/lib/i18n";
 import { usePluginPages, usePluginRenderSlots, useUiOverrides } from "@/lib/addons/plugins";
 import { hasId, layoutSlot, pageSlots, routeKey, type Area, type LayoutPosition, type PagePosition } from "@/lib/addons/addon-frame";
+import type { RowData } from "@tanstack/react-table";
 import type { Column } from "@/components/ResponsiveTable";
 import { PluginSlot, SlotItem } from "./PluginSlot";
 
@@ -20,7 +21,7 @@ export function useRouteInfo(pathname?: string) {
   const loc = useLocation();
   const path = pathname ?? loc.pathname;
   const area: Area = path.startsWith("/admin") ? "admin" : "client";
-  const id = path.split("/").filter(Boolean).reverse().find((s) => hasId(`/${s}`));
+  const id = path.split("/").filter(Boolean).toReversed().find((s) => hasId(`/${s}`));
   return { area, key: routeKey(path, area), path, ctx: { route: path, ...(id ? { id } : {}) } as Record<string, unknown> };
 }
 
@@ -101,7 +102,7 @@ export function AddonDetailPanels() {
 }
 
 /** Extra actions column for tables (`<area>.<route>.row-actions`); `ctx.row_id` and `row` are bound. */
-export function useRowActionsColumn<T>(rowKey: (r: T) => string | number): Column<T> | null {
+export function useRowActionsColumn<T extends RowData>(rowKey: (r: T) => string | number): Column<T> | null {
   const { area, key, ctx } = useRouteInfo();
   const items = usePluginRenderSlots(pageSlots(area, key, "row-actions"));
   if (!items.length) return null;

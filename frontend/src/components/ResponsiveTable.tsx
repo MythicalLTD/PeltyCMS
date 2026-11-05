@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
+import { flexRender, tableFeatures, useTable, type ColumnDef, type RowData } from "@tanstack/react-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "./ui/card";
 import { Skeleton } from "./ui/skeleton";
@@ -17,12 +17,14 @@ export interface Column<T> {
   primary?: boolean;
 }
 
+const features = tableFeatures({});
+
 /**
  * TanStack Table rendered with shadcn `Table` on md+ and as a list of shadcn
  * `Card`s below md (no sideways scrolling on phones). Columns with an empty
  * header become the card's footer actions.
  */
-export function ResponsiveTable<T>({ columns: own, rows, rowKey, loading, emptyIcon, emptyTitle, emptyDescription }: {
+export function ResponsiveTable<T extends RowData>({ columns: own, rows, rowKey, loading, emptyIcon, emptyTitle, emptyDescription }: {
   emptyIcon?: Icon;
   emptyTitle?: string;
   emptyDescription?: string;
@@ -34,8 +36,17 @@ export function ResponsiveTable<T>({ columns: own, rows, rowKey, loading, emptyI
   const { t } = useI18n();
   const addon = useRowActionsColumn(rowKey);
   const columns = addon ? [...own, addon] : own;
-  const defs: ColumnDef<T>[] = columns.map((c, i) => ({ id: `c${i}`, header: c.header, cell: ({ row }) => c.cell(row.original), meta: c }));
-  const table = useReactTable({ data: rows ?? [], columns: defs, getCoreRowModel: getCoreRowModel(), getRowId: (r) => String(rowKey(r)) });
+  const defs: ColumnDef<typeof features, T>[] = columns.map((c, i) => ({
+    id: `c${i}`,
+    header: c.header,
+    cell: ({ row }) => c.cell(row.original),
+  }));
+  const table = useTable({
+    features,
+    data: rows ?? [],
+    columns: defs,
+    getRowId: (r) => String(rowKey(r)),
+  });
   const explicit = columns.findIndex((c) => c.primary);
   const primaryIdx = explicit >= 0 ? explicit : Math.max(0, columns.findIndex((c) => c.header));
   const empty = !loading && rows && rows.length === 0
@@ -57,7 +68,7 @@ export function ResponsiveTable<T>({ columns: own, rows, rowKey, loading, emptyI
           <TableBody>
             {table.getRowModel().rows.map((r) => (
               <TableRow key={r.id}>
-                {r.getVisibleCells().map((c) => <TableCell key={c.id} className={cn("pointer-coarse:[&_a]:inline-flex pointer-coarse:[&_a]:min-h-11 pointer-coarse:[&_a]:items-center", meta(c.column.id)?.className)}>{flexRender(c.column.columnDef.cell, c.getContext())}</TableCell>)}
+                {r.getAllCells().map((c) => <TableCell key={c.id} className={cn("pointer-coarse:[&_a]:inline-flex pointer-coarse:[&_a]:min-h-11 pointer-coarse:[&_a]:items-center", meta(c.column.id)?.className)}>{flexRender(c.column.columnDef.cell, c.getContext())}</TableCell>)}
               </TableRow>
             ))}
             {loading && Array.from({ length: 5 }, (_, i) => <TableRow key={`sk-${i}`}><TableCell colSpan={columns.length}><Skeleton className="h-6 w-full" />{i === 0 && <span className="sr-only">{t("common.loading")}</span>}</TableCell></TableRow>)}
@@ -67,7 +78,7 @@ export function ResponsiveTable<T>({ columns: own, rows, rowKey, loading, emptyI
       </div>
       <ul className="flex flex-col gap-3 md:hidden" data-testid="rt-cards">
         {table.getRowModel().rows.map((r) => {
-          const cells = r.getVisibleCells();
+          const cells = r.getAllCells();
           const p = cells[primaryIdx];
           const actions = cells.filter((c, i) => i !== primaryIdx && !meta(c.column.id)?.header);
           return (

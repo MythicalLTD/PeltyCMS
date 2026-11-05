@@ -113,7 +113,7 @@ export function ClientQuotePage() {
           <Button variant="outline" onClick={() => decide.mutate(false)} disabled={decide.isPending}><XIcon aria-hidden />{t("quotes.decline")}</Button>
           <Button onClick={() => decide.mutate(true)} disabled={decide.isPending}><CheckIcon aria-hidden />{t("quotes.accept")}</Button>
         </>} />
-      {expired && <p className="text-sm text-destructive" role="status">{t("quotes.expired_hint", { date: formatDate(q.valid_until, lang) })}</p>}
+      {expired && <output className="block text-sm text-destructive">{t("quotes.expired_hint", { date: formatDate(q.valid_until, lang) })}</output>}
       <FormError message={error} />
       <Card className="gap-0 overflow-hidden py-0">
         <QuoteBody q={q} />

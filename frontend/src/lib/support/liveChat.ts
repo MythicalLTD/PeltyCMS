@@ -19,7 +19,7 @@ export function loadCreds(store: Pick<Storage, "getItem">): ChatCreds | null {
 export function mergeMessages(prev: ChatMessage[], next: ChatMessage[]): ChatMessage[] {
   const seen = new Set(prev.map((m) => m.id));
   const out = [...prev, ...next.filter((m) => !seen.has(m.id))];
-  return out.sort((a, b) => a.id - b.id);
+  return out.toSorted((a, b) => a.id - b.id);
 }
 
 export const lastId = (m: ChatMessage[]) => m.at(-1)?.id ?? 0;

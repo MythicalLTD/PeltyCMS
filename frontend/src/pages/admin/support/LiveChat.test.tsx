@@ -12,9 +12,9 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 function Location() { const loc = useLocation(); return <output data-testid="url">{loc.search}</output>; }
 
 it("renders a read-only selected open chat transcript without write controls or staff sockets", async () => {
-  const socket = vi.fn();
+  const socket = vi.fn<typeof WebSocket>();
   vi.stubGlobal("WebSocket", socket);
-  const fetcher = vi.fn(async (url: string, _init?: RequestInit) => {
+  const fetcher = vi.fn<(url: string, _init?: RequestInit) => Promise<Response>>(async (url: string, _init?: RequestInit) => {
     if (url.includes("/messages?")) return Response.json({ status: "open", messages: [
       { id: 1, author: "visitor", staff_name: null, body: "Please check my service", created_at: "2026-01-01T00:00:00Z" },
       { id: 2, author: "staff", staff_name: "Support", body: "We are investigating", created_at: "2026-01-01T00:01:00Z" },
@@ -41,7 +41,7 @@ it("renders a read-only selected open chat transcript without write controls or 
 
 it("explicitly reports a closed deep link outside the loaded 200 conversations only after the inbox is ready", async () => {
   let resolve!: (response: Response) => void;
-  const fetcher = vi.fn((_url: string) => new Promise<Response>(r => { resolve = r; }));
+  const fetcher = vi.fn<(_url: string) => Promise<Response>>((_url: string) => new Promise<Response>(r => { resolve = r; }));
   vi.stubGlobal("fetch", fetcher);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/admin/live-chat?session=older-transcript&status=closed"]}><AdminLiveChatPage /></MemoryRouter></QueryClientProvider>);
@@ -56,7 +56,7 @@ it("explicitly reports a closed deep link outside the loaded 200 conversations o
 });
 
 it("shows a retryable inbox error instead of claiming a selected conversation is unavailable", async () => {
-  const fetcher = vi.fn().mockResolvedValueOnce(Response.json({}, { status: 500 })).mockResolvedValueOnce(Response.json({ unread: 0, sessions: [] }));
+  const fetcher = vi.fn<() => Promise<Response>>().mockResolvedValueOnce(Response.json({}, { status: 500 })).mockResolvedValueOnce(Response.json({ unread: 0, sessions: [] }));
   vi.stubGlobal("fetch", fetcher);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/admin/live-chat?session=older-transcript&status=closed"]}><AdminLiveChatPage /></MemoryRouter></QueryClientProvider>);
@@ -69,7 +69,7 @@ it("shows a retryable inbox error instead of claiming a selected conversation is
 });
 
 it("opens a closed conversation deep link and preserves unrelated query parameters when selecting", async () => {
-  const fetcher = vi.fn(async (url: string) => {
+  const fetcher = vi.fn<(url: string) => Promise<Response>>(async (url: string) => {
     if (url.includes("/messages?")) return Response.json({ status: "closed", messages: [] });
     return Response.json({ unread: 0, sessions: ["one", "two"].map(id => ({ id, name: `Customer ${id}`, email: `${id}@example.test`, status: "closed", staff_unread: 0, last_body: `Preview ${id}` })) });
   });

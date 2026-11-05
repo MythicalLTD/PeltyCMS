@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowCircleUpIcon, CheckCircleIcon, PackageIcon, PercentIcon, PlusIcon, ShoppingCartIcon, TagIcon, XIcon } from "@phosphor-icons/react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -102,7 +103,10 @@ export function OptionField({ o, value, onChange, currency, cycle }: { o: Config
       <fieldset className="grid gap-2"><legend className="mb-2 text-sm font-medium">{o.name}</legend>
         <div role="radiogroup" className="flex flex-wrap gap-2">
           {o.choices.map((c) => (
-            <Button key={c.id} type="button" role="radio" aria-checked={value === c.id} variant={value === c.id ? "secondary" : "outline"} size="sm" className="min-h-11 md:min-h-8" onClick={() => onChange(c.id)}>{c.label}{price(c)}</Button>
+            <label key={c.id} className={cn(buttonVariants({ variant: value === c.id ? "secondary" : "outline", size: "sm" }), "min-h-11 cursor-pointer md:min-h-8")}>
+              <input type="radio" name={`order-opt-${o.id}`} className="sr-only" checked={value === c.id} onChange={() => onChange(c.id)} />
+              {c.label}{price(c)}
+            </label>
           ))}
         </div>
       </fieldset>
@@ -184,7 +188,7 @@ export function ClientOrderPage() {
     onSuccess: (r) => {
       const to = r.redirect_url;
       if (to && to.startsWith("/") && !to.startsWith("//")) nav(to);
-      else if (to && /^https:\/\//.test(to)) window.location.assign(to);
+      else if (to && to.startsWith("https://")) window.location.assign(to);
       else nav(`/invoices/${r.invoice.id}`);
     },
     onError: (e) => setError(errText(e)),
@@ -230,7 +234,7 @@ export function ClientOrderPage() {
           <CardContent className="grid gap-3 *:min-w-0 sm:grid-cols-2">
             {products.length === 0 && <p className="text-sm text-muted-foreground sm:col-span-2">{t("order.no_products_currency")}</p>}
             {products.map((p) => {
-              const from = p.prices.filter((x) => x.currency === currency).sort((a, b) => Number(a.amount) - Number(b.amount))[0];
+              const from = p.prices.filter((x) => x.currency === currency).toSorted((a, b) => Number(a.amount) - Number(b.amount))[0];
               const on = p.id === pid;
               return (
                 <Button key={p.id} type="button" variant={on ? "secondary" : "outline"} aria-pressed={on} className="h-auto flex-col items-start gap-1 p-4 text-left whitespace-normal" onClick={() => pick(p)}>
@@ -274,7 +278,7 @@ export function ClientOrderPage() {
             <CardHeader><CardTitle>{t("cross_sell.title")}</CardTitle></CardHeader>
             <CardContent className="grid gap-3 *:min-w-0 sm:grid-cols-3">
               {cross.map((p) => {
-                const from = p.prices.filter((x) => x.currency === currency).sort((a, b) => Number(a.amount) - Number(b.amount))[0];
+                const from = p.prices.filter((x) => x.currency === currency).toSorted((a, b) => Number(a.amount) - Number(b.amount))[0];
                 return (
                   <div key={p.id} className="flex flex-col gap-2 rounded-md border p-3 text-sm">
                     <span className="font-medium">{p.name}</span>

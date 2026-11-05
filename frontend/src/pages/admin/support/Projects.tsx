@@ -132,7 +132,7 @@ export function AdminProjectDetailPage() {
           </div>
           <div className="flex flex-col gap-2"><Label htmlFor="pj-desc">{t("project.description")}</Label><Textarea id="pj-desc" rows={3} defaultValue={p.description} onBlur={(e) => e.target.value !== p.description && put({ description: e.target.value })} /></div>
           <div className="flex items-center gap-2"><Switch id="pj-vis" checked={p.client_visible} disabled={!p.customer_id} onCheckedChange={(c) => put({ client_visible: c })} /><Label htmlFor="pj-vis">{t("project.client_visible")}</Label></div>
-          <div><ConfirmAction description={t("project.delete_confirm")} onConfirm={() => api(base, { method: "DELETE" }).then(() => { refresh(); window.history.back(); }).catch(err)}><Button variant="destructive"><TrashIcon data-icon="inline-start" />{t("common.delete")}</Button></ConfirmAction></div>
+          <div><ConfirmAction description={t("project.delete_confirm")} onConfirm={() => api(base, { method: "DELETE" }).then(() => { refresh(); window.history.back(); return undefined; }).catch(err)}><Button variant="destructive"><TrashIcon data-icon="inline-start" />{t("common.delete")}</Button></ConfirmAction></div>
         </CardContent>
       </Card>
       <div className="grid gap-6 lg:grid-cols-2">

@@ -1,5 +1,5 @@
 import { DuoCard } from "@/components/account/Duo";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileTextIcon, ShieldCheckIcon, TrashIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -35,8 +35,12 @@ function PolicyCard() {
   const { t } = useI18n();
   const onErr = useErr();
   const q = useQuery({ queryKey: ["admin", "security-policy"], queryFn: () => api<{ policy: Policy; defaults: { session_idle_minutes: number; session_absolute_hours: number; login_rate_per_minute: number } }>("/admin/security/policy") });
-  const [p, setP] = useState<Policy | null>(null);
-  useEffect(() => { if (q.data) setP(q.data.policy); }, [q.data]);
+  const [p, setP] = useState<Policy | null>(q.data?.policy ?? null);
+  const [seen, setSeen] = useState(q.data);
+  if (q.data !== seen) {
+    setSeen(q.data);
+    if (q.data !== undefined) setP(q.data.policy);
+  }
   const save = useMutation({ mutationFn: (b: Policy) => api("/admin/security/policy", { method: "PUT", body: b }), onSuccess: () => toast.success(t("security.saved")), onError: onErr });
   if (!p) return null;
   const opt = (k: keyof Policy) => (e: React.ChangeEvent<HTMLInputElement>) => setP({ ...p, [k]: e.target.value === "" ? null : Number(e.target.value) });
@@ -71,9 +75,13 @@ function CaptchaCard() {
   const onErr = useErr();
   const q = useQuery({ queryKey: ["admin", "captcha"], queryFn: () => api<{ policy: CaptchaPolicy; forms: string[]; modes: string[] }>("/admin/security/captcha") });
   const addons = useQuery({ queryKey: ["admin", "addons"], queryFn: () => api<{ items: Addon[] }>("/admin/addons") });
-  const [c, setC] = useState<CaptchaPolicy | null>(null);
+  const [c, setC] = useState<CaptchaPolicy | null>(q.data?.policy ?? null);
+  const [seen, setSeen] = useState(q.data);
+  if (q.data !== seen) {
+    setSeen(q.data);
+    if (q.data !== undefined) setC(q.data.policy);
+  }
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => { if (q.data) setC(q.data.policy); }, [q.data]);
   const save = useMutation({
     mutationFn: (b: CaptchaPolicy) => api("/admin/security/captcha", { method: "PUT", body: b }),
     onSuccess: () => { setErr(null); toast.success(t("security.saved")); },
@@ -311,9 +319,13 @@ function TrustedProxiesCard() {
   const { t, tCode } = useI18n();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["admin", "trusted-proxies"], queryFn: () => api<{ proxies: string[] }>("/admin/security/trusted-proxies") });
-  const [text, setText] = useState("");
+  const [text, setText] = useState(q.data ? q.data.proxies.join("\n") : "");
+  const [seen, setSeen] = useState(q.data);
+  if (q.data !== seen) {
+    setSeen(q.data);
+    if (q.data !== undefined) setText(q.data.proxies.join("\n"));
+  }
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => { if (q.data) setText(q.data.proxies.join("\n")); }, [q.data]);
   const save = useMutation({
     mutationFn: () => api<{ proxies: string[] }>("/admin/security/trusted-proxies", { method: "PUT", body: { proxies: text.split(/[\s,]+/).filter(Boolean) } }),
     onSuccess: (d) => { setErr(null); qc.setQueryData(["admin", "trusted-proxies"], d); void qc.invalidateQueries({ queryKey: ["admin", "ip-rules"] }); toast.success(t("common.saved")); },

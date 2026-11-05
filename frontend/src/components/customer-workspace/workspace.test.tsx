@@ -24,7 +24,7 @@ function mount(element: React.ReactNode) {
 describe("workspace activity interactions", () => {
   it("filters and paginates with the exact cursor, replacing pages on filter change", async () => {
     const cursor = '{"key":"note:a+b&%","kind":"all"}';
-    const fetcher = vi.fn(async (url: string) => {
+    const fetcher = vi.fn<(url: string) => Promise<Response>>(async (url: string) => {
       const params = new URL(url, "https://example.test").searchParams;
       if (params.get("kind") === "invoice") return Response.json({ items: [event("i", "invoice", "INV-123")], next_cursor: null });
       if (params.has("before")) return Response.json({ items: [event("second")], next_cursor: null });
@@ -47,7 +47,7 @@ describe("workspace activity interactions", () => {
   });
   it("retries initial errors and failed pagination without discarding earlier events", async () => {
     let calls = 0;
-    const fetcher = vi.fn(async (url: string) => {
+    const fetcher = vi.fn<(url: string) => Promise<Response>>(async (url: string) => {
       calls++;
       if (calls === 1 || calls === 3) return Response.json({}, { status: 500 });
       if (url.includes("before=")) return Response.json({ items: [event("second", "email", "Email delivery")], next_cursor: null });
@@ -67,7 +67,7 @@ describe("workspace activity interactions", () => {
     expect(fetcher.mock.calls[3]![0]).toContain("before=opaque");
   });
   it("never exposes restricted filters and resets pagination when the customer changes", async () => {
-    const fetcher = vi.fn(async (_url: string) => Response.json({ items: [event("one")], next_cursor: "cursor" }));
+    const fetcher = vi.fn<(_url: string) => Promise<Response>>(async (_url: string) => Response.json({ items: [event("one")], next_cursor: "cursor" }));
     vi.stubGlobal("fetch", fetcher);
     const restricted = { ...access, finance: false, services: false, support: false, operations: false, audit: false };
     const { client, rerender } = mount(<WorkspaceActivity key="c1" customerId="c1" access={restricted} />);
@@ -84,7 +84,7 @@ describe("workspace activity interactions", () => {
 
 describe("inline workspace notes", () => {
   it("validates input, trims the saved note and invalidates workspace plus all activity filters", async () => {
-    const fetcher = vi.fn(async () => Response.json({ id: "n" }));
+    const fetcher = vi.fn<() => Promise<Response>>(async () => Response.json({ id: "n" }));
     vi.stubGlobal("fetch", fetcher);
     const { client } = mount(<WorkspaceNotes customerId="c1" />);
     client.setQueryData(workspaceKey("c1"), {});
@@ -112,7 +112,7 @@ describe("inline workspace notes", () => {
     expect(client.getQueryState(workspaceKey("c2"))?.isInvalidated).toBe(false);
   });
   it("keeps the draft after save failure and allows retry", async () => {
-    const fetcher = vi.fn().mockResolvedValueOnce(Response.json({}, { status: 500 })).mockResolvedValueOnce(Response.json({ id: "n" }));
+    const fetcher = vi.fn<() => Promise<Response>>().mockResolvedValueOnce(Response.json({}, { status: 500 })).mockResolvedValueOnce(Response.json({ id: "n" }));
     vi.stubGlobal("fetch", fetcher);
     mount(<WorkspaceNotes customerId="c1" />);
     fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Keep this draft" } });

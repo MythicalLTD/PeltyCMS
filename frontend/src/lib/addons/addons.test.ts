@@ -2,6 +2,7 @@ import { describe as d, expect, it } from "vitest";
 import { capabilityLines, dangerLine, describe, filterAddons, initialValues, type Addon } from "./addons";
 
 const a = (o: Partial<Addon>): Addon => ({ id: "x", name: "X", version: "1", kind: "gateway", engine: "x", description: "", author: "", permissions: [], settings_schema: [], source: "builtin", hash: "builtin", status: "available", installed_version: null, integrity_ok: true, ...o });
+const addonTr = (k: string) => (k === "addons.desc.generic" ? "generic" : k);
 
 d("addons", () => {
   const items = [a({ id: "gateway-stripe", name: "Stripe", status: "enabled" }), a({ id: "provisioning-pterodactyl", name: "Pterodactyl", kind: "provisioning" })];
@@ -12,9 +13,8 @@ d("addons", () => {
     expect(filterAddons(items, "all", "STR").map((x) => x.id)).toEqual(["gateway-stripe"]);
   });
   it("describes built-ins via i18n with fallback", () => {
-    const t = (k: string) => (k === "addons.desc.generic" ? "generic" : k);
-    expect(describe(a({ description: "addons.desc.gateway.zzz" }), t)).toBe("generic");
-    expect(describe(a({ description: "Plain" }), t)).toBe("Plain");
+    expect(describe(a({ description: "addons.desc.gateway.zzz" }), addonTr)).toBe("generic");
+    expect(describe(a({ description: "Plain" }), addonTr)).toBe("Plain");
   });
   it("fills defaults", () => {
     expect(initialValues([{ key: "m", label: "", kind: "select", required: false, choices: ["a"], default: "a" }, { key: "b", label: "", kind: "bool", required: false, choices: [] }], {})).toEqual({ m: "a", b: false });

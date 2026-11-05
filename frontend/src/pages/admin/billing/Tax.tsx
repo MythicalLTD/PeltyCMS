@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { EInvoiceCard } from "@/pages/admin/billing/EInvoice";
 import { toast } from "sonner";
 import { PencilSimpleIcon, PlusIcon, ReceiptIcon, TrashIcon } from "@phosphor-icons/react";
@@ -38,9 +38,13 @@ function SwitchRow({ id, label, hint, checked, onChange }: { id: string; label: 
 function SettingsCard() {
   const { t, tCode } = useI18n();
   const { data } = useQuery({ queryKey: ["admin", "settings", "tax"], queryFn: () => api<TaxSettings>("/admin/settings/tax") });
-  const [form, setForm] = useState<TaxSettings>({ enabled: false, inclusive: false, home_country: "", reverse_charge: false });
+  const [form, setForm] = useState<TaxSettings>(data ?? { enabled: false, inclusive: false, home_country: "", reverse_charge: false });
+  const [seen, setSeen] = useState(data);
+  if (data !== seen) {
+    setSeen(data);
+    if (data !== undefined) setForm(data);
+  }
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { if (data) setForm(data); }, [data]);
   const save = useMutation({
     mutationFn: (b: TaxSettings) => api<TaxSettings>("/admin/settings/tax", { method: "PUT", body: b }),
     onSuccess: (b) => { setForm(b); setError(null); toast.success(t("common.saved")); },
@@ -71,9 +75,11 @@ function RuleDialog({ rule, open, onOpenChange }: { rule: TaxRule | null; open: 
   const qc = useQueryClient();
   const [form, setForm] = useState<RuleForm>(EMPTY_RULE);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
+  const [gate, setGate] = useState({ open, rule });
+  if (open !== gate.open || rule !== gate.rule) {
+    setGate({ open, rule });
     if (open) { setForm(rule ? { ...rule } : EMPTY_RULE); setError(null); }
-  }, [open, rule]);
+  }
   const save = useMutation({
     mutationFn: (b: RuleForm) => api<TaxRule>(rule ? `/admin/tax-rules/${rule.id}` : "/admin/tax-rules", { method: rule ? "PUT" : "POST", body: { ...b, priority: Number(b.priority) || 0 } }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "tax-rules"] }); onOpenChange(false); toast.success(t("common.saved")); },
@@ -121,9 +127,13 @@ export const isHexColor = (s: string) => /^#[0-9a-fA-F]{6}$/.test(s);
 function BrandingCard() {
   const { t, tCode } = useI18n();
   const { data } = useQuery({ queryKey: ["admin", "settings", "invoice-branding"], queryFn: () => api<InvoiceBranding>("/admin/settings/invoice-branding") });
-  const [form, setForm] = useState<InvoiceBranding>({ company_name: "", address: "", tax_id: "", footer: "", accent: "#111827" });
+  const [form, setForm] = useState<InvoiceBranding>(data ?? { company_name: "", address: "", tax_id: "", footer: "", accent: "#111827" });
+  const [seen, setSeen] = useState(data);
+  if (data !== seen) {
+    setSeen(data);
+    if (data !== undefined) setForm(data);
+  }
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { if (data) setForm(data); }, [data]);
   const save = useMutation({
     mutationFn: (b: InvoiceBranding) => api<InvoiceBranding>("/admin/settings/invoice-branding", { method: "PUT", body: b }),
     onSuccess: (b) => { setForm(b); setError(null); toast.success(t("common.saved")); },

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellRingingIcon, CheckCircleIcon, CoinsIcon, ProhibitIcon, XCircleIcon } from "@phosphor-icons/react";
 import { PageHeader } from "@/components/PageHeader";
@@ -28,7 +28,7 @@ export interface DueReminders { enabled: boolean; days_before: number[] }
 /** Parse "7, 3,3" into sorted unique positive days (invalid parts dropped). */
 export function parseDays(s: string): number[] {
   const v = s.split(/[\s,;]+/).map((x) => Number(x)).filter((n) => Number.isInteger(n) && n >= 1 && n <= 60);
-  return [...new Set(v)].sort((a, b) => a - b);
+  return [...new Set(v)].toSorted((a, b) => a - b);
 }
 
 /** Toggle one id in a selection. */
@@ -49,10 +49,10 @@ function Summary({ r }: { r: BulkResponse | null }) {
   if (!r) return null;
   const failed = r.results.filter((x) => !x.ok);
   return (
-    <div className="space-y-1 text-sm" role="status">
+    <output className="block space-y-1 text-sm">
       <p>{t("bulk.summary").replace("{ok}", String(r.ok)).replace("{failed}", String(r.failed))}</p>
       {failed.map((f) => <p key={f.id} className="font-mono text-xs text-muted-foreground">{f.id.slice(0, 8)} · {tCode(f.error ?? "error.unknown")}</p>)}
-    </div>
+    </output>
   );
 }
 
@@ -104,8 +104,12 @@ function RulesTab() {
   const { t, tCode } = useI18n();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["admin", "approval-rules"], queryFn: () => api<ApprovalRules>("/admin/settings/order-approval") });
-  const [r, setR] = useState<ApprovalRules | null>(null);
-  useEffect(() => { if (q.data) setR(q.data); }, [q.data]);
+  const [r, setR] = useState<ApprovalRules | null>(q.data ?? null);
+  const [seen, setSeen] = useState(q.data);
+  if (q.data !== seen) {
+    setSeen(q.data);
+    if (q.data !== undefined) setR(q.data);
+  }
   const m = useMutation({
     mutationFn: (v: ApprovalRules) => api<ApprovalRules>("/admin/settings/order-approval", { method: "PUT", body: cleanRules(v) }),
     onSuccess: (v) => { setR(v); qc.invalidateQueries({ queryKey: ["admin", "approval-queue"] }); },
@@ -203,9 +207,16 @@ function InvoicesTab() {
 function RemindersTab() {
   const { t, tCode } = useI18n();
   const q = useQuery({ queryKey: ["admin", "due-reminders"], queryFn: () => api<DueReminders>("/admin/settings/due-reminders") });
-  const [enabled, setEnabled] = useState(false);
-  const [days, setDays] = useState("");
-  useEffect(() => { if (q.data) { setEnabled(q.data.enabled); setDays(q.data.days_before.join(", ")); } }, [q.data]);
+  const [seen, setSeen] = useState(q.data);
+  const [enabled, setEnabled] = useState(q.data?.enabled ?? false);
+  const [days, setDays] = useState(q.data ? q.data.days_before.join(", ") : "");
+  if (q.data !== seen) {
+    setSeen(q.data);
+    if (q.data !== undefined) {
+      setEnabled(q.data.enabled);
+      setDays(q.data.days_before.join(", "));
+    }
+  }
   const m = useMutation({
     mutationFn: () => api<DueReminders>("/admin/settings/due-reminders", { method: "PUT", body: { enabled, days_before: parseDays(days) } }),
     onSuccess: (v) => setDays(v.days_before.join(", ")),
@@ -286,10 +297,10 @@ export function MassPayButton() {
         </div>
         <FormError message={errMsg(m.error, tCode)} />
         {res && (
-          <div className="space-y-1 text-sm" role="status">
+          <output className="block space-y-1 text-sm">
             <p>{t("masspay.done").replace("{n}", String(res.paid))}</p>
             {res.results.filter((r) => !r.ok).map((r) => <p key={r.id} className="text-xs text-muted-foreground">{r.id.slice(0, 8)} · {tCode(r.error ?? "error.unknown")}</p>)}
-          </div>
+          </output>
         )}
         <DialogFooter><Button disabled={!sel.length || m.isPending} onClick={() => m.mutate()}>{t("masspay.pay")}</Button></DialogFooter>
       </DialogContent>

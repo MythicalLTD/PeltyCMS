@@ -17,6 +17,7 @@ import { useI18n } from "@/lib/i18n";
 
 type Login = "none" | "password" | "invite";
 const EMPTY = { email: "", first_name: "", last_name: "", organization: "", phone: "", address_line1: "", city: "", postal_code: "", country: "", notes: "", password: "" };
+const trimOpt = (v: string) => v.trim() || undefined;
 
 /** Admin "Add client": profile, optional login (password or emailed invite), group, language, status, notes. */
 export function CreateClientDialog() {
@@ -35,13 +36,12 @@ export function CreateClientDialog() {
   const groups = useQuery({ queryKey: ["admin", "client-groups"], queryFn: () => api<{ items: { id: string; name: string }[] }>("/admin/client-groups"), enabled: open });
   const currencies = useQuery({ queryKey: ["currencies"], queryFn: () => api<{ items: { code: string }[] }>("/currencies"), enabled: open });
   const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((p) => ({ ...p, [k]: e.target.value }));
-  const opt = (v: string) => v.trim() || undefined;
   const create = useMutation({
     mutationFn: () => api<Customer>("/admin/customers", { method: "POST", body: {
       email: f.email.trim(), login, password: login === "password" ? f.password : undefined, send_welcome: login === "password" && welcome,
-      first_name: opt(f.first_name), last_name: opt(f.last_name), organization: opt(f.organization), phone: opt(f.phone),
-      address_line1: opt(f.address_line1), city: opt(f.city), postal_code: opt(f.postal_code), country: opt(f.country.toUpperCase()),
-      currency: currency || undefined, group_id: group === "none" ? undefined : group, locale: locale || undefined, status, notes: opt(f.notes),
+      first_name: trimOpt(f.first_name), last_name: trimOpt(f.last_name), organization: trimOpt(f.organization), phone: trimOpt(f.phone),
+      address_line1: trimOpt(f.address_line1), city: trimOpt(f.city), postal_code: trimOpt(f.postal_code), country: trimOpt(f.country.toUpperCase()),
+      currency: currency || undefined, group_id: group === "none" ? undefined : group, locale: locale || undefined, status, notes: trimOpt(f.notes),
     } }),
     onSuccess: (c) => {
       toast.success(t("clients.created"));

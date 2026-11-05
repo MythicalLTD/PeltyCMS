@@ -23,13 +23,13 @@ interface SessionGroup extends Session { ids: string[] }
  *  the current session always stays in its own row. */
 export function groupSessions(items: Session[]): SessionGroup[] {
   const out = new Map<string, SessionGroup>();
-  for (const x of [...items].sort((a, b) => b.last_seen_at.localeCompare(a.last_seen_at))) {
+  for (const x of items.toSorted((a, b) => b.last_seen_at.localeCompare(a.last_seen_at))) {
     const k = x.current ? `cur:${x.id}` : `${x.user_agent ?? ""}|${x.ip ?? ""}`;
     const g = out.get(k);
     if (g) g.ids.push(x.id);
     else out.set(k, { ...x, ids: [x.id] });
   }
-  return [...out.values()].sort((a, b) => Number(b.current) - Number(a.current));
+  return [...out.values()].toSorted((a, b) => Number(b.current) - Number(a.current));
 }
 
 export function SessionsPage() {

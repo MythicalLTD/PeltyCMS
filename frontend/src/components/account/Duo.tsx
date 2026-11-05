@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { ShieldCheckIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -53,18 +53,23 @@ export function DuoCallbackPage() {
   const [params] = useSearchParams();
   const nav = useNavigate();
   const qc = useQueryClient();
-  const [err, setErr] = useState<string | null>(null);
-  const once = useRef(false);
-  useEffect(() => {
-    if (once.current) return;
-    once.current = true;
-    const state = params.get("state") ?? "";
-    const code = params.get("duo_code") ?? params.get("code") ?? "";
-    if (!state || !code) { setErr(t("error.duo_denied")); return; }
-    api<Me>("/auth/duo/finish", { method: "POST", body: { state, duo_code: code } })
-      .then((me) => { setCsrfToken(me.csrf_token); qc.setQueryData(["me"], me); nav(isStaff(me) ? "/admin" : "/", { replace: true }); })
-      .catch((e) => setErr(e instanceof ApiError ? tCode(e.code) : t("common.error")));
-  }, [params, nav, qc, t, tCode]);
+  const state = params.get("state") ?? "";
+  const code = params.get("duo_code") ?? params.get("code") ?? "";
+  const missing = !state || !code;
+  const finish = useQuery({
+    queryKey: ["auth", "duo-finish", state, code],
+    queryFn: async () => {
+      const me = await api<Me>("/auth/duo/finish", { method: "POST", body: { state, duo_code: code } });
+      setCsrfToken(me.csrf_token);
+      qc.setQueryData(["me"], me);
+      nav(isStaff(me) ? "/admin" : "/", { replace: true });
+      return me;
+    },
+    enabled: !missing,
+    retry: false,
+    staleTime: Infinity,
+  });
+  const err = missing ? t("error.duo_denied") : finish.isError ? (finish.error instanceof ApiError ? tCode(finish.error.code) : t("common.error")) : null;
   return (
     <Card>
       <CardHeader><h1 className="text-2xl font-semibold tracking-tight">{t("duo.title")}</h1></CardHeader>
@@ -84,7 +89,11 @@ export function DuoCard() {
   const { data } = useQuery({ queryKey: key, queryFn: () => api<DuoCfg>("/admin/security/duo") });
   const [f, setF] = useState<DuoCfg & { client_secret: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => { if (data) setF({ ...data, client_secret: "" }); }, [data]);
+  const [seen, setSeen] = useState(data);
+  if (data !== seen) {
+    setSeen(data);
+    if (data !== undefined) setF({ ...data, client_secret: "" });
+  }
   const onErr = (e: unknown) => setErr(e instanceof ApiError ? tCode(e.code) : t("error.internal"));
   const save = useMutation({ mutationFn: (b: DuoCfg & { client_secret: string }) => api<DuoCfg>("/admin/security/duo", { method: "PUT", body: { enabled: b.enabled, client_id: b.client_id, api_host: b.api_host, scope: b.scope, client_secret: b.client_secret } }), onSuccess: (r) => { qc.setQueryData(key, r); setErr(null); toast.success(t("common.saved")); }, onError: onErr });
   const test = useMutation({ mutationFn: () => api("/admin/security/duo/test", { method: "POST" }), onSuccess: () => { setErr(null); toast.success(t("duo.test_ok")); }, onError: onErr });

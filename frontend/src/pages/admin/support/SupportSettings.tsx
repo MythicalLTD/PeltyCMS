@@ -333,6 +333,8 @@ function Stat({ label, value }: { label: string; value: string }) {
   return <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="text-2xl font-semibold tabular-nums">{value}</p></div>;
 }
 
+const csatDash = (v: string | null, suffix = "") => (v == null ? "-" : `${v}${suffix}`);
+
 function SatisfactionTab() {
   const { t, lang } = useI18n();
   const [days, setDays] = useState("30");
@@ -341,12 +343,11 @@ function SatisfactionTab() {
   const qs = new URLSearchParams({ days, ...(dep ? { department_id: dep } : {}), ...(low ? { low: "true" } : {}) });
   const { data, isLoading } = useQuery({ queryKey: ["admin", "ticket-satisfaction", days, dep, low], queryFn: () => api<{ report: CsatReport }>(`/admin/ticket-satisfaction?${qs}`) });
   const r = data?.report;
-  const dash = (v: string | null, suffix = "") => (v == null ? "-" : `${v}${suffix}`);
   const groupCols = (first: string) => [
     { header: first, primary: true, cell: (g: CsatGroup) => <span className="font-medium">{g.name || t("csat.unassigned")}</span> },
     { header: t("csat.ratings"), cell: (g: CsatGroup) => g.ratings },
-    { header: t("csat.avg"), cell: (g: CsatGroup) => dash(g.avg_rating) },
-    { header: t("csat.csat"), cell: (g: CsatGroup) => dash(g.csat, "%") },
+    { header: t("csat.avg"), cell: (g: CsatGroup) => csatDash(g.avg_rating) },
+    { header: t("csat.csat"), cell: (g: CsatGroup) => csatDash(g.csat, "%") },
   ];
   return (
     <div className="flex flex-col gap-4">
@@ -359,10 +360,10 @@ function SatisfactionTab() {
         <Label className="flex h-9 items-center gap-2"><Switch checked={low} onCheckedChange={setLow} />{t("csat.low_only")}</Label>
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label={t("csat.avg")} value={dash(r?.summary.avg_rating ?? null, " / 5")} />
-        <Stat label={t("csat.csat")} value={dash(r?.summary.csat ?? null, "%")} />
+        <Stat label={t("csat.avg")} value={csatDash(r?.summary.avg_rating ?? null, " / 5")} />
+        <Stat label={t("csat.csat")} value={csatDash(r?.summary.csat ?? null, "%")} />
         <Stat label={t("csat.ratings")} value={String(r?.summary.ratings ?? 0)} />
-        <Stat label={t("csat.response_rate")} value={dash(r?.summary.rated_tickets_share ?? null, "%")} />
+        <Stat label={t("csat.response_rate")} value={csatDash(r?.summary.rated_tickets_share ?? null, "%")} />
       </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>

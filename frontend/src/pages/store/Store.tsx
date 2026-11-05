@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { ArrowLeftIcon, CreditCardIcon, PackageIcon, PlusIcon, ShoppingCartIcon, StorefrontIcon, TagIcon, TrashIcon } from "@phosphor-icons/react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -130,9 +131,14 @@ export function StoreProductPage() {
   const [config, setConfig] = useState<ConfigSel>({});
   const [addons, setAddons] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (product) { setConfig(defaultConfig(product.options)); setCycle((c) => (product.prices.some((p) => p.currency === currency && p.cycle === c) ? c : product.prices.find((p) => p.currency === currency)?.cycle ?? "")); }
-  }, [product, currency]);
+  const [gate, setGate] = useState({ product, currency });
+  if (product !== gate.product || currency !== gate.currency) {
+    setGate({ product, currency });
+    if (product) {
+      setConfig(defaultConfig(product.options));
+      setCycle((c) => (product.prices.some((p) => p.currency === currency && p.cycle === c) ? c : product.prices.find((p) => p.currency === currency)?.cycle ?? ""));
+    }
+  }
   if (data && !product) return <EmptyState icon={PackageIcon} title={t("store.not_found")} />;
   if (!product) return <PageSkeleton />;
   const price = cycles.find((c) => c.cycle === cycle);
@@ -158,9 +164,10 @@ export function StoreProductPage() {
           <div className="grid gap-2 sm:col-span-2"><Label>{t("billing.cycle")}</Label>
             <div role="radiogroup" className="flex flex-wrap gap-2">
               {cycles.map((c) => (
-                <Button key={c.cycle} type="button" role="radio" aria-checked={cycle === c.cycle} variant={cycle === c.cycle ? "secondary" : "outline"} className="h-auto min-h-11 flex-col items-start gap-0 py-2" onClick={() => setCycle(c.cycle)}>
+                <label key={c.cycle} className={cn(buttonVariants({ variant: cycle === c.cycle ? "secondary" : "outline" }), "h-auto min-h-11 cursor-pointer flex-col items-start gap-0 py-2")}>
+                  <input type="radio" name="store-cycle" className="sr-only" checked={cycle === c.cycle} onChange={() => setCycle(c.cycle)} />
                   <span>{tCode(`cycle.${c.cycle}`)}</span><span className="text-xs tabular-nums text-muted-foreground">{formatMoney(c.amount, currency, lang)}</span>
-                </Button>
+                </label>
               ))}
             </div>
           </div>
@@ -395,9 +402,10 @@ export function CheckoutPage() {
             {(gw?.items.length ?? 0) === 0 ? <p className="text-sm text-muted-foreground">{t("store.no_gateways")}</p> : (
               <div role="radiogroup" className="grid gap-2 *:min-w-0 sm:grid-cols-2">
                 {gw!.items.map((g) => (
-                  <Button key={g} type="button" role="radio" aria-checked={chosen === g} variant={chosen === g ? "secondary" : "outline"} className="min-h-11 justify-start" onClick={() => setGateway(g)}>
+                  <label key={g} className={cn(buttonVariants({ variant: chosen === g ? "secondary" : "outline" }), "min-h-11 cursor-pointer justify-start")}>
+                    <input type="radio" name="store-gateway" className="sr-only" checked={chosen === g} onChange={() => setGateway(g)} />
                     <CreditCardIcon aria-hidden />{(() => { const k = gwKey(g); return k ? t(k) : g; })()}
-                  </Button>
+                  </label>
                 ))}
               </div>
             )}

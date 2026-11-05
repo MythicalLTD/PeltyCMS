@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useLiveChat } from "@/hooks/useLiveChat";
@@ -59,37 +59,47 @@ function ChatPanel() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const msgsRef = useRef(msgs);
-  msgsRef.current = msgs;
+  const credsRef = useRef(creds);
+  useEffect(() => {
+    msgsRef.current = msgs;
+    credsRef.current = creds;
+  });
   const endRef = useRef<HTMLDivElement>(null);
+  const pollActiveRef = useRef(false);
   const live = useLiveChat(open && creds ? `/chat/sessions/${creds.id}/ws` : null, { token: creds?.token }, (event) => {
     setStatus(event.status);
     if (event.messages?.length) setMsgs((p) => mergeMessages(p, event.messages));
   }, () => lastId(msgsRef.current));
 
-  const forget = () => { localStorage.removeItem(CHAT_KEY); setCreds(null); setMsgs([]); setStatus("open"); };
+  const forget = useCallback(() => { localStorage.removeItem(CHAT_KEY); setCreds(null); setMsgs([]); setStatus("open"); }, []);
   const fail = (e: unknown) => setErr(e instanceof ApiError ? tCode(e.code) : t("error.internal"));
 
-  const pull = async () => {
-    if (!creds) return;
+  const pull = useCallback(async () => {
+    const c = credsRef.current;
+    if (!c) return;
     try {
-      const r = await api<{ status: "open" | "closed"; messages: ChatMessage[] }>(`/chat/sessions/${creds.id}/messages?after=${lastId(msgsRef.current)}`, { headers: { "x-chat-token": creds.token } });
+      const r = await api<{ status: "open" | "closed"; messages: ChatMessage[] }>(`/chat/sessions/${c.id}/messages?after=${lastId(msgsRef.current)}`, { headers: { "x-chat-token": c.token } });
       setStatus(r.status);
       if (r.messages.length) setMsgs((p) => mergeMessages(p, r.messages));
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) forget();
     }
-  };
+  }, [forget]);
 
+  const pullRef = useRef(pull);
+  useEffect(() => { pullRef.current = pull; }, [pull]);
   useEffect(() => {
     if (!open || !creds) return;
-    let active = true;
-    void pull().finally(() => { /* one-shot on open */ });
-    if (live.connected) return () => { active = false; };
-    const h = window.setInterval(() => { if (active) void pull(); }, 15000);
-    return () => { active = false; window.clearInterval(h); };
+    pollActiveRef.current = true;
+    void pullRef.current().finally(() => { /* one-shot on open */ });
+    if (live.connected) return () => { pollActiveRef.current = false; };
+    const h = window.setInterval(() => { if (pollActiveRef.current) void pullRef.current(); }, 15000);
+    return () => { pollActiveRef.current = false; window.clearInterval(h); };
   }, [open, creds, live.connected]);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [msgs.length, live.typing]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  });
 
   const start = async () => {
     setErr(null); setBusy(true);
@@ -126,7 +136,7 @@ function ChatPanel() {
         <SheetHeader>
           <SheetTitle>{t("chat.title")}</SheetTitle>
           <SheetDescription>{t("chat.subtitle")}</SheetDescription>
-          {creds && <p className="text-xs" role="status">{t(live.online ? "chat.online" : "chat.offline")}</p>}
+          {creds && <output className="block text-xs">{t(live.online ? "chat.online" : "chat.offline")}</output>}
         </SheetHeader>
         <div className="flex flex-1 flex-col gap-3 overflow-hidden px-4 pb-4">
           {creds ? (
@@ -169,7 +179,7 @@ function ChatPanel() {
                   {availability.data?.departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </NativeSelect>
               </div>
-              {availability.data && !availability.data.open && <p role="status">{t("error.chat_unavailable")}</p>}
+              {availability.data && !availability.data.open && <output className="block">{t("error.chat_unavailable")}</output>}
               <Button type="submit" disabled={!availability.data?.open || busy || !validBody(body) || !name.trim() || !email.trim()}>{t("chat.start")}</Button>
             </form>
           )}

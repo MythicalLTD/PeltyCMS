@@ -7,11 +7,11 @@ import { STATUSES } from "./support/support";
 const root = join(__dirname, "../../..");
 const locale = (l: string) => JSON.parse(readFileSync(join(root, "locales", `${l}.json`), "utf8")) as Record<string, string>;
 
-function files(dir: string, ext: RegExp): string[] {
-  return readdirSync(dir).flatMap((f) => {
-    const p = join(dir, f);
-    if (statSync(p).isDirectory()) return f === "node_modules" || f === "target" ? [] : files(p, ext);
-    return ext.test(f) ? [p] : [];
+function walkFiles(dir: string, ext: RegExp): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const p = join(dir, name);
+    if (statSync(p).isDirectory()) return name === "node_modules" || name === "target" ? [] : walkFiles(p, ext);
+    return ext.test(name) ? [p] : [];
   });
 }
 
@@ -34,8 +34,8 @@ describe("translation key coverage", () => {
   const en = locale("en");
   it("every frontend key exists in en", () => {
     const used = new Set<string>();
-    for (const f of files(join(root, "frontend/src"), /\.tsx?$/)) {
-      const src = readFileSync(f, "utf8");
+    for (const srcPath of walkFiles(join(root, "frontend/src"), /\.tsx?$/)) {
+      const src = readFileSync(srcPath, "utf8");
       for (const m of src.matchAll(/\bt\(\s*"([a-z0-9_.]+)"/g)) used.add(m[1]!);
       for (const m of src.matchAll(/(?:label|section):\s*"([a-z0-9_.]+)"/g)) used.add(m[1]!);
     }
@@ -44,8 +44,8 @@ describe("translation key coverage", () => {
   });
   it("every backend error code exists in en", () => {
     const used = new Set<string>();
-    for (const f of files(join(root, "crates"), /\.rs$/)) {
-      for (const m of readFileSync(f, "utf8").matchAll(/"(error\.[a-z_]+)"/g)) used.add(m[1]!);
+    for (const srcPath of walkFiles(join(root, "crates"), /\.rs$/)) {
+      for (const m of readFileSync(srcPath, "utf8").matchAll(/"(error\.[a-z_]+)"/g)) used.add(m[1]!);
     }
     expect(used.size).toBeGreaterThan(10);
     expect([...used].filter((k) => !(k in en))).toEqual([]);
@@ -56,23 +56,23 @@ describe("translation key coverage", () => {
     expect(interpolate("{a} {{b}} {c}", { a: 1 })).toBe("1 {{b}} {c}");
   });
   it("every locale has the same keys as en", () => {
-    for (const f of readdirSync(join(root, "locales")).filter((f) => f.endsWith(".json"))) {
-      const l = locale(f.replace(".json", ""));
+    for (const localeFile of readdirSync(join(root, "locales")).filter((name) => name.endsWith(".json"))) {
+      const l = locale(localeFile.replace(".json", ""));
       const missing = Object.keys(en).filter((k) => !(k in l));
       const extra = Object.keys(l).filter((k) => !(k in en));
-      expect({ file: f, missing, extra }).toEqual({ file: f, missing: [], extra: [] });
+      expect({ file: localeFile, missing, extra }).toEqual({ file: localeFile, missing: [], extra: [] });
     }
   });
   it("plugin and theme locale files match their own en", () => {
     for (const kind of ["plugins", "themes"]) {
       for (const id of readdirSync(join(root, "extensions", kind))) {
         const dir = join(root, "extensions", kind, id, "locales");
-        let files: string[] = [];
-        try { files = readdirSync(dir).filter((f) => f.endsWith(".json")); } catch { continue; }
+        let localeFiles: string[] = [];
+        try { localeFiles = readdirSync(dir).filter((name) => name.endsWith(".json")); } catch { continue; }
         const base = JSON.parse(readFileSync(join(dir, "en.json"), "utf8")) as Record<string, string>;
-        for (const f of files) {
-          const l = JSON.parse(readFileSync(join(dir, f), "utf8")) as Record<string, string>;
-          expect({ ext: `${kind}/${id}/${f}`, missing: Object.keys(base).filter((k) => !(k in l)) }).toEqual({ ext: `${kind}/${id}/${f}`, missing: [] });
+        for (const localeFile of localeFiles) {
+          const l = JSON.parse(readFileSync(join(dir, localeFile), "utf8")) as Record<string, string>;
+          expect({ ext: `${kind}/${id}/${localeFile}`, missing: Object.keys(base).filter((k) => !(k in l)) }).toEqual({ ext: `${kind}/${id}/${localeFile}`, missing: [] });
         }
       }
     }
@@ -95,8 +95,8 @@ describe("status and error codes", () => {
   const ro = locale("ro");
   it("every ticket status has status.* in en and ro", () => {
     for (const s of STATUSES) {
-      expect(en[`status.${s}`], s).toBeTruthy();
-      expect(ro[`status.${s}`], s).toBeTruthy();
+      expect(en[`status.${s}`]).toBeTruthy();
+      expect(ro[`status.${s}`]).toBeTruthy();
     }
   });
   it("every status.* / error.* key in en exists in ro", () => {
@@ -105,8 +105,8 @@ describe("status and error codes", () => {
   });
   it("literal status.* / error.* codes used in the frontend exist in both locales", () => {
     const used = new Set<string>();
-    for (const f of files(join(root, "frontend/src"), /\.tsx?$/).filter((f) => !/\.test\.tsx?$/.test(f))) {
-      for (const m of readFileSync(f, "utf8").matchAll(/["'`]((?:status|error)\.[a-z0-9_]+)["'`]/g)) used.add(m[1]!);
+    for (const srcPath of walkFiles(join(root, "frontend/src"), /\.tsx?$/).filter((p) => !/\.test\.tsx?$/.test(p))) {
+      for (const m of readFileSync(srcPath, "utf8").matchAll(/["'`]((?:status|error)\.[a-z0-9_]+)["'`]/g)) used.add(m[1]!);
     }
     expect([...used].filter((k) => !(k in en) || !(k in ro))).toEqual([]);
   });

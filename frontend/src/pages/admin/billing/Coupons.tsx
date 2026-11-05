@@ -27,15 +27,19 @@ export interface Coupon {
 type Draft = Omit<Coupon, "id" | "uses">;
 const blank: Draft = { code: "", description: "", kind: "percent", value: "10", currency: null, recurring: false, max_uses: null, max_uses_per_customer: null, starts_at: null, expires_at: null, active: true, product_ids: [], recurring_cycles: null, applies_addons: false, applies_domains: false, tlds: [], customer_ids: [], client_group_ids: [] };
 
+const couponIso = (v: string | null) => (v ? new Date(v).toISOString() : null);
+
 /** Payload sent to the API: dates as RFC 3339, empty numbers as null. */
 export function toPayload(d: Draft) {
-  const iso = (v: string | null) => (v ? new Date(v).toISOString() : null);
-  return { ...d, recurring_cycles: d.recurring ? d.recurring_cycles : null, currency: d.kind === "fixed" ? (d.currency || "EUR") : null, starts_at: iso(d.starts_at), expires_at: iso(d.expires_at) };
+  return { ...d, recurring_cycles: d.recurring ? d.recurring_cycles : null, currency: d.kind === "fixed" ? (d.currency || "EUR") : null, starts_at: couponIso(d.starts_at), expires_at: couponIso(d.expires_at) };
 }
 
 export function couponValue(c: Pick<Coupon, "kind" | "value" | "currency">, lang: string) {
   return c.kind === "percent" ? `${Number(c.value)}%` : formatMoney(c.value, c.currency ?? "EUR", lang);
 }
+
+const couponNum = (v: string) => (v === "" ? null : Math.max(1, Number(v)));
+const couponDtLocal = (v: string | null) => (v ? v.slice(0, 16) : "");
 
 function CouponDialog({ initial, onDone, trigger }: { initial?: Coupon; onDone: () => void; trigger: React.ReactNode }) {
   const { t, tCode } = useI18n();
@@ -52,8 +56,6 @@ function CouponDialog({ initial, onDone, trigger }: { initial?: Coupon; onDone: 
     onError: (e) => setError(e instanceof ApiError ? tCode(e.code) : t("error.internal")),
   });
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));
-  const num = (v: string) => (v === "" ? null : Math.max(1, Number(v)));
-  const dt = (v: string | null) => (v ? v.slice(0, 16) : "");
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { const v = { ...blank, ...initial }; setD(v); setTlds(v.tlds.join(", ")); setCustomers(v.customer_ids.join(", ")); } }}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
@@ -84,7 +86,7 @@ function CouponDialog({ initial, onDone, trigger }: { initial?: Coupon; onDone: 
           </div>
           {d.recurring && (
             <div className="grid gap-2"><Label htmlFor="c-cyc">{t("coupons.recurring_cycles")}</Label>
-              <Input id="c-cyc" type="number" min={1} placeholder="∞" value={d.recurring_cycles ?? ""} onChange={(e) => set("recurring_cycles", num(e.target.value))} />
+              <Input id="c-cyc" type="number" min={1} placeholder="∞" value={d.recurring_cycles ?? ""} onChange={(e) => set("recurring_cycles", couponNum(e.target.value))} />
               <p className="text-sm text-muted-foreground">{t("coupons.recurring_cycles_hint")}</p></div>
           )}
           <div className="grid gap-3 sm:grid-cols-2">
@@ -119,15 +121,15 @@ function CouponDialog({ initial, onDone, trigger }: { initial?: Coupon; onDone: 
             <p className="text-sm text-muted-foreground">{t("coupons.customers_hint")}</p></div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2"><Label htmlFor="c-max">{t("coupons.max_uses")}</Label>
-              <Input id="c-max" type="number" min={1} placeholder="∞" value={d.max_uses ?? ""} onChange={(e) => set("max_uses", num(e.target.value))} /></div>
+              <Input id="c-max" type="number" min={1} placeholder="∞" value={d.max_uses ?? ""} onChange={(e) => set("max_uses", couponNum(e.target.value))} /></div>
             <div className="grid gap-2"><Label htmlFor="c-maxc">{t("coupons.max_per_customer")}</Label>
-              <Input id="c-maxc" type="number" min={1} placeholder="∞" value={d.max_uses_per_customer ?? ""} onChange={(e) => set("max_uses_per_customer", num(e.target.value))} /></div>
+              <Input id="c-maxc" type="number" min={1} placeholder="∞" value={d.max_uses_per_customer ?? ""} onChange={(e) => set("max_uses_per_customer", couponNum(e.target.value))} /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2"><Label htmlFor="c-start">{t("coupons.starts")}</Label>
-              <Input id="c-start" type="datetime-local" value={dt(d.starts_at)} onChange={(e) => set("starts_at", e.target.value || null)} /></div>
+              <Input id="c-start" type="datetime-local" value={couponDtLocal(d.starts_at)} onChange={(e) => set("starts_at", e.target.value || null)} /></div>
             <div className="grid gap-2"><Label htmlFor="c-exp">{t("coupons.expires")}</Label>
-              <Input id="c-exp" type="datetime-local" value={dt(d.expires_at)} onChange={(e) => set("expires_at", e.target.value || null)} /></div>
+              <Input id="c-exp" type="datetime-local" value={couponDtLocal(d.expires_at)} onChange={(e) => set("expires_at", e.target.value || null)} /></div>
           </div>
           <div className="grid gap-2">
             <Label>{t("coupons.products")}</Label>

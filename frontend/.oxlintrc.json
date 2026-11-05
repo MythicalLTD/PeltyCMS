@@ -1,0 +1,43 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "react",
+    "typescript",
+    "oxc",
+    "unicorn",
+    "import",
+    "jsx-a11y",
+    "vitest",
+    "promise"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "warn",
+    // Modern JSX transform — React need not be in scope.
+    "react/react-in-jsx-scope": "off",
+    // Table/column `cell:` / `header:` render props are intentional.
+    "react/no-unstable-nested-components": ["error", { "allowAsProps": true }],
+    // react-router `<Link to>` is a valid navigation anchor.
+    "jsx-a11y/anchor-is-valid": ["error", {
+      "components": ["Link"],
+      "specialLink": ["to"],
+      "aspects": ["noHref", "invalidHref", "preferButton"]
+    }],
+    // Side-effect CSS / font imports.
+    "import/no-unassigned-import": ["error", {
+      "allow": ["**/*.css", "**/index.css", "@fontsource-variable/**"]
+    }]
+  },
+  "env": {
+    "builtin": true
+  },
+  "settings": {
+    "react": {
+      "linkComponents": [{ "name": "Link", "linkAttribute": "to" }]
+    }
+  }
+}

@@ -11,13 +11,14 @@ export function fromRules(r: GatewayRules): RuleForm {
   };
 }
 
+const optionalAmount = (v: string) => (v.trim() === "" ? null : v.trim());
+
 /** Form → API body. Amounts stay strings (exact decimals, parsed server-side). */
 export function toRules(f: RuleForm): GatewayRules {
-  const opt = (v: string) => (v.trim() === "" ? null : v.trim());
   const limits: Record<string, CurrencyLimit> = {};
   for (const l of f.limits) {
     const c = l.currency.trim().toUpperCase();
-    if (c) limits[c] = { min: opt(l.min), max: opt(l.max), fee_fixed: l.fee_fixed.trim() || "0" };
+    if (c) limits[c] = { min: optionalAmount(l.min), max: optionalAmount(l.max), fee_fixed: l.fee_fixed.trim() || "0" };
   }
   return {
     fee_percent: f.fee_percent.trim() || "0",

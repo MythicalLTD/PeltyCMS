@@ -20,8 +20,8 @@ function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const el = document.createElement("script");
     el.src = src; el.async = true;
-    el.onload = () => { el.dataset.loaded = "1"; resolve(); };
-    el.onerror = () => reject(new Error("captcha script"));
+    el.addEventListener("load", () => { el.dataset.loaded = "1"; resolve(); }, { once: true });
+    el.addEventListener("error", () => reject(new Error("captcha script")), { once: true });
     document.head.appendChild(el);
   });
 }
@@ -43,6 +43,7 @@ export function Captcha({ form, signedIn = false }: { form: string; signedIn?: b
   const score = widget?.mode === "score";
   const box = useRef<HTMLDivElement>(null);
   const wid = useRef<string | number | null>(null);
+  const goneRef = useRef(false);
   const [challenge, setChallenge] = useState<{ token: string; question: string } | null>(null);
   const [answer, setAnswer] = useState("");
 
@@ -55,7 +56,7 @@ export function Captcha({ form, signedIn = false }: { form: string; signedIn?: b
     } else if (score && script) {
       await loadScript(script);
       const g = win[global] as V3;
-      g.ready(() => { void g.execute(key, { action: form }).then((tok) => setCaptchaToken(tok)); });
+      g.ready(() => { void g.execute(key, { action: form }).then((tok) => { setCaptchaToken(tok); return tok; }); });
     } else {
       const lib = win[global] as Widget | undefined;
       if (lib && wid.current !== null) lib.reset(wid.current);
@@ -64,22 +65,41 @@ export function Captcha({ form, signedIn = false }: { form: string; signedIn?: b
 
   useEffect(() => {
     if (!active) return;
-    let gone = false;
+    goneRef.current = false;
     if (script && !score) {
       void loadScript(script).then(() => {
         const tryRender = () => {
           const lib = win[global] as Widget | undefined;
-          if (gone || !box.current) return;
+          if (goneRef.current || !box.current) return;
           if (!lib?.render) { setTimeout(tryRender, 100); return; }
           if (wid.current === null) wid.current = lib.render(box.current, { sitekey: key, callback: (tok: string) => setCaptchaToken(tok), "expired-callback": () => setCaptchaToken(null) });
         };
         tryRender();
+        return undefined;
       });
-    } else void refresh();
+    } else {
+      void (async () => {
+        if (engine === "internal") {
+          const ch = await api<{ token: string; question: string }>("/captcha/challenge");
+          if (goneRef.current) return;
+          setAnswer("");
+          setChallenge(ch);
+        } else if (score && script) {
+          await loadScript(script);
+          if (goneRef.current) return;
+          const g = win[global] as V3;
+          await new Promise<void>((resolve) => g.ready(resolve));
+          if (goneRef.current) return;
+          setCaptchaToken(await g.execute(key, { action: form }));
+        } else {
+          setCaptchaToken(null);
+        }
+      })();
+    }
     const onReset = () => { void refresh(); };
     window.addEventListener("pelty:captcha-reset", onReset);
-    return () => { gone = true; window.removeEventListener("pelty:captcha-reset", onReset); setCaptchaToken(null); };
-  }, [active, engine, key, refresh, script, score, global]);
+    return () => { goneRef.current = true; window.removeEventListener("pelty:captcha-reset", onReset); setCaptchaToken(null); };
+  }, [active, engine, key, form, refresh, script, score, global]);
 
   if (!active) return null;
   if (score) return <p className="text-xs text-muted-foreground">{t("captcha.recaptcha_notice")}</p>;

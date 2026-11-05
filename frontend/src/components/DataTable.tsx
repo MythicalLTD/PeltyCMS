@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router";
 import { Card, CardContent } from "./ui/card";
@@ -21,10 +21,8 @@ export function DataTable<T extends { id: string | number }>({ title, path, colu
   // Other tables retain their existing explicitly supplied query parameters.
   const search = path === "/admin/services" ? urlSearch.get("q") ?? "" : "";
   const [pagination, setPagination] = useState({ search, page: 1 });
-  const page = pagination.search === search ? pagination.page : 1;
-  useEffect(() => {
-    if (pagination.search !== search) setPagination({ search, page: 1 });
-  }, [pagination.search, search]);
+  if (pagination.search !== search) setPagination({ search, page: 1 });
+  const page = pagination.page;
   const sep = path.includes("?") ? "&" : "?";
   const filter = search ? `&q=${encodeURIComponent(search)}` : "";
   const { data, isLoading } = useQuery({ queryKey: [...queryKey, ...(search ? [{ q: search }] : []), page], queryFn: () => api<Paged<T>>(`${path}${sep}page=${page}&per_page=25${filter}`) });
@@ -35,7 +33,7 @@ export function DataTable<T extends { id: string | number }>({ title, path, colu
       <CardContent className="min-w-0 p-0 md:px-2 md:py-1">
         <ResponsiveTable columns={columns} rows={data?.items} rowKey={(r) => r.id} loading={isLoading} emptyIcon={emptyIcon} emptyTitle={emptyTitle} emptyDescription={emptyDescription} />
       </CardContent>
-      {data && <Pager page={data.page} perPage={data.per_page} total={data.total} onPage={page => setPagination({ search, page })} />}
+      {data && <Pager page={data.page} perPage={data.per_page} total={data.total} onPage={(nextPage) => setPagination({ search, page: nextPage })} />}
     </Card>
     </div>
   );

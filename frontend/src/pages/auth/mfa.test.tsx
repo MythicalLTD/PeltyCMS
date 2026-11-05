@@ -43,7 +43,7 @@ async function toChallenge() {
   fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "ana@example.com" } });
   fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "pw" } });
   fireEvent.click(screen.getByRole("button", { name: /sign in|log in/i }));
-  await waitFor(() => expect(document.body.textContent).toMatch(/two-step verification/i), { timeout: 3000 }).catch((e) => { console.log("DOM:", document.body.textContent, JSON.stringify(calls)); throw e; });
+  await waitFor(() => { expect(document.body.textContent).toMatch(/two-step verification/i); }, { timeout: 3000 });
 }
 
 describe("2FA login", () => {

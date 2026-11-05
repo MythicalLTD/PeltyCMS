@@ -41,6 +41,7 @@ export function SiteLayout() {
   const { data: site } = usePublicSite();
   const { view } = useStoreCart();
   const [open, setOpen] = useState(false);
+  const [copyrightYear] = useState(() => new Date().getFullYear());
   const loc = useLocation();
   const n = view?.cart.order_id ? 0 : lineCount(view?.cart);
   const c = site?.config;
@@ -105,7 +106,7 @@ export function SiteLayout() {
         <div className="border-t">
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-              <p>{c?.copyright || `© ${new Date().getFullYear()} ${c?.site_name ?? t("app.name")}. ${t("site.rights")}`}</p>
+              <p>{c?.copyright || `© ${copyrightYear} ${c?.site_name ?? t("app.name")}. ${t("site.rights")}`}</p>
               {c?.footer_text && <p>{c.footer_text}</p>}
             </div>
             {(c?.social ?? []).length > 0 && (
@@ -115,8 +116,8 @@ export function SiteLayout() {
                   const Ico = SOCIAL_ICONS[x.network];
                   if (!h || !Ico) return null;
                   return (
-                    <Button key={i} asChild variant="ghost" size="icon" aria-label={x.network}>
-                      <a href={h} rel="noopener noreferrer" target={isInternal(h) ? undefined : "_blank"}><Ico aria-hidden /></a>
+                    <Button key={i} asChild variant="ghost" size="icon">
+                      <a href={h} rel="noopener noreferrer" target={isInternal(h) ? undefined : "_blank"} aria-label={x.network}><Ico aria-hidden /><span className="sr-only">{x.network}</span></a>
                     </Button>
                   );
                 })}

@@ -53,6 +53,8 @@ export function moveBlock<T>(list: T[], from: number, to: number): T[] {
 /** Only safe links: same-site paths, http(s), mailto, anchors (mirrors the server). */
 export function safeHref(h: unknown): string | null {
   if (typeof h !== "string" || !h) return null;
+  // Reject whitespace and C0 controls so hrefs cannot smuggle newlines / nulls.
+  // oxlint-disable-next-line eslint/no-control-regex -- intentional control-char reject
   if (/[\s\u0000-\u001f]/.test(h)) return null;
   if ((h.startsWith("/") && !h.startsWith("//")) || /^(https?:\/\/|mailto:|#)/.test(h)) return h;
   return null;

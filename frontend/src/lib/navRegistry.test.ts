@@ -13,7 +13,7 @@ const routed = (to: string) => (to === "/admin" ? app.includes("<Route index ele
 describe.each<NavScope>(["admin", "client"])("nav registry (%s)", (scope) => {
   const leaves = flatNav(scope);
   it("every route exists in the router", () => {
-    for (const l of leaves) expect(routed(l.to), l.to).toBe(true);
+    for (const l of leaves) expect(routed(l.to)).toBe(true);
     expect(paths.has(scope === "admin" ? "hub/:id" : "/hub/:id")).toBe(true);
     expect(hubPath(scope, "x")).toBe(scope === "admin" ? "/admin/hub/x" : "/hub/x");
   });
@@ -29,7 +29,7 @@ describe.each<NavScope>(["admin", "client"])("nav registry (%s)", (scope) => {
   });
   it("every i18n key exists in en and ro", () => {
     const keys = [...navTree(scope).map((c) => c.label), ...leaves.flatMap((l) => [l.label, l.desc])];
-    for (const d of [en, ro] as Record<string, string>[]) for (const k of keys) expect(d[k], k).toBeTruthy();
+    for (const d of [en, ro] as Record<string, string>[]) for (const k of keys) expect(d[k]).toBeTruthy();
   });
   it("stays compact", () => {
     expect(navTree(scope).length).toBeLessThanOrEqual(scope === "admin" ? 11 : 7);
@@ -58,7 +58,7 @@ describe("admin nav covers every former sidebar route", () => {
   it("keeps all /admin routes reachable from the registry", () => {
     const old = ["users", "staff", "campaigns", "customers", "client-groups", "products", "orders", "invoices", "billing-tools", "gift-cards", "transactions", "domains", "billable-items", "bundles", "usage-metrics", "currencies", "legal-entities", "tickets", "live-chat", "coupons", "order-forms", "quotes", "affiliates", "downloads", "servers", "module-queue", "module-log", "cancellations", "services", "jobs", "audit", "website", "extensions", "themes", "gateways", "tax", "overdue", "email-templates", "content", "sessions", "general-settings", "mail-settings", "reports", "gdpr", "fraud", "security", "oauth-clients", "api-keys", "network-status", "system-health", "my-notes", "calendar", "login-history", "backups", "csv-import", "notifications", "todos", "client-fields"];
     const have = new Set(flatNav("admin").map((l) => l.to));
-    for (const o of old) expect(have.has(`/admin/${o}`), o).toBe(true);
+    for (const o of old) expect(have.has(`/admin/${o}`)).toBe(true);
   });
 });
 

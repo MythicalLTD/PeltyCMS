@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { EnvelopeSimpleIcon, SealCheckIcon, WarningIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -92,23 +91,22 @@ export function VerifyRegistrantPage() {
   const { t, tCode } = useI18n();
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
-  const [state, setState] = useState<{ ok?: number; err?: string } | null>(null);
-  const once = useRef(false);
-  useEffect(() => {
-    if (once.current) return;
-    once.current = true;
-    if (!token) { setState({ err: t("error.registrant_token_invalid") }); return; }
-    api<{ verified: number }>("/public/domains/verify-registrant", { method: "POST", body: { token } })
-      .then((r) => setState({ ok: r.verified }))
-      .catch((e) => setState({ err: e instanceof ApiError ? tCode(e.code) : t("error.internal") }));
-  }, [token, t, tCode]);
+  const missing = !token;
+  const verify = useQuery({
+    queryKey: ["public", "verify-registrant", token],
+    queryFn: () => api<{ verified: number }>("/public/domains/verify-registrant", { method: "POST", body: { token } }),
+    enabled: !missing,
+    retry: false,
+    staleTime: Infinity,
+  });
+  const err = missing ? t("error.registrant_token_invalid") : verify.isError ? (verify.error instanceof ApiError ? tCode(verify.error.code) : t("error.internal")) : null;
   return (
     <Card>
       <CardHeader><h1 className="text-2xl font-semibold tracking-tight">{t("registrant.title")}</h1></CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {!state && <BlockSkeleton />}
-        {state?.ok !== undefined && <p role="status" data-testid="registrant-ok" className="rounded-md bg-success/10 px-3 py-2 text-sm text-success">{t("registrant.done", { count: String(state.ok) })}</p>}
-        {state?.err && <FormError message={state.err} />}
+        {!missing && verify.isPending && <BlockSkeleton />}
+        {verify.data && <output data-testid="registrant-ok" className="block rounded-md bg-success/10 px-3 py-2 text-sm text-success">{t("registrant.done", { count: String(verify.data.verified) })}</output>}
+        {err && <FormError message={err} />}
         <Link to="/" className="text-center text-sm text-primary hover:underline">{t("auth.verify.continue")}</Link>
       </CardContent>
     </Card>

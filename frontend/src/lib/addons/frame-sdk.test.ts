@@ -39,7 +39,7 @@ describe("pelty-frame.js", () => {
   it("handshakes, requests, subscribes and emits with messages the host accepts", async () => {
     const { sent, w, deliver } = frame();
     expect(sent[0]).toEqual({ type: "pelty:ready" });
-    const ready = vi.fn();
+    const ready = vi.fn<(i: { locale: string }) => void>();
     w.Pelty.ready(ready);
     const seen: string[] = [];
     w.Pelty.on("cart.*", (n) => seen.push(n));
@@ -65,7 +65,7 @@ describe("pelty-frame.js", () => {
     w.Pelty.emit("demo:saved", { id: 1 });
     w.Pelty.toast("Saved");
     w.Pelty.navigate("/services");
-    for (const m of sent) expect(parseFrameMessage(m), JSON.stringify(m)).not.toBeNull();
+    for (const m of sent) expect(parseFrameMessage(m)).not.toBeNull();
     expect(sent).toContainEqual({ type: "pelty:subscribe", events: ["cart.*"] });
     expect(sent).toContainEqual({ type: "pelty:emit", name: "demo:saved", payload: { id: 1 } });
   });
@@ -104,7 +104,7 @@ describe("pelty-frame.js", () => {
 
   it("ignores messages that do not come from the parent", () => {
     const { w } = frame();
-    const ready = vi.fn();
+    const ready = vi.fn<(i: { locale: string }) => void>();
     w.Pelty.ready(ready);
     message(w, { type: "pelty:init" }, w);
     expect(ready).not.toHaveBeenCalled();

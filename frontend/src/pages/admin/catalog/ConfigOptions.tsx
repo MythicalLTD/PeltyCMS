@@ -37,15 +37,16 @@ export function optionPayload(d: OptionDraft) {
 
 interface Props { productId: string; productName: string; options: ConfigOption[]; prices: { currency: string; cycle: string }[] }
 
+const blankOptionDraft = (): OptionDraft => ({ name: "", option_type: "dropdown", required: true, qty_min: 0, qty_max: 100, choices: [{ label: "", prices: {} }] });
+
 export function ProductOptionsDialog({ productId, productName, options, prices }: Props) {
   const { t, tCode, lang } = useI18n();
   const qc = useQueryClient();
-  const blank = (): OptionDraft => ({ name: "", option_type: "dropdown", required: true, qty_min: 0, qty_max: 100, choices: [{ label: "", prices: {} }] });
-  const [d, setD] = useState<OptionDraft>(blank);
+  const [d, setD] = useState<OptionDraft>(blankOptionDraft);
   const [error, setError] = useState<string | null>(null);
   const fail = (e: unknown) => setError(e instanceof ApiError ? tCode(e.code) : t("error.internal"));
   const done = () => { setError(null); void qc.invalidateQueries({ queryKey: ["admin", "products"] }); };
-  const add = useMutation({ mutationFn: () => api(`/admin/catalog/products/${productId}/options`, { method: "POST", body: optionPayload(d) }), onSuccess: () => { setD(blank()); done(); }, onError: fail });
+  const add = useMutation({ mutationFn: () => api(`/admin/catalog/products/${productId}/options`, { method: "POST", body: optionPayload(d) }), onSuccess: () => { setD(blankOptionDraft()); done(); }, onError: fail });
   const del = useMutation({ mutationFn: (id: string) => api(`/admin/catalog/products/${productId}/options/${id}`, { method: "DELETE" }), onSuccess: done, onError: fail });
   const setChoice = (i: number, c: Partial<ChoiceDraft>) => setD((x) => ({ ...x, choices: x.choices.map((y, j) => (j === i ? { ...y, ...c } : y)) }));
   const shown = single(d.option_type) ? d.choices.slice(0, 1) : d.choices;

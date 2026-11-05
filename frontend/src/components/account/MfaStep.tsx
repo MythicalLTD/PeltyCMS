@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,12 @@ export function MfaStep({ challenge, methods = ["totp"], onDone, onRestart }: { 
   const [backup, setBackup] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const backupRef = useRef<HTMLInputElement>(null);
+  const otpRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (backup) backupRef.current?.focus();
+    else otpRef.current?.focus();
+  }, [backup]);
   const submit = async (value: string) => {
     setBusy(true);
     setError(null);
@@ -78,10 +84,10 @@ export function MfaStep({ challenge, methods = ["totp"], onDone, onRestart }: { 
           {backup ? (
             <div className="grid gap-2">
               <Label htmlFor="backup-code">{t("mfa.backup_code")}</Label>
-              <Input id="backup-code" autoComplete="one-time-code" autoFocus value={code} onChange={(e) => setCode(e.target.value)} className="h-11 font-mono md:h-9" />
+              <Input ref={backupRef} id="backup-code" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} className="h-11 font-mono md:h-9" />
             </div>
           ) : (
-            <InputOTP maxLength={6} value={code} onChange={(v) => { setCode(v); if (v.length === 6) void submit(v); }} autoFocus aria-label={t("mfa.code")} containerClassName="justify-center">
+            <InputOTP ref={otpRef} maxLength={6} value={code} onChange={(v) => { setCode(v); if (v.length === 6) void submit(v); }} aria-label={t("mfa.code")} containerClassName="justify-center">
               <InputOTPGroup>
                 {[0, 1, 2, 3, 4, 5].map((i) => <InputOTPSlot key={i} index={i} className="size-11" />)}
               </InputOTPGroup>

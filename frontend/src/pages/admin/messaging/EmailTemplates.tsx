@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,13 +22,8 @@ interface Preview { subject: string; text: string; html: string; custom_html?: b
 
 /** Full-document email preview via blob URL (srcDoc is blocked by CSP frame-src). */
 function HtmlPreview({ html, title }: { html: string; title: string }) {
-  const [src, setSrc] = useState<string | null>(null);
-  useEffect(() => {
-    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
-    setSrc(url);
-    return () => URL.revokeObjectURL(url);
-  }, [html]);
-  if (!src) return null;
+  const src = useMemo(() => URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" })), [html]);
+  useEffect(() => () => URL.revokeObjectURL(src), [src]);
   return (
     <iframe
       title={title}
@@ -52,27 +47,25 @@ export function AdminEmailTemplatesPage() {
   const [locale, setLocale] = useState("en");
   const tpl = data?.items.find((x) => x.name === name);
   const current = tpl?.locales.find((l) => l.locale === locale);
-  // If the selected locale was removed, fall back to the first available tab.
-  useEffect(() => {
-    if (!tpl?.locales.length) return;
-    if (!tpl.locales.some((l) => l.locale === locale)) {
-      const fallback = tpl.locales[0]?.locale;
-      if (fallback) setLocale(fallback);
-    }
-  }, [tpl, locale]);
+  if (tpl?.locales.length && !tpl.locales.some((l) => l.locale === locale)) {
+    const fallback = tpl.locales[0]?.locale;
+    if (fallback) setLocale(fallback);
+  }
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [html, setHtml] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
-  useEffect(() => {
+  const [seenCurrent, setSeenCurrent] = useState(current);
+  if (current !== seenCurrent) {
+    setSeenCurrent(current);
     if (current) {
       setSubject(current.subject);
       setBody(current.body);
       setHtml(current.html ?? "");
       setPreview(null);
     }
-  }, [current]);
+  }
   const fail = (e: unknown) => { setError(e instanceof ApiError ? tCode(e.code) : t("error.internal")); };
   const ok = (m: string) => { setError(null); toast.success(m); void qc.invalidateQueries({ queryKey: ["admin", "email-templates"] }); };
   const path = `/admin/email-templates/${name}/${locale}`;

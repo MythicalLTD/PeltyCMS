@@ -53,10 +53,10 @@ export function LiveChatSettings() {
   };
   return <details className="rounded border p-4" open={widgetOff || undefined}><summary>{t("chat.settings")}</summary><div className="mt-3 flex flex-col gap-3">
     {widgetOff && (
-      <p className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm" role="status">
+      <output className="block rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
         {t("chat.widget_off")}{" "}
         <Link className="underline" to="/admin/general-settings">{t("chat.open_general")}</Link>
-      </p>
+      </output>
     )}
     <label className="flex cursor-pointer items-center gap-2"><input type="checkbox" checked={value.enabled} onChange={(e) => setDraft({ ...value, enabled: e.target.checked })} /> {t("chat.enabled")}</label>
     <p className="text-sm text-muted-foreground">{t("chat.departments_hint")}</p>

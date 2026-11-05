@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { Link, useParams } from "react-router";
 import { ArrowClockwiseIcon, ArrowLeftIcon, GlobeIcon, PlayIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
@@ -87,6 +87,12 @@ function TldDialog({ initial, trigger }: { initial?: Tld; trigger: React.ReactNo
   );
 }
 
+function tldToolField(id: string, label: string, v: string, set: (x: string) => void, upper = false) {
+  return (
+    <div className="grid gap-2"><Label htmlFor={id}>{label}</Label><Input id={id} value={v} inputMode={upper ? undefined : "decimal"} maxLength={upper ? 3 : 20} onChange={(e) => set(upper ? e.target.value.toUpperCase() : e.target.value)} /></div>
+  );
+}
+
 function TldTools() {
   const { t, tCode } = useI18n();
   const qc = useQueryClient();
@@ -106,9 +112,6 @@ function TldTools() {
     onSuccess: (r) => { setMsg(t("domains.tld_updated_n", { n: r.updated })); setError(null); qc.invalidateQueries({ queryKey: ["admin", "tlds"] }); },
     onError: (e) => setError(e instanceof ApiError ? tCode(e.code) : t("error.internal")),
   });
-  const field = (id: string, label: string, v: string, set: (x: string) => void, upper = false) => (
-    <div className="grid gap-2"><Label htmlFor={id}>{label}</Label><Input id={id} value={v} inputMode={upper ? undefined : "decimal"} maxLength={upper ? 3 : 20} onChange={(e) => set(upper ? e.target.value.toUpperCase() : e.target.value)} /></div>
-  );
   return (
     <>
       <Button variant="outline" onClick={() => { setOpen("adjust"); setMsg(null); setError(null); }}>{t("domains.bulk_adjust")}</Button>
@@ -120,11 +123,11 @@ function TldTools() {
             <FormError message={error} />
             {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
             {open === "adjust" ? (<>
-              {field("ba-pct", t("domains.percent"), percent, setPercent)}
-              {field("ba-cur", t("domains.currency_optional"), currency, setCurrency, true)}
+              {tldToolField("ba-pct", t("domains.percent"), percent, setPercent)}
+              {tldToolField("ba-cur", t("domains.currency_optional"), currency, setCurrency, true)}
             </>) : (<>
-              <div className="grid grid-cols-2 gap-3">{field("cc-from", t("domains.from_currency"), from, setFrom, true)}{field("cc-to", t("domains.to_currency"), to, setTo, true)}</div>
-              {field("cc-rate", t("domains.rate"), rate, setRate)}
+              <div className="grid grid-cols-2 gap-3">{tldToolField("cc-from", t("domains.from_currency"), from, setFrom, true)}{tldToolField("cc-to", t("domains.to_currency"), to, setTo, true)}</div>
+              {tldToolField("cc-rate", t("domains.rate"), rate, setRate)}
               <div className="flex items-center gap-2"><Switch id="cc-ow" checked={overwrite} onCheckedChange={setOverwrite} /><Label htmlFor="cc-ow">{t("domains.overwrite")}</Label></div>
             </>)}
             <DialogFooter><Button type="submit" disabled={run.isPending}>{t("domains.apply")}</Button></DialogFooter>
@@ -207,7 +210,14 @@ function DomainDefaultsCard() {
   const q = useQuery({ queryKey: ["admin", "domain-defaults"], queryFn: () => api<Defaults>("/admin/settings/domain-defaults") });
   const [ns, setNs] = useState("");
   const [recs, setRecs] = useState<DnsRec[]>([]);
-  useEffect(() => { if (q.data) { setNs(q.data.nameservers.join("\n")); setRecs(q.data.dns_template); } }, [q.data]);
+  const [seenDefaults, setSeenDefaults] = useState(q.data);
+  if (q.data !== seenDefaults) {
+    setSeenDefaults(q.data);
+    if (q.data) {
+      setNs(q.data.nameservers.join("\n"));
+      setRecs(q.data.dns_template);
+    }
+  }
   const save = useMutation({
     mutationFn: () => api<Defaults>("/admin/settings/domain-defaults", { method: "PUT", body: { nameservers: ns.split(/\s+/).filter(Boolean), dns_template: recs } }),
     onSuccess: (d) => { qc.setQueryData(["admin", "domain-defaults"], d); toast.success(t("common.saved")); },

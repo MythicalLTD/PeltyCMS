@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -55,8 +55,12 @@ function SettingsTab() {
   const qc = useQueryClient();
   const err = useErr();
   const q = useQuery({ queryKey: ["admin", "site"], queryFn: async () => normalizeConfig(await api<unknown>("/admin/site")) });
-  const [c, setC] = useState<SiteConfig | null>(null);
-  useEffect(() => { if (q.data) setC(q.data); }, [q.data]);
+  const [c, setC] = useState<SiteConfig | null>(q.data ?? null);
+  const [seen, setSeen] = useState(q.data);
+  if (q.data !== seen) {
+    setSeen(q.data);
+    if (q.data !== undefined) setC(q.data);
+  }
   const save = useMutation({
     mutationFn: async (b: SiteConfig) => normalizeConfig(await api<unknown>("/admin/site", { method: "PUT", body: b })),
     onSuccess: (d) => { qc.setQueryData(["admin", "site"], d); qc.invalidateQueries({ queryKey: ["public", "site"] }); toast.success(t("common.saved")); },

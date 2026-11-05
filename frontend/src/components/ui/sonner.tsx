@@ -8,13 +8,15 @@ import {
 import { useEffect, useState } from "react"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
+// PeltyCMS themes toggle the `dark` class on <html> (lib/theme.ts).
+const htmlIsDark = () => document.documentElement.classList.contains("dark")
+
 const Toaster = ({ ...props }: ToasterProps) => {
-  // PeltyCMS themes toggle the `dark` class on <html> (lib/theme.ts).
-  // Track it live: the active theme loads after first render and can change.
-  const isDark = () => document.documentElement.classList.contains("dark")
-  const [theme, setTheme] = useState(isDark() ? "dark" : "light")
+  const [theme, setTheme] = useState(htmlIsDark() ? "dark" : "light")
   useEffect(() => {
-    const o = new MutationObserver(() => setTheme(isDark() ? "dark" : "light"))
+    const sync = () => setTheme(htmlIsDark() ? "dark" : "light")
+    sync()
+    const o = new MutationObserver(sync)
     o.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] })
     return () => o.disconnect()
   }, [])

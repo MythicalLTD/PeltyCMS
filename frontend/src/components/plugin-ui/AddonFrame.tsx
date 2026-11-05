@@ -51,24 +51,34 @@ export function AddonFrame({ plugin, frame, bridge = [], ctx = {}, title, sameOr
   const me = useMe().data;
   const viewer = me ? { id: me.id, display_name: me.display_name, locale: me.locale, staff: me.permissions.includes("admin.access"), permissions: me.permissions } : null;
   const subs = useRef<string[]>([]);
-
   // Latest values for the message handler without re-binding it.
   const live = useRef({ tok, lang, ctx, area, bridge, viewer });
-  live.current = { tok, lang, ctx, area, bridge, viewer };
+  const initRef = useRef<() => void>(() => undefined);
 
   const post = (m: unknown) => ref.current?.contentWindow?.postMessage(m, "*");
+  const postRef = useRef(post);
   const init = () => {
     const cs = getComputedStyle(document.documentElement);
     post({ type: "pelty:init", plugin, theme: themeVars((n) => cs.getPropertyValue(n)), dark: document.documentElement.classList.contains("dark"), locale: live.current.lang, ctx: { ...live.current.ctx, route: loc.pathname, area: live.current.area }, token: live.current.tok, viewer: live.current.viewer, events: HOST_EVENTS, sdk: 2 });
   };
-  const initRef = useRef(init);
-  initRef.current = init;
+
+  const tokLangRef = useRef({ tok: "", lang: "" });
+
+  useEffect(() => {
+    postRef.current = post;
+    live.current = { tok, lang, ctx, area, bridge, viewer };
+    initRef.current = init;
+    if (tokLangRef.current.tok !== tok || tokLangRef.current.lang !== lang) {
+      tokLangRef.current = { tok, lang };
+      initRef.current();
+    }
+  });
 
   useEffect(() => {
     // Async filter registrations of this frame and their pending calls.
     const removers = new Map<string, () => void>();
     const pending = new Map<number, (v: unknown) => void>();
-    let filterSeq = 0;
+    const filterSeq = { n: 0 };
     const onMsg = async (e: MessageEvent) => {
       if (!ref.current || e.source !== ref.current.contentWindow) return;
       const m = parseFrameMessage(e.data);
@@ -82,11 +92,11 @@ export function AddonFrame({ plugin, frame, bridge = [], ctx = {}, title, sameOr
       else if (m.type === "pelty:filter_register") {
         if (removers.has(m.name) || removers.size >= 8) return;
         removers.set(m.name, addAsyncFilter(m.name, (value, fctx) => new Promise((res) => {
-          const id = ++filterSeq;
+          const id = ++filterSeq.n;
           pending.set(id, res);
           // The host deadline rejects first; this only frees the slot.
           setTimeout(() => pending.delete(id), 5000);
-          post({ type: "pelty:filter", id, name: m.name, value, ctx: fctx });
+          postRef.current({ type: "pelty:filter", id, name: m.name, value, ctx: fctx });
         }), m.priority, plugin));
       }
       else if (m.type === "pelty:filter_result") {
@@ -97,13 +107,13 @@ export function AddonFrame({ plugin, frame, bridge = [], ctx = {}, title, sameOr
       else if (m.type === "pelty:toast") { if (m.tone === "error") toast.error(m.text); else toast.success(m.text); }
       else if (m.type === "pelty:request") {
         const rel = apiRel(m.path);
-        if (!rel || !bridgeAllowed(plugin, br, m.method, m.path)) { post({ type: "pelty:response", id: m.id, ok: false, status: 403, body: { error: { code: "error.forbidden" } } }); return; }
+        if (!rel || !bridgeAllowed(plugin, br, m.method, m.path)) { postRef.current({ type: "pelty:response", id: m.id, ok: false, status: 403, body: { error: { code: "error.forbidden" } } }); return; }
         const own = m.path.startsWith(`/api/v1/addons/${plugin}/`);
         try {
           const body = await api<unknown>(rel, { method: m.method, body: m.method === "GET" ? undefined : m.body, headers: own && tk ? { "x-pelty-ui-token": tk } : undefined });
-          post({ type: "pelty:response", id: m.id, ok: true, status: 200, body });
+          postRef.current({ type: "pelty:response", id: m.id, ok: true, status: 200, body });
         } catch (err) {
-          post({ type: "pelty:response", id: m.id, ok: false, status: err instanceof ApiError ? err.status : 500, body: { error: { code: err instanceof ApiError ? err.code : "error.internal" } } });
+          postRef.current({ type: "pelty:response", id: m.id, ok: false, status: err instanceof ApiError ? err.status : 500, body: { error: { code: err instanceof ApiError ? err.code : "error.internal" } } });
         }
       }
     };
@@ -114,7 +124,7 @@ export function AddonFrame({ plugin, frame, bridge = [], ctx = {}, title, sameOr
       for (const r of removers.values()) r();
       pending.clear();
     };
-  }, [plugin, nav]);
+  }, [plugin, nav, setHeight]);
 
   // Forward subscribed bus events into the frame (JSON-cloned: no host objects leak).
   useEffect(() => on("*", (name, payload) => {
@@ -124,8 +134,6 @@ export function AddonFrame({ plugin, frame, bridge = [], ctx = {}, title, sameOr
     ref.current?.contentWindow?.postMessage({ type: "pelty:event", name, payload: data }, "*");
   }), []);
 
-  // Re-send theme/locale/token when they change (theme switch, token refresh).
-  useEffect(() => { initRef.current(); }, [tok, lang]);
   useEffect(() => {
     const o = new MutationObserver(() => initRef.current());
     o.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style", "data-theme"] });

@@ -21,8 +21,7 @@ interface Outcome { status: string; invoice_id: string }
 
 /** Parse `?ids=` into a stable, de-duplicated list (2-50). */
 export function parsePayManyIds(raw: string | null): string[] {
-  const ids = [...new Set((raw ?? "").split(",").map((s) => s.trim()).filter(Boolean))];
-  ids.sort();
+  const ids = [...new Set((raw ?? "").split(",").map((s) => s.trim()).filter(Boolean))].toSorted();
   return ids.length >= 2 && ids.length <= 50 ? ids : [];
 }
 

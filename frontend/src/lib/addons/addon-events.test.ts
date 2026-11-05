@@ -72,7 +72,7 @@ describe("async (frame) filters", () => {
   it("fails open on timeouts and errors, and notifies registry watchers", async () => {
     vi.useFakeTimers();
     try {
-      const changes = vi.fn();
+      const changes = vi.fn<() => void>();
       onFilterRegistry(changes);
       const stop = addAsyncFilter("page.title", () => new Promise(() => {}), 0, "slow");
       addAsyncFilter("page.title", () => { throw new Error("boom"); }, 1, "throws");

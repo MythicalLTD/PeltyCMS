@@ -31,14 +31,18 @@ interface ListResp {
 
 /** Placeholders as written: `{{name}}` (e-mail templates) or `{name}` (UI). */
 export function placeholders(s: string): string[] {
-  return [...new Set([...s.matchAll(/\{\{\s*([^{}]{1,64}?)\s*\}\}|\{(\w{1,64})\}/g)].map((m) => (m[1] ? `{{${m[1]}}}` : m[2] ? `{${m[2]}}` : "")))].filter(Boolean).sort();
+  return [...new Set([...s.matchAll(/\{\{\s*([^{}]{1,64}?)\s*\}\}|\{(\w{1,64})\}/g)].map((m) => (m[1] ? `{{${m[1]}}}` : m[2] ? `{${m[2]}}` : "")))].filter(Boolean).toSorted();
 }
 
 function Row({ row, lang, onSaved }: { row: TranslationRow; lang: string; onSaved: () => void }) {
   const { t, tCode } = useI18n();
   const current = row.override ?? row.file ?? "";
   const [v, setV] = useState(current);
-  useEffect(() => setV(current), [current]);
+  const [seen, setSeen] = useState(current);
+  if (current !== seen) {
+    setSeen(current);
+    setV(current);
+  }
   const onErr = (e: unknown) => toast.error(e instanceof ApiError ? tCode(e.code) : t("error.internal"));
   const save = useMutation({ mutationFn: () => api("/admin/translations", { method: "PUT", body: { lang, key: row.key, value: v } }), onSuccess: () => { toast.success(t("common.saved")); onSaved(); }, onError: onErr });
   const revert = useMutation({ mutationFn: () => api(`/admin/translations?lang=${encodeURIComponent(lang)}&key=${encodeURIComponent(row.key)}`, { method: "DELETE" }), onSuccess: () => { toast.success(t("translations.reverted")); onSaved(); }, onError: onErr });
@@ -138,8 +142,8 @@ export function AdminTranslationsPage() {
     try {
       const res = await fetch(`/api/v1/admin/translations/export?lang=${encodeURIComponent(lang)}&mode=${mode}`, { credentials: "same-origin", headers: { accept: "application/json" } });
       if (!res.ok) {
-        const data = await res.json().catch(() => null) as { error?: { code?: string } } | null;
-        throw new ApiError(res.status, data?.error?.code ?? "error.internal", res.statusText);
+        const errBody = await res.json().catch(() => null) as { error?: { code?: string } } | null;
+        throw new ApiError(res.status, errBody?.error?.code ?? "error.internal", res.statusText);
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);

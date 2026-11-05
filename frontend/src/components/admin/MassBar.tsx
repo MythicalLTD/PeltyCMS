@@ -72,7 +72,7 @@ export function MassBar({ sel, endpoint, actions, invalidate, extra }: {
   });
   if (sel.ids.length === 0) return null;
   return (
-    <div className="flex flex-col gap-2 rounded-md border bg-muted/40 p-2 sm:flex-row sm:flex-wrap sm:items-center" role="region" aria-label={t("mass.with_selected")}>
+    <section className="flex flex-col gap-2 rounded-md border bg-muted/40 p-2 sm:flex-row sm:flex-wrap sm:items-center" aria-label={t("mass.with_selected")}>
       <span className="flex items-center gap-1.5 text-sm font-medium"><CheckSquareIcon aria-hidden />{t("mass.selected").replace("{n}", String(sel.ids.length))}</span>
       <Select value={key} onValueChange={(v) => { setKey(v); setValue(null); }}>
         <SelectTrigger className="w-full sm:w-52" aria-label={t("mass.action")}><SelectValue placeholder={t("mass.action")} /></SelectTrigger>
@@ -87,6 +87,6 @@ export function MassBar({ sel, endpoint, actions, invalidate, extra }: {
       <Button size="sm" disabled={!act || (!!act.options && value === null) || run.isPending} onClick={() => run.mutate()}>{t("mass.apply")}</Button>
       {extra}
       <Button size="sm" variant="ghost" onClick={sel.clear}><XIcon aria-hidden />{t("mass.clear")}</Button>
-    </div>
+    </section>
   );
 }

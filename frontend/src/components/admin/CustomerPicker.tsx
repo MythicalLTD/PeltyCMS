@@ -30,9 +30,11 @@ export function CustomerPicker({
   const [dq, setDq] = useState("");
   const [picked, setPicked] = useState<Customer | null>(null);
   useEffect(() => { const h = setTimeout(() => setDq(q.trim()), 200); return () => clearTimeout(h); }, [q]);
-  useEffect(() => {
+  const [seenValue, setSeenValue] = useState(value);
+  if (value !== seenValue) {
+    setSeenValue(value);
     setPicked((p) => (!value ? null : p && p.id !== value ? null : p));
-  }, [value]);
+  }
   const { data, isFetching } = useQuery({
     queryKey: ["admin", "customers", "picker", dq],
     queryFn: () => api<Paged<Customer>>(`/admin/customers?per_page=25${dq ? `&q=${encodeURIComponent(dq)}` : ""}`),
@@ -44,7 +46,11 @@ export function CustomerPicker({
     queryFn: () => api<{ customer: Customer }>(`/admin/customers/${encodeURIComponent(value)}`),
     enabled: needResolve,
   });
-  useEffect(() => { if (resolve.data?.customer) setPicked(resolve.data.customer); }, [resolve.data]);
+  const [seenResolve, setSeenResolve] = useState(resolve.data);
+  if (resolve.data !== seenResolve) {
+    setSeenResolve(resolve.data);
+    if (resolve.data?.customer) setPicked(resolve.data.customer);
+  }
 
   const hint = placeholder ?? t("quotes.pick_customer");
   const shown = picked && picked.id === value ? customerLabel(picked) : value ? (resolve.isFetching ? t("common.loading") : value.slice(0, 8)) : hint;
@@ -52,7 +58,7 @@ export function CustomerPicker({
   return (
     <Popover open={open} onOpenChange={(o) => { setOpen(o); if (o) setQ(""); }}>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" role="combobox" aria-expanded={open} className="h-10 w-full justify-between font-normal">
+        <Button type="button" variant="outline" aria-expanded={open} aria-haspopup="listbox" className="h-10 w-full justify-between font-normal">
           <span className={cn("truncate", !value && "text-muted-foreground")}>{shown}</span>
           <CaretUpDownIcon className="opacity-50" aria-hidden />
         </Button>

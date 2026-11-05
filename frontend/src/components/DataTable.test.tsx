@@ -12,7 +12,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const first = "11111111-1111-4111-8111-111111111111";
 const second = "22222222-2222-4222-8222-222222222222";
 function mount(path = "/admin/services") {
-  const fetcher = vi.fn(async (url: string) => {
+  const fetcher = vi.fn<(url: string) => Promise<Response>>(async (url: string) => {
     const params = new URL(url, "https://example.test").searchParams;
     return Response.json({ items: [{ id: params.get("q") ?? "unfiltered" }], page: Number(params.get("page")), per_page: 25, total: 75 });
   });

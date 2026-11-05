@@ -1,5 +1,5 @@
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { useCurrentCrumb } from "@/lib/crumb";
 import { PuzzlePieceIcon, SignOutIcon, CaretUpDownIcon, CaretRightIcon, UserCircleIcon, SquaresFourIcon, type Icon } from "@phosphor-icons/react";
 import { useState } from "react";
@@ -42,7 +42,15 @@ export interface NavItem {
 function CloseOnNavigate() {
   const loc = useLocation();
   const { setOpenMobile } = useSidebar();
-  useEffect(() => setOpenMobile(false), [loc.pathname, setOpenMobile]);
+  const closeMobile = useRef(setOpenMobile);
+  const prevLocKey = useRef(loc.key);
+  useEffect(() => { closeMobile.current = setOpenMobile; });
+  useEffect(() => {
+    if (prevLocKey.current !== loc.key) {
+      prevLocKey.current = loc.key;
+      closeMobile.current(false);
+    }
+  });
   return null;
 }
 
@@ -203,7 +211,7 @@ export function Shell({ scope, section, footer, slot }: { scope: NavScope; secti
   const account = scope === "client" ? "/account" : "/admin/sessions";
   const current = all
     .filter((n) => (n.end ? loc.pathname === n.to : loc.pathname === n.to || loc.pathname.startsWith(`${n.to}/`)))
-    .sort((a, b) => b.to.length - a.to.length)[0];
+    .toSorted((a, b) => b.to.length - a.to.length)[0];
   const pluginCurrent = pluginNav.find((e) => loc.pathname.startsWith(e.path));
   const crumb = useCurrentCrumb();
   const pagePlugin = pluginPages.find((p) => loc.pathname === pluginPagePath(p));

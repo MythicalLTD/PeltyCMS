@@ -53,7 +53,7 @@ export function AdminAuditPage() {
   const actions = useQuery({ queryKey: ["admin", "audit", "actions"], queryFn: () => api<{ items: { action: string; count: number }[] }>("/admin/audit-logs/actions"), staleTime: 60_000 });
   const qs = auditQuery(df);
   const active = qs !== "";
-  const prefixes = [...new Set((actions.data?.items ?? []).map((a) => `${a.action.split(".")[0]}.`))].sort();
+  const prefixes = [...new Set((actions.data?.items ?? []).map((a) => `${a.action.split(".")[0]}.`))].toSorted();
   return (
     <>
       <DataTable<Entry>
@@ -68,7 +68,7 @@ export function AdminAuditPage() {
               </div>
               <Input list="audit-actions" placeholder={t("admin.audit.filter_action")} aria-label={t("admin.audit.filter_action")} value={f.action} onChange={(e) => set("action", e.target.value)} />
               <datalist id="audit-actions">
-                {prefixes.map((p) => <option key={p} value={p} />)}
+                {prefixes.map((p) => <option key={p} value={p}>{p}</option>)}
                 {(actions.data?.items ?? []).map((a) => <option key={a.action} value={a.action}>{auditLabel(tCode, a.action)} ({a.count})</option>)}
               </datalist>
               <Input placeholder={t("admin.audit.filter_actor")} aria-label={t("admin.audit.filter_actor")} value={f.actor} disabled={f.system} onChange={(e) => set("actor", e.target.value)} />

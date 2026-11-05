@@ -16,9 +16,10 @@ export function ReferralLandingPage() {
     let live = true;
     api<{ valid: boolean }>("/affiliates/track", { method: "POST", body: { code } })
       .then((r) => {
-        if (!live) return;
+        if (!live) return undefined;
         if (r.valid) navigate("/register", { replace: true });
         else setInvalid(true);
+        return undefined;
       })
       .catch(() => live && setInvalid(true));
     return () => { live = false; };

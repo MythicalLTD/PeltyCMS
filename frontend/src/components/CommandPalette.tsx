@@ -32,7 +32,12 @@ export function CommandPalette({ scope }: { scope: NavScope }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  useEffect(() => { if (open) setRecents(readRecents(scope)); else setQ(""); }, [open, scope]);
+  const [gate, setGate] = useState({ open, scope });
+  if (open !== gate.open || scope !== gate.scope) {
+    setGate({ open, scope });
+    if (open) setRecents(readRecents(scope));
+    else setQ("");
+  }
   const { pages: extPages } = usePluginPages(scope);
   const access = useClientAccess(scope === "client");
   const pages = useMemo(
@@ -93,10 +98,10 @@ export function CommandPalette({ scope }: { scope: NavScope }) {
             </CommandGroup>
           )}
           {pending && (
-            <div className="grid gap-2 p-3" role="status" aria-live="polite" data-testid="palette-searching">
+            <output className="grid gap-2 p-3" aria-live="polite" data-testid="palette-searching">
               <span className="text-xs text-muted-foreground">{t("search.searching")}</span>
               <Skeleton className="h-6 w-full" /><Skeleton className="h-6 w-4/5" /><Skeleton className="h-6 w-3/5" />
-            </div>
+            </output>
           )}
           {found.length > 0 && (
             <CommandGroup heading={t("search.group.pages")}>

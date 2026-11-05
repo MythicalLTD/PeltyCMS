@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Replaceable } from "@/components/plugin-ui/AddonSlots";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRightIcon, WarningIcon } from "@phosphor-icons/react";
@@ -35,8 +35,12 @@ export function AdminGeneralSettingsPage() {
   const { t, tCode } = useI18n();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["admin", "general-settings"], queryFn: () => api<{ settings: GeneralSettings; date_formats: string[]; order_forms: string[] }>("/admin/general-settings") });
-  const [s, setS] = useState<GeneralSettings | null>(null);
-  useEffect(() => { if (q.data) setS(q.data.settings); }, [q.data]);
+  const [s, setS] = useState<GeneralSettings | null>(q.data?.settings ?? null);
+  const [seen, setSeen] = useState(q.data);
+  if (q.data !== seen) {
+    setSeen(q.data);
+    if (q.data !== undefined) setS(q.data.settings);
+  }
   const save = useMutation({
     mutationFn: (b: GeneralSettings) => api("/admin/general-settings", { method: "PUT", body: b }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "general-settings"] }); qc.invalidateQueries({ queryKey: ["public", "general"] }); toast.success(t("common.saved")); },
@@ -90,8 +94,12 @@ export function AdminGeneralSettingsPage() {
 function CustomCodeCard() {
   const { t } = useI18n();
   const q = useQuery({ queryKey: ["admin", "custom-code"], queryFn: () => api<CustomCode>("/admin/custom-code"), retry: false });
-  const [c, setC] = useState<CustomCode>({ css: "", head_js: "", footer_js: "" });
-  useEffect(() => { if (q.data) setC(q.data); }, [q.data]);
+  const [c, setC] = useState<CustomCode>(q.data ?? { css: "", head_js: "", footer_js: "" });
+  const [seen, setSeen] = useState(q.data);
+  if (q.data !== seen) {
+    setSeen(q.data);
+    if (q.data !== undefined) setC(q.data);
+  }
   const save = useMutation({
     mutationFn: () => api("/admin/custom-code", { method: "PUT", body: c }),
     onSuccess: () => toast.success(t("common.saved")),

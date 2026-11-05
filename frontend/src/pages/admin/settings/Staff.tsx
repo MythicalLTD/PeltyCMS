@@ -29,17 +29,17 @@ export function groupPermissions(perms: string[]): [string, string[]][] {
     const g = p.split(".")[0] ?? p;
     m.set(g, [...(m.get(g) ?? []), p]);
   }
-  return [...m.entries()].sort(([a], [b]) => a.localeCompare(b));
+  return [...m.entries()].toSorted(([a], [b]) => a.localeCompare(b));
 }
 
 export function toggle(list: string[], v: string): string[] {
-  return list.includes(v) ? list.filter((x) => x !== v) : [...list, v].sort();
+  return list.includes(v) ? list.filter((x) => x !== v) : [...list, v].toSorted();
 }
 
 /** Tick or untick every permission of one group. */
 export function setGroup(list: string[], group: string[], on: boolean): string[] {
   const rest = list.filter((x) => !group.includes(x));
-  return on ? [...rest, ...group].sort() : rest;
+  return on ? [...rest, ...group].toSorted() : rest;
 }
 
 /** Permissions whose name or label contains the filter text. */

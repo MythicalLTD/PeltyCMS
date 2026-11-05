@@ -86,11 +86,17 @@ export const needsPriority = (t: string) => t === "MX" || t === "SRV";
 export interface PublicCheck { name: string; supported: boolean; available: boolean; pricing?: Tld | null }
 export interface WhoisInfo { registered: boolean; registrar?: string | null; created?: string | null; expires?: string | null; status: string[]; nameservers: string[] }
 
+const decimalToInt = (x: string, s: number) => {
+  const neg = x.trim().startsWith("-");
+  const [i, f = ""] = x.trim().replace(/^[-+]/, "").split(".");
+  const v = BigInt((i || "0") + f.padEnd(s, "0"));
+  return neg ? -v : v;
+};
+
 /** Exact add-on sum for one year: base + ID protection + DNS (string decimals). */
 export function addDecimal(a: string, b: string): string {
   const sa = (a.split(".")[1] ?? "").length, sb = (b.split(".")[1] ?? "").length, sc = Math.max(sa, sb);
-  const toInt = (x: string, s: number) => { const neg = x.trim().startsWith("-"); const [i, f = ""] = x.trim().replace(/^[-+]/, "").split("."); const v = BigInt((i || "0") + f.padEnd(s, "0")); return neg ? -v : v; };
-  const v = toInt(a, sc) + toInt(b, sc);
+  const v = decimalToInt(a, sc) + decimalToInt(b, sc);
   const neg = v < 0n; let s = (neg ? -v : v).toString().padStart(sc + 1, "0");
   if (sc > 0) s = `${s.slice(0, -sc)}.${s.slice(-sc)}`;
   return (neg ? "-" : "") + s;

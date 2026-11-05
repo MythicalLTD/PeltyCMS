@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { filterPerms, groupPermissions, setGroup, toggle, validRoleName } from "./Staff";
 import { auditPath } from "../ops/Audit";
 
+const permLabel = (p: string) => (p === "tickets.manage" ? "Handle support" : p);
+
 describe("staff helpers", () => {
   it("groups permissions by prefix", () => {
     expect(groupPermissions(["users.read", "admin.access", "users.manage"])).toEqual([["admin", ["admin.access"]], ["users", ["users.read", "users.manage"]]]);
@@ -27,8 +29,7 @@ describe("role editor helpers", () => {
     expect(setGroup(["a.x", "b.y", "b.z"], ["b.y", "b.z"], false)).toEqual(["a.x"]);
   });
   it("filters by name or label", () => {
-    const label = (p: string) => (p === "tickets.manage" ? "Handle support" : p);
-    expect(filterPerms(["tickets.manage", "users.read"], "support", label)).toEqual(["tickets.manage"]);
-    expect(filterPerms(["tickets.manage", "users.read"], " ", label)).toHaveLength(2);
+    expect(filterPerms(["tickets.manage", "users.read"], "support", permLabel)).toEqual(["tickets.manage"]);
+    expect(filterPerms(["tickets.manage", "users.read"], " ", permLabel)).toHaveLength(2);
   });
 });

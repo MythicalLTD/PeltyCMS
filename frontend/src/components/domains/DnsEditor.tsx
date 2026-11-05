@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,11 @@ export function DnsEditor({ base, disabled }: { base: string; disabled?: boolean
   const { data, error: loadErr } = useQuery({ queryKey: key, queryFn: () => api<{ items: DnsRecord[] }>(`${base}/dns`), enabled: !disabled, retry: false });
   const [rows, setRows] = useState<DnsRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { if (data) setRows(data.items); }, [data]);
+  const [seen, setSeen] = useState(data);
+  if (data !== seen) {
+    setSeen(data);
+    if (data !== undefined) setRows(data.items);
+  }
   const save = useMutation({
     mutationFn: () => api<{ items: DnsRecord[] }>(`${base}/dns`, { method: "PUT", body: { records: rows.map((r) => ({ ...r, ttl: Number(r.ttl) || 3600, priority: needsPriority(r.rtype) ? Number(r.priority ?? 10) : null })) } }),
     onSuccess: (r) => { qc.setQueryData(key, r); setError(null); },

@@ -1,8 +1,6 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 import { OTPInput, OTPInputContext } from "input-otp"
-import { MinusIcon } from "@phosphor-icons/react"
-
 function InputOTP({
   className,
   containerClassName,
@@ -63,11 +61,14 @@ function InputOTPSlot({
   )
 }
 
-function InputOTPSeparator({ ...props }: React.ComponentProps<"div">) {
+function InputOTPSeparator({ className, ...props }: React.ComponentProps<"hr">) {
   return (
-    <div data-slot="input-otp-separator" role="separator" {...props}>
-      <MinusIcon />
-    </div>
+    <hr
+      data-slot="input-otp-separator"
+      aria-hidden
+      className={cn("mx-1 h-4 w-px shrink-0 border-0 bg-border", className)}
+      {...props}
+    />
   )
 }
 

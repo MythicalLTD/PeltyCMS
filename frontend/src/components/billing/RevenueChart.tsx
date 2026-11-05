@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { EmptyState } from "@/components/EmptyState";
 import { ChartBarIcon } from "@phosphor-icons/react";
@@ -18,7 +19,7 @@ export function RevenueChart({ series, title, hint }: { series: MonthRevenue[]; 
   const currencies = [...new Set(series.map((s) => s.currency))];
   // Always show the last 6 calendar months (UTC), zero-filled, so a single
   // data point doesn't become one full-width bar.
-  const now = new Date();
+  const [now] = useState(() => new Date());
   const months = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5 + i, 1));
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;

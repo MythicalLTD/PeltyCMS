@@ -59,13 +59,14 @@ function RecentActivity() {
   );
 }
 
+const currencyTotalCount = (l: CurrencyTotal[] | undefined) => (l ?? []).reduce((n, c) => n + c.count, 0);
+
 export function AdminDashboardPage() {
   const { data: me } = useMe();
   const { t, lang } = useI18n();
   const prefs = usePrefs();
   const { data } = useQuery({ queryKey: ["admin", "dashboard"], queryFn: () => api<AdminDashboard>("/admin/dashboard") });
   const money = (l: CurrencyTotal[] | undefined) => !l ? "…" : l.length === 0 ? "0" : l.map((c) => formatMoney(c.amount, c.currency, lang)).join(" · ");
-  const count = (l: CurrencyTotal[] | undefined) => (l ?? []).reduce((n, c) => n + c.count, 0);
   const n = (v: number | undefined) => (v === undefined ? "…" : formatNumber(v, lang));
   return (
     <div className="flex flex-col gap-6">
@@ -83,9 +84,9 @@ export function AdminDashboardPage() {
         switch (w) {
           case "stats": return (
             <Replaceable key={w} section="stats"><div className="grid gap-3 *:min-w-0 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-        <Stat icon={MoneyIcon} label={t("admin.dashboard.revenue_month")} value={money(data?.revenue_month)} tone="success" sub={data && t("admin.dashboard.payments", { count: count(data.revenue_month) })} />
-        <Stat icon={FileTextIcon} label={t("admin.dashboard.unpaid")} value={n(data && count(data.unpaid))} sub={data?.unpaid.length ? money(data.unpaid) : undefined} to="/admin/invoices" tone={data && count(data.unpaid) ? "warning" : "primary"} />
-        <Stat icon={WarningIcon} label={t("admin.dashboard.overdue")} value={n(data && count(data.overdue))} sub={data?.overdue.length ? money(data.overdue) : undefined} to="/admin/invoices" tone={data && count(data.overdue) ? "danger" : "primary"} />
+        <Stat icon={MoneyIcon} label={t("admin.dashboard.revenue_month")} value={money(data?.revenue_month)} tone="success" sub={data && t("admin.dashboard.payments", { count: currencyTotalCount(data.revenue_month) })} />
+        <Stat icon={FileTextIcon} label={t("admin.dashboard.unpaid")} value={n(data && currencyTotalCount(data.unpaid))} sub={data?.unpaid.length ? money(data.unpaid) : undefined} to="/admin/invoices" tone={data && currencyTotalCount(data.unpaid) ? "warning" : "primary"} />
+        <Stat icon={WarningIcon} label={t("admin.dashboard.overdue")} value={n(data && currencyTotalCount(data.overdue))} sub={data?.overdue.length ? money(data.overdue) : undefined} to="/admin/invoices" tone={data && currencyTotalCount(data.overdue) ? "danger" : "primary"} />
         <Stat icon={HardDrivesIcon} label={t("admin.dashboard.active_services")} value={n(data?.active_services)} to="/admin/services" />
         <Stat icon={ShoppingCartIcon} label={t("admin.dashboard.pending_orders")} value={n(data?.pending_orders)} to="/admin/orders" tone={data?.pending_orders ? "warning" : "primary"} />
         <Stat icon={ListChecksIcon} label={t("admin.dashboard.failed_jobs")} value={n(data?.failed_jobs)} to="/admin/jobs" tone={data?.failed_jobs ? "danger" : "primary"} />

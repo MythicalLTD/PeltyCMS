@@ -50,7 +50,7 @@ export function resetCartId(storage: Pick<Storage, "setItem">, gen: () => string
 
 /** Cheapest price in a currency ("from" price on product cards). */
 export function fromPrice(prices: Price[], currency: string): Price | undefined {
-  return prices.filter((p) => p.currency === currency).sort((a, b) => Number(a.amount) - Number(b.amount))[0];
+  return prices.filter((p) => p.currency === currency).toSorted((a, b) => Number(a.amount) - Number(b.amount))[0];
 }
 
 /** Addon price for a cycle; one-time addons fall back to their only price. */

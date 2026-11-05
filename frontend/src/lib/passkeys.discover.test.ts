@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const calls: { path: string; body?: unknown }[] = [];
 vi.mock("@/lib/api", () => ({
-  api: vi.fn(async (path: string, o?: { body?: unknown }) => {
+  api: vi.fn<(path: string, o?: { body?: unknown }) => Promise<unknown>>(async (path: string, o?: { body?: unknown }) => {
     calls.push({ path, body: o?.body });
     if (path.endsWith("/discover/start")) return { challenge_id: "c1", options: { publicKey: { challenge: "AQ", userVerification: "required" } } };
     return { email: "a@example.com" };
@@ -20,7 +20,7 @@ function stub(get: (o: CredentialRequestOptions) => unknown, conditional = true)
   vi.stubGlobal("PublicKeyCredential", pkc);
   if (typeof window === "undefined") vi.stubGlobal("window", { PublicKeyCredential: pkc });
   else vi.stubGlobal("window", Object.assign(window, { PublicKeyCredential: pkc }));
-  vi.stubGlobal("navigator", { credentials: { get: vi.fn(async (o: CredentialRequestOptions) => get(o)) } });
+  vi.stubGlobal("navigator", { credentials: { get: vi.fn<(o: CredentialRequestOptions) => Promise<unknown>>(async (o: CredentialRequestOptions) => get(o)) } });
 }
 
 describe("usernameless passkey login", () => {

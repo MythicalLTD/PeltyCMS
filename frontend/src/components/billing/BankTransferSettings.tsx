@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
@@ -15,9 +15,13 @@ const EMPTY: Bank = { beneficiary: "", iban: "", bic: "", bank_name: "", note: "
 export function BankTransferSettings() {
   const { t, tCode } = useI18n();
   const { data } = useQuery({ queryKey: ["admin", "settings", "bank"], queryFn: () => api<Bank>("/admin/settings/bank-transfer") });
-  const [form, setForm] = useState<Bank>(EMPTY);
+  const [form, setForm] = useState<Bank>(data ?? EMPTY);
+  const [seen, setSeen] = useState(data);
+  if (data !== seen) {
+    setSeen(data);
+    if (data !== undefined) setForm(data);
+  }
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { if (data) setForm(data); }, [data]);
   const save = useMutation({
     mutationFn: (b: Bank) => api<Bank>("/admin/settings/bank-transfer", { method: "PUT", body: b }),
     onSuccess: (b) => { setForm(b); setError(null); toast.success(t("common.saved")); },

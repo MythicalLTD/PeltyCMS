@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router";
 import { useLiveChat } from "@/hooks/useLiveChat";
@@ -87,25 +87,25 @@ function Conversation({ s, onClosed }: { s: ChatSession; onClosed: () => void })
   const [body, setBody] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const ref = useRef(msgs);
-  ref.current = msgs;
+  const msgsRef = useRef(msgs);
+  useEffect(() => { msgsRef.current = msgs; });
   const me = useMe();
   const canManage = me.data?.permissions.includes("tickets.manage") === true;
   const live = useLiveChat(canManage ? `/admin/chats/${s.id}/ws` : null, { csrf: me.data?.csrf_token }, (event) => {
     setSt(event.status);
     if (event.messages?.length) setMsgs((p) => mergeMessages(p, event.messages));
-  }, () => lastId(ref.current));
-  const fetchNew = async () => {
-    const r = await api<{ status: "open" | "closed"; messages: ChatMessage[] }>(`/admin/chats/${s.id}/messages?after=${lastId(ref.current)}`);
+  }, () => lastId(msgsRef.current));
+  const fetchNew = useCallback(async () => {
+    const r = await api<{ status: "open" | "closed"; messages: ChatMessage[] }>(`/admin/chats/${s.id}/messages?after=${lastId(msgsRef.current)}`);
     setSt(r.status);
     if (r.messages.length) setMsgs((p) => mergeMessages(p, r.messages));
-  };
+  }, [s.id]);
   useEffect(() => {
     void fetchNew().catch(() => undefined);
     if (live.connected) return;
     const h = window.setInterval(() => void fetchNew().catch(() => undefined), 15000);
     return () => window.clearInterval(h);
-  }, [s.id, live.connected]);
+  }, [fetchNew, live.connected]);
   const fail = (e: unknown) => setErr(e instanceof ApiError ? tCode(e.code) : t("error.internal"));
   const send = async () => {
     if (!canManage || !validBody(body)) return;
@@ -128,7 +128,7 @@ function Conversation({ s, onClosed }: { s: ChatSession; onClosed: () => void })
         {canManage && st === "open" && <Button variant="outline" size="sm" onClick={close}><XCircleIcon /> {t("chat.admin.close")}</Button>}
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <p className="text-xs" role="status">{t(live.online ? "chat.online" : "chat.offline")}</p>
+        <output className="block text-xs">{t(live.online ? "chat.online" : "chat.offline")}</output>
         <div className="flex max-h-[28rem] flex-col gap-2 overflow-y-auto">
           {msgs.map((m) => <Bubble key={m.id} m={m} mine={m.author === "staff"} />)}
           {live.typing && st === "open" && <TypingBubble />}

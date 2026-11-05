@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CheckCircleIcon, ShieldCheckIcon, WarningIcon } from "@phosphor-icons/react";
@@ -37,11 +37,11 @@ export function OAuthAuthorizePage() {
     onSuccess: (r) => window.location.assign(r.redirect_to),
   });
   const auto = useRef(false);
-  const [leaving, setLeaving] = useState(false);
   const d = info.data;
+  const leaving = !!d?.redirect_to || d?.consent_required === false;
   useEffect(() => {
     if (!d) return;
-    if (d.redirect_to) { setLeaving(true); window.location.assign(d.redirect_to); return; }
+    if (d.redirect_to) { window.location.assign(d.redirect_to); return; }
     if (d.consent_required === false && !auto.current) { auto.current = true; decide.mutate(true); }
   }, [d, decide]);
 

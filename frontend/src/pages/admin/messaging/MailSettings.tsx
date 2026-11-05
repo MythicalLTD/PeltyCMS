@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PaperPlaneTiltIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -20,6 +20,19 @@ interface Smtp {
 }
 interface Form { enabled: boolean; host: string; port: string; security: string; username: string; password: string; from_address: string; from_name: string }
 
+function smtpForm(data: Smtp): Form {
+  return {
+    enabled: data.enabled,
+    host: data.host,
+    port: String(data.port || 587),
+    security: data.security || "starttls",
+    username: data.username,
+    password: "",
+    from_address: data.from_address,
+    from_name: data.from_name,
+  };
+}
+
 export function AdminMailSettingsPage() {
   const { t, tCode } = useI18n();
   const qc = useQueryClient();
@@ -27,9 +40,11 @@ export function AdminMailSettingsPage() {
   const [form, setForm] = useState<Form>({ enabled: false, host: "", port: "587", security: "starttls", username: "", password: "", from_address: "", from_name: "" });
   const [error, setError] = useState<string | null>(null);
   const [to, setTo] = useState("");
-  useEffect(() => {
-    if (data) setForm({ enabled: data.enabled, host: data.host, port: String(data.port || 587), security: data.security || "starttls", username: data.username, password: "", from_address: data.from_address, from_name: data.from_name });
-  }, [data]);
+  const [seen, setSeen] = useState(data);
+  if (data !== seen) {
+    setSeen(data);
+    if (data !== undefined) setForm(smtpForm(data));
+  }
   const errMsg = (e: unknown) => (e instanceof ApiError ? tCode(e.code) : t("error.internal"));
   const save = useMutation({
     mutationFn: (clear: boolean) => api<Smtp>("/admin/settings/smtp", { method: "PUT", body: { ...form, port: Number(form.port) || 0, password: form.password || null, clear_password: clear } }),

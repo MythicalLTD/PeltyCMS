@@ -6,8 +6,8 @@ import { TicketAiSuggestion } from "./TicketAiSuggestion";
 vi.mock("@/lib/i18n", () => ({ useI18n: () => ({ t: (key: string) => key, tCode: (key: string) => key }) }));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 function mount(enabled = true) {
-  const insert = vi.fn();
-  const fetcher = vi.fn(async (url: string) => new Response(JSON.stringify(url.endsWith("/status") ? { enabled } : { body: "Suggested <b>text</b>" }), { status: 200 }));
+  const insert = vi.fn<(html: string) => void>();
+  const fetcher = vi.fn<(url: string) => Promise<Response>>(async (url: string) => new Response(JSON.stringify(url.endsWith("/status") ? { enabled } : { body: "Suggested <b>text</b>" }), { status: 200 }));
   vi.stubGlobal("fetch", fetcher);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(<QueryClientProvider client={client}><TicketAiSuggestion ticketId="ticket-id" onInsert={insert} /></QueryClientProvider>);

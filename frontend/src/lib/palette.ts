@@ -26,7 +26,7 @@ export function matchPages<T extends { title: string; group: string; hint: strin
   const n = fold(q.trim());
   if (!n) return [];
   const score = (p: T) => (fold(p.title).startsWith(n) ? 0 : fold(p.title).includes(n) ? 1 : fold(p.group).includes(n) ? 2 : fold(p.hint).includes(n) ? 3 : 9);
-  return pages.map((p) => [score(p), p] as const).filter(([s]) => s < 9).sort((a, b) => a[0] - b[0]).slice(0, limit).map(([, p]) => p);
+  return pages.map((p) => [score(p), p] as const).filter(([s]) => s < 9).toSorted((a, b) => a[0] - b[0]).slice(0, limit).map(([, p]) => p);
 }
 
 /** Quick links for an empty query: primary pages not already in recents. */

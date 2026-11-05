@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { PlayIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -44,9 +44,15 @@ const toForm = (s: OverdueSettings): Form => ({
 function AutopayCard() {
   const { t, tCode } = useI18n();
   const { data } = useQuery({ queryKey: ["admin", "settings", "autopay"], queryFn: () => api<AutopaySettings>("/admin/settings/autopay") });
-  const [form, setForm] = useState<{ enabled: boolean; retry_days: string } | null>(null);
+  const [form, setForm] = useState<{ enabled: boolean; retry_days: string } | null>(
+    data ? { enabled: data.enabled, retry_days: data.retry_days.join(", ") } : null,
+  );
+  const [seen, setSeen] = useState(data);
+  if (data !== seen) {
+    setSeen(data);
+    if (data !== undefined) setForm({ enabled: data.enabled, retry_days: data.retry_days.join(", ") });
+  }
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { if (data) setForm({ enabled: data.enabled, retry_days: data.retry_days.join(", ") }); }, [data]);
   const fail = (e: unknown) => setError(e instanceof ApiError ? tCode(e.code) : t("error.internal"));
   const save = useMutation({
     mutationFn: (f: { enabled: boolean; retry_days: string }) => api<AutopaySettings>("/admin/settings/autopay", { method: "PUT", body: { enabled: f.enabled, retry_days: parseDays(f.retry_days) } }),
@@ -87,9 +93,13 @@ function AutopayCard() {
 export function AdminOverduePage() {
   const { t, tCode } = useI18n();
   const { data } = useQuery({ queryKey: ["admin", "settings", "overdue"], queryFn: () => api<OverdueSettings>("/admin/settings/overdue") });
-  const [form, setForm] = useState<Form | null>(null);
+  const [form, setForm] = useState<Form | null>(data ? toForm(data) : null);
+  const [seen, setSeen] = useState(data);
+  if (data !== seen) {
+    setSeen(data);
+    if (data !== undefined) setForm(toForm(data));
+  }
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { if (data) setForm(toForm(data)); }, [data]);
   const fail = (e: unknown) => setError(e instanceof ApiError ? tCode(e.code) : t("error.internal"));
   const save = useMutation({
     mutationFn: (f: Form) => api<OverdueSettings>("/admin/settings/overdue", { method: "PUT", body: {

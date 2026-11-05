@@ -26,7 +26,7 @@ describe("api health circuit", () => {
   });
 
   it("goes offline on unreachable and recovers after a healthy probe", async () => {
-    const probe = vi.fn()
+    const probe = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(null, { status: 503 }))
       .mockResolvedValueOnce(new Response("ok", { status: 200 }));
     setHealthFetch(probe as unknown as typeof fetch);

@@ -54,6 +54,18 @@ describe("ResponsiveTable", () => {
   });
 });
 
+function shellApp(path = "/dashboard") {
+  return wrap(
+    <Routes><Route element={<Shell scope="client" section="nav.client_area" slot="client.nav" />}>
+      <Route path="dashboard" element={<p>home</p>} /><Route path="services" element={<p>services page</p>} />
+    </Route></Routes>, path);
+}
+
+function setTestViewport(w: number) {
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: w });
+  vi.stubGlobal("matchMedia", (q: string) => ({ matches: w < 768, media: q, addEventListener() {}, removeEventListener() {} }));
+}
+
 describe("Shell navigation", () => {
   globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
   const nav = [
@@ -61,19 +73,10 @@ describe("Shell navigation", () => {
     { to: "/services", label: "nav.services" as const, icon: HardDrivesIcon },
   ];
   void nav;
-  const app = (path = "/dashboard") => wrap(
-    <Routes><Route element={<Shell scope="client" section="nav.client_area" slot="client.nav" />}>
-      <Route path="dashboard" element={<p>home</p>} /><Route path="services" element={<p>services page</p>} />
-    </Route></Routes>, path);
-
-  const viewport = (w: number) => {
-    Object.defineProperty(window, "innerWidth", { configurable: true, value: w });
-    vi.stubGlobal("matchMedia", (q: string) => ({ matches: w < 768, media: q, addEventListener() {}, removeEventListener() {} }));
-  };
 
   it("phone: trigger opens the shadcn Sheet drawer, navigation closes it", async () => {
-    viewport(375);
-    app();
+    setTestViewport(375);
+    shellApp();
     const trigger = await screen.findByRole("button", { name: "Open menu" });
     expect(trigger.className).toContain("size-11"); // 44px tap target
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -87,8 +90,8 @@ describe("Shell navigation", () => {
   });
 
   it("phone: Escape closes the drawer", async () => {
-    viewport(375);
-    app();
+    setTestViewport(375);
+    shellApp();
     fireEvent.click(await screen.findByRole("button", { name: "Open menu" }));
     const sheet = await screen.findByRole("dialog");
     fireEvent.keyDown(sheet, { key: "Escape" });
@@ -96,9 +99,9 @@ describe("Shell navigation", () => {
   });
 
   it("desktop: sidebar collapses to icons and persists the state", async () => {
-    viewport(1280);
+    setTestViewport(1280);
     document.cookie = "sidebar_state=; max-age=0; path=/";
-    const { container } = app();
+    const { container } = shellApp();
     const wrapper = () => container.querySelector('[data-slot="sidebar"][data-state]')!;
     await waitFor(() => expect(wrapper().getAttribute("data-state")).toBe("expanded"));
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));

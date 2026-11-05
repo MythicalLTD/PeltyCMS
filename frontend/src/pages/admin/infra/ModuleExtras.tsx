@@ -60,8 +60,8 @@ export function ModuleQueueCard() {
   const key = ["admin", "module-queue"];
   const { data, isLoading } = useQuery({ queryKey: key, queryFn: () => api<{ data: Failed[] }>("/admin/module-queue") });
   const [filter, setFilter] = useState("");
-  const f = filter.trim().toLowerCase();
-  const rows = data?.data.filter((x) => !f || [x.module ?? "", x.product_name, x.customer_email, x.provision_error].some((v) => v.toLowerCase().includes(f)));
+  const needle = filter.trim().toLowerCase();
+  const rows = data?.data.filter((x) => !needle || [x.module ?? "", x.product_name, x.customer_email, x.provision_error].some((v) => v.toLowerCase().includes(needle)));
   const retry = useMutation({ mutationFn: (id: string) => api(`/admin/module-queue/${id}/retry`, { method: "POST" }), onSuccess: () => { setError(null); void qc.invalidateQueries({ queryKey: key }); }, onError: (e) => setError(errOf(e)) });
   return (
     <div className="flex flex-col gap-3">
@@ -75,10 +75,10 @@ export function ModuleQueueCard() {
       <ListCard<Failed>
         rows={rows} rowKey={(f) => f.service_id} loading={isLoading} emptyIcon={WarningIcon} emptyTitle={t("modx.queue_empty")}
         columns={[
-          { header: t("modx.service"), primary: true, cell: (f) => <><div className="font-medium">{f.product_name}</div><div className="text-xs text-muted-foreground">{f.customer_email}</div></> },
-          { header: t("servers.module"), cell: (f) => <Badge variant="outline">{f.module ?? "-"}</Badge> },
-          { header: t("provisioning.last_error"), cell: (f) => <span className="break-words font-mono text-xs text-destructive">{f.provision_error}</span> },
-          { header: "", cell: (f) => <div className="flex justify-end"><Button size="sm" variant="outline" disabled={retry.isPending} onClick={() => retry.mutate(f.service_id)}><ArrowsClockwiseIcon aria-hidden />{t("modx.retry")}</Button></div> },
+          { header: t("modx.service"), primary: true, cell: (row) => <><div className="font-medium">{row.product_name}</div><div className="text-xs text-muted-foreground">{row.customer_email}</div></> },
+          { header: t("servers.module"), cell: (row) => <Badge variant="outline">{row.module ?? "-"}</Badge> },
+          { header: t("provisioning.last_error"), cell: (row) => <span className="break-words font-mono text-xs text-destructive">{row.provision_error}</span> },
+          { header: "", cell: (row) => <div className="flex justify-end"><Button size="sm" variant="outline" disabled={retry.isPending} onClick={() => retry.mutate(row.service_id)}><ArrowsClockwiseIcon aria-hidden />{t("modx.retry")}</Button></div> },
         ]}
       />
     </div>
@@ -137,7 +137,7 @@ export function ServiceCustomActions({ serviceId }: { serviceId: string }) {
   return (
     <CardContent className="grid gap-2 px-0">
       <p className="text-sm font-medium">{t("modx.custom_actions")}</p>
-      {msg && (msg.ok ? <p role="status" className="break-all text-sm text-muted-foreground">{msg.text}</p> : <FormError message={msg.text} />)}
+      {msg && (msg.ok ? <output className="block break-all text-sm text-muted-foreground">{msg.text}</output> : <FormError message={msg.text} />)}
       {data.actions.includes("change_password") && <Input type="password" autoComplete="new-password" placeholder={t("modx.new_password_optional")} value={pw} onChange={(e) => setPw(e.target.value)} />}
       <div className="flex flex-wrap gap-1">
         {data.actions.map((a) => <Button key={a} size="sm" variant="outline" disabled={run.isPending} onClick={() => run.mutate(a)}>{tCode(`modx.action.${a}`)}</Button>)}

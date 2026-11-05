@@ -1,6 +1,6 @@
 import { Switch } from "@/components/ui/switch";
 import { PageHeader } from "@/components/PageHeader";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,8 +23,12 @@ export function AdminPluginDetailPage() {
   });
   // External plugins with a webhook_url get a delivery log page (404 otherwise).
   const hook = useQuery({ queryKey: ["admin", "plugin-webhook", id], queryFn: () => api<unknown>(`/admin/plugins/${encodeURIComponent(id)}/webhook`), retry: false });
-  const [values, setValues] = useState<Values>({});
-  useEffect(() => setValues(data?.values ?? {}), [data]);
+  const [values, setValues] = useState<Values>(data?.values ?? {});
+  const [seen, setSeen] = useState(data);
+  if (data !== seen) {
+    setSeen(data);
+    if (data !== undefined) setValues(data.values ?? {});
+  }
   const save = useMutation({
     mutationFn: () => api<void>(`/admin/plugins/${encodeURIComponent(id)}/settings`, { method: "PUT", body: values }),
     onSuccess: () => refetch(),
@@ -79,7 +83,7 @@ export function AdminPluginDetailPage() {
                 );
               })}
               {save.error instanceof ApiError && <p role="alert" className="text-sm text-destructive">{save.error.message}</p>}
-              {save.isSuccess && <p role="status" className="text-sm text-success">{t("common.saved")}</p>}
+              {save.isSuccess && <output className="block text-sm text-success">{t("common.saved")}</output>}
               <Button type="submit" disabled={save.isPending} className="self-start">{t("common.save")}</Button>
             </form>
           )}

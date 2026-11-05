@@ -5,17 +5,18 @@ export interface CreditState { balances: CreditBalance[]; entries: CreditEntry[]
 
 const DEC = /^-?\d+(\.\d+)?$/;
 
+const decNeg = (s: string) => s.startsWith("-");
+const decNorm = (s: string) => {
+  const [i = "", f = ""] = s.replace(/^-/, "").split(".");
+  return { i: i.replace(/^0+(?=\d)/, ""), f: f.replace(/0+$/, "") };
+};
+const decZero = (n: { i: string; f: string }) => n.i === "0" && n.f === "";
+
 /** Compare two decimal strings exactly: -1, 0 or 1. */
 export function cmpDec(a: string, b: string): number {
   if (!DEC.test(a) || !DEC.test(b)) throw new Error("not a decimal");
-  const neg = (s: string) => s.startsWith("-");
-  const norm = (s: string) => {
-    const [i = "", f = ""] = s.replace(/^-/, "").split(".");
-    return { i: i.replace(/^0+(?=\d)/, ""), f: f.replace(/0+$/, "") };
-  };
-  const na = norm(a), nb = norm(b);
-  const zero = (n: { i: string; f: string }) => n.i === "0" && n.f === "";
-  const sa = zero(na) ? 0 : neg(a) ? -1 : 1, sb = zero(nb) ? 0 : neg(b) ? -1 : 1;
+  const na = decNorm(a), nb = decNorm(b);
+  const sa = decZero(na) ? 0 : decNeg(a) ? -1 : 1, sb = decZero(nb) ? 0 : decNeg(b) ? -1 : 1;
   if (sa !== sb) return sa < sb ? -1 : 1;
   if (sa === 0) return 0;
   let c = na.i.length !== nb.i.length ? (na.i.length < nb.i.length ? -1 : 1) : na.i < nb.i ? -1 : na.i > nb.i ? 1 : 0;

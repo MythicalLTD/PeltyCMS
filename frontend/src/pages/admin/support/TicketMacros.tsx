@@ -38,6 +38,15 @@ function useLists(enabled = true) {
   return { deps, staff };
 }
 
+function macroSelect(value: string | null, onChange: (v: string | null) => void, any: string, items: { id: string; name: string }[]) {
+  return (
+    <Select value={opt(value)} onValueChange={(v) => onChange(unopt(v))}>
+      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+      <SelectContent><SelectItem value={NONE}>{any}</SelectItem>{items.map((i) => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}</SelectContent>
+    </Select>
+  );
+}
+
 function MacroDialog({ initial, trigger }: { initial?: TicketMacro; trigger: React.ReactNode }) {
   const { t, tCode } = useI18n();
   const qc = useQueryClient();
@@ -53,12 +62,6 @@ function MacroDialog({ initial, trigger }: { initial?: TicketMacro; trigger: Rea
     onSuccess: () => { setOpen(false); void qc.invalidateQueries({ queryKey: KEY }); }, onError,
   });
   const set = <K extends keyof MacroDraft>(k: K, v: MacroDraft[K]) => setD((x) => ({ ...x, [k]: v }));
-  const sel = (value: string | null, onChange: (v: string | null) => void, any: string, items: { id: string; name: string }[]) => (
-    <Select value={opt(value)} onValueChange={(v) => onChange(unopt(v))}>
-      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-      <SelectContent><SelectItem value={NONE}>{any}</SelectItem>{items.map((i) => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}</SelectContent>
-    </Select>
-  );
   const staffItems = staff.map((u) => ({ id: u.id, name: u.display_name || u.email }));
   return (
     <Dialog open={open} onOpenChange={(o) => {
@@ -72,7 +75,7 @@ function MacroDialog({ initial, trigger }: { initial?: TicketMacro; trigger: Rea
           <FormError message={error} />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="grid gap-2"><Label htmlFor="m-name">{t("macros.name")}</Label><Input id="m-name" maxLength={100} value={d.name} onChange={(e) => set("name", e.target.value)} /></div>
-            <div className="grid gap-2"><Label>{t("tickets.department")}</Label>{sel(d.department_id, (v) => set("department_id", v), t("support.all_departments"), deps)}</div>
+            <div className="grid gap-2"><Label>{t("tickets.department")}</Label>{macroSelect(d.department_id, (v) => set("department_id", v), t("support.all_departments"), deps)}</div>
           </div>
           <div className="grid gap-2"><Label htmlFor="m-desc">{t("macros.description")}</Label><Input id="m-desc" maxLength={500} value={d.description} onChange={(e) => set("description", e.target.value)} /></div>
           <div className="grid gap-2"><Label htmlFor="m-body">{t("macros.reply")}</Label>
@@ -80,15 +83,15 @@ function MacroDialog({ initial, trigger }: { initial?: TicketMacro; trigger: Rea
             <p className="text-xs text-muted-foreground">{t("macros.placeholders")} {MACRO_PLACEHOLDERS.map((p) => <code key={p} className="mr-1">{`{${p}}`}</code>)}</p>
             <Label className="flex items-center gap-2"><Switch checked={d.reply_internal} onCheckedChange={(v) => set("reply_internal", v)} />{t("tickets.internal_note")}</Label></div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="grid gap-2"><Label>{t("macros.set_status")}</Label>{sel(d.set_status, (v) => set("set_status", v), t("support.keep"), statuses.items.map((s) => ({ id: s.slug, name: statuses.label(s.slug) })))}</div>
-            <div className="grid gap-2"><Label>{t("support.set_priority")}</Label>{sel(d.set_priority, (v) => set("set_priority", v), t("support.keep"), PRIORITIES.map((p) => ({ id: p, name: tCode(`tickets.priority.${p}`) })))}</div>
+            <div className="grid gap-2"><Label>{t("macros.set_status")}</Label>{macroSelect(d.set_status, (v) => set("set_status", v), t("support.keep"), statuses.items.map((s) => ({ id: s.slug, name: statuses.label(s.slug) })))}</div>
+            <div className="grid gap-2"><Label>{t("support.set_priority")}</Label>{macroSelect(d.set_priority, (v) => set("set_priority", v), t("support.keep"), PRIORITIES.map((p) => ({ id: p, name: tCode(`tickets.priority.${p}`) })))}</div>
             <div className="grid gap-2"><Label>{t("tickets.assignee")}</Label>
               <Select value={d.assign_mode} onValueChange={(v) => set("assign_mode", v as AssignMode)}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>{(["keep", "self", "user", "unassign"] as const).map((m) => <SelectItem key={m} value={m}>{t(`macros.assign.${m}`)}</SelectItem>)}</SelectContent>
               </Select>
-              {d.assign_mode === "user" && sel(d.assign_to, (v) => set("assign_to", v), t("macros.pick_staff"), staffItems)}</div>
-            <div className="grid gap-2"><Label>{t("support.move_department")}</Label>{sel(d.set_department, (v) => set("set_department", v), t("support.keep"), deps)}</div>
+              {d.assign_mode === "user" && macroSelect(d.assign_to, (v) => set("assign_to", v), t("macros.pick_staff"), staffItems)}</div>
+            <div className="grid gap-2"><Label>{t("support.move_department")}</Label>{macroSelect(d.set_department, (v) => set("set_department", v), t("support.keep"), deps)}</div>
           </div>
           <div className="grid gap-2"><Label htmlFor="m-tags">{t("support.add_tag")}</Label><Input id="m-tags" placeholder={t("tickets.tags_hint")} value={tags} onChange={(e) => setTags(e.target.value)} /></div>
           <div className="flex items-center justify-between rounded-md border p-3"><Label htmlFor="m-act">{t("coupons.active")}</Label><Switch id="m-act" checked={d.is_active} onCheckedChange={(v) => set("is_active", v)} /></div>

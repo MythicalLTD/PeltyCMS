@@ -57,7 +57,7 @@ export function usePluginRenderSlot(slot: RenderSlot | string): PluginSlotUi[] {
 export function usePluginRenderSlots(slots: string[]): PluginSlotUi[] {
   const { data } = usePluginUiData();
   const all = data?.slots ?? [];
-  return slots.flatMap((name) => all.filter((s) => s.slot === name).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+  return slots.flatMap((name) => all.filter((s) => s.slot === name).toSorted((a, b) => (a.order ?? 0) - (b.order ?? 0)));
 }
 
 export type RenderSlot = "admin.dashboard" | "client.dashboard" | "admin.service.detail" | "admin.customer.detail" | "admin.order.detail" | "admin.invoice.detail" | "client.home";

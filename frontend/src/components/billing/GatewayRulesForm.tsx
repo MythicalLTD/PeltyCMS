@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import { Button } from "../ui/button";
@@ -12,9 +12,13 @@ import { fromRules, toRules, type RuleForm, type GatewayRules } from "@/lib/bill
 export function GatewayRulesForm({ gateway, manual = false }: { gateway: string; manual?: boolean }) {
   const { t, tCode } = useI18n();
   const { data } = useQuery({ queryKey: ["admin", "gateways", gateway, "rules"], queryFn: () => api<GatewayRules>(`/admin/gateways/${encodeURIComponent(gateway)}/rules`) });
-  const [form, setForm] = useState<RuleForm>({ fee_percent: "0", currencies: "", limits: [] });
+  const [form, setForm] = useState<RuleForm>(data ? fromRules(data) : { fee_percent: "0", currencies: "", limits: [] });
+  const [seen, setSeen] = useState(data);
+  if (data !== seen) {
+    setSeen(data);
+    if (data !== undefined) setForm(fromRules(data));
+  }
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { if (data) setForm(fromRules(data)); }, [data]);
   const save = useMutation({
     mutationFn: (f: RuleForm) => api<GatewayRules>(`/admin/gateways/${encodeURIComponent(gateway)}/rules`, { method: "PUT", body: toRules(f) }),
     onSuccess: (r) => { setForm(fromRules(r)); setError(null); toast.success(t("common.saved")); },

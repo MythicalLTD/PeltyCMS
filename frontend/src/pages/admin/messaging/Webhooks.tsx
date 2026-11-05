@@ -27,7 +27,7 @@ interface ListResp { items: WebhookEndpoint[]; events: CatalogEvent[]; signing_a
 export function groupEvents(events: CatalogEvent[]): [string, CatalogEvent[]][] {
   const m = new Map<string, CatalogEvent[]>();
   for (const e of events) m.set(e.category, [...(m.get(e.category) ?? []), e]);
-  return [...m.entries()].sort(([a], [b]) => a.localeCompare(b));
+  return [...m.entries()].toSorted(([a], [b]) => a.localeCompare(b));
 }
 
 /** Toggle a filter entry; picking `*` or `cat.*` drops the entries it covers. */

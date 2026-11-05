@@ -17,13 +17,13 @@ function mount(url: string, go: (u: string) => void) {
 }
 describe("DuoStep", () => {
   it("redirects to the https Duo URL", async () => {
-    const go = vi.fn();
+    const go = vi.fn<(url: string) => void>();
     mount("https://api-x.duosecurity.com/oauth/v1/authorize?x=1", go);
     fireEvent.click(screen.getByRole("button", { name: /duo/i }));
     await waitFor(() => expect(go).toHaveBeenCalledWith("https://api-x.duosecurity.com/oauth/v1/authorize?x=1"));
   });
   it("refuses a non-https URL", async () => {
-    const go = vi.fn();
+    const go = vi.fn<(url: string) => void>();
     mount("javascript:alert(1)", go);
     fireEvent.click(screen.getByRole("button", { name: /duo/i }));
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());

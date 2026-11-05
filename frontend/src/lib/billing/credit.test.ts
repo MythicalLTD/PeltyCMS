@@ -9,7 +9,7 @@ describe("credit helpers", () => {
     expect(cmpDec("-1", "0")).toBe(-1);
     expect(cmpDec("-2", "-1.5")).toBe(-1);
     expect(cmpDec("-0.00", "0")).toBe(0);
-    expect(() => cmpDec("abc", "1")).toThrow();
+    expect(() => cmpDec("abc", "1")).toThrow("not a decimal");
   });
   it("finds balance per currency", () => {
     const s = { balances: [{ currency: "EUR", amount: "12.50" }], entries: [] };

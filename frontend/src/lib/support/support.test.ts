@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { canRate, minutes, parseTags, slaPercent, statusLabel, statusSlugValid, suggestText, distribution } from "./support";
 
+const statusTr = (c: string) => `T(${c})`;
+
 describe("support helpers", () => {
   it("normalises tags like the server", () => {
     expect(parseTags(" VIP Client, vip-client, billing, !!, ")).toEqual(["billing", "vip-client"]);
@@ -26,12 +28,11 @@ describe("support helpers", () => {
 });
 
 describe("ticket statuses", () => {
-  const tr = (c: string) => `T(${c})`;
   it("labels", () => {
-    expect(statusLabel(undefined, "open", tr)).toBe("T(tickets.status.open)");
-    expect(statusLabel({ slug: "open", name: "New", color: "default", sort_order: 0, awaiting_staff: true, builtin: true }, "open", tr)).toBe("New");
-    expect(statusLabel({ slug: "vendor", name: "Vendor", color: "default", sort_order: 0, awaiting_staff: false, builtin: false }, "vendor", tr)).toBe("Vendor");
-    expect(statusLabel(undefined, "gone", tr)).toBe("gone");
+    expect(statusLabel(undefined, "open", statusTr)).toBe("T(tickets.status.open)");
+    expect(statusLabel({ slug: "open", name: "New", color: "default", sort_order: 0, awaiting_staff: true, builtin: true }, "open", statusTr)).toBe("New");
+    expect(statusLabel({ slug: "vendor", name: "Vendor", color: "default", sort_order: 0, awaiting_staff: false, builtin: false }, "vendor", statusTr)).toBe("Vendor");
+    expect(statusLabel(undefined, "gone", statusTr)).toBe("gone");
   });
   it("slugs", () => {
     expect(statusSlugValid("waiting_vendor")).toBe(true);

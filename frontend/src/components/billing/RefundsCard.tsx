@@ -113,7 +113,7 @@ export function RefundsCard({ scope, invoiceId }: { scope: "admin" | "client"; i
                 <Link className="font-medium tabular-nums text-primary hover:underline" to={`${base}/${c.id}`}>{c.number}</Link>
                 <span className="flex items-center gap-2">
                   <span className="tabular-nums">{formatMoney(c.total, c.currency, lang)}</span>
-                  <Button asChild size="sm" variant="ghost" aria-label={t("billing.download_pdf")}><a href={pdfUrl(scope, c.id)} download><FilePdfIcon aria-hidden /></a></Button>
+                  <Button asChild size="sm" variant="ghost"><a href={pdfUrl(scope, c.id)} download aria-label={t("billing.download_pdf")}><FilePdfIcon aria-hidden /><span className="sr-only">{t("billing.download_pdf")}</span></a></Button>
                 </span>
               </div>
             ))}

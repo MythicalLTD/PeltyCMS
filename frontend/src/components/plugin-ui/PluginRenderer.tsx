@@ -12,7 +12,8 @@ import * as P from "@phosphor-icons/react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -167,8 +168,8 @@ export function Node({ node, scope }: { node: UiNode; scope: Scope }): ReactNode
       const v = Math.max(0, Math.min(max, num(r("value"), 0)));
       const pct = Math.round((v / max) * 100);
       return (
-        <div className="flex items-center gap-2" role="progressbar" aria-valuemin={0} aria-valuemax={max} aria-valuenow={v}>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary" style={{ width: `${pct}%` }} /></div>
+        <div className="flex items-center gap-2">
+          <progress className="h-2 w-full overflow-hidden rounded-full accent-primary [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-primary" value={v} max={max} />
           <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">{pct}%</span>
         </div>
       );
@@ -437,7 +438,12 @@ function FieldNode({ n, type, scope }: { n: Props; type: string; scope: Scope })
           </Select>
         ) : type === "radio" ? (
           <div role="radiogroup" className="flex flex-wrap gap-2">
-            {opts.map((o) => <Button key={o.value} type="button" size="sm" variant={display(value) === o.value ? "default" : "outline"} role="radio" aria-checked={display(value) === o.value} onClick={() => set(o.value)}>{o.label}</Button>)}
+            {opts.map((o) => (
+              <label key={o.value} className={cn(buttonVariants({ size: "sm", variant: display(value) === o.value ? "default" : "outline" }), "cursor-pointer")}>
+                <input type="radio" name={id} className="sr-only" checked={display(value) === o.value} onChange={() => set(o.value)} />
+                {o.label}
+              </label>
+            ))}
           </div>
         ) : (
           <Input id={id} required={!!n.required} type={n.input_type === "number" ? "number" : n.input_type === "email" ? "email" : n.input_type === "password" ? "password" : "text"}
