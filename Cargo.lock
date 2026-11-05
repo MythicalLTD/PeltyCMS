@@ -3651,7 +3651,7 @@ dependencies = [
  "ring",
  "rsa 0.9.10",
  "sha2 0.10.9",
- "spki 0.7.3",
+ "spki 0.8.1",
  "time",
  "uuid",
  "x509-cert 0.2.5",
