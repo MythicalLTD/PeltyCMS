@@ -12,7 +12,9 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     const body = url.endsWith("/auth/me")
       ? { id: "u", email: "ana@example.com", display_name: "Ana", locale: null, roles: ["customer"], permissions: [], csrf_token: "c" }
-      : url.endsWith("/i18n") ? { languages: [{ code: "en", name: "English" }, { code: "ro", name: "Română" }] } : {};
+      : url.endsWith("/client/access")
+        ? { owner: true, services: true, invoices: true, tickets: true, orders: true, domains: true }
+        : url.endsWith("/i18n") ? { languages: [{ code: "en", name: "English" }, { code: "ro", name: "Română" }] } : {};
     return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
   }));
   localStorage.clear();

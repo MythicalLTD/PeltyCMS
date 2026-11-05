@@ -742,7 +742,7 @@ pub fn nav(scope: &str) -> Vec<NavLeaf> {
 /// Steps of the first-run setup checklist (`pelty-database/src/config/setup_wizard.rs`).
 pub fn setup_steps() -> Vec<(String, bool, String)> {
     let re = regex::Regex::new(
-        r#"Step \{ id: "([a-z_]+)", done: [^\n]*?, optional: (true|false), href: "([^"]+)""#,
+        r#"(?s)Step \{\s*id: "([a-z_]+)",\s*done: .*?,\s*optional: (true|false),\s*href: "([^"]+)""#,
     )
     .unwrap();
     re.captures_iter(&read("crates/pelty-database/src/config/setup_wizard.rs"))

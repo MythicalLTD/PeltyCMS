@@ -26,7 +26,7 @@ export function WorkspaceOverview({ data: d, search }: { data: CustomerWorkspace
   return <div className="grid min-w-0 gap-4">
     <section aria-label={tCode("workspace.attention")}>
       <h2 className="mb-3 flex items-center gap-2 text-base font-semibold"><WarningCircleIcon />{tCode("workspace.attention")}</h2>
-      {visibleAttention.length ? <div className="grid gap-3 sm:grid-cols-3">{visibleAttention.map(a => <Link key={a.kind} to={toTab(attentionTabs[a.kind])} className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 hover:bg-amber-500/10"><span><strong className="block text-2xl tabular-nums">{a.count}</strong><span className="text-sm">{tCode(`workspace.attention_${a.kind}`)}</span></span><ArrowRightIcon /></Link>)}</div> : <p className="rounded-lg border p-4 text-sm text-muted-foreground">{tCode("workspace.no_attention")}</p>}
+      {visibleAttention.length ? <div className="grid gap-3 sm:grid-cols-3">{visibleAttention.map(a => { const label = tCode(`workspace.attention_${a.kind}`); return <Link key={a.kind} to={toTab(attentionTabs[a.kind])} aria-label={`${a.count} ${label}`} className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 hover:bg-amber-500/10"><span><strong className="block text-2xl tabular-nums">{a.count}</strong><span className="text-sm">{label}</span></span><ArrowRightIcon /></Link>; })}</div> : <p className="rounded-lg border p-4 text-sm text-muted-foreground">{tCode("workspace.no_attention")}</p>}
     </section>
     {d.access.finance && <section aria-label={tCode("workspace.balances")}>
       <h2 className="mb-3 text-base font-semibold">{tCode("workspace.balances")}</h2>

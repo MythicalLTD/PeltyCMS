@@ -180,6 +180,7 @@ fn main() -> ExitCode {
         // `PELTY_EULA=true` accepts the EULA without editing eula.txt
         // (containers, CI); `serve` refuses to start until it is accepted.
         if let eula::Gate::Refused { created } =
+            // `PELTY_EULA=true` accepts the EULA without editing eula.txt (containers and CI).
             eula::check(&root, std::env::var("PELTY_EULA").ok().as_deref())
         {
             println!("{}", eula::refusal_message(&root));
@@ -289,8 +290,9 @@ fn run_headless(root: &std::path::Path, h: &setup::Headless) -> Result<setup::Pl
 
 /// True inside a container (`/.dockerenv` or `PELTY_DOCKER=1`).
 fn in_container() -> bool {
-    std::path::Path::new("/.dockerenv").exists()
-        || std::env::var("PELTY_DOCKER").is_ok_and(|v| v == "1" || v == "true")
+    // `PELTY_DOCKER=1` (or `true`) marks a container when `/.dockerenv` is absent.
+    let marked = std::env::var("PELTY_DOCKER").is_ok_and(|v| v == "1" || v == "true");
+    std::path::Path::new("/.dockerenv").exists() || marked
 }
 
 fn save_answers(root: &std::path::Path, a: setup::Answers) -> Result<setup::Plan, ExitCode> {

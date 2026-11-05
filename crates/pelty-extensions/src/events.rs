@@ -117,7 +117,7 @@ pub const REGISTRY: &[EventSpec] = &[
     // ---- users ----
     domain("user.registered", "A new account was created (password sign-up, SSO or OAuth).", &[f("user_id", "uuid", "New user"), o("via", "string", "SSO/OAuth provider id when not a password sign-up")]),
     domain("user.logged_in", "A user signed in successfully.", &[f("user_id", "uuid", "User")]),
-    domain("user.login_alert", "Sign-in from a new IP for an account with login alerts on.", &[f("user_id", "uuid", "User"), f("ip", "string", "Client IP"), f("user_agent", "string", "Browser user agent")]),
+    domain("user.login_alert", "Sign-in from a new IP for an account with login alerts on.", &[f("user_id", "uuid", "User"), f("ip", "string", "Client IP"), f("user_agent", "string", "Browser user agent"), f("location", "string", "Resolved place, or a placeholder when GeoIP has none"), o("country", "string", "ISO country code"), o("city", "string", "City"), o("region", "string", "Region")]),
     domain("customer.closed", "A customer account was closed (GDPR erasure or admin close).", &[f("customer_id", "uuid", "Customer")]),
     // ---- orders ----
     domain("order.created", "A customer placed an order.", &[f("order_id", "uuid", "Order"), f("customer_id", "uuid", "Customer"), f("total", "decimal", "Order total"), f("currency", "string", "ISO 4217 code")]),

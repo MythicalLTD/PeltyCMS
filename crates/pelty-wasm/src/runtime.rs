@@ -891,7 +891,14 @@ impl host::Host for State {
                 host_of(&req.url).unwrap_or_default()
             ));
         };
-        if wildcard && !self.caps.http_private {
+        let t = self
+            .ctx
+            .http
+            .clone()
+            .unwrap_or_else(|| self.services.http.clone());
+        let public_only = wildcard && !self.caps.http_private;
+        // Mock transports never dial. Reserved names such as `*.example` have no DNS.
+        if public_only && !t.offline() {
             self.check_public(&req.url)?;
         }
         if req.body.len() > HTTP_MAX_BYTES || req.headers.len() > 64 {
@@ -912,12 +919,6 @@ impl host::Host for State {
             headers: req.headers,
             body: req.body,
         };
-        let t = self
-            .ctx
-            .http
-            .clone()
-            .unwrap_or_else(|| self.services.http.clone());
-        let public_only = wildcard && !self.caps.http_private;
         let out = if public_only {
             self.block(pelty_provisioning::http::public_only(t.send(spec)))
         } else {

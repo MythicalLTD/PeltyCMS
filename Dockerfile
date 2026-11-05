@@ -3,13 +3,13 @@
 FROM node:22-bookworm-slim AS web
 WORKDIR /src/frontend
 RUN corepack enable pnpm
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY frontend/ ./
 COPY locales/ /src/locales/
 RUN pnpm run build
 
-FROM rust:1.93-bookworm AS build
+FROM rust:1.97-bookworm AS build
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/

@@ -68,8 +68,8 @@ async fn dump(
     }
     let (p2, url) = (path.clone(), database_url.to_string());
     let out = tokio::task::spawn_blocking(move || {
-        // `pg_dump` binary used for backups (default `pg_dump` on PATH).
         std::process::Command::new(
+            // `pg_dump` binary used for backups (default `pg_dump` on PATH).
             std::env::var("PELTY_PG_DUMP").unwrap_or_else(|_| "pg_dump".into()),
         )
         .arg("--format=custom")

@@ -170,7 +170,7 @@ function notifyRegistry() {
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise((res, rej) => {
     const t = setTimeout(() => rej(new Error("timeout")), ms);
-    p.then((v) => { clearTimeout(t); res(v); return v; }, (e: unknown) => { clearTimeout(t); rej(e); throw e; });
+    p.then((v) => { clearTimeout(t); res(v); }, (e: unknown) => { clearTimeout(t); rej(e); });
   });
 }
 

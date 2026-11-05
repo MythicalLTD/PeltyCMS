@@ -27,6 +27,12 @@ impl HttpRequestSpec {
 /// Pluggable HTTP transport. Returns `(status, body)`; `Err` = network error.
 pub trait HttpTransport: Send + Sync {
     fn send(&self, req: HttpRequestSpec) -> BoxFuture<'_, Result<(u16, String), String>>;
+
+    /// Never dials a socket. The WASM host then skips the public-DNS SSRF check,
+    /// which reserved names such as `*.example` cannot pass.
+    fn offline(&self) -> bool {
+        false
+    }
 }
 
 /// Refuses every request (offline default for the bare registry).
@@ -101,6 +107,10 @@ impl MockTransport {
 }
 
 impl HttpTransport for MockTransport {
+    fn offline(&self) -> bool {
+        true
+    }
+
     fn send(&self, req: HttpRequestSpec) -> BoxFuture<'_, Result<(u16, String), String>> {
         Box::pin(async move {
             if let Ok(mut s) = self.sent.lock() {
