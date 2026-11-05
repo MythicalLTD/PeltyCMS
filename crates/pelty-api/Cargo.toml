@@ -56,7 +56,7 @@ maxminddb = "0.26"
 workspace = true
 
 [dev-dependencies]
-tokio-tungstenite = { version = "0.29", default-features = false, features = ["connect", "handshake"] }
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect", "handshake"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 webauthn-authenticator-rs = { workspace = true }
 pelty-payments = { workspace = true, features = ["test-util"] }
