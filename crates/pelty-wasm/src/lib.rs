@@ -89,10 +89,12 @@ fn env_max(key: &str, hard: u64) -> u64 {
 
 /// Admin maxima currently in force: (memory MiB, timeout s, fuel).
 pub fn limit_maxima() -> (u64, u64, u64) {
-    // Admin caps for addon limits: memory MiB, timeout seconds, fuel (defaults: the built-in maxima).
     (
+        // Lower the per-addon memory ceiling in MiB. Cannot exceed the built-in maximum.
         env_max("PELTY_ADDON_MAX_MEMORY_MIB", LIMIT_MEMORY_MIB),
+        // Lower the per-addon call timeout in seconds. Cannot exceed the built-in maximum.
         env_max("PELTY_ADDON_MAX_TIMEOUT_SECS", LIMIT_TIMEOUT_SECS),
+        // Lower the per-addon fuel budget. Cannot exceed the built-in maximum.
         env_max("PELTY_ADDON_MAX_FUEL", LIMIT_FUEL),
     )
 }

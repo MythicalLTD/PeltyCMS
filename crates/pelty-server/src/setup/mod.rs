@@ -1920,7 +1920,10 @@ pub fn headless<S: Services + ?Sized>(
     if let Some(email) = h
         .admin_email
         .clone()
-        .or_else(|| cur("PELTY_ADMIN_EMAIL"))
+        .or_else(|| {
+            // First administrator email for `setup --yes` when `--admin-email` is omitted.
+            cur("PELTY_ADMIN_EMAIL")
+        })
         .filter(|e| !e.trim().is_empty())
     {
         let email = valid_email(&email).map_err(|e| format!("--admin-email: {e}"))?;

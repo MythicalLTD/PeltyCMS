@@ -2,6 +2,18 @@
 
 After the first sign-in the admin dashboard shows a **Finish setting up your store** checklist. It is computed from the database, so a step turns done as soon as the setting exists. Required steps keep the checklist on the dashboard until they are done; you can hide it with **Hide from dashboard** (Admin → Getting started brings it back).
 
+Each step opens its settings page:
+
+- License and EULA: `/admin/getting-started`
+- Company: `/admin/general-settings`
+- Currency: `/admin/currencies`
+- Outgoing email: `/admin/mail-settings`
+- Payment gateway: `/admin/gateways`
+- First product: `/admin/products`
+- Tax (optional): `/admin/tax`
+- Domains (optional): `/admin/domains`
+- Provisioning server (optional): `/admin/servers`
+
 The first required step is **License and EULA**. Accepting records agreement for this deployment under the Source Available License: free in production with **50 or fewer Active Clients**, Soft reminders (no feature lock) above that, and a Commercial License when you grow past Free Tier. See `LICENSE`, `EULA.md` and `COMMERCIAL.md` in the install, or Admin → Getting started.
 
 {{wizard}}
