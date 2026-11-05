@@ -7,7 +7,7 @@ license.workspace = true
 # SAML 2.0 Service Provider primitives in pure Rust (no C, no unsafe):
 # XML parsing, Exclusive C14N 1.0, XML-DSig verification, assertion checks.
 [dependencies]
-quick-xml = "0.41"
+quick-xml = "0.42"
 base64 = { workspace = true }
 sha2 = { workspace = true }
 time = { workspace = true }
