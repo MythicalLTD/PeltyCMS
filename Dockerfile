@@ -21,11 +21,19 @@ COPY extensions/ extensions/
 # Workspace member (developer commands); only needed so the workspace resolves.
 COPY xtask/ xtask/
 COPY Makefile ./
-# Embedded into install docs (`{{file:docker-compose.yml}}` in pelty-docs).
+# Root + extension samples that pelty-docs embeds via {{file:...}} templates.
 COPY docker-compose.yml ./
-# pelty-docs reads frontend/src (App.tsx, navRegistry, PluginSlot sites) at
-# generation time; the web stage only produces dist for the runtime image.
+# pelty-docs also reads frontend/src (App.tsx, navRegistry, PluginSlot sites);
+# the web stage only produces dist for the runtime image.
 COPY frontend/ frontend/
+# Fail fast if a docs embed target is missing (avoids a late panic after a 20m build).
+RUN test -f docker-compose.yml \
+ && test -f extensions/examples/addon-guide/addon.json \
+ && test -f extensions/examples/addon-guide/assets/ui.html \
+ && test -f extensions/themes/default/theme.json \
+ && test -f frontend/src/lib/navRegistry.ts \
+ && test -f locales/en.json \
+ && test -f xtask/src/main.rs
 RUN cargo build --release --locked -p pelty-server -p pelty-docs \
  && ./target/release/pelty-docs /src/target/docs
 

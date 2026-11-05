@@ -26,6 +26,8 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: pnpm/action-setup@v4
         with:
@@ -54,6 +56,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -91,6 +95,8 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -133,6 +139,9 @@ jobs:
     if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'docker')
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Addon crates live as PeltyCMS/addon-* submodules under extensions/addons.
+          submodules: recursive
 
       - name: Free disk
         run: |

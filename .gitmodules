@@ -206,3 +206,31 @@
 	path = extensions/addons/sso-oidc
 	url = https://github.com/PeltyCMS/addon-sso-oidc.git
 	branch = main
+[submodule "extensions/addons/authorizenet"]
+	path = extensions/addons/authorizenet
+	url = https://github.com/PeltyCMS/addon-gateway-authorizenet.git
+	branch = main
+[submodule "extensions/addons/gocardless"]
+	path = extensions/addons/gocardless
+	url = https://github.com/PeltyCMS/addon-gateway-gocardless.git
+	branch = main
+[submodule "extensions/addons/google-analytics"]
+	path = extensions/addons/google-analytics
+	url = https://github.com/PeltyCMS/addon-integration-google-analytics.git
+	branch = main
+[submodule "extensions/addons/netopia"]
+	path = extensions/addons/netopia
+	url = https://github.com/PeltyCMS/addon-gateway-netopia.git
+	branch = main
+[submodule "extensions/addons/prov-solusio"]
+	path = extensions/addons/prov-solusio
+	url = https://github.com/PeltyCMS/addon-provisioning-solusio.git
+	branch = main
+[submodule "extensions/addons/prov-vendor"]
+	path = extensions/addons/prov-vendor
+	url = https://github.com/PeltyCMS/addon-provisioning-vendor.git
+	branch = main
+[submodule "extensions/addons/reg-cloudflare"]
+	path = extensions/addons/reg-cloudflare
+	url = https://github.com/PeltyCMS/addon-registrar-cloudflare.git
+	branch = main
