@@ -24,7 +24,7 @@ pelty-extensions = { workspace = true }
 serde = { workspace = true }
 # Setup wizard prompts (hidden password input; Windows and Unix terminals).
 dialoguer = { version = "0.11", default-features = false, features = ["password", "fuzzy-select"] }
-console = "0.15"
+console = "0.16"
 ipnet = "2"
 sqlx = { workspace = true }
 url = "2"
