@@ -1,0 +1,13 @@
+[package]
+name = "pelty-addon-guide"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+workspace = "../../addons"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pelty-addon-sdk = { workspace = true }

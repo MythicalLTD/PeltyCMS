@@ -1,0 +1,97 @@
+# Separate workspace: every member compiles to wasm32-wasip2 and is shipped
+# as its own addon zip (`cargo xtask addons`). Nothing here is linked into
+# the PeltyCMS server binary.
+[workspace]
+resolver = "2"
+members = [
+    "sdk",
+    "reg-common",
+    "captcha-common",
+    "sso-common",
+    "tests-provisioning",
+    "fixture-events",
+    "fixture-ext",
+    "fixture-lifecycle",
+    "fixture-hooks",
+    "fixture-points",
+    "fixture-cron",
+    "fixture-listener",
+    "fixture-power",
+    "captcha-turnstile",
+    "captcha-hcaptcha",
+    "captcha-recaptcha-v2",
+    "captcha-recaptcha-v3",
+    "sso-oidc",
+    "sso-google",
+    "sso-github",
+    "sso-discord",
+    "sso-microsoft",
+    "sso-facebook",
+    "fixture-prov",
+    "fixture-pay",
+    "stripe",
+    "paypal",
+    "mollie",
+    "razorpay",
+    "gocardless",
+    "crypto",
+    "paddle",
+    "adyen",
+    "manual",
+    "custom",
+    "prov-pterodactyl",
+    "prov-pelican",
+    "prov-webhook",
+    "prov-https-agent",
+    "prov-featherpanel",
+    "prov-proxmox",
+    "prov-cpanel",
+    "prov-plesk",
+    "prov-directadmin",
+    "prov-cyberpanel",
+    "prov-hestia",
+    "prov-ispconfig",
+    "prov-hetzner-cloud",
+    "prov-digitalocean",
+    "prov-vultr",
+    "prov-linode",
+    "prov-virtualizor",
+    "prov-solusvm",
+    "prov-solusio",
+    "google-analytics",
+    "prov-amp",
+    "prov-docker",
+    "prov-openstack",
+    "prov-ssl-reseller",
+    "prov-vendor",
+    "prov-licensing",
+    "prov-convoy",
+    "prov-virtfusion",
+    "prov-enhance",
+    "reg-namecheap",
+    "reg-resellerclub",
+    "reg-enom",
+    "reg-opensrs",
+    "reg-godaddy",
+    "reg-centralnic",
+    "reg-generic",
+    "reg-mock",
+    "../examples/addon-guide",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Proprietary"
+
+[workspace.dependencies]
+pelty-addon-sdk = { path = "sdk" }
+serde_json = "1"
+wit-bindgen = "0.63.0"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+codegen-units = 1
+panic = "abort"

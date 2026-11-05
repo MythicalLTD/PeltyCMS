@@ -1,0 +1,2 @@
+body { font-family: var(--font-sans, system-ui, sans-serif); color: var(--foreground, #111); background: transparent; margin: 0; padding: 12px; }
+button { border: 1px solid var(--border, #ccc); border-radius: var(--radius, 6px); padding: 4px 10px; background: var(--primary, #111); color: var(--primary-foreground, #fff); }

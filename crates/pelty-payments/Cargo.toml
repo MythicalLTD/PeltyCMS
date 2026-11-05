@@ -1,0 +1,36 @@
+[package]
+name = "pelty-payments"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = []
+# Helpers for gateway addon tests.
+test-util = []
+
+[dependencies]
+pelty-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+rust_decimal = { workspace = true }
+hmac = "0.12"
+sha2 = { workspace = true }
+hex = { workspace = true }
+subtle = { workspace = true }
+base64 = { workspace = true }
+time = { workspace = true }
+rsa = { version = "0.9", default-features = false, features = ["std", "sha2", "pem"] }
+crc32fast = "1.5"
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+
+[dev-dependencies]
+tokio = { workspace = true }
+axum = { workspace = true }
+rust_decimal = { workspace = true }
+
+[lints]
+workspace = true

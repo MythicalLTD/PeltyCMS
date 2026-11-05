@@ -1,0 +1,25 @@
+{
+  "id": "provisioning-convoy",
+  "name": "Convoy",
+  "version": "0.1.0",
+  "kind": "provisioning",
+  "engine": "wasm",
+  "provides": "convoy",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.provisioning.convoy",
+  "author": "MythicalSystems",
+  "permissions": [
+    "provisioning.manage",
+    "network.outbound"
+  ],
+  "capabilities": {
+    "http": [
+      "$server"
+    ],
+    "secrets": [
+      "api_key"
+    ]
+  },
+  "settings": []
+}

@@ -1,0 +1,123 @@
+# PeltyCMS Source Available License (SAL) 1.0
+
+Copyright (c) 2026 MythicalSystems Studios LLC. All rights reserved.
+
+This is not an OSI Open Source license. The source code is published so you can
+review, self-host, and extend PeltyCMS. Use of the Software is governed by this
+License and by the PeltyCMS End User License Agreement (`EULA.md`).
+
+**Draft for product use.** Have qualified counsel review these terms before you
+rely on them in production or public distribution.
+
+## 1. Definitions
+
+- **Software** means PeltyCMS and related materials in this repository, including
+  binaries you build or we distribute, documentation, and bundled examples,
+  excluding third-party components under their own licenses.
+- **Licensor** means MythicalSystems Studios LLC.
+- **You** means the individual or legal entity exercising rights under this License.
+- **Active Client** means a customer record in the Software whose status is
+  `active` and that is not merged into another customer. Closed or inactive
+  customers do not count.
+- **Free Tier Limit** means fifty (50) Active Clients on a single production
+  deployment (one logical billing installation).
+- **Non-Production** means use solely for evaluation, development, staging, or
+  backup copies that do not serve live paying end customers.
+
+## 2. Grant for Free Tier and Non-Production
+
+Subject to this License and the EULA, Licensor grants You a worldwide,
+non-exclusive, non-transferable, royalty-free license to use, copy, modify, and
+self-host the Software when **all** of the following are true:
+
+1. Your production deployment has **at most** the Free Tier Limit of Active
+   Clients, **or** Your use is Non-Production; and
+2. You comply with sections 4 through 8; and
+3. You have accepted the EULA for that deployment.
+
+## 3. Commercial License (above the Free Tier)
+
+If Your production deployment exceeds the Free Tier Limit, You must obtain a
+separate **Commercial License** from the Licensor (see `COMMERCIAL.md` and
+https://peltycms.com/pricing).
+
+Until a Commercial License is in force:
+
+- You remain bound by this License and the EULA.
+- The Software may remind administrators that a Commercial License is required.
+- **The Software does not disable features, delete data, or hard-block
+  operation solely because You exceed the Free Tier Limit.** Soft notices are
+  informational. Legal obligation still applies.
+
+A Commercial License, once issued, replaces the Free Tier client cap for the
+licensed deployment under the terms of that Commercial License.
+
+## 4. Source, modifications, and addons
+
+You may modify the Software for Your own use and build addons that talk to its
+APIs. Modified versions and addons You distribute to third parties must:
+
+- keep copyright and license notices intact;
+- not remove or obscure Soft license notices that state the Free Tier Limit;
+- not claim endorsement by the Licensor.
+
+Publishing Your modifications does not grant others a Commercial License, and
+does not expand the Free Tier Limit.
+
+## 5. Restrictions
+
+Except as allowed by a Commercial License or mandatory law, You may not:
+
+1. Offer the Software (modified or not) as a hosted multi-tenant service to
+   third parties where those parties operate their own client bases on Your
+   instance without a Commercial License covering that use.
+2. Remove, hide, or circumvent license notices, acceptance gates, or Soft
+   overage notices except for Non-Production debugging.
+3. Use Licensor trademarks in a way that suggests affiliation without written
+   permission (product names in factual statements are fine).
+4. Redistribute official paid addons, license keys, or Commercial License
+   materials.
+
+## 6. Patents
+
+If You institute patent litigation against Licensor or any contributor alleging
+that the Software infringes a patent, Your license under this License terminates
+as of the filing date.
+
+## 7. Disclaimer of warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR
+A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. YOU USE IT AT YOUR OWN RISK.
+
+## 8. Limitation of liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, LICENSOR IS NOT LIABLE FOR ANY INDIRECT,
+INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS,
+REVENUE, DATA, OR BUSINESS, ARISING FROM THE SOFTWARE OR THIS LICENSE, WHETHER
+IN CONTRACT, TORT, OR OTHERWISE, EVEN IF ADVISED OF THE POSSIBILITY.
+
+## 9. Termination
+
+Your rights under this License end automatically if You breach it and fail to
+cure within thirty (30) days of notice (or immediately for willful breach of
+sections 3 or 5). On termination, stop new production use that requires rights
+under this License. Sections 7, 8, and 10 survive.
+
+## 10. Governing law
+
+This License is governed by the laws of the State of Delaware, USA, excluding
+conflict-of-law rules, unless mandatory local consumer law says otherwise for
+You as an individual.
+
+## 11. Contact
+
+Commercial licensing and notices:
+MythicalSystems Studios LLC
+https://peltycms.com
+legal@peltycms.com
+
+---
+
+Third-party components remain under their own licenses. See dependency metadata
+in the repository and crate manifests.

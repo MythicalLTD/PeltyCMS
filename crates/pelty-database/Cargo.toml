@@ -1,0 +1,23 @@
+[package]
+name = "pelty-database"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+pelty-core = { workspace = true }
+sqlx = { workspace = true }
+uuid = { workspace = true }
+time = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rust_decimal = { workspace = true }
+pelty-billing = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+rand = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+
+[lints]
+workspace = true

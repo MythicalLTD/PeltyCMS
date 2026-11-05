@@ -1,0 +1,18 @@
+{
+  "name": "@peltycms/theme-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Typed client + i18n helper for building PeltyCMS theme frontends against /api/v1.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "pnpm --dir ../../../frontend exec tsc -p \"$PWD\" && cp dist/index.js ../../themes/minimal/dist/pelty-sdk.js",
+    "test": "pnpm --dir ../../../frontend exec vitest run --root \"$PWD\""
+  },
+  "packageManager": "pnpm@12.16.1",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=10"
+  }
+}

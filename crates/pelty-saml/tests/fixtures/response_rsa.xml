@@ -1,0 +1,37 @@
+<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_resp1" Version="2.0" IssueInstant="2026-10-30T10:00:00Z" Destination="https://billing.example/acs" InResponseTo="_req42">
+  <saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">https://idp.fixture/entity</saml:Issuer>
+  <samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>
+  <saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ID="_assert1" Version="2.0" IssueInstant="2026-10-30T10:00:00Z">
+    <saml:Issuer>https://idp.fixture/entity</saml:Issuer>
+    <ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/><ds:Reference URI="#_assert1"><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>g4ug0zRtZ23U73ahA7Vr610+MKYJKylCEtE4W57QTXU=</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>gJ8JolenVbrN8euddhhhK9XPrAdsQwp60h3HmjMB+f8DiU5nTHFq2QPTBVPSovAB0WxdihtvXYHaS8rk19RiLqSnWvSMr0T+ArRiQnTK7f/DAwNrxIruKGoKR0VKVisMcyqoWwMI3fbnTXtwQB6BQ0OndlVLCxb3Bpft6fgIHrZDyceHrtj+ekfxmE4s2u5F9TGzukJIrsQnQxzOY734D+5JWiXUaqlwuCL+j7+OCOs5jMFhcLI3beZPH6yS2SklawrO1Z27XTMTZP4RQYZbK3dxMhoaXFdGmwftl1PQ9S0QQWUNdDfGZZpOWQUvIGf2M6yrgr69BrWc+pAXqRcgig==</ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>MIIDDTCCAfWgAwIBAgIUGE0GwzwgzXBozarMzrJt7aLqGUQwDQYJKoZIhvcNAQEL
+BQAwFjEUMBIGA1UEAwwLZml4dHVyZS1pZHAwHhcNMjYxMDMwMTEyNjMyWhcNMzYx
+MDI3MTEyNjMyWjAWMRQwEgYDVQQDDAtmaXh0dXJlLWlkcDCCASIwDQYJKoZIhvcN
+AQEBBQADggEPADCCAQoCggEBALupYCudJu2NNwqggp/7WfVUpdqzFG4uFZlq6cxf
+K+Zf1pNwJUIkj/V5cXtZvMDef7U80ym4P+gliBvPiprpNmIWcCV9LTUyWeXgPqrt
+rwcEBUpdz3PSksijO6DGp+0ryswlBBcimXxIoMpIRE1MqS/nzhD2zQYAEV+wmFmM
+XKH7Jht5rwS011qguA/9DU1Z7Jp+kXEsTg2/FZrN6s6rxLCaeeJkhcwDR90f0o12
+R2l5lhuZ2lym9XzRHJ5l19KG/CCzo5zzaXEkeayCMslzxql58m5+p3HjxRvt4K85
+VGcSJ5m5z45dDBLVKTPXT3bVsXbvmGVitnYaghpcC2qyVlUCAwEAAaNTMFEwHQYD
+VR0OBBYEFNn2K2ysqeSP2W6895wpinfhMtoEMB8GA1UdIwQYMBaAFNn2K2ysqeSP
+2W6895wpinfhMtoEMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEB
+ABrj22oNfBxI3u/h9G/wYYyeG2BgwONBY9LP3xx+HDdxpL0fkphO/kZ3CMlziWgh
+T0w1gBy5KhjR1OuCqzGaOR6+IXUnSezRc1vRA/q3FFOjG0cCTbleSjQei4YQTNo7
+ZrxR85SS1uXjA/cVVZ79es87kpEQYHdnLrt1EGCioWvMyUGV6Vaf82qTvovaIz1N
+0vpPIWYtZTn2HZuXWgSWUpET1/UuZzVE3Gg0ZipA+b/LykyuewE8qUg3elBMxUpO
+zzedZSMklyd0sKiIz1JMKVOLD1NVpAoXdczOliylu3JuqK7gIFGnH6Rx7KrGTDZO
+cTKmUs6XbPp5JYGqoetnbOM=
+</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature><saml:Subject>
+      <saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">ion@example.com</saml:NameID>
+      <saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
+        <saml:SubjectConfirmationData NotOnOrAfter="2026-10-30T10:05:00Z" Recipient="https://billing.example/acs" InResponseTo="_req42"/>
+      </saml:SubjectConfirmation>
+    </saml:Subject>
+    <saml:Conditions NotBefore="2026-10-30T10:00:00Z" NotOnOrAfter="2026-10-30T10:05:00Z">
+      <saml:AudienceRestriction><saml:Audience>https://billing.example/sp</saml:Audience></saml:AudienceRestriction>
+    </saml:Conditions>
+    <saml:AuthnStatement AuthnInstant="2026-10-30T10:00:00Z" SessionIndex="s1"><saml:AuthnContext><saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:Password</saml:AuthnContextClassRef></saml:AuthnContext></saml:AuthnStatement>
+    <saml:AttributeStatement>
+      <saml:Attribute Name="mail" FriendlyName="email"><saml:AttributeValue xsi:type="xs:string">ion@example.com</saml:AttributeValue></saml:Attribute>
+      <saml:Attribute Name="memberOf"><saml:AttributeValue xsi:type="xs:string">Clients &amp; Co</saml:AttributeValue><saml:AttributeValue xsi:type="xs:string">vip</saml:AttributeValue></saml:Attribute>
+    </saml:AttributeStatement>
+  </saml:Assertion></samlp:Response>

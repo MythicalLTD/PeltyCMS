@@ -1,0 +1,42 @@
+[package]
+name = "pelty-addon-tests-provisioning"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Native behaviour tests for the provisioning addons (not an addon itself: no addon.json)."
+
+[dependencies]
+pelty-provisioning = { path = "../../../crates/pelty-provisioning" }
+pelty-addon-provisioning-pterodactyl = { path = "../prov-pterodactyl", default-features = false }
+pelty-addon-provisioning-webhook = { path = "../prov-webhook", default-features = false }
+pelty-addon-provisioning-https-agent = { path = "../prov-https-agent", default-features = false }
+pelty-addon-provisioning-featherpanel = { path = "../prov-featherpanel", default-features = false }
+pelty-addon-provisioning-proxmox = { path = "../prov-proxmox", default-features = false }
+pelty-addon-provisioning-cpanel = { path = "../prov-cpanel", default-features = false }
+pelty-addon-provisioning-plesk = { path = "../prov-plesk", default-features = false }
+pelty-addon-provisioning-directadmin = { path = "../prov-directadmin", default-features = false }
+pelty-addon-provisioning-cyberpanel = { path = "../prov-cyberpanel", default-features = false }
+pelty-addon-provisioning-hestia = { path = "../prov-hestia", default-features = false }
+pelty-addon-provisioning-ispconfig = { path = "../prov-ispconfig", default-features = false }
+pelty-addon-provisioning-hetzner-cloud = { path = "../prov-hetzner-cloud", default-features = false }
+pelty-addon-provisioning-digitalocean = { path = "../prov-digitalocean", default-features = false }
+pelty-addon-provisioning-vultr = { path = "../prov-vultr", default-features = false }
+pelty-addon-provisioning-linode = { path = "../prov-linode", default-features = false }
+pelty-addon-provisioning-virtualizor = { path = "../prov-virtualizor", default-features = false }
+pelty-addon-provisioning-solusvm = { path = "../prov-solusvm", default-features = false }
+pelty-addon-provisioning-solusio = { path = "../prov-solusio", default-features = false }
+pelty-addon-provisioning-amp = { path = "../prov-amp", default-features = false }
+pelty-addon-provisioning-docker = { path = "../prov-docker", default-features = false }
+pelty-addon-provisioning-openstack = { path = "../prov-openstack", default-features = false }
+pelty-addon-provisioning-ssl-reseller = { path = "../prov-ssl-reseller", default-features = false }
+pelty-addon-provisioning-vendor = { path = "../prov-vendor", default-features = false }
+pelty-addon-provisioning-licensing = { path = "../prov-licensing", default-features = false }
+pelty-addon-provisioning-convoy = { path = "../prov-convoy", default-features = false }
+pelty-addon-provisioning-virtfusion = { path = "../prov-virtfusion", default-features = false }
+pelty-addon-provisioning-enhance = { path = "../prov-enhance", default-features = false }
+
+[dev-dependencies]
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "time"] }
+axum = { version = "0.8", features = ["macros"] }

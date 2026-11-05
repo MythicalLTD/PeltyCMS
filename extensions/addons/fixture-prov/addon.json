@@ -1,0 +1,25 @@
+{
+  "id": "provisioning-addontestmod",
+  "name": "Addon Test",
+  "version": "0.1.0",
+  "kind": "provisioning",
+  "engine": "wasm",
+  "provides": "addontestmod",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.provisioning.addontestmod",
+  "author": "MythicalSystems",
+  "permissions": [
+    "provisioning.manage",
+    "network.outbound"
+  ],
+  "capabilities": {
+    "http": [
+      "$server"
+    ],
+    "secrets": [
+      "api_key"
+    ]
+  },
+  "settings": []
+}

@@ -1,0 +1,245 @@
+{
+  "id": "integration-extdemo",
+  "name": "Extension demo (test fixture)",
+  "version": "0.1.0",
+  "kind": "integration",
+  "engine": "wasm",
+  "provides": "extdemo",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.integration.extdemo",
+  "author": "MythicalSystems",
+  "permissions": [],
+  "capabilities": {
+    "http": [],
+    "secrets": [],
+    "kv": true,
+    "events": [],
+    "hooks": [
+      {
+        "event": "login.before",
+        "priority": 10
+      },
+      {
+        "event": "client.before_register"
+      },
+      {
+        "event": "invoice.before_create",
+        "priority": 50
+      },
+      {
+        "event": "order.before_place",
+        "fail_open": false,
+        "timeout_ms": 1000
+      }
+    ],
+    "routes": [
+      {
+        "method": "GET",
+        "path": "/ping",
+        "access": "public"
+      },
+      {
+        "method": "GET",
+        "path": "/items/:id",
+        "access": "public"
+      },
+      {
+        "method": "GET",
+        "path": "/stats",
+        "access": "admin",
+        "permission": "reports.read"
+      },
+      {
+        "method": "POST",
+        "path": "/notes",
+        "access": "client"
+      },
+      {
+        "method": "GET",
+        "path": "/notes",
+        "access": "client"
+      }
+    ],
+    "ui": [
+      "iframe"
+    ],
+    "bridge": [
+      "/api/v1/auth/me"
+    ]
+  },
+  "ui": {
+    "pages": [
+      {
+        "id": "stats",
+        "area": "admin",
+        "title": "plugin.integration-extdemo.stats_title",
+        "icon": "ChartBar",
+        "nav": true,
+        "data": {
+          "stats": {
+            "get": "/api/v1/addons/integration-extdemo/stats"
+          }
+        },
+        "body": {
+          "type": "stack",
+          "children": [
+            {
+              "type": "text",
+              "text": "{{t:plugin.integration-extdemo.stats_hint}}"
+            },
+            {
+              "type": "table",
+              "rows": "{{data.stats}}",
+              "columns": [
+                {
+                  "header": "plugin.integration-extdemo.name",
+                  "value": "{{row.label}}"
+                },
+                {
+                  "header": "plugin.integration-extdemo.value",
+                  "value": "{{row.value}}"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "notes",
+        "area": "client",
+        "title": "plugin.integration-extdemo.notes_title",
+        "icon": "Note",
+        "nav": true,
+        "data": {
+          "notes": {
+            "get": "/api/v1/addons/integration-extdemo/notes"
+          }
+        },
+        "body": {
+          "type": "stack",
+          "children": [
+            {
+              "type": "form",
+              "submit": {
+                "type": "request",
+                "method": "POST",
+                "path": "/api/v1/addons/integration-extdemo/notes",
+                "then": {
+                  "type": "refresh"
+                }
+              },
+              "children": [
+                {
+                  "type": "textarea",
+                  "name": "text",
+                  "label": "plugin.integration-extdemo.note"
+                },
+                {
+                  "type": "button",
+                  "label": "plugin.integration-extdemo.save"
+                }
+              ]
+            },
+            {
+              "type": "table",
+              "rows": "{{data.notes}}",
+              "columns": [
+                {
+                  "header": "plugin.integration-extdemo.note",
+                  "value": "{{row.text}}"
+                }
+              ],
+              "empty": {
+                "type": "empty",
+                "title": "plugin.integration-extdemo.no_notes"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "panel",
+        "area": "client",
+        "title": "plugin.integration-extdemo.panel_title",
+        "icon": "AppWindow",
+        "nav": true,
+        "frame": {
+          "src": "assets/ui.html",
+          "height": 240
+        }
+      }
+    ],
+    "slots": [
+      {
+        "slot": "client.dashboard",
+        "body": {
+          "type": "alert",
+          "text": "{{t:plugin.integration-extdemo.hello}}"
+        }
+      },
+      {
+        "slot": "admin.customer.detail",
+        "data": {
+          "stats": {
+            "get": "/api/v1/addons/integration-extdemo/stats"
+          }
+        },
+        "body": {
+          "type": "text",
+          "text": "{{t:plugin.integration-extdemo.hello}}"
+        }
+      },
+      {
+        "slot": "admin.invoices.toolbar",
+        "order": 5,
+        "body": {
+          "type": "frame",
+          "src": "assets/ui.html",
+          "height": 120
+        }
+      },
+      {
+        "slot": "admin.layout.banner",
+        "body": {
+          "type": "alert",
+          "text": "{{t:plugin.integration-extdemo.hello}}"
+        }
+      },
+      {
+        "slot": "client.*.after",
+        "body": {
+          "type": "text",
+          "text": "{{t:plugin.integration-extdemo.hello}}"
+        }
+      }
+    ]
+  },
+  "settings": [],
+  "i18n": {
+    "en": {
+      "stats_title": "Extension stats",
+      "stats_hint": "Counters kept by the addon.",
+      "name": "Name",
+      "value": "Value",
+      "notes_title": "My notes",
+      "note": "Note",
+      "save": "Save",
+      "no_notes": "No notes yet.",
+      "hello": "Hello from an addon.",
+      "panel_title": "Addon panel"
+    },
+    "ro": {
+      "stats_title": "Statistici extensie",
+      "stats_hint": "Contoare ținute de addon.",
+      "name": "Nume",
+      "value": "Valoare",
+      "notes_title": "Notițele mele",
+      "note": "Notiță",
+      "save": "Salvează",
+      "no_notes": "Încă nu ai notițe.",
+      "hello": "Salut de la un addon.",
+      "panel_title": "Panou addon"
+    }
+  }
+}

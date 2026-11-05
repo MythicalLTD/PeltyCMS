@@ -1,0 +1,17 @@
+[package]
+name = "pelty-addon-captcha-turnstile"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Export the addon ABI (off when another crate reuses this one).
+default = ["export"]
+export = []
+
+[dependencies]
+pelty-addon-captcha-common = { path = "../captcha-common" }

@@ -1,0 +1,48 @@
+{
+  "id": "registrar-generic",
+  "name": "Generic HTTP registrar",
+  "version": "0.1.0",
+  "kind": "registrar",
+  "engine": "wasm",
+  "provides": "generic",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.registrar.generic",
+  "author": "MythicalSystems",
+  "permissions": [
+    "domains.manage",
+    "network.outbound"
+  ],
+  "capabilities": {
+    "http": [
+      "$setting:api_base"
+    ],
+    "secrets": []
+  },
+  "settings": [
+    {
+      "key": "api_base",
+      "label": "addons.registrar.setting.api_base",
+      "kind": "text",
+      "required": true
+    },
+    {
+      "key": "auth_header",
+      "label": "addons.registrar.setting.auth_header",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "key": "auth_value",
+      "label": "addons.registrar.setting.auth_value",
+      "kind": "secret",
+      "required": false
+    },
+    {
+      "key": "hmac_secret",
+      "label": "addons.registrar.setting.hmac_secret",
+      "kind": "secret",
+      "required": false
+    }
+  ]
+}

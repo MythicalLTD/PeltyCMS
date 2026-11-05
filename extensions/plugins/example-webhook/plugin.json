@@ -1,0 +1,24 @@
+{
+  "id": "example-webhook",
+  "name": "Example external webhook",
+  "version": "0.1.0",
+  "api_version": 1,
+  "description": "Out-of-process plugin example. Receives signed event deliveries.",
+  "capabilities": [
+    "events.read"
+  ],
+  "hooks": [
+    "invoice.paid",
+    "service.created"
+  ],
+  "webhook_url": "https://plugins.example.com/pelty",
+  "settings_schema": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string",
+        "title": "plugin.example-webhook.settings.channel"
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": "minimal",
+  "name": "Minimal",
+  "version": "0.1.0",
+  "author": "MythicalSystems Studios",
+  "description": "Example theme that replaces the whole frontend with a tiny dependency-free app built on the theme SDK.",
+  "color_scheme": "light",
+  "frontend": "dist",
+  "tokens": {
+    "background": "#fafafa",
+    "foreground": "#111111",
+    "primary": "#2f6fed",
+    "primary-foreground": "#ffffff",
+    "border": "#dddddd",
+    "radius": "0.25rem",
+    "font-sans": "ui-sans-serif, system-ui, sans-serif"
+  }
+}

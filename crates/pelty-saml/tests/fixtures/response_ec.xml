@@ -1,0 +1,29 @@
+<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_resp1" Version="2.0" IssueInstant="2026-10-30T10:00:00Z" Destination="https://billing.example/acs" InResponseTo="_req42">
+  <saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">https://idp.fixture/entity</saml:Issuer>
+  <samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>
+  <saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ID="_assert1" Version="2.0" IssueInstant="2026-10-30T10:00:00Z">
+    <saml:Issuer>https://idp.fixture/entity</saml:Issuer>
+    <ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256"/><ds:Reference URI="#_assert1"><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>g4ug0zRtZ23U73ahA7Vr610+MKYJKylCEtE4W57QTXU=</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>+RPdBhg/G99P650aOHoGSMATRkv02I7OlNlTdPK7aSYm+BYcDSluxTy/TGSAZvKHhLhp0D6sNX7/LQ787oeXlA==</ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>MIIBgDCCASegAwIBAgIUf7jwAYypLThq7wuhwAnGQN0e2jcwCgYIKoZIzj0EAwIw
+FjEUMBIGA1UEAwwLZml4dHVyZS1pZHAwHhcNMjYxMDMwMTEyNjMyWhcNMzYxMDI3
+MTEyNjMyWjAWMRQwEgYDVQQDDAtmaXh0dXJlLWlkcDBZMBMGByqGSM49AgEGCCqG
+SM49AwEHA0IABHuMXE6F/jcBlTWe2q3bIt0Xeb3NsSQaOdXocAMYc0n6lRK/nIgh
+Rd0jbLPTRmyrMwQHFY4LpY/uxXcxKiwPir6jUzBRMB0GA1UdDgQWBBSVmjmfXx3B
+g+RGvT0suwbEiHBWKjAfBgNVHSMEGDAWgBSVmjmfXx3Bg+RGvT0suwbEiHBWKjAP
+BgNVHRMBAf8EBTADAQH/MAoGCCqGSM49BAMCA0cAMEQCIB2r3esZ4CE7nEjnyuyF
+5OYDfz69axdFE4g43ze8e0AlAiAV4Njyd0ETQGIqLd3ryo0UuIXdVQvgOQZLnaAg
+w5jimw==
+</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature><saml:Subject>
+      <saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">ion@example.com</saml:NameID>
+      <saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
+        <saml:SubjectConfirmationData NotOnOrAfter="2026-10-30T10:05:00Z" Recipient="https://billing.example/acs" InResponseTo="_req42"/>
+      </saml:SubjectConfirmation>
+    </saml:Subject>
+    <saml:Conditions NotBefore="2026-10-30T10:00:00Z" NotOnOrAfter="2026-10-30T10:05:00Z">
+      <saml:AudienceRestriction><saml:Audience>https://billing.example/sp</saml:Audience></saml:AudienceRestriction>
+    </saml:Conditions>
+    <saml:AuthnStatement AuthnInstant="2026-10-30T10:00:00Z" SessionIndex="s1"><saml:AuthnContext><saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:Password</saml:AuthnContextClassRef></saml:AuthnContext></saml:AuthnStatement>
+    <saml:AttributeStatement>
+      <saml:Attribute Name="mail" FriendlyName="email"><saml:AttributeValue xsi:type="xs:string">ion@example.com</saml:AttributeValue></saml:Attribute>
+      <saml:Attribute Name="memberOf"><saml:AttributeValue xsi:type="xs:string">Clients &amp; Co</saml:AttributeValue><saml:AttributeValue xsi:type="xs:string">vip</saml:AttributeValue></saml:Attribute>
+    </saml:AttributeStatement>
+  </saml:Assertion></samlp:Response>

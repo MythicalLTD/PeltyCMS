@@ -1,0 +1,93 @@
+[package]
+name = "pelty-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+semver = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+futures-util = { version = "0.3", default-features = false }
+redis = { version = "0.32", default-features = false, features = ["tokio-comp", "connection-manager"] }
+sqlparser = { version = "0.63", features = ["visitor"] }
+sqlx = { workspace = true }
+pelty-provisioning = { workspace = true }
+pelty-saml = { workspace = true }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+pelty-core = { workspace = true }
+pelty-database = { workspace = true }
+pelty-auth = { workspace = true }
+pelty-extensions = { workspace = true }
+pelty-payments = { workspace = true }
+pelty-wasm = { workspace = true }
+axum = { workspace = true, features = ["ws"] }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rust_decimal = { workspace = true }
+pelty-billing = { workspace = true }
+pelty-notifications = { workspace = true }
+base64 = { workspace = true }
+webauthn-rs = { workspace = true }
+x509-cert = "0.2"
+der = "0.7"
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+webpki-roots = "1"
+tracing = { workspace = true }
+uuid = { workspace = true }
+time = { workspace = true }
+utoipa = { workspace = true }
+http-body-util = { workspace = true }
+sha2 = { workspace = true }
+hmac = "0.12"
+ring = "0.17"
+ipnet = "2"
+form_urlencoded = "1"
+pdf-writer = "0.15"
+ttf-parser = "0.25"
+subsetter = "0.2.6"
+croner = "4.0.2"
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+maxminddb = "0.26"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tokio-tungstenite = { version = "0.29", default-features = false, features = ["connect", "handshake"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink"] }
+webauthn-authenticator-rs = { workspace = true }
+pelty-payments = { workspace = true, features = ["test-util"] }
+pelty-addon-registrar-namecheap = { path = "../../extensions/addons/reg-namecheap", default-features = false }
+pelty-addon-registrar-resellerclub = { path = "../../extensions/addons/reg-resellerclub", default-features = false }
+pelty-addon-registrar-enom = { path = "../../extensions/addons/reg-enom", default-features = false }
+pelty-addon-registrar-opensrs = { path = "../../extensions/addons/reg-opensrs", default-features = false }
+pelty-addon-registrar-godaddy = { path = "../../extensions/addons/reg-godaddy", default-features = false }
+pelty-addon-registrar-centralnic = { path = "../../extensions/addons/reg-centralnic", default-features = false }
+pelty-addon-registrar-generic = { path = "../../extensions/addons/reg-generic", default-features = false }
+pelty-addon-gateway-stripe = { path = "../../extensions/addons/stripe", default-features = false }
+pelty-addon-gateway-paypal = { path = "../../extensions/addons/paypal", default-features = false }
+pelty-addon-gateway-mollie = { path = "../../extensions/addons/mollie", default-features = false }
+pelty-addon-gateway-razorpay = { path = "../../extensions/addons/razorpay", default-features = false }
+pelty-addon-gateway-gocardless = { path = "../../extensions/addons/gocardless", default-features = false }
+pelty-addon-gateway-crypto = { path = "../../extensions/addons/crypto", default-features = false }
+pelty-addon-gateway-paddle = { path = "../../extensions/addons/paddle", default-features = false }
+pelty-addon-gateway-adyen = { path = "../../extensions/addons/adyen", default-features = false }
+pelty-addon-gateway-manual = { path = "../../extensions/addons/manual", default-features = false }
+pelty-addon-gateway-custom = { path = "../../extensions/addons/custom", default-features = false }
+pelty-auth = { workspace = true }
+hmac = "0.12"
+time = { workspace = true }
+uuid = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+sqlx = { workspace = true }
+zip = { workspace = true }
+
+# All integration suites share one test binary (tests/integration/main.rs):
+# one link of wasmtime/sqlx/addons instead of one ~1 GB debug binary per file.
+[[test]]
+name = "integration"
+path = "tests/integration/main.rs"

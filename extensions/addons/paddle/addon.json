@@ -1,0 +1,28 @@
+{
+  "id": "gateway-paddle",
+  "name": "Paddle",
+  "version": "0.1.0",
+  "kind": "gateway",
+  "engine": "wasm",
+  "provides": "paddle",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.gateway.paddle",
+  "author": "MythicalSystems",
+  "permissions": [
+    "payments.process",
+    "network.outbound"
+  ],
+  "capabilities": {
+    "http": [
+      "api.paddle.com",
+      "sandbox-api.paddle.com",
+      "$setting:api_base"
+    ],
+    "secrets": [
+      "api_key",
+      "webhook_secret"
+    ]
+  },
+  "settings": []
+}

@@ -1,0 +1,64 @@
+[package]
+name = "pelty-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+pelty-core = { workspace = true }
+pelty-database = { workspace = true }
+pelty-auth = { workspace = true }
+pelty-api = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde_json = { workspace = true }
+time = { workspace = true }
+pelty-import = { workspace = true }
+rand = { workspace = true }
+base64 = { workspace = true }
+rustyline = { version = "19", default-features = false }
+pelty-extensions = { workspace = true }
+serde = { workspace = true }
+# Setup wizard prompts (hidden password input; Windows and Unix terminals).
+dialoguer = { version = "0.11", default-features = false, features = ["password", "fuzzy-select"] }
+console = "0.15"
+ipnet = "2"
+sqlx = { workspace = true }
+url = "2"
+percent-encoding = "2"
+pelty-notifications = { workspace = true }
+include_dir = { version = "0.7", optional = true }
+# Self-update (`pelty-server update`).
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+ring = "0.17"
+zip = { workspace = true }
+tar = "0.4"
+flate2 = "1"
+self-replace = "1"
+
+[target.'cfg(unix)'.dependencies]
+# Restore the terminal if the server stops while the console prompt is active.
+nix = { version = "0.31", default-features = false, features = ["term"] }
+
+[dev-dependencies]
+uuid = { workspace = true }
+
+[features]
+# Compile the web UI build (frontend/dist) and the default themes into the
+# binary, so one file serves everything. Built only from what exists at build
+# time (`cargo xtask build` builds the UI first); without a UI build the
+# server still compiles and serves the API.
+default = ["embed-frontend"]
+embed-frontend = ["dep:include_dir"]
+# Opt-in, never in releases: also compile extensions/addons/dist/*.zip in and
+# seed them on start. By default no addon ships in the binary; install addons
+# with an upload in Admin > Addons (a source checkout seeds from disk).
+embed-addons = ["embed-frontend"]
+# Enables `pelty-server import whmcs --dsn mysql://...` (pulls the MySQL driver).
+whmcs-mysql = ["pelty-import/mysql"]
+
+[lints]
+workspace = true

@@ -1,0 +1,142 @@
+package pelty:addon@0.2.0;
+
+/// Host services every addon may import. Each call is checked against the
+/// capabilities the admin approved at install (addon.json `capabilities`).
+interface host {
+    enum level { debug, info, warn, error }
+    log: func(level: level, message: string);
+
+    record http-request {
+        method: string,
+        url: string,
+        headers: list<tuple<string, string>>,
+        body: string,
+    }
+    record http-response {
+        status: u16,
+        body: string,
+    }
+    /// Outbound HTTP. Only hosts in `capabilities.http` (plus `$server` /
+    /// `$setting:<key>` placeholders) are reachable; link-local and cloud
+    /// metadata addresses are always refused; bodies and time are capped.
+    http-fetch: func(req: http-request) -> result<http-response, string>;
+
+    /// Admin setting value (JSON-encoded), if set.
+    setting: func(key: string) -> option<string>;
+    /// Decrypted secret declared in `capabilities.secrets`.
+    secret: func(key: string) -> option<string>;
+
+    /// Addon-private key/value store (needs `capabilities.kv`).
+    kv-get: func(key: string) -> option<string>;
+    kv-set: func(key: string, value: string) -> result<_, string>;
+    kv-delete: func(key: string);
+
+    now-unix: func() -> s64;
+    random-bytes: func(len: u32) -> list<u8>;
+}
+
+/// Opt-in powers. Every call is refused unless the matching capability was
+/// approved by the admin at install (see the generated docs, "Capabilities" page).
+interface power {
+    /// Read core records (`capabilities.db.read` lists the entities).
+    /// `query`: JSON `{ "id"?, "filter"?: {column: value}, "limit"?, "offset"? }`.
+    /// Returns a JSON array. Password hashes, TOTP secrets, tokens and
+    /// encrypted credentials are never returned.
+    db-read: func(entity: string, query: string) -> result<string, string>;
+    /// Typed write through host APIs (`capabilities.db.write` lists the ops,
+    /// e.g. `client.note`, `ticket.reply`, `service.suspend`). Audited.
+    db-write: func(op: string, input: string) -> result<string, string>;
+    /// SQL on the addon's own tables (`addon_<id>_*`, `capabilities.db.sql`).
+    /// `params`: JSON array bound as $1..$n. Returns JSON rows.
+    sql: func(statement: string, params: string) -> result<string, string>;
+
+    record exec-output {
+        status: s32,
+        stdout: string,
+        stderr: string,
+    }
+    /// Run an allowlisted program (`capabilities.exec`, absolute paths; no
+    /// shell, empty environment, output and time capped). Off in Docker.
+    exec: func(program: string, args: list<string>, stdin: string) -> result<exec-output, string>;
+
+    /// Queue `call(op, input)` to run in the background job worker after
+    /// `delay-secs` (`capabilities.jobs` must list `op`).
+    job-enqueue: func(op: string, input: string, delay-secs: u32) -> result<_, string>;
+
+    /// ABI 0.5: add or replace a cron job at runtime (`name` like an op,
+    /// five-field `schedule` in the company time zone). Needs the `cron`
+    /// capability (`capabilities.cron` or `capabilities.cron_runtime`); the
+    /// host calls `on-cron(name)` on each match. Max 20 runtime jobs.
+    cron-register: func(name: string, schedule: string, description: string) -> result<_, string>;
+    /// Remove a job added with `cron-register` (manifest jobs stay).
+    cron-unregister: func(name: string) -> result<_, string>;
+}
+
+/// Addon-defined events (ABI 0.3 features; the package stays @0.2.0 so
+/// 0.2 components keep linking). `name` must be `<own-addon-id>:<event>`
+/// and be declared in `capabilities.emits`. The `before` phase runs
+/// synchronously through every listener (priority order, cancel/modify);
+/// the result is JSON `{ "cancelled": bool, "reason"?: string, "payload": {...} }`.
+/// `after` and `finished` phases are delivered by the host afterwards.
+interface events {
+    emit: func(name: string, payload: string) -> result<string, string>;
+}
+
+/// Call context (ABI 0.4; the package stays @0.2.0 so older components
+/// keep linking). JSON describing the operation being served, e.g.
+/// `{"kind": "hook", "event": "invoice.paid", "phase": "after", "priority": 0}`,
+/// `{"kind": "filter", "filter": "catalog.public", ...}` or
+/// `{"kind": "mixin", "target": "fn ticket.open", "at": "around", ...}`.
+/// `null` when the host gave none (e.g. `describe`, jobs).
+interface context {
+    current: func() -> string;
+}
+
+/// Addon-defined filter points (ABI 0.4). `name` must be
+/// `<own-addon-id>:<point>` and be declared in `capabilities.filter-points`
+/// (manifest key `filter_points`). Every other addon subscribed to `name` in
+/// its `capabilities.filters` rewrites `value` (JSON) in priority order; the
+/// caller itself is skipped. Schema and money rules match core filters, and
+/// failures never surface: the result is always a JSON value, unchanged when
+/// nothing applies.
+interface filters {
+    apply: func(name: string, value: string, context: string) -> string;
+}
+
+/// The addon contract. Every kind (gateway, provisioning, registrar,
+/// captcha, sso, integration) implements the same three exports; `op` names
+/// and JSON shapes per kind are documented in the generated docs (`make docs`).
+interface addon {
+    /// JSON descriptor: kind-specific metadata (capabilities, settings, fields).
+    describe: func() -> string;
+    /// Run one operation with a JSON input; returns JSON output.
+    call: func(op: string, input: string) -> result<string, string>;
+    /// Subscribed event (`invoice.paid`, `service.created`, …).
+    on-event: func(name: string, payload: string) -> result<_, string>;
+}
+
+/// Scheduled jobs (ABI 0.5; the package stays @0.2.0). Declared in the
+/// manifest under `capabilities.cron` (`[{ "name": "nightly", "schedule":
+/// "0 3 * * *" }]`, needs the admin-approved `cron` capability); the host
+/// calls `on-cron(name)` at each matching minute in the company time zone,
+/// with the same fuel, deadline and failure limits as `call`. Returns JSON
+/// (shown as the run's result). Components built against `pelty-addon`
+/// (0.2 to 0.4) simply do not export it.
+interface scheduled {
+    on-cron: func(job: string) -> result<string, string>;
+}
+
+world pelty-addon {
+    import host;
+    import power;
+    import events;
+    import context;
+    import filters;
+    export addon;
+}
+
+/// ABI 0.5: everything in `pelty-addon` plus the `scheduled` export.
+world pelty-addon-cron {
+    include pelty-addon;
+    export scheduled;
+}

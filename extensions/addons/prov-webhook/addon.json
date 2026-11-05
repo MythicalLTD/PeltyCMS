@@ -1,0 +1,25 @@
+{
+  "id": "provisioning-webhook",
+  "name": "Webhook",
+  "version": "0.1.0",
+  "kind": "provisioning",
+  "engine": "wasm",
+  "provides": "webhook",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.provisioning.webhook",
+  "author": "MythicalSystems",
+  "permissions": [
+    "provisioning.manage",
+    "network.outbound"
+  ],
+  "capabilities": {
+    "http": [
+      "$server"
+    ],
+    "secrets": [
+      "api_key"
+    ]
+  },
+  "settings": []
+}

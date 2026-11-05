@@ -1,0 +1,53 @@
+{
+  "id": "captcha-recaptcha-v3",
+  "name": "Google reCAPTCHA v3",
+  "version": "0.1.0",
+  "kind": "captcha",
+  "engine": "wasm",
+  "provides": "recaptcha_v3",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.captcha.recaptcha_v3",
+  "author": "MythicalSystems",
+  "permissions": [
+    "network.outbound"
+  ],
+  "capabilities": {
+    "http": [
+      "www.google.com",
+      "www.recaptcha.net",
+      "$setting:verify_url"
+    ],
+    "secrets": []
+  },
+  "settings": [
+    {
+      "key": "site_key",
+      "label": "addons.captcha.setting.site_key",
+      "kind": "text",
+      "required": false,
+      "default": ""
+    },
+    {
+      "key": "secret_key",
+      "label": "addons.captcha.setting.secret_key",
+      "kind": "secret",
+      "required": false,
+      "default": ""
+    },
+    {
+      "key": "min_score",
+      "label": "addons.captcha.setting.min_score",
+      "kind": "number",
+      "required": false,
+      "default": 0.5
+    },
+    {
+      "key": "verify_url",
+      "label": "addons.captcha.setting.verify_url",
+      "kind": "text",
+      "required": false,
+      "default": ""
+    }
+  ]
+}

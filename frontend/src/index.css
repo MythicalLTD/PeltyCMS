@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * shadcn/ui theme variables only. Defaults = the "Pelty" brand theme (peltycms.com); the
+ * active PeltyCMS theme overwrites these at runtime (see lib/theme.ts).
+ */
+:root {
+  --radius: 0.5rem;
+  --background: #080e16;
+  --foreground: #f8fafc;
+  --card: #0c141e;
+  --card-foreground: #f8fafc;
+  --popover: #0c141e;
+  --popover-foreground: #f8fafc;
+  --primary: #59b5d3;
+  --primary-foreground: #08121c;
+  --secondary: #111d31;
+  --secondary-foreground: #f8fafc;
+  --muted: #111d31;
+  --muted-foreground: #a0adb9;
+  --accent: #111d31;
+  --accent-foreground: #f8fafc;
+  --destructive: oklch(0.64 0.21 25);
+  --success: oklch(0.72 0.16 155);
+  --warning: oklch(0.8 0.15 75);
+  --border: #202b36;
+  --input: #36414d;
+  --ring: #59b5d3;
+  --chart-1: #59b5d3;
+  --chart-2: oklch(0.72 0.16 155);
+  --chart-3: oklch(0.8 0.15 75);
+  --chart-4: oklch(0.64 0.21 25);
+  --chart-5: oklch(0.7 0.15 300);
+  --sidebar: #0c141e;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: #59b5d3;
+  --sidebar-primary-foreground: #08121c;
+  --sidebar-accent: #111d31;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: #202b36;
+  --sidebar-ring: #59b5d3;
+  --font-sans: "Manrope Variable", Manrope, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

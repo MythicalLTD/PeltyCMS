@@ -1,0 +1,20 @@
+{
+  "id": "gateway-manual",
+  "name": "Manual bank transfer",
+  "version": "0.1.0",
+  "kind": "gateway",
+  "engine": "wasm",
+  "provides": "manual",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.gateway.manual",
+  "author": "MythicalSystems",
+  "permissions": [
+    "payments.process"
+  ],
+  "capabilities": {
+    "http": [],
+    "secrets": []
+  },
+  "settings": []
+}

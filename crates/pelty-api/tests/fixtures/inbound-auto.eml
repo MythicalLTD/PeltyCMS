@@ -1,0 +1,9 @@
+From: robot@example.test
+To: help@example.test
+Message-ID: <fixture-auto@example.test>
+Subject: Automatic response
+Auto-Submitted: auto-replied
+Precedence: bulk
+Content-Type: text/plain
+
+I am out of office.

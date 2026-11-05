@@ -1,0 +1,35 @@
+{
+  "id": "integration-eventlog",
+  "name": "Event log (test fixture)",
+  "version": "0.1.0",
+  "kind": "integration",
+  "engine": "wasm",
+  "provides": "eventlog",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.integration.eventlog",
+  "author": "MythicalSystems",
+  "permissions": [],
+  "capabilities": {
+    "http": [],
+    "secrets": [],
+    "kv": true,
+    "events": [
+      "invoice.*",
+      "fixture.ping"
+    ],
+    "hooks": [
+      {
+        "event": "invoice.before_create",
+        "priority": 200
+      }
+    ]
+  },
+  "settings": [
+    {
+      "key": "token",
+      "label": "Token",
+      "kind": "secret"
+    }
+  ]
+}

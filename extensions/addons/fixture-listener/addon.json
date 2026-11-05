@@ -1,0 +1,23 @@
+{
+  "id": "integration-listener",
+  "name": "Event listener (test fixture)",
+  "version": "0.1.0",
+  "kind": "integration",
+  "engine": "wasm",
+  "provides": "listener",
+  "abi": "0.3.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.integration.listener",
+  "author": "MythicalSystems",
+  "permissions": [],
+  "capabilities": {
+    "kv": true,
+    "hooks": [
+      { "event": "before:integration-lifecycle:greet", "priority": "low" },
+      { "event": "after:integration-lifecycle:greet" },
+      { "event": "finished:integration-lifecycle:greet", "priority": "monitor" }
+    ],
+    "routes": [{ "method": "GET", "path": "/log", "access": "admin", "permission": "reports.read" }]
+  },
+  "settings": []
+}

@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="ui.css">
+<!-- The frame SDK (extensions/frame-sdk/pelty-frame.js), copied into assets/. -->
+<script src="pelty-frame.js"></script>
+</head>
+<body>
+<h1 id="title">Addon frame</h1>
+<p id="who">…</p>
+<button id="ping" type="button">Ping</button>
+<pre id="out"></pre>
+<p id="last-event"></p>
+<script>
+Pelty.ready(function (init) {
+  // Theme, dark mode and locale are applied for you; ctx carries the route.
+  document.getElementById("who").textContent = init.viewer ? init.viewer.display_name : init.ctx.route;
+});
+document.getElementById("ping").addEventListener("click", function () {
+  // Only this addon's routes (and approved `bridge` prefixes) are reachable.
+  Pelty.request("/api/v1/addons/integration-guide/hello")
+    .then(function (body) {
+      document.getElementById("out").textContent = JSON.stringify(body);
+      Pelty.emit("integration-guide:greeted", body);
+      Pelty.toast("Pinged");
+    })
+    .catch(function (e) { Pelty.toast("Failed: " + e.status, "error"); });
+});
+// Host and addon events on the panel's bus.
+Pelty.on("cart.*", function (name) {
+  document.getElementById("last-event").textContent = name;
+});
+// A panel filter: while this page is open, its title gets a marker.
+Pelty.filter("page.title", function (title) { return title + " · guide"; });
+</script>
+</body>
+</html>

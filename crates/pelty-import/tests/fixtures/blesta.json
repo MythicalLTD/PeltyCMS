@@ -1,0 +1,57 @@
+{
+  "currencies": [{"code": "EUR"}, {"code": "USD"}],
+  "client_groups": [{"id": "1", "name": "Blesta VIP TAG"}],
+  "clients": [
+    {"id": "1", "client_group_id": "1", "status": "active"},
+    {"id": "2", "client_group_id": "1", "status": "inactive"},
+    {"id": "3", "client_group_id": "1", "status": "active"}
+  ],
+  "contacts": [
+    {"client_id": "1", "contact_type": "primary", "first_name": "Ion", "last_name": "Popescu", "company": "Acme SRL", "email": "ion-TAG@example.com", "address1": "Str. 1", "city": "Cluj", "zip": "400000", "country": "RO"},
+    {"client_id": "1", "contact_type": "billing", "first_name": "Billing", "email": "billing-TAG@example.com"},
+    {"client_id": "2", "contact_type": "primary", "first_name": "Jane", "last_name": "Doe", "email": "jane-TAG@example.com", "country": "US"}
+  ],
+  "package_groups": [{"id": "5", "name": "VPS TAG"}],
+  "package_group": [{"package_id": "10", "package_group_id": "5"}, {"package_id": "11", "package_group_id": "5"}],
+  "packages": [
+    {"id": "10", "name": "VPS S TAG", "description": "1 vCPU", "status": "active", "module": "proxmox"},
+    {"id": "11", "name": "Legacy TAG", "status": "inactive"}
+  ],
+  "pricings": [
+    {"id": "100", "term": "1", "period": "month", "price": "5.0000", "setup_fee": "1.5000", "currency": "EUR"},
+    {"id": "101", "term": "1", "period": "year", "price": "50.0000", "setup_fee": "0", "currency": "EUR"},
+    {"id": "102", "term": "1", "period": "month", "price": "6.10", "setup_fee": "0", "currency": "USD"},
+    {"id": "103", "term": "2", "period": "week", "price": "1.00", "setup_fee": "0", "currency": "EUR"}
+  ],
+  "package_pricing": [
+    {"id": "1000", "package_id": "10", "pricing_id": "100"},
+    {"id": "1001", "package_id": "10", "pricing_id": "101"},
+    {"id": "1002", "package_id": "10", "pricing_id": "102"},
+    {"id": "1003", "package_id": "11", "pricing_id": "103"}
+  ],
+  "services": [
+    {"id": "20", "client_id": "1", "pricing_id": "1000", "status": "active", "date_added": "2025-01-10 08:00:00", "date_renews": "2026-11-10 00:00:00", "name": "vps1.example.com"},
+    {"id": "21", "client_id": "1", "pricing_id": "9999", "status": "active"}
+  ],
+  "invoices": [
+    {"id": "30", "id_value": "BTAG-1", "client_id": "1", "date_billed": "2026-10-01", "date_due": "2026-10-10", "date_closed": "2026-10-02 12:00:00", "subtotal": "6.5000", "total": "7.7400", "status": "active", "currency": "EUR"},
+    {"id": "31", "id_value": "BTAG-2", "client_id": "1", "date_billed": "2026-10-15", "date_due": "2026-10-25", "subtotal": "5.00", "total": "5.00", "status": "active", "currency": "EUR"}
+  ],
+  "invoice_lines": [
+    {"id": "1", "invoice_id": "30", "service_id": "20", "description": "VPS S (monthly)", "qty": "1", "amount": "5.0000"},
+    {"id": "2", "invoice_id": "30", "service_id": "20", "description": "Setup fee", "qty": "1", "amount": "1.5000"},
+    {"id": "3", "invoice_id": "31", "service_id": "20", "description": "VPS S (monthly)", "qty": "1", "amount": "5.00"}
+  ],
+  "transactions": [
+    {"id": "40", "client_id": "1", "amount": "7.7400", "currency": "EUR", "gateway": "stripe", "transaction_id": "ch_TAG", "status": "approved", "date_added": "2026-10-02 12:00:00"},
+    {"id": "41", "client_id": "1", "amount": "1.00", "currency": "EUR", "gateway": "stripe", "transaction_id": "ch_declined_TAG", "status": "declined"}
+  ],
+  "transaction_applied": [{"transaction_id": "40", "invoice_id": "30"}],
+  "support_departments": [{"id": "1", "name": "Blesta Support TAG"}],
+  "support_tickets": [{"id": "50", "code": "777", "department_id": "1", "client_id": "1", "summary": "Server down", "status": "awaiting_reply", "priority": "high", "date_added": "2026-10-20"}],
+  "support_replies": [
+    {"id": "1", "ticket_id": "50", "details": "My VPS is down", "date_added": "2026-10-20 10:00:00", "type": "reply"},
+    {"id": "2", "ticket_id": "50", "staff_id": "3", "details": "Rebooted it", "date_added": "2026-10-20 11:00:00", "type": "reply"},
+    {"id": "3", "ticket_id": "50", "staff_id": "3", "details": "internal note", "date_added": "2026-10-20 11:01:00", "type": "note"}
+  ]
+}

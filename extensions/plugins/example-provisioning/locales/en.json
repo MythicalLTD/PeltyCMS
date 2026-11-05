@@ -1,0 +1,18 @@
+{
+  "page.title": "Provisioning overview",
+  "page.intro": "Servers, load and connection checks.",
+  "stat.servers": "Servers",
+  "stat.services": "Services on servers",
+  "card.servers": "Servers",
+  "col.name": "Name",
+  "col.module": "Module",
+  "col.load": "Load",
+  "action.test": "Test connection",
+  "tested": "Test sent. Check the result on the Servers page.",
+  "empty": "No servers configured.",
+  "slot.title": "Provisioning (plugin)",
+  "slot.remote": "Panel ID",
+  "slot.status": "Status",
+  "action.retry": "Run create again",
+  "confirm": "Queue a create job for this service?"
+}

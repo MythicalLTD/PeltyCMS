@@ -1,0 +1,17 @@
+{
+  "id": "hello-webhook",
+  "name": "Hello Webhook (example)",
+  "version": "0.1.0",
+  "kind": "provisioning",
+  "engine": "webhook",
+  "description": "Example on-disk addon: provisions through the signed webhook engine and ships its own migration.",
+  "author": "PeltyCMS",
+  "permissions": ["provisioning.manage", "network.outbound", "db.migrate"],
+  "settings": [
+    { "key": "endpoint", "label": "Endpoint URL", "kind": "text", "required": true },
+    { "key": "mode", "label": "Mode", "kind": "select", "choices": ["live", "test"], "default": "test" },
+    { "key": "verbose", "label": "Verbose logging", "kind": "bool" }
+  ],
+  "migrations": ["migrations/0001_init.sql"],
+  "files": { "migrations/0001_init.sql": "6169286965719c6263adb96b0ad3a34e4c91f28de17139600d07284737280b35" }
+}

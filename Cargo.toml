@@ -1,0 +1,76 @@
+[workspace]
+resolver = "2"
+members = ["crates/pelty-core", "crates/pelty-database", "crates/pelty-auth", "crates/pelty-api", "crates/pelty-server", "crates/pelty-extensions", "crates/pelty-payments", "crates/pelty-billing", "crates/pelty-notifications", "crates/pelty-provisioning", "crates/pelty-import", "crates/pelty-cli", "crates/pelty-saml", "crates/pelty-wasm", "crates/pelty-docs", "xtask"]
+exclude = ["examples", "addons", "extensions"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+# Custom terms in ./LICENSE (PeltyCMS Source Available License). Not OSI Open Source.
+license = "LicenseRef-PeltyCMS-SAL-1.0"
+authors = ["MythicalSystems Studios LLC"]
+rust-version = "1.85"
+
+[workspace.dependencies]
+pelty-core = { path = "crates/pelty-core" }
+pelty-database = { path = "crates/pelty-database" }
+pelty-auth = { path = "crates/pelty-auth" }
+pelty-api = { path = "crates/pelty-api" }
+pelty-wasm = { path = "crates/pelty-wasm" }
+pelty-extensions = { path = "crates/pelty-extensions" }
+pelty-payments = { path = "crates/pelty-payments" }
+pelty-billing = { path = "crates/pelty-billing" }
+pelty-notifications = { path = "crates/pelty-notifications" }
+pelty-provisioning = { path = "crates/pelty-provisioning" }
+pelty-import = { path = "crates/pelty-import" }
+pelty-saml = { path = "crates/pelty-saml" }
+pelty-docs = { path = "crates/pelty-docs" }
+axum = { version = "0.8", features = ["macros"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "net", "sync", "time", "io-std", "io-util"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["trace", "request-id", "compression-gzip", "compression-br", "fs", "set-header", "util"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "time", "json", "rust_decimal", "macros", "migrate"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"] }
+thiserror = "2"
+uuid = { version = "1", features = ["v4", "serde"] }
+time = { version = "0.3", features = ["serde", "serde-human-readable", "formatting", "parsing", "macros"] }
+rust_decimal = { version = "1", features = ["serde-str"] }
+argon2 = { version = "0.5", features = ["std"] }
+rand = "0.8"
+sha2 = "0.10"
+base64 = "0.22"
+webauthn-rs = { version = "0.6", features = ["danger-allow-state-serialisation", "conditional-ui"] }
+webauthn-authenticator-rs = { version = "0.6", default-features = false, features = ["softpasskey"] }
+hex = "0.4"
+subtle = "2"
+utoipa = { version = "5", features = ["uuid", "time", "axum_extras", "decimal"] }
+http-body-util = "0.1"
+zip = { version = "9", default-features = false, features = ["deflate"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+# WASM addons are compiled by cranelift at load time; an unoptimised
+# cranelift makes every debug build / test start very slow.
+# xtask unpacks the dev PostgreSQL download; unoptimized xz decoding is slow.
+[profile.dev.package.lzma-rs]
+opt-level = 3
+[profile.dev.package.cranelift-codegen]
+opt-level = 2
+[profile.dev.package.regalloc2]
+opt-level = 2
+[profile.dev.package.cranelift-frontend]
+opt-level = 2
+[profile.dev.package.cranelift-bforest]
+opt-level = 2
+[profile.dev.package.wasmtime-internal-cranelift]
+opt-level = 2

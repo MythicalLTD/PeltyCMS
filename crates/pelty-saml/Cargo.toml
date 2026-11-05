@@ -1,0 +1,24 @@
+[package]
+name = "pelty-saml"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# SAML 2.0 Service Provider primitives in pure Rust (no C, no unsafe):
+# XML parsing, Exclusive C14N 1.0, XML-DSig verification, assertion checks.
+[dependencies]
+quick-xml = "0.41"
+base64 = { workspace = true }
+sha2 = { workspace = true }
+time = { workspace = true }
+ring = "0.17"
+rsa = { version = "0.9", features = ["sha2"] }
+x509-cert = { version = "0.2", features = ["builder"] }
+der = { version = "0.7", features = ["pem"] }
+spki = "0.7"
+flate2 = "1"
+rand = { workspace = true }
+uuid = { workspace = true }
+
+[lints]
+workspace = true

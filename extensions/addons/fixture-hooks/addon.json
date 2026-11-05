@@ -1,0 +1,89 @@
+{
+  "id": "integration-hooks",
+  "name": "Hook power (test fixture)",
+  "version": "0.1.0",
+  "kind": "integration",
+  "engine": "wasm",
+  "provides": "hooks",
+  "abi": "0.4.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.integration.hooks",
+  "author": "MythicalSystems",
+  "permissions": [],
+  "capabilities": {
+    "kv": true,
+    "hooks": [
+      {
+        "event": "before:PUT /api/v1/client/profile",
+        "timeout_ms": 150,
+        "fail_open": true
+      },
+      {
+        "event": "ticket.before_open"
+      },
+      {
+        "event": "ticket.before_reply"
+      }
+    ],
+    "filters": [
+      {
+        "name": "catalog.public",
+        "priority": 10
+      },
+      {
+        "name": "invoice.view"
+      },
+      {
+        "name": "integration-hooks:greeting"
+      }
+    ],
+    "routes": [
+      {
+        "method": "GET",
+        "path": "/state",
+        "access": "client"
+      },
+      {
+        "method": "GET",
+        "path": "/greeting",
+        "access": "client"
+      }
+    ],
+    "ui": [
+      "override"
+    ],
+    "mixins": [
+      {
+        "target": "fn ticket.open",
+        "at": "around",
+        "timeout_ms": 500
+      }
+    ],
+    "filter_points": [
+      "integration-hooks:greeting"
+    ]
+  },
+  "settings": [],
+  "ui": {
+    "pages": [
+      {
+        "id": "override",
+        "area": "client",
+        "title": "plugin.integration-hooks.override_title",
+        "nav": false,
+        "body": {
+          "type": "text",
+          "text": "overridden by fixture"
+        }
+      }
+    ],
+    "overrides": {
+      "pages": {
+        "client.hooks-fixture": "override"
+      },
+      "hide_nav": [
+        "/hooks-fixture-hidden"
+      ]
+    }
+  }
+}

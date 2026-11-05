@@ -1,0 +1,21 @@
+{
+  "id": "integration-points",
+  "name": "Addon filter points (test fixture)",
+  "version": "0.1.0",
+  "kind": "integration",
+  "engine": "wasm",
+  "provides": "points",
+  "abi": "0.4.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.integration.points",
+  "author": "MythicalSystems",
+  "permissions": [],
+  "settings": [],
+  "capabilities": {
+    "filters": [
+      { "name": "integration-hooks:greeting", "priority": 5 },
+      { "name": "integration-points:loop" }
+    ],
+    "filter_points": ["integration-points:loop"]
+  }
+}

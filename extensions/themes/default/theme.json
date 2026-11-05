@@ -1,0 +1,33 @@
+{
+  "id": "default",
+  "name": "Pelty",
+  "version": "2.0.0",
+  "author": "MythicalSystems Studios",
+  "description": "Official PeltyCMS brand (peltycms.com): ink-navy surfaces, Pelty cyan accent, Manrope, flat with fine borders.",
+  "color_scheme": "dark",
+  "logo": "logo.png",
+  "tokens": {
+    "background": "#080e16",
+    "foreground": "#f8fafc",
+    "surface": "#0c141e",
+    "surface-foreground": "#f8fafc",
+    "sidebar": "#0c141e",
+    "sidebar-foreground": "#f8fafc",
+    "muted": "#111d31",
+    "muted-foreground": "#a0adb9",
+    "border": "#202b36",
+    "input": "#36414d",
+    "ring": "#59b5d3",
+    "primary": "#59b5d3",
+    "primary-foreground": "#08121c",
+    "accent": "#111d31",
+    "accent-foreground": "#f8fafc",
+    "success": "oklch(0.72 0.16 155)",
+    "warning": "oklch(0.8 0.15 75)",
+    "danger": "oklch(0.64 0.21 25)",
+    "radius": "0.5rem",
+    "font-sans": "\"Manrope Variable\", Manrope, system-ui, sans-serif",
+    "font-mono": "\"JetBrains Mono Variable\", ui-monospace, monospace",
+    "spacing": "0.25rem"
+  }
+}

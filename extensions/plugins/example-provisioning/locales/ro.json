@@ -1,0 +1,18 @@
+{
+  "page.title": "Prezentare provizionare",
+  "page.intro": "Servere, încărcare și verificări de conexiune.",
+  "stat.servers": "Servere",
+  "stat.services": "Servicii pe servere",
+  "card.servers": "Servere",
+  "col.name": "Nume",
+  "col.module": "Modul",
+  "col.load": "Încărcare",
+  "action.test": "Testează conexiunea",
+  "tested": "Test trimis. Vezi rezultatul pe pagina Servere.",
+  "empty": "Niciun server configurat.",
+  "slot.title": "Provizionare (plugin)",
+  "slot.remote": "ID panou",
+  "slot.status": "Stare",
+  "action.retry": "Rulează din nou crearea",
+  "confirm": "Pui în coadă un job de creare pentru acest serviciu?"
+}

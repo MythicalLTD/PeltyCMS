@@ -1,0 +1,22 @@
+{
+  "id": "integration-cron",
+  "name": "Addon cron jobs (test fixture)",
+  "version": "0.1.0",
+  "kind": "integration",
+  "engine": "wasm",
+  "provides": "cron",
+  "abi": "0.5.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.integration.cron",
+  "author": "MythicalSystems",
+  "permissions": [],
+  "settings": [],
+  "capabilities": {
+    "cron_runtime": true,
+    "routes": [{ "method": "POST", "path": "/cron", "access": "admin", "permission": "plugins.manage" }],
+    "cron": [
+      { "name": "nightly", "schedule": "0 3 * * *", "description": "Nightly cleanup" },
+      { "name": "broken", "schedule": "*/15 * * * *" }
+    ]
+  }
+}

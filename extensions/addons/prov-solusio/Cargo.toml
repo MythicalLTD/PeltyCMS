@@ -1,0 +1,18 @@
+[package]
+name = "pelty-addon-provisioning-solusio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["export"]
+export = []
+
+[dependencies]
+pelty-addon-sdk = { workspace = true, features = ["provisioning"] }
+pelty-provisioning = { path = "../../../crates/pelty-provisioning" }
+serde_json = "1"

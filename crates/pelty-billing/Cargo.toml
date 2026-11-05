@@ -1,0 +1,13 @@
+[package]
+name = "pelty-billing"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+rust_decimal = { workspace = true }
+serde = { workspace = true }
+time = { workspace = true }
+
+[lints]
+workspace = true

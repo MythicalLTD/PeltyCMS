@@ -1,0 +1,21 @@
+{
+  "id": "registrar-mock",
+  "name": "Mock registrar",
+  "version": "0.2.0",
+  "kind": "registrar",
+  "engine": "wasm",
+  "provides": "mock",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.registrar.mock",
+  "author": "MythicalSystems",
+  "permissions": [
+    "domains.manage"
+  ],
+  "capabilities": {
+    "http": [],
+    "secrets": [],
+    "kv": true
+  },
+  "settings": []
+}

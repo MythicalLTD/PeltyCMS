@@ -1,0 +1,64 @@
+# UNVERIFIED: statically reviewed, never run (no Docker on the dev box).
+# Put secrets in a .env file next to this file (never commit it):
+#   POSTGRES_PASSWORD=<long random>
+#   PELTY_ENCRYPTION_KEY=<32-byte key, base64>   # encrypts server API keys / gateway secrets
+#   PELTY_PUBLIC_URL=https://billing.example.com
+#   PELTY_EULA=true        # required: you accept the PeltyCMS EULA (EULA.md)
+# PELTY_ENCRYPTION_KEY may stay unset: the first start generates one into the
+#   appdata volume (/data/.env). Back that volume up together with the database.
+# Optional: PELTY_SMTP_URL, PELTY_MAIL_FROM, PELTY_COOKIE_SECURE (default true here),
+#   PELTY_AUTH_RATE_PER_MINUTE, PELTY_PROVISION_ALLOW_LINK_LOCAL (keep unset).
+# First admin: docker compose run --rm app admin create you@example.com
+# Server console (help, status, addons, admin, ...): uncomment stdin_open/tty
+#   below, then `docker attach <container>`; detach with Ctrl+P Ctrl+Q.
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pelty
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: peltycms
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pelty -d peltycms"]
+      interval: 5s
+      retries: 10
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      PELTY_EULA: ${PELTY_EULA:?set PELTY_EULA=true in .env to accept the PeltyCMS EULA (EULA.md)}
+      DATABASE_URL: postgres://pelty:${POSTGRES_PASSWORD}@db:5432/peltycms
+      PELTY_ENCRYPTION_KEY: ${PELTY_ENCRYPTION_KEY:-}
+      PELTY_PUBLIC_URL: ${PELTY_PUBLIC_URL:-http://localhost:8080}
+      PELTY_SMTP_URL: ${PELTY_SMTP_URL:-}
+      PELTY_MAIL_FROM: ${PELTY_MAIL_FROM:-}
+      PELTY_AI_BASE_URL: ${PELTY_AI_BASE_URL:-}
+      PELTY_AI_API_KEY: ${PELTY_AI_API_KEY:-}
+      PELTY_AI_MODEL: ${PELTY_AI_MODEL:-}
+      PELTY_ADDON_REQUIRE_SIGNATURES: ${PELTY_ADDON_REQUIRE_SIGNATURES:-false}
+      PELTY_ADDON_TRUSTED_KEYS: ${PELTY_ADDON_TRUSTED_KEYS:-} # operator public-key JSON, mounted read-only inside the container
+      PELTY_COOKIE_SECURE: ${PELTY_COOKIE_SECURE:-true}   # set false only for plain-HTTP local testing
+      PELTY_REDIS_URL: ${PELTY_REDIS_URL:-}   # e.g. redis://redis:6379/0 with `--profile redis`
+    volumes: [appdata:/data]
+    read_only: true
+    tmpfs: [/tmp]
+    # stdin_open: true
+    # tty: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    # Bind to localhost; put a TLS reverse proxy in front.
+    ports: ["127.0.0.1:8080:8080"]
+  # Optional, for several app replicas: docker compose --profile redis up
+  # and set PELTY_REDIS_URL=redis://redis:6379/0 in .env.
+  redis:
+    image: redis:7-alpine
+    profiles: [redis]
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+volumes:
+  pgdata:
+  appdata:

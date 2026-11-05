@@ -1,0 +1,8 @@
+body { margin: 0; font-family: var(--pelty-font-sans); background: var(--pelty-background); color: var(--pelty-foreground); }
+main { max-width: 28rem; margin: 4rem auto; padding: 1.5rem; border: 1px solid var(--pelty-border); border-radius: var(--pelty-radius); background: #fff; }
+label { display: block; margin: .75rem 0 .25rem; font-size: .875rem; }
+input, select { width: 100%; box-sizing: border-box; padding: .5rem; border: 1px solid var(--pelty-border); border-radius: var(--pelty-radius); }
+button { margin-top: 1rem; padding: .5rem 1rem; border: 0; border-radius: var(--pelty-radius); background: var(--pelty-primary); color: var(--pelty-primary-foreground); cursor: pointer; }
+.err { color: #b00020; font-size: .875rem; }
+header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+header select { width: auto; }

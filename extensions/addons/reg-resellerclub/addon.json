@@ -1,0 +1,63 @@
+{
+  "id": "registrar-resellerclub",
+  "name": "ResellerClub",
+  "version": "0.1.0",
+  "kind": "registrar",
+  "engine": "wasm",
+  "provides": "resellerclub",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.registrar.resellerclub",
+  "author": "MythicalSystems",
+  "permissions": [
+    "domains.manage",
+    "network.outbound"
+  ],
+  "capabilities": {
+    "http": [
+      "httpapi.com",
+      "test.httpapi.com",
+      "$setting:api_base"
+    ],
+    "secrets": []
+  },
+  "settings": [
+    {
+      "key": "reseller_id",
+      "label": "addons.registrar.setting.reseller_id",
+      "kind": "text",
+      "required": true
+    },
+    {
+      "key": "api_key",
+      "label": "addons.registrar.setting.api_key",
+      "kind": "secret",
+      "required": true
+    },
+    {
+      "key": "customer_id",
+      "label": "addons.registrar.setting.customer_id",
+      "kind": "text",
+      "required": true
+    },
+    {
+      "key": "contact_id",
+      "label": "addons.registrar.setting.contact_id",
+      "kind": "text",
+      "required": true
+    },
+    {
+      "key": "test_mode",
+      "label": "addons.registrar.setting.test_mode",
+      "kind": "bool",
+      "required": false,
+      "default": false
+    },
+    {
+      "key": "api_base",
+      "label": "addons.registrar.setting.api_base",
+      "kind": "text",
+      "required": false
+    }
+  ]
+}

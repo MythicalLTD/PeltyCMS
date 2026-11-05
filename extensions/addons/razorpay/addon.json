@@ -1,0 +1,28 @@
+{
+  "id": "gateway-razorpay",
+  "name": "Razorpay",
+  "version": "0.1.0",
+  "kind": "gateway",
+  "engine": "wasm",
+  "provides": "razorpay",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.gateway.razorpay",
+  "author": "MythicalSystems",
+  "permissions": [
+    "payments.process",
+    "network.outbound"
+  ],
+  "capabilities": {
+    "http": [
+      "api.razorpay.com",
+      "$setting:api_base"
+    ],
+    "secrets": [
+      "key_id",
+      "key_secret",
+      "webhook_secret"
+    ]
+  },
+  "settings": []
+}

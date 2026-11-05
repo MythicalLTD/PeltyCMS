@@ -1,0 +1,26 @@
+[package]
+name = "pelty-docs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Generates the PeltyCMS API, plugin and guide documentation from code."
+
+[[bin]]
+name = "pelty-docs"
+path = "src/main.rs"
+
+[dependencies]
+pelty-api = { workspace = true }
+pelty-core = { workspace = true }
+pelty-extensions = { workspace = true }
+pelty-wasm = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+utoipa = { workspace = true }
+regex = "1"
+syntect = { version = "5", default-features = false, features = ["regex-fancy", "html", "parsing"] }
+two-face = { version = "0.4", default-features = false, features = ["syntect-fancy"] }
+pelty-notifications = { workspace = true }
+
+[lints]
+workspace = true

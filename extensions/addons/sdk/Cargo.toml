@@ -1,0 +1,19 @@
+[package]
+name = "pelty-addon-sdk"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Guest SDK for PeltyCMS WASM addons (world pelty:addon/pelty-addon@0.2.0)"
+
+[features]
+default = []
+gateway = ["dep:pelty-payments"]
+provisioning = ["dep:pelty-provisioning"]
+# ABI 0.5: export `on-cron` (capabilities.cron jobs).
+cron = []
+
+[dependencies]
+wit-bindgen = { workspace = true }
+serde_json = { workspace = true }
+pelty-payments = { path = "../../../crates/pelty-payments", optional = true }
+pelty-provisioning = { path = "../../../crates/pelty-provisioning", optional = true }

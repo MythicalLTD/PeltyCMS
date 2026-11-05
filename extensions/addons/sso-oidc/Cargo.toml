@@ -1,0 +1,18 @@
+[package]
+name = "pelty-addon-sso-oidc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Export the addon ABI (off when another crate reuses this one).
+default = ["export"]
+export = []
+
+[dependencies]
+pelty-addon-sso-common = { path = "../sso-common" }
+serde_json = { workspace = true }

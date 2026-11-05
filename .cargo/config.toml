@@ -1,0 +1,8 @@
+# Developer commands live in the `xtask` crate (pure Rust, works on Windows,
+# macOS and Linux without make or bash). `cargo xtask help` lists them.
+[alias]
+xtask = "run -q -p xtask --"
+dev = "xtask dev"
+stop = "xtask stop"
+addons = "xtask addons"
+seed = "xtask seed"

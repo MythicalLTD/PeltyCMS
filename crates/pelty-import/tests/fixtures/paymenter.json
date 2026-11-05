@@ -1,0 +1,40 @@
+{
+  "currencies": [{"code": "USD"}],
+  "users": [
+    {"id": 1, "first_name": "Ana", "last_name": "Ionescu", "email": "ana-TAG@example.com", "role_id": null},
+    {"id": 2, "first_name": "Admin", "last_name": "Staff", "email": "staff-TAG@example.com", "role_id": 1}
+  ],
+  "credits": [{"user_id": 1, "currency_code": "USD", "amount": "3.25"}],
+  "categories": [{"id": 1, "name": "Game TAG", "sort": 2}],
+  "products": [{"id": 7, "category_id": 1, "name": "Minecraft 4GB TAG", "description": "<p>4GB</p>", "hidden": 0}],
+  "plans": [
+    {"id": 70, "priceable_id": 7, "priceable_type": "App\\Models\\Product", "type": "recurring", "billing_period": 1, "billing_unit": "month"},
+    {"id": 71, "priceable_id": 7, "priceable_type": "App\\Models\\Product", "type": "recurring", "billing_period": 3, "billing_unit": "month"},
+    {"id": 72, "priceable_id": 7, "priceable_type": "App\\Models\\Product", "type": "recurring", "billing_period": 1, "billing_unit": "day"}
+  ],
+  "prices": [
+    {"plan_id": 70, "currency_code": "USD", "price": "8.00", "setup_fee": "0.00"},
+    {"plan_id": 71, "currency_code": "USD", "price": "21.60", "setup_fee": "0.00"},
+    {"plan_id": 72, "currency_code": "USD", "price": "0.30", "setup_fee": "0.00"}
+  ],
+  "services": [{"id": 9, "user_id": 1, "product_id": 7, "plan_id": 70, "status": "active", "price": "8.00", "currency_code": "USD", "expires_at": "2026-11-15 00:00:00", "created_at": "2026-09-15 00:00:00"}],
+  "invoices": [
+    {"id": 3, "number": "PTAG-3", "user_id": 1, "status": "paid", "currency_code": "USD", "due_at": "2026-10-15", "created_at": "2026-10-08"},
+    {"id": 4, "number": "PTAG-4", "user_id": 1, "status": "pending", "currency_code": "USD", "due_at": "2026-11-15", "created_at": "2026-11-08"}
+  ],
+  "invoice_items": [
+    {"id": 1, "invoice_id": 3, "description": "Minecraft 4GB", "price": "8.00", "quantity": 1, "reference_id": 9, "reference_type": "App\\Models\\Service"},
+    {"id": 2, "invoice_id": 3, "description": "Extra slot", "price": "0.50", "quantity": 2},
+    {"id": 3, "invoice_id": 4, "description": "Minecraft 4GB", "price": "8.00", "quantity": 1, "reference_id": 9, "reference_type": "App\\Models\\Service"}
+  ],
+  "gateways": [{"id": 1, "name": "PayPal", "extension": "PayPal"}],
+  "invoice_transactions": [
+    {"id": 5, "invoice_id": 3, "gateway_id": 1, "amount": "9.00", "transaction_id": "PAY-TAG", "status": "succeeded", "created_at": "2026-10-09"},
+    {"id": 6, "invoice_id": 4, "gateway_id": 1, "amount": "8.00", "transaction_id": "PAY-F-TAG", "status": "failed", "created_at": "2026-11-09"}
+  ],
+  "tickets": [{"id": 11, "user_id": 1, "subject": "Lag", "status": "replied", "priority": "low", "department": "Game TAG", "created_at": "2026-10-10"}],
+  "ticket_messages": [
+    {"id": 1, "ticket_id": 11, "user_id": 1, "message": "Server lags", "created_at": "2026-10-10 10:00:00"},
+    {"id": 2, "ticket_id": 11, "user_id": 2, "message": "Moved node", "created_at": "2026-10-10 12:00:00"}
+  ]
+}

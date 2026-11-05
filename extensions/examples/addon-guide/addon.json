@@ -1,0 +1,65 @@
+{
+  "id": "integration-guide",
+  "name": "Addon guide example",
+  "version": "0.1.0",
+  "kind": "integration",
+  "engine": "wasm",
+  "provides": "guide",
+  "abi": "0.3.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.integration.guide",
+  "author": "MythicalSystems",
+  "permissions": [],
+  "capabilities": {
+    "kv": true,
+    "http": ["example.com"],
+    "secrets": ["api_token"],
+    "events": ["invoice.paid", "user.registered"],
+    "emits": ["integration-guide:greeted"],
+    "hooks": [
+      { "event": "client.before_register", "priority": "normal" },
+      { "event": "login.before", "priority": "high", "fail_open": true, "timeout_ms": 500 },
+      { "event": "before:integration-guide:greeted" },
+      { "event": "order.before_place", "priority": "highest", "ignore_cancelled": true },
+      { "event": "after:PUT /api/v1/client/profile", "priority": "monitor" }
+    ],
+    "mixins": [
+      { "target": "GET /api/v1/client/profile", "at": "after" }
+    ],
+    "jobs": [{ "op": "cleanup", "every_secs": 3600 }],
+    "routes": [
+      { "method": "GET", "path": "/hello", "access": "public" },
+      { "method": "POST", "path": "/greet", "access": "client" },
+      { "method": "GET", "path": "/stats", "access": "admin", "permission": "reports.read" }
+    ],
+    "ui": ["iframe"]
+  },
+  "ui": {
+    "pages": [
+      {
+        "id": "stats", "area": "admin", "title": "plugin.integration-guide.stats_title", "icon": "ChartBar", "nav": true,
+        "data": { "stats": { "get": "/api/v1/addons/integration-guide/stats" } },
+        "body": { "type": "stack", "children": [
+          { "type": "text", "text": "{{t:plugin.integration-guide.stats_hint}}" },
+          { "type": "table", "rows": "{{data.stats.rows}}", "columns": [
+            { "header": "plugin.integration-guide.key", "value": "{{row.key}}" },
+            { "header": "plugin.integration-guide.value", "value": "{{row.value}}" }
+          ] }
+        ] }
+      },
+      { "id": "frame", "area": "client", "title": "plugin.integration-guide.frame_title", "icon": "AppWindow", "nav": true, "frame": { "src": "assets/ui.html", "height": 200 } }
+    ],
+    "slots": [
+      { "slot": "client.dashboard", "body": { "type": "alert", "text": "{{t:plugin.integration-guide.hello}}" } },
+      { "slot": "admin.invoices.toolbar", "order": 5, "body": { "type": "badge", "text": "{{t:plugin.integration-guide.badge}}" } }
+    ]
+  },
+  "settings": [
+    { "key": "greeting", "label": "Greeting text", "kind": "text", "required": false },
+    { "key": "api_token", "label": "API token", "kind": "secret", "required": false }
+  ],
+  "i18n": {
+    "en": { "stats_title": "Guide stats", "stats_hint": "Counters kept by the guide addon.", "key": "Counter", "value": "Value", "frame_title": "Guide frame", "hello": "Hello from the guide addon.", "badge": "Guide" },
+    "ro": { "stats_title": "Statistici ghid", "stats_hint": "Contoare ținute de addon-ul ghid.", "key": "Contor", "value": "Valoare", "frame_title": "Cadru ghid", "hello": "Salut de la addon-ul ghid.", "badge": "Ghid" }
+  }
+}

@@ -1,0 +1,13 @@
+From: Ana <ana@example.test>
+To: help@example.test
+Message-ID: <fixture-reply@example.test>
+Subject: Re: Changed subject without a ticket number
+In-Reply-To: <fixture-mixed@example.test>
+References: <older@example.test>
+ <fixture-mixed@example.test>
+Content-Type: text/plain; charset=utf-8
+
+Still broken.
+
+On Monday, Support wrote:
+> Please restart.

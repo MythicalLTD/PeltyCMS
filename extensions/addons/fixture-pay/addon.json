@@ -1,0 +1,20 @@
+{
+  "id": "gateway-addontestpay",
+  "name": "Addon Test Pay",
+  "version": "0.1.0",
+  "kind": "gateway",
+  "engine": "wasm",
+  "provides": "addontestpay",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.gateway.addontestpay",
+  "author": "MythicalSystems",
+  "permissions": [
+    "payments.process"
+  ],
+  "capabilities": {
+    "http": [],
+    "secrets": []
+  },
+  "settings": []
+}

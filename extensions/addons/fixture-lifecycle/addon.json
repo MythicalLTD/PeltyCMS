@@ -1,0 +1,60 @@
+{
+  "id": "integration-lifecycle",
+  "name": "Lifecycle demo (test fixture)",
+  "version": "0.1.0",
+  "kind": "integration",
+  "engine": "wasm",
+  "provides": "lifecycle",
+  "abi": "0.3.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.integration.lifecycle",
+  "author": "MythicalSystems",
+  "permissions": [],
+  "capabilities": {
+    "kv": true,
+    "emits": ["integration-lifecycle:greet"],
+    "hooks": [
+      { "event": "before:PUT /api/v1/client/profile", "priority": "normal" },
+      { "event": "during:PUT /api/v1/client/profile" },
+      { "event": "after:PUT /api/v1/client/profile" },
+      { "event": "finished:PUT /api/v1/client/profile", "priority": "monitor" },
+      { "event": "before:integration-lifecycle:greet", "priority": "highest", "ignore_cancelled": true }
+    ],
+    "mixins": [
+      { "target": "PUT /api/v1/client/profile", "at": "around" },
+      { "target": "GET /api/v1/client/profile", "at": "after", "priority": 10 },
+      { "target": "GET /api/v1/client/profile", "at": "return", "priority": 20 }
+    ],
+    "routes": [
+      { "method": "POST", "path": "/greet", "access": "client" },
+      { "method": "POST", "path": "/greet-other", "access": "client" },
+      { "method": "GET", "path": "/log", "access": "client" }
+    ],
+    "ui": ["iframe"]
+  },
+  "ui": {
+    "pages": [
+      {
+        "id": "log", "area": "client", "title": "plugin.integration-lifecycle.log_title", "icon": "Lightning", "nav": true,
+        "data": { "log": { "get": "/api/v1/addons/integration-lifecycle/log" } },
+        "body": { "type": "stack", "children": [
+          { "type": "text", "text": "{{t:plugin.integration-lifecycle.log_hint}}" },
+          { "type": "table", "rows": "{{data.log.rows}}", "columns": [
+            { "header": "plugin.integration-lifecycle.key", "value": "{{row.key}}" },
+            { "header": "plugin.integration-lifecycle.value", "value": "{{row.value}}" }
+          ] }
+        ] }
+      },
+      { "id": "frame", "area": "client", "title": "plugin.integration-lifecycle.frame_title", "icon": "AppWindow", "nav": true, "frame": { "src": "assets/ui.html", "height": 200 } }
+    ],
+    "slots": [
+      { "slot": "client.invoices.toolbar", "body": { "type": "badge", "text": "{{t:plugin.integration-lifecycle.badge}}" } },
+      { "slot": "client.dashboard.after", "body": { "type": "frame", "src": "assets/ui.html", "height": 120 } }
+    ]
+  },
+  "settings": [],
+  "i18n": {
+    "en": { "log_title": "Event log", "log_hint": "Counters of every event phase and mixin.", "key": "Phase", "value": "Count", "frame_title": "Lifecycle frame", "badge": "Lifecycle on" },
+    "ro": { "log_title": "Jurnal evenimente", "log_hint": "Contoare pentru fiecare fază de eveniment și mixin.", "key": "Fază", "value": "Număr", "frame_title": "Cadru lifecycle", "badge": "Lifecycle activ" }
+  }
+}

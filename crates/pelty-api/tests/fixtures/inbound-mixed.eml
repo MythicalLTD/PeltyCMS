@@ -1,0 +1,30 @@
+From: =?UTF-8?Q?Ana_Client?= <ana@example.test>
+To: Undisclosed recipients:;
+Subject: =?UTF-8?Q?Server_help?=
+Message-ID: <fixture-mixed@example.test>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="outer"
+
+--outer
+Content-Type: multipart/alternative; boundary="inner"
+
+--inner
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+Please help=21
+
+-- 
+Ana
+--inner
+Content-Type: text/html; charset=utf-8
+
+<p>Please help!</p>
+--inner--
+--outer
+Content-Type: text/plain; name="../../diagnostic.txt"
+Content-Disposition: attachment; filename="../../diagnostic.txt"
+Content-Transfer-Encoding: base64
+
+bG9nIGxpbmUK
+--outer--

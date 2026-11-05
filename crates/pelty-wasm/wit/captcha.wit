@@ -1,0 +1,27 @@
+package pelty:addon@0.1.0;
+
+/// Host services every addon may import. Capabilities are still gated by the manifest.
+interface host {
+    enum level { debug, info, warn, error }
+    log: func(level: level, message: string);
+}
+
+/// Captcha verification contract (ABI 0.1).
+interface captcha {
+    record verify-request {
+        token: string,
+        remote-ip: option<string>,
+        /// Admin-configured secret from addon settings.
+        secret: string,
+    }
+    record verify-result {
+        success: bool,
+        error-codes: list<string>,
+    }
+    verify: func(req: verify-request) -> result<verify-result, string>;
+}
+
+world captcha-addon {
+    import host;
+    export captcha;
+}

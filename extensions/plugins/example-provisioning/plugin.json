@@ -1,0 +1,63 @@
+{
+  "id": "example-provisioning",
+  "name": "Provisioning dashboard (example)",
+  "version": "0.1.0",
+  "api_version": 1,
+  "description": "Example of a declarative native UI: a servers overview page and a provisioning panel on each service. No plugin code runs in the browser.",
+  "capabilities": ["services.read", "ui.core_actions"],
+  "ui": {
+    "pages": [
+      {
+        "id": "servers",
+        "area": "admin",
+        "title": "plugin.example-provisioning.page.title",
+        "icon": "HardDrives",
+        "permission": "servers.manage",
+        "data": { "servers": { "get": "/api/v1/admin/servers", "refresh_secs": 30 } },
+        "body": {
+          "type": "stack",
+          "children": [
+            { "type": "heading", "text": "{{t:plugin.example-provisioning.page.title}}", "description": "{{t:plugin.example-provisioning.page.intro}}" },
+            { "type": "grid", "columns_count": 3, "children": [
+              { "type": "stat", "label": "plugin.example-provisioning.stat.servers", "value": "{{data.servers.items.length}}" },
+              { "type": "stat", "label": "plugin.example-provisioning.stat.services", "value": "{{sum data.servers.items services}}" }
+            ] },
+            { "type": "card", "title": "plugin.example-provisioning.card.servers", "children": [
+              { "type": "table", "rows": "{{data.servers.items}}",
+                "columns": [
+                  { "header": "plugin.example-provisioning.col.name", "value": "{{row.name}}" },
+                  { "header": "plugin.example-provisioning.col.module", "cell": { "type": "badge", "variant": "outline", "text": "{{row.module}}" } },
+                  { "header": "plugin.example-provisioning.col.load", "cell": { "type": "progress", "value": "{{row.services}}", "max": "{{row.max_services}}" } },
+                  { "header": "", "cell": { "type": "button", "size": "sm", "variant": "outline", "label": "plugin.example-provisioning.action.test",
+                      "action": { "type": "request", "method": "POST", "path": "/api/v1/admin/servers/{{row.id}}/test", "success": "plugin.example-provisioning.tested" } } }
+                ],
+                "empty": { "type": "empty", "title": "plugin.example-provisioning.empty" } }
+            ] }
+          ]
+        }
+      }
+    ],
+    "slots": [
+      {
+        "slot": "admin.service.detail",
+        "permission": "servers.manage",
+        "data": { "p": { "get": "/api/v1/admin/services/{{ctx.service_id}}/provisioning" } },
+        "body": {
+          "type": "card", "title": "plugin.example-provisioning.slot.title",
+          "children": [
+            { "type": "kv", "items": [
+              { "label": "plugin.example-provisioning.col.module", "value": "{{data.p.state.module}}" },
+              { "label": "plugin.example-provisioning.slot.remote", "value": "{{data.p.state.remote_id}}" },
+              { "label": "plugin.example-provisioning.slot.status", "value": "{{data.p.state.provision_status}}" }
+            ] },
+            { "type": "if", "when": "{{data.p.state.provision_error}}", "children": [
+              { "type": "alert", "variant": "destructive", "text": "{{data.p.state.provision_error}}" }
+            ] },
+            { "type": "button", "label": "plugin.example-provisioning.action.retry", "confirm": "plugin.example-provisioning.confirm",
+              "action": { "type": "request", "method": "POST", "path": "/api/v1/admin/services/{{ctx.service_id}}/module", "body": { "action": "create" }, "then": { "type": "refresh" } } }
+          ]
+        }
+      }
+    ]
+  }
+}

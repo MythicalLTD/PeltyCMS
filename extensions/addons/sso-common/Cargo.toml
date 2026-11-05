@@ -1,0 +1,11 @@
+[package]
+name = "pelty-addon-sso-common"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Shared OAuth2/OIDC code exchange for the SSO addons (a library, not an addon)."
+
+[dependencies]
+pelty-addon-sdk = { workspace = true }
+serde_json = { workspace = true }

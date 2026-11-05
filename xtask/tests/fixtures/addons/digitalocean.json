@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "addon_id": "provisioning-digitalocean",
+  "kind": "provisioning",
+  "settings": {},
+  "secrets": {"api_key": "do_fixture_only"},
+  "server_url": "https://panel.example.test",
+  "cases": [
+    {
+      "name": "Create droplet using server-scoped bearer secret",
+      "op": "create",
+      "input": {
+        "server": {"base_url": "https://panel.example.test", "config": {}},
+        "svc": {"service_id": "svc-1", "customer_email": "alice@example.test", "customer_first_name": "Alice", "customer_last_name": "Doe", "product_config": {"plan": "s-1vcpu-1gb", "region": "fra1", "image": "ubuntu-24-04-x64"}, "custom_fields": {"domain": "vm.example.test"}, "remote_id": null, "module_data": {}}
+      },
+      "expect": {"value": {"remote_id": "42", "module_data": {"hostname": "vm.example.test", "initial_password": null}}},
+      "http": [{
+        "request": {"method": "POST", "url": "https://panel.example.test/v2/droplets", "headers": [["accept", "application/json"], ["authorization", "Bearer do_fixture_only"], ["content-type", "application/json"]], "body": "{\"image\":\"ubuntu-24-04-x64\",\"name\":\"vm.example.test\",\"region\":\"fra1\",\"size\":\"s-1vcpu-1gb\",\"ssh_keys\":[],\"tags\":[\"pelty-svc-1\"],\"user_data\":\"\"}"},
+        "response": {"status": 202, "body": "{\"droplet\":{\"id\":42}}"}
+      }]
+    },
+    {
+      "name": "Create retry with persisted remote ID performs no HTTP",
+      "op": "create",
+      "input": {"server": {"base_url": "https://panel.example.test", "config": {}}, "svc": {"service_id": "svc-1", "customer_email": "alice@example.test", "customer_first_name": "Alice", "customer_last_name": "Doe", "product_config": {}, "custom_fields": {}, "remote_id": "42", "module_data": {"hostname": "vm.example.test", "initial_password": null}}},
+      "expect": {"value": {"remote_id": "42", "module_data": {"hostname": "vm.example.test", "initial_password": null}}},
+      "http": []
+    },
+    {
+      "name": "Suspend powers off the persisted remote ID",
+      "op": "suspend",
+      "input": {"server": {"base_url": "https://panel.example.test", "config": {}}, "svc": {"service_id": "svc-1", "product_config": {}, "custom_fields": {}, "remote_id": "42", "module_data": {}}},
+      "expect": {"value": null},
+      "http": [{"request": {"method": "POST", "url": "https://panel.example.test/v2/droplets/42/actions", "headers": [["accept", "application/json"], ["authorization", "Bearer do_fixture_only"], ["content-type", "application/json"]], "body": "{\"type\":\"power_off\"}"}, "response": {"status": 201, "body": "{\"action\":{\"id\":71,\"status\":\"in-progress\"}}"}}]
+    },
+    {
+      "name": "Resume uses unsuspend operation and powers on",
+      "op": "unsuspend",
+      "input": {"server": {"base_url": "https://panel.example.test", "config": {}}, "svc": {"service_id": "svc-1", "product_config": {}, "custom_fields": {}, "remote_id": "42", "module_data": {}}},
+      "expect": {"value": null},
+      "http": [{"request": {"method": "POST", "url": "https://panel.example.test/v2/droplets/42/actions", "headers": [["accept", "application/json"], ["authorization", "Bearer do_fixture_only"], ["content-type", "application/json"]], "body": "{\"type\":\"power_on\"}"}, "response": {"status": 201, "body": "{\"action\":{\"id\":72,\"status\":\"in-progress\"}}"}}]
+    },
+    {
+      "name": "Invalid remote ID cannot become a URL path",
+      "op": "suspend",
+      "input": {"server": {"base_url": "https://panel.example.test", "config": {}}, "svc": {"service_id": "svc-1", "product_config": {}, "custom_fields": {}, "remote_id": "../metadata", "module_data": {}}},
+      "expect": {"error": "config:invalid remote id"},
+      "http": []
+    }
+  ]
+}

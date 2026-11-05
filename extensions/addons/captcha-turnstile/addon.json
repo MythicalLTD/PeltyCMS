@@ -1,0 +1,45 @@
+{
+  "id": "captcha-turnstile",
+  "name": "Cloudflare Turnstile",
+  "version": "0.1.0",
+  "kind": "captcha",
+  "engine": "wasm",
+  "provides": "turnstile",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.captcha.turnstile",
+  "author": "MythicalSystems",
+  "permissions": [
+    "network.outbound"
+  ],
+  "capabilities": {
+    "http": [
+      "challenges.cloudflare.com",
+      "$setting:verify_url"
+    ],
+    "secrets": []
+  },
+  "settings": [
+    {
+      "key": "site_key",
+      "label": "addons.captcha.setting.site_key",
+      "kind": "text",
+      "required": false,
+      "default": ""
+    },
+    {
+      "key": "secret_key",
+      "label": "addons.captcha.setting.secret_key",
+      "kind": "secret",
+      "required": false,
+      "default": ""
+    },
+    {
+      "key": "verify_url",
+      "label": "addons.captcha.setting.verify_url",
+      "kind": "text",
+      "required": false,
+      "default": ""
+    }
+  ]
+}

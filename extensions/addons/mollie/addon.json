@@ -1,0 +1,26 @@
+{
+  "id": "gateway-mollie",
+  "name": "Mollie",
+  "version": "0.1.0",
+  "kind": "gateway",
+  "engine": "wasm",
+  "provides": "mollie",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.gateway.mollie",
+  "author": "MythicalSystems",
+  "permissions": [
+    "payments.process",
+    "network.outbound"
+  ],
+  "capabilities": {
+    "http": [
+      "api.mollie.com",
+      "$setting:api_base"
+    ],
+    "secrets": [
+      "api_key"
+    ]
+  },
+  "settings": []
+}

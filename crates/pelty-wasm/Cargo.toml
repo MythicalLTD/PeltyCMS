@@ -1,0 +1,46 @@
+[package]
+name = "pelty-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+sha2 = { workspace = true }
+pelty-extensions = { workspace = true }
+pelty-payments = { workspace = true }
+pelty-provisioning = { workspace = true }
+pelty-core = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+rand = { workspace = true }
+url = "2"
+base64 = { workspace = true }
+rust_decimal = { workspace = true }
+serde_json = { workspace = true }
+semver = "1"
+thiserror = { workspace = true }
+tracing = { workspace = true }
+wasmtime = { version = "50", default-features = false, features = ["runtime", "cranelift", "component-model", "std", "cache"] }
+wasmtime-wasi = { version = "50", default-features = false }
+
+
+[dev-dependencies]
+pelty-addon-registrar-opensrs = { path = "../../extensions/addons/reg-opensrs", default-features = false }
+pelty-payments = { workspace = true, features = ["test-util"] }
+pelty-addon-gateway-stripe = { path = "../../extensions/addons/stripe", default-features = false }
+pelty-addon-gateway-paypal = { path = "../../extensions/addons/paypal", default-features = false }
+pelty-addon-gateway-mollie = { path = "../../extensions/addons/mollie", default-features = false }
+pelty-addon-gateway-razorpay = { path = "../../extensions/addons/razorpay", default-features = false }
+pelty-addon-gateway-gocardless = { path = "../../extensions/addons/gocardless", default-features = false }
+pelty-addon-gateway-crypto = { path = "../../extensions/addons/crypto", default-features = false }
+pelty-addon-gateway-paddle = { path = "../../extensions/addons/paddle", default-features = false }
+pelty-addon-gateway-adyen = { path = "../../extensions/addons/adyen", default-features = false }
+pelty-addon-gateway-manual = { path = "../../extensions/addons/manual", default-features = false }
+pelty-addon-gateway-custom = { path = "../../extensions/addons/custom", default-features = false }
+tokio = { workspace = true }
+hmac = "0.12"
+hex = { workspace = true }
+axum = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "addon_id": "gateway-stripe",
+  "kind": "gateway",
+  "settings": {},
+  "secrets": {"secret_key": "sk_fixture_only", "webhook_secret": "whsec_fixture_only"},
+  "server_url": null,
+  "cases": [
+    {
+      "name": "Validate synthetic configuration without I/O",
+      "op": "validate",
+      "input": {"id": "stripe", "config": {}, "secret_names": ["secret_key", "webhook_secret"]},
+      "expect": {"value": null},
+      "http": []
+    },
+    {
+      "name": "Checkout sends exact minor units, metadata and idempotency key",
+      "op": "create_payment",
+      "input": {
+        "id": "stripe", "config": {}, "secret_names": ["secret_key", "webhook_secret"],
+        "req": {
+          "payment_id": "pay_1", "reference": "INV-7", "amount": {"amount": "12.50", "currency": "EUR"},
+          "description": "Invoice INV-7", "customer_email": "a@example.test",
+          "success_url": "https://x.test/ok", "cancel_url": "https://x.test/no", "webhook_url": "https://x.test/wh",
+          "idempotency_key": "idem-1"
+        }
+      },
+      "expect": {"value": {"type": "redirect", "url": "https://checkout.stripe.com/c/cs_1", "provider_ref": "cs_1"}},
+      "http": [{
+        "request": {
+          "method": "POST", "url": "https://api.stripe.com/v1/checkout/sessions",
+          "headers": [["Authorization", "Bearer sk_fixture_only"], ["Content-Type", "application/x-www-form-urlencoded"], ["Idempotency-Key", "idem-1"]],
+          "body": "mode=payment&success_url=https%3A%2F%2Fx.test%2Fok&cancel_url=https%3A%2F%2Fx.test%2Fno&client_reference_id=pay_1&line_items%5B0%5D%5Bquantity%5D=1&line_items%5B0%5D%5Bprice_data%5D%5Bcurrency%5D=eur&line_items%5B0%5D%5Bprice_data%5D%5Bunit_amount%5D=1250&line_items%5B0%5D%5Bprice_data%5D%5Bproduct_data%5D%5Bname%5D=Invoice+INV-7&metadata%5Bpelty_payment_id%5D=pay_1&payment_intent_data%5Bmetadata%5D%5Bpelty_payment_id%5D=pay_1&customer_email=a%40example.test"
+        },
+        "response": {"status": 200, "body": "{\"id\":\"cs_1\",\"url\":\"https://checkout.stripe.com/c/cs_1\"}"}
+      }]
+    },
+    {
+      "name": "Refund resolves session to intent before refunding",
+      "op": "refund",
+      "input": {"id": "stripe", "config": {}, "secret_names": ["secret_key", "webhook_secret"], "provider_ref": "cs_1", "amount": {"amount": "5.00", "currency": "EUR"}, "idempotency_key": "refund-1"},
+      "expect": {"value": {"provider_ref": "re_1", "status": "succeeded"}},
+      "http": [
+        {"request": {"method": "GET", "url": "https://api.stripe.com/v1/checkout/sessions/cs_1", "headers": [["Authorization", "Bearer sk_fixture_only"], ["Content-Type", "application/x-www-form-urlencoded"]], "body": ""}, "response": {"status": 200, "body": "{\"id\":\"cs_1\",\"payment_intent\":\"pi_9\"}"}},
+        {"request": {"method": "POST", "url": "https://api.stripe.com/v1/refunds", "headers": [["Authorization", "Bearer sk_fixture_only"], ["Content-Type", "application/x-www-form-urlencoded"], ["Idempotency-Key", "refund-1"]], "body": "payment_intent=pi_9&amount=500"}, "response": {"status": 200, "body": "{\"id\":\"re_1\",\"status\":\"succeeded\"}"}}
+      ]
+    },
+    {
+      "name": "Provider refund failure stays a typed addon error",
+      "op": "refund",
+      "input": {"id": "stripe", "config": {}, "secret_names": ["secret_key", "webhook_secret"], "provider_ref": "pi_1", "amount": {"amount": "1.00", "currency": "EUR"}, "idempotency_key": "refund-2"},
+      "expect": {"error": "provider:HTTP 402: card_declined"},
+      "http": [{"request": {"method": "POST", "url": "https://api.stripe.com/v1/refunds", "headers": [["Authorization", "Bearer sk_fixture_only"], ["Content-Type", "application/x-www-form-urlencoded"], ["Idempotency-Key", "refund-2"]], "body": "payment_intent=pi_1&amount=100"}, "response": {"status": 402, "body": "{\"error\":{\"message\":\"card_declined\"}}"}}]
+    },
+    {
+      "name": "Valid signed webhook with deterministic caller-supplied time",
+      "op": "parse_webhook",
+      "input": {"id": "stripe", "config": {}, "secret_names": ["secret_key", "webhook_secret"], "headers": {"stripe-signature": "t=100,v1=f24813bc17de731687757f8034062e3ec5184b1c8030d7b92d1db3d847fefb4a"}, "body_b64": "eyJpZCI6ImU1IiwidHlwZSI6InBheW1lbnRfaW50ZW50LnBheW1lbnRfZmFpbGVkIiwiZGF0YSI6eyJvYmplY3QiOnsiaWQiOiJwaV8zIiwibWV0YWRhdGEiOnsicGVsdHlfcGF5bWVudF9pZCI6InAtMSJ9fX19", "now": 100},
+      "expect": {"value": {"event_id": "e5", "event_type": "payment_intent.payment_failed", "kind": "payment_failed", "provider_ref": "pi_3", "payment_id": "p-1"}},
+      "http": []
+    },
+    {
+      "name": "Forged webhook is rejected without HTTP",
+      "op": "parse_webhook",
+      "input": {"id": "stripe", "config": {}, "secret_names": ["secret_key", "webhook_secret"], "headers": {"stripe-signature": "t=100,v1=0000000000000000000000000000000000000000000000000000000000000000"}, "body_b64": "e30=", "now": 100},
+      "expect": {"error": "invalid_signature:"},
+      "http": []
+    },
+    {
+      "name": "Expired valid signature is rejected without HTTP",
+      "op": "parse_webhook",
+      "input": {"id": "stripe", "config": {}, "secret_names": ["secret_key", "webhook_secret"], "headers": {"stripe-signature": "t=100,v1=f24813bc17de731687757f8034062e3ec5184b1c8030d7b92d1db3d847fefb4a"}, "body_b64": "eyJpZCI6ImU1IiwidHlwZSI6InBheW1lbnRfaW50ZW50LnBheW1lbnRfZmFpbGVkIiwiZGF0YSI6eyJvYmplY3QiOnsiaWQiOiJwaV8zIiwibWV0YWRhdGEiOnsicGVsdHlfcGF5bWVudF9pZCI6InAtMSJ9fX19", "now": 100000},
+      "expect": {"error": "invalid_signature:"},
+      "http": []
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+# Release signing public key (base64 ed25519), compiled into pelty-server.
+# The updater requires a valid SHA256SUMS.sig once a key line is present.
+# Create the key pair with `cargo xtask release-keygen` (the private key
+# stays with the release owner) and put the printed public key below.

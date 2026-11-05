@@ -1,0 +1,57 @@
+{
+  "id": "registrar-centralnic",
+  "name": "CentralNic Reseller",
+  "version": "0.1.0",
+  "kind": "registrar",
+  "engine": "wasm",
+  "provides": "centralnic",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.registrar.centralnic",
+  "author": "MythicalSystems",
+  "permissions": [
+    "domains.manage",
+    "network.outbound"
+  ],
+  "capabilities": {
+    "http": [
+      "api.rrpproxy.net",
+      "api-ote.rrpproxy.net",
+      "$setting:api_base"
+    ],
+    "secrets": []
+  },
+  "settings": [
+    {
+      "key": "login",
+      "label": "addons.registrar.setting.login",
+      "kind": "text",
+      "required": true
+    },
+    {
+      "key": "password",
+      "label": "addons.registrar.setting.password",
+      "kind": "secret",
+      "required": true
+    },
+    {
+      "key": "contact_handle",
+      "label": "addons.registrar.setting.contact_handle",
+      "kind": "text",
+      "required": true
+    },
+    {
+      "key": "test_mode",
+      "label": "addons.registrar.setting.test_mode",
+      "kind": "bool",
+      "required": false,
+      "default": false
+    },
+    {
+      "key": "api_base",
+      "label": "addons.registrar.setting.api_base",
+      "kind": "text",
+      "required": false
+    }
+  ]
+}

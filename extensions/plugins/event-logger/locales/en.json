@@ -1,0 +1,7 @@
+{
+  "menu": "Event log",
+  "widget": "Events captured",
+  "settings.keep": "Events to keep in memory",
+  "title": "Event logger",
+  "empty": "No events captured yet."
+}

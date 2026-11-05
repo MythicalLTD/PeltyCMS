@@ -1,0 +1,28 @@
+{
+  "id": "integration-powerdemo",
+  "name": "Power capabilities demo (test fixture)",
+  "version": "0.1.0",
+  "kind": "integration",
+  "engine": "wasm",
+  "provides": "powerdemo",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "Test fixture for opt-in capabilities.",
+  "author": "MythicalSystems",
+  "permissions": [],
+  "limits": { "memory_mib": 128, "timeout_secs": 10 },
+  "capabilities": {
+    "http": ["*"],
+    "http_private": false,
+    "kv": true,
+    "money": { "modify": true },
+    "db": { "read": ["clients", "invoices"], "write": ["client.note"], "sql": true },
+    "fs": true,
+    "exec": ["/bin/echo"],
+    "jobs": [{ "op": "tick", "every_secs": 0 }],
+    "auth_provider": true,
+    "hooks": [{ "event": "before:*", "priority": 10 }],
+    "filters": [{ "name": "checkout.discounts" }],
+    "routes": [{ "method": "POST", "path": "/try", "access": "admin", "permission": "plugins.manage" }]
+  }
+}

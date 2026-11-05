@@ -1,0 +1,57 @@
+{
+  "id": "registrar-godaddy",
+  "name": "GoDaddy",
+  "version": "0.1.0",
+  "kind": "registrar",
+  "engine": "wasm",
+  "provides": "godaddy",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.registrar.godaddy",
+  "author": "MythicalSystems",
+  "permissions": [
+    "domains.manage",
+    "network.outbound"
+  ],
+  "capabilities": {
+    "http": [
+      "api.godaddy.com",
+      "api.ote-godaddy.com",
+      "$setting:api_base"
+    ],
+    "secrets": []
+  },
+  "settings": [
+    {
+      "key": "api_key",
+      "label": "addons.registrar.setting.api_key",
+      "kind": "secret",
+      "required": true
+    },
+    {
+      "key": "api_secret",
+      "label": "addons.registrar.setting.api_secret",
+      "kind": "secret",
+      "required": true
+    },
+    {
+      "key": "customer_ip",
+      "label": "addons.registrar.setting.customer_ip",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "key": "test_mode",
+      "label": "addons.registrar.setting.test_mode",
+      "kind": "bool",
+      "required": false,
+      "default": false
+    },
+    {
+      "key": "api_base",
+      "label": "addons.registrar.setting.api_base",
+      "kind": "text",
+      "required": false
+    }
+  ]
+}

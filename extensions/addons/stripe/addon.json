@@ -1,0 +1,15 @@
+{
+  "id": "gateway-stripe",
+  "name": "Stripe",
+  "version": "0.1.0",
+  "kind": "gateway",
+  "engine": "wasm",
+  "provides": "stripe",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.gateway.stripe",
+  "author": "MythicalSystems",
+  "permissions": ["payments.process", "network.outbound"],
+  "capabilities": { "http": ["api.stripe.com", "$setting:api_base"], "secrets": ["secret_key", "webhook_secret"] },
+  "settings": []
+}

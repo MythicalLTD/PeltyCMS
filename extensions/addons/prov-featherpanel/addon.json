@@ -1,0 +1,25 @@
+{
+  "id": "provisioning-featherpanel",
+  "name": "FeatherPanel",
+  "version": "0.1.0",
+  "kind": "provisioning",
+  "engine": "wasm",
+  "provides": "featherpanel",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.provisioning.featherpanel",
+  "author": "MythicalSystems",
+  "permissions": [
+    "provisioning.manage",
+    "network.outbound"
+  ],
+  "capabilities": {
+    "http": [
+      "$server"
+    ],
+    "secrets": [
+      "api_key"
+    ]
+  },
+  "settings": []
+}
