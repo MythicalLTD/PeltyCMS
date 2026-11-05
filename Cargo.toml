@@ -39,7 +39,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 time = { version = "0.3", features = ["serde", "serde-human-readable", "formatting", "parsing", "macros"] }
 rust_decimal = { version = "1", features = ["serde-str"] }
 argon2 = { version = "0.5", features = ["std"] }
-rand = "0.10"
+rand = "0.8"
 sha2 = "0.10"
 base64 = "0.22"
 webauthn-rs = { version = "0.6", features = ["danger-allow-state-serialisation", "conditional-ui"] }
