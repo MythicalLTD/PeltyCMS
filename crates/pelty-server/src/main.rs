@@ -41,11 +41,11 @@
 mod bootstrap;
 mod console;
 mod embedded;
-mod update;
-mod whmcs_import;
 mod eula;
 mod logging;
 mod setup;
+mod update;
+mod whmcs_import;
 
 use pelty_api::AppState;
 use pelty_core::config::Config;
@@ -90,7 +90,11 @@ fn main() -> ExitCode {
         })
         .collect();
     if matches!(args.as_slice(), [v] if v == "--version" || v == "-V" || v == "version") {
-        println!("pelty-server {} ({})", env!("CARGO_PKG_VERSION"), update::TARGET);
+        println!(
+            "pelty-server {} ({})",
+            env!("CARGO_PKG_VERSION"),
+            update::TARGET
+        );
         return ExitCode::SUCCESS;
     }
     let root = match std::env::current_dir() {
@@ -108,7 +112,9 @@ fn main() -> ExitCode {
     // `embed-addons` feature. A default/release binary carries none, so a
     // production install starts without addons (upload them in Admin).
     let dist_set = std::env::var("PELTY_ADDONS_DIST").is_ok_and(|v| !v.trim().is_empty())
-        || bootstrap::read_env_file(&root).iter().any(|(k, v)| k == "PELTY_ADDONS_DIST" && !v.trim().is_empty());
+        || bootstrap::read_env_file(&root)
+            .iter()
+            .any(|(k, v)| k == "PELTY_ADDONS_DIST" && !v.trim().is_empty());
     if !dist_set && !root.join("extensions/addons/dist").is_dir() {
         match embedded::unpack_addons(&root) {
             // Still single-threaded here.
@@ -136,7 +142,9 @@ fn main() -> ExitCode {
         println!("[PeltyCMS] Not configured yet: run `docker run -it ... pelty-server setup` (or `docker compose run --rm app pelty-server setup`), or set the PELTY_* variables.");
     } else if setup_cmd || (serves && !skip_setup && interactive && pending) {
         if !interactive {
-            eprintln!("pelty-server setup needs an interactive terminal (edit .env and eula.txt instead)");
+            eprintln!(
+                "pelty-server setup needs an interactive terminal (edit .env and eula.txt instead)"
+            );
             return ExitCode::FAILURE;
         }
         match run_wizard(&root) {
@@ -147,28 +155,47 @@ fn main() -> ExitCode {
             Err(code) => return code,
         }
     }
-    if serves && interactive && !yes && !skip_setup && bootstrap::read_env_file(&root).iter().all(|(k, _)| k != setup::MARKER) && root.join(bootstrap::ENV_FILE).exists() {
+    if serves
+        && interactive
+        && !yes
+        && !skip_setup
+        && bootstrap::read_env_file(&root)
+            .iter()
+            .all(|(k, _)| k != setup::MARKER)
+        && root.join(bootstrap::ENV_FILE).exists()
+    {
         println!("[PeltyCMS] Tip: `pelty-server setup` walks through the database, web, proxy, admin and email settings.");
     }
     // Still single-threaded: export `.env` values the environment does not set
     // (an empty variable, e.g. `FOO=` from docker compose, counts as unset).
     for (k, v) in bootstrap::read_env_file(&root) {
-        if std::env::var(&k).map(|v| v.trim().is_empty()).unwrap_or(true) {
+        if std::env::var(&k)
+            .map(|v| v.trim().is_empty())
+            .unwrap_or(true)
+        {
             std::env::set_var(k, v);
         }
     }
     if serves {
         // `PELTY_EULA=true` accepts the EULA without editing eula.txt
         // (containers, CI); `serve` refuses to start until it is accepted.
-        if let eula::Gate::Refused { created } = eula::check(&root, std::env::var("PELTY_EULA").ok().as_deref()) {
+        if let eula::Gate::Refused { created } =
+            eula::check(&root, std::env::var("PELTY_EULA").ok().as_deref())
+        {
             println!("{}", eula::refusal_message(&root));
             if created {
-                println!("First start: also review {} (DATABASE_URL, PELTY_BIND, PELTY_PUBLIC_URL).", root.join(bootstrap::ENV_FILE).display());
+                println!(
+                    "First start: also review {} (DATABASE_URL, PELTY_BIND, PELTY_PUBLIC_URL).",
+                    root.join(bootstrap::ENV_FILE).display()
+                );
             }
             return ExitCode::FAILURE;
         }
     }
-    let rt = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
+    let rt = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+    {
         Ok(rt) => rt,
         Err(e) => {
             eprintln!("cannot start the async runtime: {e}");
@@ -181,10 +208,18 @@ fn main() -> ExitCode {
 /// Run the interactive wizard, save `.env` / `eula.txt`, and return the
 /// database work for after the migrations.
 fn run_wizard(root: &std::path::Path) -> Result<setup::Plan, ExitCode> {
-    let file: std::collections::HashMap<String, String> = bootstrap::read_env_file(root).into_iter().collect();
-    let cur = |k: &str| std::env::var(k).ok().filter(|v| !v.trim().is_empty()).or_else(|| file.get(k).cloned());
+    let file: std::collections::HashMap<String, String> =
+        bootstrap::read_env_file(root).into_iter().collect();
+    let cur = |k: &str| {
+        std::env::var(k)
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .or_else(|| file.get(k).cloned())
+    };
     let eula_ok = eula::env_accepts(std::env::var("PELTY_EULA").ok().as_deref())
-        || std::fs::read_to_string(root.join(eula::FILE)).map(|t| eula::accepted_in(&t)).unwrap_or(false);
+        || std::fs::read_to_string(root.join(eula::FILE))
+            .map(|t| eula::accepted_in(&t))
+            .unwrap_or(false);
     let answers = {
         let mut svc = match setup::term::Live::new() {
             Ok(s) => s,
@@ -194,8 +229,16 @@ fn run_wizard(root: &std::path::Path) -> Result<setup::Plan, ExitCode> {
             }
         };
         let locales = cur("PELTY_LOCALES_DIR").unwrap_or_else(|| "locales".into());
-        let dist = root.join(cur("PELTY_ADDONS_DIST").unwrap_or_else(|| "extensions/addons/dist".into()));
-        let mut ctx = setup::Ctx { cur: &cur, eula_accepted: eula_ok, languages: setup::languages(&root.join(locales)), currencies: vec![], captcha: setup::captcha_providers(&dist), gateways: setup::gateway_choices(&dist) };
+        let dist =
+            root.join(cur("PELTY_ADDONS_DIST").unwrap_or_else(|| "extensions/addons/dist".into()));
+        let mut ctx = setup::Ctx {
+            cur: &cur,
+            eula_accepted: eula_ok,
+            languages: setup::languages(&root.join(locales)),
+            currencies: vec![],
+            captcha: setup::captcha_providers(&dist),
+            gateways: setup::gateway_choices(&dist),
+        };
         setup::wizard(&mut setup::term::Term::default(), &mut svc, &mut ctx)
         // `svc` (and its runtime threads) ends here, before set_var below.
     };
@@ -219,10 +262,18 @@ fn run_wizard(root: &std::path::Path) -> Result<setup::Plan, ExitCode> {
 
 /// `--yes`: defaults plus flags / environment, no questions.
 fn run_headless(root: &std::path::Path, h: &setup::Headless) -> Result<setup::Plan, ExitCode> {
-    let file: std::collections::HashMap<String, String> = bootstrap::read_env_file(root).into_iter().collect();
-    let cur = |k: &str| std::env::var(k).ok().filter(|v| !v.trim().is_empty()).or_else(|| file.get(k).cloned());
+    let file: std::collections::HashMap<String, String> =
+        bootstrap::read_env_file(root).into_iter().collect();
+    let cur = |k: &str| {
+        std::env::var(k)
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .or_else(|| file.get(k).cloned())
+    };
     let eula_ok = eula::env_accepts(std::env::var("PELTY_EULA").ok().as_deref())
-        || std::fs::read_to_string(root.join(eula::FILE)).map(|t| eula::accepted_in(&t)).unwrap_or(false);
+        || std::fs::read_to_string(root.join(eula::FILE))
+            .map(|t| eula::accepted_in(&t))
+            .unwrap_or(false);
     let res = match setup::term::Live::new() {
         Ok(mut svc) => setup::headless(&mut svc, &cur, eula_ok, h),
         Err(e) => Err(format!("cannot start the setup checks: {e}")),
@@ -238,7 +289,8 @@ fn run_headless(root: &std::path::Path, h: &setup::Headless) -> Result<setup::Pl
 
 /// True inside a container (`/.dockerenv` or `PELTY_DOCKER=1`).
 fn in_container() -> bool {
-    std::path::Path::new("/.dockerenv").exists() || std::env::var("PELTY_DOCKER").is_ok_and(|v| v == "1" || v == "true")
+    std::path::Path::new("/.dockerenv").exists()
+        || std::env::var("PELTY_DOCKER").is_ok_and(|v| v == "1" || v == "true")
 }
 
 fn save_answers(root: &std::path::Path, a: setup::Answers) -> Result<setup::Plan, ExitCode> {
@@ -246,7 +298,11 @@ fn save_answers(root: &std::path::Path, a: setup::Answers) -> Result<setup::Plan
         eprintln!("cannot save the configuration: {e}");
         return Err(ExitCode::FAILURE);
     }
-    println!("[PeltyCMS] saved {} and {}", root.join(bootstrap::ENV_FILE).display(), root.join(eula::FILE).display());
+    println!(
+        "[PeltyCMS] saved {} and {}",
+        root.join(bootstrap::ENV_FILE).display(),
+        root.join(eula::FILE).display()
+    );
     // The answers apply to this run even where the environment says otherwise.
     for (k, v) in &a.env {
         if std::env::var(k).is_ok_and(|old| !old.trim().is_empty() && old != *v) {
@@ -317,7 +373,10 @@ async fn update_cmd(cfg: &Config, rest: &[&str]) -> Result<(), BoxErr> {
     if pool.is_none() && !o.check {
         println!("[update] warning: database not reachable");
     }
-    update::run(pool.as_ref(), &cfg.database_url, &o, &mut |m| println!("[update] {m}")).await?;
+    update::run(pool.as_ref(), &cfg.database_url, &o, &mut |m| {
+        println!("[update] {m}")
+    })
+    .await?;
     Ok(())
 }
 
@@ -376,20 +435,40 @@ async fn setup_db(cfg: &Config) -> Result<pelty_database::Pool, BoxErr> {
 /// captcha provider and payment gateways.
 async fn apply_addons(state: &AppState, plan: &setup::Plan) {
     if let Some(c) = &plan.captcha {
-        match pelty_api::captcha::configure_from_setup(state, &c.provider, &c.site_key, &c.secret_key).await {
-            Ok(()) => println!("[PeltyCMS] setup: captcha enabled ({}) for guests on {}", c.label, pelty_api::captcha::SETUP_FORMS.join(", ")),
-            Err(e) => println!("[PeltyCMS] setup warning: captcha not enabled: {e} (Admin > Security > Captcha)"),
+        match pelty_api::captcha::configure_from_setup(
+            state,
+            &c.provider,
+            &c.site_key,
+            &c.secret_key,
+        )
+        .await
+        {
+            Ok(()) => println!(
+                "[PeltyCMS] setup: captcha enabled ({}) for guests on {}",
+                c.label,
+                pelty_api::captcha::SETUP_FORMS.join(", ")
+            ),
+            Err(e) => println!(
+                "[PeltyCMS] setup warning: captcha not enabled: {e} (Admin > Security > Captcha)"
+            ),
         }
     }
     for g in &plan.gateways {
         let sg = pelty_api::routes::gateways::SetupGateway {
             addon: g.addon.clone(),
-            secret_refs: g.secret_refs.iter().map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone()))).collect(),
+            secret_refs: g
+                .secret_refs
+                .iter()
+                .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
+                .collect(),
             test_mode: g.test_mode,
         };
         match pelty_api::routes::gateways::configure_from_setup(state, &sg).await {
             Ok(m) => println!("[PeltyCMS] setup: gateway {m}"),
-            Err(e) => println!("[PeltyCMS] setup warning: gateway {} not enabled: {e} (Admin > Gateways)", g.label),
+            Err(e) => println!(
+                "[PeltyCMS] setup warning: gateway {} not enabled: {e} (Admin > Gateways)",
+                g.label
+            ),
         }
     }
 }
@@ -410,20 +489,37 @@ async fn finish_setup(cfg: &Config, plan: Option<setup::Plan>) -> Result<bool, B
     }
     pool.close().await;
     let root = std::env::current_dir().unwrap_or_default();
-    println!("{}", setup::next_steps(&cfg.public_url, plan.as_ref().and_then(|p| p.admin.as_ref()).map(|a| a.email.as_str()), &root));
+    println!(
+        "{}",
+        setup::next_steps(
+            &cfg.public_url,
+            plan.as_ref()
+                .and_then(|p| p.admin.as_ref())
+                .map(|a| a.email.as_str()),
+            &root
+        )
+    );
     if !ask {
         return Ok(false);
     }
     // Only offer to start when nothing else listens on the port.
     if std::net::TcpListener::bind(cfg.bind).is_err() {
-        println!("{} is in use (a server already running?); start PeltyCMS later with `pelty-server`.", cfg.bind);
+        println!(
+            "{} is in use (a server already running?); start PeltyCMS later with `pelty-server`.",
+            cfg.bind
+        );
         return Ok(false);
     }
-    let start = tokio::task::block_in_place(|| setup::ask_start(&mut setup::term::Term::default())).unwrap_or(false);
+    let start = tokio::task::block_in_place(|| setup::ask_start(&mut setup::term::Term::default()))
+        .unwrap_or(false);
     Ok(start)
 }
 
-async fn serve(cfg: Config, console_flag: Option<bool>, plan: Option<setup::Plan>) -> Result<(), BoxErr> {
+async fn serve(
+    cfg: Config,
+    console_flag: Option<bool>,
+    plan: Option<setup::Plan>,
+) -> Result<(), BoxErr> {
     use std::io::IsTerminal;
     let started = std::time::Instant::now();
     let stdin_tty = std::io::stdin().is_terminal();
@@ -432,7 +528,14 @@ async fn serve(cfg: Config, console_flag: Option<bool>, plan: Option<setup::Plan
     if let Some(p) = &plan {
         setup::apply(&pool, p).await;
         let root = std::env::current_dir().unwrap_or_default();
-        println!("{}", setup::next_steps(&cfg.public_url, p.admin.as_ref().map(|a| a.email.as_str()), &root));
+        println!(
+            "{}",
+            setup::next_steps(
+                &cfg.public_url,
+                p.admin.as_ref().map(|a| a.email.as_str()),
+                &root
+            )
+        );
     }
     let i18n = I18n::load(&cfg.locales_dir, &cfg.default_locale)?;
     tracing::info!(languages = ?i18n.languages(), "locales loaded");
@@ -452,9 +555,16 @@ async fn serve(cfg: Config, console_flag: Option<bool>, plan: Option<setup::Plan
     tracing::info!(%bind, "PeltyCMS listening");
     let stop = Arc::new(tokio::sync::Notify::new());
     #[cfg(unix)]
-    let saved_term = stdin_tty.then(|| nix::sys::termios::tcgetattr(std::io::stdin()).ok()).flatten();
+    let saved_term = stdin_tty
+        .then(|| nix::sys::termios::tcgetattr(std::io::stdin()).ok())
+        .flatten();
     if console_on {
-        let ctx = console::Ctx { state, started, worker: worker.clone(), stop: stop.clone() };
+        let ctx = console::Ctx {
+            state,
+            started,
+            worker: worker.clone(),
+            stop: stop.clone(),
+        };
         console::start(Arc::new(ctx), stdin_tty);
     }
     axum::serve(
@@ -467,7 +577,8 @@ async fn serve(cfg: Config, console_flag: Option<bool>, plan: Option<setup::Plan
     // Stopped by a signal while the console prompt had the terminal in raw mode.
     #[cfg(unix)]
     if let Some(t) = saved_term {
-        let _ = nix::sys::termios::tcsetattr(std::io::stdin(), nix::sys::termios::SetArg::TCSANOW, &t);
+        let _ =
+            nix::sys::termios::tcsetattr(std::io::stdin(), nix::sys::termios::SetArg::TCSANOW, &t);
     }
     worker.abort();
     pool.close().await;
@@ -511,8 +622,22 @@ async fn cron_run(cfg: Config, rest: &[&str]) -> Result<(), BoxErr> {
         // One task now (`cron list` in the console shows the names); other
         // queued jobs run too, so its follow-up work is not left waiting.
         Some(t) => match pelty_api::routes::automation::run_task(&state, t).await {
-            Ok(id) => println!("[PeltyCMS] cron: queued {t}{}", id.map(|i| format!(" (job {i})")).unwrap_or_else(|| " (already queued this minute)".into())),
-            Err(pelty_core::AppError::NotFound) => return Err(format!("no task {t:?}; built-in: {}", pelty_api::routes::automation::TASKS.iter().map(|t| t.0).collect::<Vec<_>>().join(", ")).into()),
+            Ok(id) => println!(
+                "[PeltyCMS] cron: queued {t}{}",
+                id.map(|i| format!(" (job {i})"))
+                    .unwrap_or_else(|| " (already queued this minute)".into())
+            ),
+            Err(pelty_core::AppError::NotFound) => {
+                return Err(format!(
+                    "no task {t:?}; built-in: {}",
+                    pelty_api::routes::automation::TASKS
+                        .iter()
+                        .map(|t| t.0)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+                .into())
+            }
             Err(e) => return Err(e.to_string().into()),
         },
         None => {
@@ -527,7 +652,9 @@ async fn cron_run(cfg: Config, rest: &[&str]) -> Result<(), BoxErr> {
     let started = std::time::Instant::now();
     let mut total = 0;
     while started.elapsed() < std::time::Duration::from_secs(600) {
-        let ran = pelty_api::worker::run_once(&state, &worker, n).await.map_err(|e| e.to_string())?;
+        let ran = pelty_api::worker::run_once(&state, &worker, n)
+            .await
+            .map_err(|e| e.to_string())?;
         if ran == 0 {
             break;
         }

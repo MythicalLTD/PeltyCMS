@@ -13,14 +13,22 @@ impl pelty_addon_sdk::Addon for Points {
         let mut v = f.value.clone();
         match f.name.as_str() {
             "integration-hooks:greeting" => {
-                let looped = pelty_addon_sdk::apply_filter("integration-points:loop", &json!({ "n": 0 }), &json!({}));
+                let looped = pelty_addon_sdk::apply_filter(
+                    "integration-points:loop",
+                    &json!({ "n": 0 }),
+                    &json!({}),
+                );
                 let text = v["text"].as_str().unwrap_or("").to_string();
                 v["text"] = json!(format!("{text} world (loop n={})", looped["n"]));
             }
             // Would recurse forever if the host called the applying addon.
             "integration-points:loop" => {
                 let n = v["n"].as_i64().unwrap_or(0) + 1;
-                v = pelty_addon_sdk::apply_filter("integration-points:loop", &json!({ "n": n }), &json!({}));
+                v = pelty_addon_sdk::apply_filter(
+                    "integration-points:loop",
+                    &json!({ "n": n }),
+                    &json!({}),
+                );
             }
             _ => {}
         }

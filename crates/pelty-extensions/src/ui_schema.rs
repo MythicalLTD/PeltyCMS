@@ -11,18 +11,63 @@ use std::collections::BTreeMap;
 /// manifest load so a plugin never renders half-broken.
 pub const NODE_TYPES: &[&str] = &[
     // layout
-    "stack", "row", "grid", "card", "section", "separator", "tabs", "tab", "accordion", "accordion_item", "dialog",
+    "stack",
+    "row",
+    "grid",
+    "card",
+    "section",
+    "separator",
+    "tabs",
+    "tab",
+    "accordion",
+    "accordion_item",
+    "dialog",
     // content
-    "heading", "text", "badge", "alert", "stat", "kv", "code", "image", "avatar", "icon", "progress", "skeleton",
-    "empty", "tooltip", "money", "date", "link",
+    "heading",
+    "text",
+    "badge",
+    "alert",
+    "stat",
+    "kv",
+    "code",
+    "image",
+    "avatar",
+    "icon",
+    "progress",
+    "skeleton",
+    "empty",
+    "tooltip",
+    "money",
+    "date",
+    "link",
     // data
-    "table", "list", "each", "if", "chart",
+    "table",
+    "list",
+    "each",
+    "if",
+    "chart",
     // interaction
-    "button", "form", "input", "textarea", "select", "switch", "checkbox", "radio",
+    "button",
+    "form",
+    "input",
+    "textarea",
+    "select",
+    "switch",
+    "checkbox",
+    "radio",
     // overlays / navigation
-    "collapsible", "popover", "sheet", "dropdown", "breadcrumb", "pagination", "scroll_area",
+    "collapsible",
+    "popover",
+    "sheet",
+    "dropdown",
+    "breadcrumb",
+    "pagination",
+    "scroll_area",
     // typography
-    "label", "kbd", "blockquote", "list_item",
+    "label",
+    "kbd",
+    "blockquote",
+    "list_item",
     // addon iframe widget (needs the `ui.iframe` capability)
     "frame",
     // last resort
@@ -48,12 +93,22 @@ pub const UI_RENDER_SLOTS: &[(&str, &[&str])] = &[
 /// or `*` for every page. `replace:<section>` swaps out a named section,
 /// `before:<section>` / `after:<section>` render next to it.
 pub const SECTION_POSITIONS: &[&str] = &["replace", "before", "after"];
-pub const PAGE_POSITIONS: &[&str] = &["before", "after", "toolbar", "row-actions", "tabs", "detail-panel"];
+pub const PAGE_POSITIONS: &[&str] = &[
+    "before",
+    "after",
+    "toolbar",
+    "row-actions",
+    "tabs",
+    "detail-panel",
+];
 /// Layout slots: `<area>.layout.<position>` (`*` not needed: always global).
 pub const LAYOUT_POSITIONS: &[&str] = &["header", "sidebar", "footer", "banner"];
 
 fn key_ok(k: &str) -> bool {
-    !k.is_empty() && k.len() <= 64 && k.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+    !k.is_empty()
+        && k.len() <= 64
+        && k.bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 
 /// Accepts the named legacy slots and the generic page/layout slots.
@@ -62,14 +117,20 @@ pub fn valid_slot(name: &str) -> bool {
         return true;
     }
     let mut it = name.splitn(3, '.');
-    let (Some(area), Some(route), Some(pos)) = (it.next(), it.next(), it.next()) else { return false };
+    let (Some(area), Some(route), Some(pos)) = (it.next(), it.next(), it.next()) else {
+        return false;
+    };
     if area != "admin" && area != "client" {
         return false;
     }
     if route == "layout" {
         return LAYOUT_POSITIONS.contains(&pos);
     }
-    (route == "*" || key_ok(route)) && (PAGE_POSITIONS.contains(&pos) || pos.split_once(':').is_some_and(|(p, s)| SECTION_POSITIONS.contains(&p) && key_ok(s)))
+    (route == "*" || key_ok(route))
+        && (PAGE_POSITIONS.contains(&pos)
+            || pos
+                .split_once(':')
+                .is_some_and(|(p, s)| SECTION_POSITIONS.contains(&p) && key_ok(s)))
 }
 
 /// A sandboxed iframe served from the addon's own `assets/` folder.
@@ -86,10 +147,19 @@ pub struct Frame {
 
 /// Safe `assets/...` package path of a static file.
 pub fn asset_path_ok(p: &str) -> bool {
-    let Some(rest) = p.strip_prefix("assets/") else { return false };
+    let Some(rest) = p.strip_prefix("assets/") else {
+        return false;
+    };
     !rest.is_empty()
         && p.len() <= 200
-        && rest.split('/').all(|seg| !seg.is_empty() && seg != "." && seg != ".." && seg.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b)))
+        && rest.split('/').all(|seg| {
+            !seg.is_empty()
+                && seg != "."
+                && seg != ".."
+                && seg
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
+        })
 }
 
 fn validate_frame(rules: &UiRules, f: &Frame) -> Result<(), String> {
@@ -205,9 +275,14 @@ pub fn safe_templated_path(p: &str) -> bool {
     let mut s = p;
     while let Some(i) = s.find("{{") {
         rest.push_str(&s[..i]);
-        let Some(j) = s[i..].find("}}") else { return false };
+        let Some(j) = s[i..].find("}}") else {
+            return false;
+        };
         let inner = &s[i + 2..i + j];
-        if !inner.chars().all(|c| c.is_ascii_alphanumeric() || "._".contains(c)) {
+        if !inner
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "._".contains(c))
+        {
             return false;
         }
         rest.push('x');
@@ -216,8 +291,12 @@ pub fn safe_templated_path(p: &str) -> bool {
     rest.push_str(s);
     let (path, query) = rest.split_once('?').unwrap_or((&rest, ""));
     !path.split('/').any(|seg| seg == ".." || seg == ".")
-        && path.chars().all(|c| c.is_ascii_alphanumeric() || "-_/.".contains(c))
-        && query.chars().all(|c| c.is_ascii_alphanumeric() || "-_.=&%".contains(c))
+        && path
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-_/.".contains(c))
+        && query
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-_.=&%".contains(c))
 }
 
 fn api_path(p: &str) -> bool {
@@ -248,7 +327,10 @@ fn validate_action(rules: &UiRules, a: &Value) -> Result<(), String> {
     match o.get("type").and_then(Value::as_str) {
         Some("refresh") => Ok(()),
         Some("navigate") => {
-            let to = o.get("to").and_then(Value::as_str).ok_or("navigate needs to")?;
+            let to = o
+                .get("to")
+                .and_then(Value::as_str)
+                .ok_or("navigate needs to")?;
             if !safe_templated_path(to) || to.starts_with("/api/") {
                 return Err(format!("unsafe navigate target {to}"));
             }
@@ -259,10 +341,21 @@ fn validate_action(rules: &UiRules, a: &Value) -> Result<(), String> {
             if !["POST", "PUT", "PATCH", "DELETE"].contains(&m) {
                 return Err(format!("bad method {m}"));
             }
-            let p = o.get("path").and_then(Value::as_str).ok_or("request needs path")?;
-            let own = rules.own_api.map(String::from).unwrap_or_else(|| format!("/api/v1/plugins/{}/", rules.plugin_id));
-            if !api_path(p) || p.starts_with("/api/v1/auth/") || (!p.starts_with(&own) && !rules.allow_core_actions) {
-                return Err(format!("request path {p} not allowed (needs ui.core_actions outside {own})"));
+            let p = o
+                .get("path")
+                .and_then(Value::as_str)
+                .ok_or("request needs path")?;
+            let own = rules
+                .own_api
+                .map(String::from)
+                .unwrap_or_else(|| format!("/api/v1/plugins/{}/", rules.plugin_id));
+            if !api_path(p)
+                || p.starts_with("/api/v1/auth/")
+                || (!p.starts_with(&own) && !rules.allow_core_actions)
+            {
+                return Err(format!(
+                    "request path {p} not allowed (needs ui.core_actions outside {own})"
+                ));
             }
             if let Some(then) = o.get("then") {
                 validate_action(rules, then)?;
@@ -300,7 +393,10 @@ fn walk(rules: &UiRules, node: &Value, depth: usize, count: &mut usize) -> Resul
         return Err(format!("deeper than {MAX_DEPTH}"));
     }
     let o = node.as_object().ok_or("node must be an object")?;
-    let ty = o.get("type").and_then(Value::as_str).ok_or("node needs a type")?;
+    let ty = o
+        .get("type")
+        .and_then(Value::as_str)
+        .ok_or("node needs a type")?;
     if !NODE_TYPES.contains(&ty) {
         return Err(format!("unknown node type {ty}"));
     }
@@ -325,7 +421,13 @@ fn walk(rules: &UiRules, node: &Value, depth: usize, count: &mut usize) -> Resul
             "action" | "submit" => validate_action(rules, v)?,
             "href" | "src" => {
                 let s = v.as_str().ok_or(format!("{k} must be a string"))?;
-                let ok = if ty == "frame" { asset_path_ok(s) } else if ty == "embed" { s.starts_with("https://") && s.len() <= 500 && !s.contains(char::is_whitespace) } else { safe_templated_path(s) };
+                let ok = if ty == "frame" {
+                    asset_path_ok(s)
+                } else if ty == "embed" {
+                    s.starts_with("https://") && s.len() <= 500 && !s.contains(char::is_whitespace)
+                } else {
+                    safe_templated_path(s)
+                };
                 if !ok {
                     return Err(format!("unsafe {k} {s}"));
                 }
@@ -336,12 +438,22 @@ fn walk(rules: &UiRules, node: &Value, depth: usize, count: &mut usize) -> Resul
     if ty == "frame" {
         let src = o.get("src").and_then(Value::as_str).unwrap_or("");
         let height = o.get("height").and_then(Value::as_u64).map(|h| h as u32);
-        validate_frame(rules, &Frame { src: src.into(), height })?;
+        validate_frame(
+            rules,
+            &Frame {
+                src: src.into(),
+                height,
+            },
+        )?;
     }
     if ty == "embed" && !rules.allow_embed {
         return Err("embed nodes need the ui.embed capability".into());
     }
-    if ty == "tabs" && o.get("children").and_then(Value::as_array).is_some_and(|c| c.iter().any(|t| t["type"] != "tab")) {
+    if ty == "tabs"
+        && o.get("children")
+            .and_then(Value::as_array)
+            .is_some_and(|c| c.iter().any(|t| t["type"] != "tab"))
+    {
         return Err("tabs children must be tab nodes".into());
     }
     Ok(())
@@ -358,7 +470,10 @@ pub fn validate_page(rules: &UiRules, p: &UiPage) -> Result<(), String> {
     if !p.title.starts_with(&ns) {
         return Err(format!("page title {} must be in {ns}*", p.title));
     }
-    if p.icon.as_ref().is_some_and(|i| i.len() > 40 || !i.chars().all(|c| c.is_ascii_alphanumeric())) {
+    if p.icon
+        .as_ref()
+        .is_some_and(|i| i.len() > 40 || !i.chars().all(|c| c.is_ascii_alphanumeric()))
+    {
         return Err("bad icon name".into());
     }
     if p.hub.as_deref().is_some_and(|h| !key_ok(h)) {
@@ -382,15 +497,43 @@ mod tests {
     use serde_json::json;
 
     fn r(embed: bool, core: bool) -> UiRules<'static> {
-        UiRules { plugin_id: "demo", allow_embed: embed, allow_core_actions: core, own_api: None, allow_iframe: false }
+        UiRules {
+            plugin_id: "demo",
+            allow_embed: embed,
+            allow_core_actions: core,
+            own_api: None,
+            allow_iframe: false,
+        }
     }
 
     #[test]
     fn generic_slots() {
-        for ok in ["admin.dashboard", "admin.invoices.toolbar", "client.*.before", "admin.settings-tax.replace:summary", "admin.layout.banner", "client.layout.sidebar", "admin.services.row-actions", "admin.customers.tabs", "admin.orders.detail-panel", "client.invoices.before:summary", "admin.dashboard.after:stats"] {
+        for ok in [
+            "admin.dashboard",
+            "admin.invoices.toolbar",
+            "client.*.before",
+            "admin.settings-tax.replace:summary",
+            "admin.layout.banner",
+            "client.layout.sidebar",
+            "admin.services.row-actions",
+            "admin.customers.tabs",
+            "admin.orders.detail-panel",
+            "client.invoices.before:summary",
+            "admin.dashboard.after:stats",
+        ] {
             assert!(valid_slot(ok), "{ok}");
         }
-        for bad in ["root.x.before", "admin.layout.before", "admin.Invoices.after", "admin.x.sideways", "admin.x.replace:", "admin.x", "admin..after", "admin.x.wrap:y", "admin.x.before:"] {
+        for bad in [
+            "root.x.before",
+            "admin.layout.before",
+            "admin.Invoices.after",
+            "admin.x.sideways",
+            "admin.x.replace:",
+            "admin.x",
+            "admin..after",
+            "admin.x.wrap:y",
+            "admin.x.before:",
+        ] {
             assert!(!valid_slot(bad), "{bad}");
         }
     }
@@ -398,20 +541,45 @@ mod tests {
     #[test]
     fn frames_need_capability_and_assets() {
         let mut rules = r(false, false);
-        let page = |frame: Value| -> UiPage { serde_json::from_value(json!({"id": "page", "area": "admin", "title": "plugin.demo.t", "frame": frame})).unwrap() };
+        let page = |frame: Value| -> UiPage {
+            serde_json::from_value(
+                json!({"id": "page", "area": "admin", "title": "plugin.demo.t", "frame": frame}),
+            )
+            .unwrap()
+        };
         assert!(validate_page(&rules, &page(json!({"src": "assets/ui.html"}))).is_err());
         rules.allow_iframe = true;
-        validate_page(&rules, &page(json!({"src": "assets/ui/index.html", "height": 300}))).unwrap();
-        for bad in [json!({"src": "addon.wasm"}), json!({"src": "assets/../addon.json"}), json!({"src": "assets/x.js"}), json!({"src": "https://x/y.html"})] {
+        validate_page(
+            &rules,
+            &page(json!({"src": "assets/ui/index.html", "height": 300})),
+        )
+        .unwrap();
+        for bad in [
+            json!({"src": "addon.wasm"}),
+            json!({"src": "assets/../addon.json"}),
+            json!({"src": "assets/x.js"}),
+            json!({"src": "https://x/y.html"}),
+        ] {
             assert!(validate_page(&rules, &page(bad.clone())).is_err(), "{bad}");
         }
         // body and frame are exclusive; one is required.
         let both: UiPage = serde_json::from_value(json!({"id": "page", "area": "admin", "title": "plugin.demo.t", "body": {"type": "text"}, "frame": {"src": "assets/a.html"}})).unwrap();
         assert!(validate_page(&rules, &both).is_err());
-        let none: UiPage = serde_json::from_value(json!({"id": "page", "area": "admin", "title": "plugin.demo.t"})).unwrap();
+        let none: UiPage = serde_json::from_value(
+            json!({"id": "page", "area": "admin", "title": "plugin.demo.t"}),
+        )
+        .unwrap();
         assert!(validate_page(&rules, &none).is_err());
-        validate_node(&rules, &json!({"type": "card", "children": [{"type": "frame", "src": "assets/w.html"}]})).unwrap();
-        assert!(validate_node(&r(false, false), &json!({"type": "frame", "src": "assets/w.html"})).is_err());
+        validate_node(
+            &rules,
+            &json!({"type": "card", "children": [{"type": "frame", "src": "assets/w.html"}]}),
+        )
+        .unwrap();
+        assert!(validate_node(
+            &r(false, false),
+            &json!({"type": "frame", "src": "assets/w.html"})
+        )
+        .is_err());
     }
 
     #[test]
@@ -445,9 +613,17 @@ mod tests {
             assert!(validate_node(&r(false, false), &b).is_err(), "{b}");
         }
         // Capabilities unlock embed and core actions.
-        validate_node(&r(true, false), &json!({"type": "embed", "src": "https://x.example/p"})).unwrap();
+        validate_node(
+            &r(true, false),
+            &json!({"type": "embed", "src": "https://x.example/p"}),
+        )
+        .unwrap();
         validate_node(&r(false, true), &json!({"type": "button", "action": {"type": "request", "path": "/api/v1/admin/services/{{ctx.service_id}}/module"}})).unwrap();
-        assert!(validate_node(&r(true, true), &json!({"type": "embed", "src": "http://x.example"})).is_err());
+        assert!(validate_node(
+            &r(true, true),
+            &json!({"type": "embed", "src": "http://x.example"})
+        )
+        .is_err());
     }
 
     #[test]
@@ -456,15 +632,22 @@ mod tests {
         for _ in 0..40 {
             n = json!({"type": "stack", "children": [n]});
         }
-        assert!(validate_node(&r(false, false), &n).unwrap_err().contains("deeper"));
-        let wide = json!({"type": "stack", "children": vec![json!({"type": "text"}); MAX_NODES + 1]});
+        assert!(validate_node(&r(false, false), &n)
+            .unwrap_err()
+            .contains("deeper"));
+        let wide =
+            json!({"type": "stack", "children": vec![json!({"type": "text"}); MAX_NODES + 1]});
         assert!(validate_node(&r(false, false), &wide).is_err());
     }
 
     #[test]
     fn templated_paths() {
-        assert!(safe_templated_path("/api/v1/admin/services/{{ctx.service_id}}/provisioning"));
-        assert!(safe_templated_path("/api/v1/plugins/demo/list?page=1&per_page=20"));
+        assert!(safe_templated_path(
+            "/api/v1/admin/services/{{ctx.service_id}}/provisioning"
+        ));
+        assert!(safe_templated_path(
+            "/api/v1/plugins/demo/list?page=1&per_page=20"
+        ));
         assert!(!safe_templated_path("/api/v1/x/{{ctx.a b}}"));
         assert!(!safe_templated_path("//evil.example"));
         assert!(!safe_templated_path("/x/{{unclosed"));

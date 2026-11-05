@@ -205,6 +205,13 @@ pub async fn admin_emails(pool: &PgPool) -> AppResult<Vec<String>> {
 }
 
 /// When the password was last set (password expiry policy).
-pub async fn password_changed_at(pool: &PgPool, id: Uuid) -> AppResult<Option<time::OffsetDateTime>> {
-    sqlx::query_scalar("SELECT password_changed_at FROM users WHERE id = $1").bind(id).fetch_optional(pool).await.map_err(db_err)
+pub async fn password_changed_at(
+    pool: &PgPool,
+    id: Uuid,
+) -> AppResult<Option<time::OffsetDateTime>> {
+    sqlx::query_scalar("SELECT password_changed_at FROM users WHERE id = $1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }

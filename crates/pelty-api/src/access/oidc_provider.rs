@@ -49,9 +49,15 @@ pub fn root_router() -> Router<AppState> {
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/oauth/authorize", get(authorize_info).post(authorize_decide))
+        .route(
+            "/oauth/authorize",
+            get(authorize_info).post(authorize_decide),
+        )
         .route("/admin/oauth-clients", get(admin_list).post(admin_create))
-        .route("/admin/oauth-clients/{id}", patch(admin_update).delete(admin_delete))
+        .route(
+            "/admin/oauth-clients/{id}",
+            patch(admin_update).delete(admin_delete),
+        )
         .route("/admin/oauth-clients/{id}/secret", post(admin_rotate))
         .route("/account/oauth-apps", get(my_apps))
         .route("/account/oauth-apps/{id}", axum::routing::delete(my_revoke))
@@ -85,8 +91,9 @@ async fn signing_key(s: &AppState) -> ApiResult<SigningKey> {
         None => {
             let doc = EcdsaKeyPair::generate_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, &rng)
                 .map_err(|_| AppError::Internal("oidc keygen".into()))?;
-            let pair = EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, doc.as_ref(), &rng)
-                .map_err(|_| AppError::Internal("oidc key".into()))?;
+            let pair =
+                EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, doc.as_ref(), &rng)
+                    .map_err(|_| AppError::Internal("oidc key".into()))?;
             let (x, y) = xy(&pair);
             let kid = sha(&format!("{x}.{y}"))[..16].to_string();
             let stored = match &s.secret_box {
@@ -110,7 +117,10 @@ async fn signing_key(s: &AppState) -> ApiResult<SigningKey> {
 /// Uncompressed P-256 point `04 || X || Y` → base64url X, Y.
 fn xy(pair: &EcdsaKeyPair) -> (String, String) {
     let p = pair.public_key().as_ref();
-    (URL_SAFE_NO_PAD.encode(&p[1..33]), URL_SAFE_NO_PAD.encode(&p[33..65]))
+    (
+        URL_SAFE_NO_PAD.encode(&p[1..33]),
+        URL_SAFE_NO_PAD.encode(&p[33..65]),
+    )
 }
 
 fn jwt(key: &SigningKey, claims: &Value) -> ApiResult<String> {
@@ -210,9 +220,16 @@ async fn validate(s: &AppState, p: &AuthorizeParams) -> ApiResult<Result<Validat
     }
     let st = p.state.as_deref();
     if p.response_type.as_deref().unwrap_or("code") != "code" {
-        return Ok(Err(redirect_error(&p.redirect_uri, "unsupported_response_type", st)));
+        return Ok(Err(redirect_error(
+            &p.redirect_uri,
+            "unsupported_response_type",
+            st,
+        )));
     }
-    let chal_ok = p.code_challenge.as_deref().is_some_and(|c| (43..=128).contains(&c.len()));
+    let chal_ok = p
+        .code_challenge
+        .as_deref()
+        .is_some_and(|c| (43..=128).contains(&c.len()));
     if !chal_ok || p.code_challenge_method.as_deref() != Some("S256") {
         return Ok(Err(redirect_error(&p.redirect_uri, "invalid_request", st)));
     }
@@ -238,16 +255,24 @@ async fn has_consent(s: &AppState, user: Uuid, client: Uuid, scopes: &[String]) 
 
 /// The consent screen asks this first. When the user already consented (or
 /// the client is trusted) the SPA posts `approve` right away.
-pub async fn authorize_info(State(s): State<AppState>, u: CurrentUser, Query(p): Query<AuthorizeParams>) -> ApiResult<Json<Value>> {
+pub async fn authorize_info(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Query(p): Query<AuthorizeParams>,
+) -> ApiResult<Json<Value>> {
     let v = match validate(&s, &p).await? {
         Ok(v) => v,
         Err(redirect) => return Ok(Json(json!({ "redirect_to": redirect }))),
     };
     let consented = v.client.trusted || has_consent(&s, u.user_id, v.client.id, &v.scopes).await?;
     if p.prompt.as_deref() == Some("none") && !consented {
-        return Ok(Json(json!({ "redirect_to": redirect_error(&p.redirect_uri, "consent_required", p.state.as_deref()) })));
+        return Ok(Json(
+            json!({ "redirect_to": redirect_error(&p.redirect_uri, "consent_required", p.state.as_deref()) }),
+        ));
     }
-    let me = users::find(&s.pool, u.user_id).await?.ok_or(AppError::Unauthenticated)?;
+    let me = users::find(&s.pool, u.user_id)
+        .await?
+        .ok_or(AppError::Unauthenticated)?;
     Ok(Json(json!({
         "client": { "name": v.client.name, "client_id": v.client.client_id, "trusted": v.client.trusted },
         "redirect_host": p.redirect_uri.split('/').nth(2).unwrap_or(""),
@@ -264,7 +289,11 @@ pub struct Decide {
     pub approve: bool,
 }
 
-pub async fn authorize_decide(State(s): State<AppState>, u: CurrentUser, Json(b): Json<Decide>) -> ApiResult<Json<Value>> {
+pub async fn authorize_decide(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Json(b): Json<Decide>,
+) -> ApiResult<Json<Value>> {
     if u.api_key {
         return Err(AppError::Forbidden.into());
     }
@@ -274,34 +303,73 @@ pub async fn authorize_decide(State(s): State<AppState>, u: CurrentUser, Json(b)
         Err(redirect) => return Ok(Json(json!({ "redirect_to": redirect }))),
     };
     if !b.approve {
-        audit::record(&s.pool, Some(u.user_id), "oauth.consent_denied", Some(&v.client.client_id), u.ip.as_deref(), json!({})).await?;
-        return Ok(Json(json!({ "redirect_to": redirect_error(&p.redirect_uri, "access_denied", p.state.as_deref()) })));
+        audit::record(
+            &s.pool,
+            Some(u.user_id),
+            "oauth.consent_denied",
+            Some(&v.client.client_id),
+            u.ip.as_deref(),
+            json!({}),
+        )
+        .await?;
+        return Ok(Json(
+            json!({ "redirect_to": redirect_error(&p.redirect_uri, "access_denied", p.state.as_deref()) }),
+        ));
     }
     if !v.client.trusted {
         oauth_provider::grant_consent(&s.pool, u.user_id, v.client.id, &v.scopes).await?;
     }
     let code = pelty_auth::token::generate();
     let scope = v.scopes.join(" ");
-    oauth_provider::insert_code(&s.pool, &oauth_provider::NewCode {
-        code_hash: &sha(&code), client: v.client.id, user: u.user_id, redirect_uri: &p.redirect_uri, scope: &scope,
-        nonce: p.nonce.as_deref(), code_challenge: p.code_challenge.as_deref(), expires_at: now() + Duration::seconds(CODE_TTL),
-    }).await?;
-    audit::record(&s.pool, Some(u.user_id), "oauth.authorized", Some(&v.client.client_id), u.ip.as_deref(), json!({ "scopes": v.scopes })).await?;
+    oauth_provider::insert_code(
+        &s.pool,
+        &oauth_provider::NewCode {
+            code_hash: &sha(&code),
+            client: v.client.id,
+            user: u.user_id,
+            redirect_uri: &p.redirect_uri,
+            scope: &scope,
+            nonce: p.nonce.as_deref(),
+            code_challenge: p.code_challenge.as_deref(),
+            expires_at: now() + Duration::seconds(CODE_TTL),
+        },
+    )
+    .await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "oauth.authorized",
+        Some(&v.client.client_id),
+        u.ip.as_deref(),
+        json!({ "scopes": v.scopes }),
+    )
+    .await?;
     let mut q = form_urlencoded::Serializer::new(String::new());
     q.append_pair("code", &code);
     if let Some(st) = &p.state {
         q.append_pair("state", st);
     }
     q.append_pair("iss", &issuer(&s));
-    let sep = if p.redirect_uri.contains('?') { '&' } else { '?' };
-    Ok(Json(json!({ "redirect_to": format!("{}{sep}{}", p.redirect_uri, q.finish()) })))
+    let sep = if p.redirect_uri.contains('?') {
+        '&'
+    } else {
+        '?'
+    };
+    Ok(Json(
+        json!({ "redirect_to": format!("{}{sep}{}", p.redirect_uri, q.finish()) }),
+    ))
 }
 
 // token
 
 /// RFC 6749 §5.2 error body; never cached.
 fn oauth_err(status: StatusCode, code: &str) -> Response {
-    (status, [(header::CACHE_CONTROL, "no-store")], Json(json!({ "error": code }))).into_response()
+    (
+        status,
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(json!({ "error": code })),
+    )
+        .into_response()
 }
 
 #[derive(Debug, Deserialize)]
@@ -318,7 +386,11 @@ pub struct TokenForm {
 
 /// Client authentication: HTTP Basic or form fields; public clients send
 /// only `client_id` (they are bound by PKCE instead).
-async fn authenticate_client(s: &AppState, headers: &HeaderMap, f: &TokenForm) -> Result<ClientRow, (StatusCode, &'static str)> {
+async fn authenticate_client(
+    s: &AppState,
+    headers: &HeaderMap,
+    f: &TokenForm,
+) -> Result<ClientRow, (StatusCode, &'static str)> {
     let basic = headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -327,7 +399,11 @@ async fn authenticate_client(s: &AppState, headers: &HeaderMap, f: &TokenForm) -
         .and_then(|b| String::from_utf8(b).ok())
         .and_then(|s| {
             let (a, b) = s.split_once(':')?;
-            let dec = |x: &str| form_urlencoded::parse(format!("v={x}").as_bytes()).next().map(|(_, v)| v.into_owned());
+            let dec = |x: &str| {
+                form_urlencoded::parse(format!("v={x}").as_bytes())
+                    .next()
+                    .map(|(_, v)| v.into_owned())
+            };
             Some((dec(a)?, dec(b)?))
         });
     let (cid, secret) = match basic {
@@ -349,22 +425,52 @@ async fn authenticate_client(s: &AppState, headers: &HeaderMap, f: &TokenForm) -
     }
 }
 
-async fn issue(s: &AppState, client: &ClientRow, user: Uuid, scope: &str, nonce: Option<String>, code_hash: Option<&str>, with_id_token: bool) -> ApiResult<Value> {
+async fn issue(
+    s: &AppState,
+    client: &ClientRow,
+    user: Uuid,
+    scope: &str,
+    nonce: Option<String>,
+    code_hash: Option<&str>,
+    with_id_token: bool,
+) -> ApiResult<Value> {
     let access = format!("{ACCESS_PREFIX}{}", pelty_auth::token::generate());
-    oauth_provider::insert_token(&s.pool, &oauth_provider::NewToken {
-        token_hash: &sha(&access), kind: "access", client: client.id, user, scope, code_hash, expires_at: now() + Duration::seconds(ACCESS_TTL),
-    }).await?;
+    oauth_provider::insert_token(
+        &s.pool,
+        &oauth_provider::NewToken {
+            token_hash: &sha(&access),
+            kind: "access",
+            client: client.id,
+            user,
+            scope,
+            code_hash,
+            expires_at: now() + Duration::seconds(ACCESS_TTL),
+        },
+    )
+    .await?;
     let mut out = json!({ "access_token": access, "token_type": "Bearer", "expires_in": ACCESS_TTL, "scope": scope });
     let scopes: Vec<&str> = scope.split_whitespace().collect();
     if scopes.contains(&"offline_access") {
         let refresh = format!("{REFRESH_PREFIX}{}", pelty_auth::token::generate());
-        oauth_provider::insert_token(&s.pool, &oauth_provider::NewToken {
-            token_hash: &sha(&refresh), kind: "refresh", client: client.id, user, scope, code_hash, expires_at: now() + Duration::seconds(REFRESH_TTL),
-        }).await?;
+        oauth_provider::insert_token(
+            &s.pool,
+            &oauth_provider::NewToken {
+                token_hash: &sha(&refresh),
+                kind: "refresh",
+                client: client.id,
+                user,
+                scope,
+                code_hash,
+                expires_at: now() + Duration::seconds(REFRESH_TTL),
+            },
+        )
+        .await?;
         out["refresh_token"] = json!(refresh);
     }
     if with_id_token && scopes.contains(&"openid") {
-        let me = users::find(&s.pool, user).await?.ok_or(AppError::NotFound)?;
+        let me = users::find(&s.pool, user)
+            .await?
+            .ok_or(AppError::NotFound)?;
         let t = now().unix_timestamp();
         let mut c = json!({ "iss": issuer(s), "sub": user.to_string(), "aud": client.client_id, "iat": t, "exp": t + ACCESS_TTL, "auth_time": t });
         if let Some(n) = nonce {
@@ -393,10 +499,21 @@ fn claims(c: &mut Value, u: &users::User, scopes: &[&str]) {
 }
 
 fn ok_json(v: Value) -> Response {
-    ([(header::CACHE_CONTROL, "no-store"), (header::PRAGMA, "no-cache")], Json(v)).into_response()
+    (
+        [
+            (header::CACHE_CONTROL, "no-store"),
+            (header::PRAGMA, "no-cache"),
+        ],
+        Json(v),
+    )
+        .into_response()
 }
 
-pub async fn token(State(s): State<AppState>, headers: HeaderMap, Form(f): Form<TokenForm>) -> Response {
+pub async fn token(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Form(f): Form<TokenForm>,
+) -> Response {
     match token_inner(&s, &headers, f).await {
         Ok(r) => r,
         Err(e) => {
@@ -413,24 +530,45 @@ async fn token_inner(s: &AppState, headers: &HeaderMap, f: TokenForm) -> ApiResu
     };
     match f.grant_type.as_str() {
         "authorization_code" => {
-            let (Some(code), Some(redirect), Some(verifier)) = (&f.code, &f.redirect_uri, &f.code_verifier) else {
+            let (Some(code), Some(redirect), Some(verifier)) =
+                (&f.code, &f.redirect_uri, &f.code_verifier)
+            else {
                 return Ok(oauth_err(StatusCode::BAD_REQUEST, "invalid_request"));
             };
             let ch = sha(code);
             let c = match oauth_provider::redeem_code(&s.pool, &ch).await? {
-                oauth_provider::Redeem::Unknown => return Ok(oauth_err(StatusCode::BAD_REQUEST, "invalid_grant")),
+                oauth_provider::Redeem::Unknown => {
+                    return Ok(oauth_err(StatusCode::BAD_REQUEST, "invalid_grant"))
+                }
                 oauth_provider::Redeem::Replayed { user } => {
-                    audit::record(&s.pool, Some(user), "oauth.code_replay", Some(&client.client_id), None, json!({})).await?;
+                    audit::record(
+                        &s.pool,
+                        Some(user),
+                        "oauth.code_replay",
+                        Some(&client.client_id),
+                        None,
+                        json!({}),
+                    )
+                    .await?;
                     return Ok(oauth_err(StatusCode::BAD_REQUEST, "invalid_grant"));
                 }
                 oauth_provider::Redeem::Fresh(c) => c,
             };
             let pkce = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
-            let pkce_ok = c.code_challenge.as_deref().is_some_and(|c| pelty_auth::token::constant_eq(c, &pkce));
-            if c.client_id != client.id || &c.redirect_uri != redirect || c.expires_at < now() || !pkce_ok {
+            let pkce_ok = c
+                .code_challenge
+                .as_deref()
+                .is_some_and(|c| pelty_auth::token::constant_eq(c, &pkce));
+            if c.client_id != client.id
+                || &c.redirect_uri != redirect
+                || c.expires_at < now()
+                || !pkce_ok
+            {
                 return Ok(oauth_err(StatusCode::BAD_REQUEST, "invalid_grant"));
             }
-            Ok(ok_json(issue(s, &client, c.user_id, &c.scope, c.nonce, Some(&ch), true).await?))
+            Ok(ok_json(
+                issue(s, &client, c.user_id, &c.scope, c.nonce, Some(&ch), true).await?,
+            ))
         }
         "refresh_token" => {
             let Some(rt) = &f.refresh_token else {
@@ -451,7 +589,9 @@ async fn token_inner(s: &AppState, headers: &HeaderMap, f: TokenForm) -> ApiResu
                 }
                 None => scope,
             };
-            Ok(ok_json(issue(s, &client, uid, &scope, None, code_hash.as_deref(), true).await?))
+            Ok(ok_json(
+                issue(s, &client, uid, &scope, None, code_hash.as_deref(), true).await?,
+            ))
         }
         _ => Ok(oauth_err(StatusCode::BAD_REQUEST, "unsupported_grant_type")),
     }
@@ -467,16 +607,29 @@ pub async fn userinfo(State(s): State<AppState>, headers: HeaderMap) -> ApiResul
         .map(str::trim)
         .filter(|t| t.starts_with(ACCESS_PREFIX));
     let unauth = || {
-        (StatusCode::UNAUTHORIZED, [(header::WWW_AUTHENTICATE, "Bearer error=\"invalid_token\"")], Json(json!({ "error": "invalid_token" }))).into_response()
+        (
+            StatusCode::UNAUTHORIZED,
+            [(header::WWW_AUTHENTICATE, "Bearer error=\"invalid_token\"")],
+            Json(json!({ "error": "invalid_token" })),
+        )
+            .into_response()
     };
     let Some(t) = bearer else { return Ok(unauth()) };
     let row = oauth_provider::access_token(&s.pool, &sha(t)).await?;
-    let Some((uid, scope)) = row else { return Ok(unauth()) };
+    let Some((uid, scope)) = row else {
+        return Ok(unauth());
+    };
     let scopes: Vec<&str> = scope.split_whitespace().collect();
     if !scopes.contains(&"openid") {
-        return Ok((StatusCode::FORBIDDEN, Json(json!({ "error": "insufficient_scope" }))).into_response());
+        return Ok((
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "insufficient_scope" })),
+        )
+            .into_response());
     }
-    let Some(me) = users::find(&s.pool, uid).await?.filter(|u| u.is_active) else { return Ok(unauth()) };
+    let Some(me) = users::find(&s.pool, uid).await?.filter(|u| u.is_active) else {
+        return Ok(unauth());
+    };
     let mut c = json!({ "sub": uid.to_string() });
     claims(&mut c, &me, &scopes);
     Ok(ok_json(c))
@@ -490,8 +643,21 @@ pub struct RevokeForm {
 }
 
 /// RFC 7009: always 200, even for unknown tokens.
-pub async fn revoke(State(s): State<AppState>, headers: HeaderMap, Form(f): Form<RevokeForm>) -> Response {
-    let tf = TokenForm { grant_type: String::new(), code: None, redirect_uri: None, code_verifier: None, refresh_token: None, client_id: f.client_id, client_secret: f.client_secret, scope: None };
+pub async fn revoke(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Form(f): Form<RevokeForm>,
+) -> Response {
+    let tf = TokenForm {
+        grant_type: String::new(),
+        code: None,
+        redirect_uri: None,
+        code_verifier: None,
+        refresh_token: None,
+        client_id: f.client_id,
+        client_secret: f.client_secret,
+        scope: None,
+    };
     let client = match authenticate_client(&s, &headers, &tf).await {
         Ok(c) => c,
         Err((st, e)) => return oauth_err(st, e),
@@ -521,10 +687,21 @@ fn check_uris(uris: &[String]) -> ApiResult<()> {
     }
     for u in uris {
         let https = u.starts_with("https://");
-        let loopback = u.starts_with("http://localhost") || u.starts_with("http://127.0.0.1") || u.starts_with("http://[::1]");
+        let loopback = u.starts_with("http://localhost")
+            || u.starts_with("http://127.0.0.1")
+            || u.starts_with("http://[::1]");
         // custom schemes for native apps (RFC 8252 §7.1): `com.example.app:/cb`
-        let native = u.split_once(':').is_some_and(|(sch, _)| sch.contains('.') && sch.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-'));
-        if u.len() > 500 || u.contains('#') || u.contains(char::is_whitespace) || !(https || loopback || native) {
+        let native = u.split_once(':').is_some_and(|(sch, _)| {
+            sch.contains('.')
+                && sch
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+        });
+        if u.len() > 500
+            || u.contains('#')
+            || u.contains(char::is_whitespace)
+            || !(https || loopback || native)
+        {
             return Err(AppError::Validation("error.oauth_redirect_invalid").into());
         }
     }
@@ -542,30 +719,75 @@ fn client_json(c: &ClientRow) -> Value {
     json!({ "id": c.id, "client_id": c.client_id, "name": c.name, "redirect_uris": c.redirect_uris, "scopes": c.scopes, "confidential": c.secret_hash.is_some(), "trusted": c.trusted, "enabled": c.enabled })
 }
 
-pub async fn admin_list(State(s): State<AppState>, _p: RequirePermission<SettingsManage>) -> ApiResult<Json<Value>> {
+pub async fn admin_list(
+    State(s): State<AppState>,
+    _p: RequirePermission<SettingsManage>,
+) -> ApiResult<Json<Value>> {
     let rows = oauth_provider::list_clients(&s.pool).await?;
-    Ok(Json(json!({ "clients": rows.iter().map(client_json).collect::<Vec<_>>(), "scopes": SCOPES, "issuer": issuer(&s) })))
+    Ok(Json(
+        json!({ "clients": rows.iter().map(client_json).collect::<Vec<_>>(), "scopes": SCOPES, "issuer": issuer(&s) }),
+    ))
 }
 
-pub async fn admin_create(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<SettingsManage>, Json(b): Json<ClientBody>) -> ApiResult<(StatusCode, Json<Value>)> {
-    let name = b.name.as_deref().map(str::trim).filter(|n| !n.is_empty() && n.len() <= 120).ok_or(AppError::Validation("error.name_required"))?;
+pub async fn admin_create(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<SettingsManage>,
+    Json(b): Json<ClientBody>,
+) -> ApiResult<(StatusCode, Json<Value>)> {
+    let name = b
+        .name
+        .as_deref()
+        .map(str::trim)
+        .filter(|n| !n.is_empty() && n.len() <= 120)
+        .ok_or(AppError::Validation("error.name_required"))?;
     let uris = b.redirect_uris.unwrap_or_default();
     check_uris(&uris)?;
-    let scopes = b.scopes.unwrap_or_else(|| vec!["openid".into(), "profile".into(), "email".into()]);
+    let scopes = b
+        .scopes
+        .unwrap_or_else(|| vec!["openid".into(), "profile".into(), "email".into()]);
     check_scopes(&scopes)?;
     let id = Uuid::new_v4();
     let client_id = format!("pc_{}", &pelty_auth::token::generate()[..24]);
-    let secret = b.confidential.unwrap_or(true).then(|| format!("pcs_{}", pelty_auth::token::generate()));
+    let secret = b
+        .confidential
+        .unwrap_or(true)
+        .then(|| format!("pcs_{}", pelty_auth::token::generate()));
     let secret_hash = secret.as_deref().map(sha);
-    oauth_provider::create_client(&s.pool, &oauth_provider::NewClient {
-        id, client_id: &client_id, secret_hash: secret_hash.as_deref(), name, redirect_uris: &uris, scopes: &scopes, trusted: b.trusted.unwrap_or(false),
-    }).await?;
-    audit::record(&s.pool, Some(u.user_id), "oauth.client_created", Some(&client_id), u.ip.as_deref(), json!({ "name": name })).await?;
+    oauth_provider::create_client(
+        &s.pool,
+        &oauth_provider::NewClient {
+            id,
+            client_id: &client_id,
+            secret_hash: secret_hash.as_deref(),
+            name,
+            redirect_uris: &uris,
+            scopes: &scopes,
+            trusted: b.trusted.unwrap_or(false),
+        },
+    )
+    .await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "oauth.client_created",
+        Some(&client_id),
+        u.ip.as_deref(),
+        json!({ "name": name }),
+    )
+    .await?;
     // The secret is shown exactly once.
-    Ok((StatusCode::CREATED, Json(json!({ "id": id, "client_id": client_id, "client_secret": secret }))))
+    Ok((
+        StatusCode::CREATED,
+        Json(json!({ "id": id, "client_id": client_id, "client_secret": secret })),
+    ))
 }
 
-pub async fn admin_update(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<SettingsManage>, Path(id): Path<Uuid>, Json(b): Json<ClientBody>) -> ApiResult<Json<Value>> {
+pub async fn admin_update(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<SettingsManage>,
+    Path(id): Path<Uuid>,
+    Json(b): Json<ClientBody>,
+) -> ApiResult<Json<Value>> {
     if let Some(x) = &b.redirect_uris {
         check_uris(x)?;
     }
@@ -577,26 +799,62 @@ pub async fn admin_update(State(s): State<AppState>, RequirePermission(u, _): Re
         return Err(AppError::Validation("error.name_required").into());
     }
     let patch = oauth_provider::ClientPatch {
-        name, redirect_uris: b.redirect_uris.as_deref(), scopes: b.scopes.as_deref(), trusted: b.trusted, enabled: b.enabled,
+        name,
+        redirect_uris: b.redirect_uris.as_deref(),
+        scopes: b.scopes.as_deref(),
+        trusted: b.trusted,
+        enabled: b.enabled,
     };
     let row = oauth_provider::update_client(&s.pool, id, &patch).await?;
     let c = row.ok_or(AppError::NotFound)?;
-    audit::record(&s.pool, Some(u.user_id), "oauth.client_updated", Some(&c.client_id), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "oauth.client_updated",
+        Some(&c.client_id),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(Json(client_json(&c)))
 }
 
-pub async fn admin_delete(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<SettingsManage>, Path(id): Path<Uuid>) -> ApiResult<StatusCode> {
+pub async fn admin_delete(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<SettingsManage>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
     let cid = oauth_provider::delete_client(&s.pool, id).await?;
     let cid = cid.ok_or(AppError::NotFound)?;
-    audit::record(&s.pool, Some(u.user_id), "oauth.client_deleted", Some(&cid), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "oauth.client_deleted",
+        Some(&cid),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
-pub async fn admin_rotate(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<SettingsManage>, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
+pub async fn admin_rotate(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<SettingsManage>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
     let secret = format!("pcs_{}", pelty_auth::token::generate());
     let cid = oauth_provider::set_secret(&s.pool, id, &sha(&secret)).await?;
     let cid = cid.ok_or(AppError::NotFound)?;
-    audit::record(&s.pool, Some(u.user_id), "oauth.client_secret_rotated", Some(&cid), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "oauth.client_secret_rotated",
+        Some(&cid),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(Json(json!({ "client_id": cid, "client_secret": secret })))
 }
 
@@ -611,11 +869,23 @@ pub async fn my_apps(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Jso
     Ok(Json(json!({ "apps": apps })))
 }
 
-pub async fn my_revoke(State(s): State<AppState>, u: CurrentUser, Path(id): Path<Uuid>) -> ApiResult<StatusCode> {
+pub async fn my_revoke(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
     if !oauth_provider::revoke_consent(&s.pool, u.user_id, id).await? {
         return Err(AppError::NotFound.into());
     }
-    audit::record(&s.pool, Some(u.user_id), "oauth.consent_revoked", Some(&id.to_string()), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "oauth.consent_revoked",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -628,7 +898,10 @@ mod tests {
         assert!(check_uris(&["https://app.example.com/cb".into()]).is_ok());
         assert!(check_uris(&["http://127.0.0.1:8765/cb".into()]).is_ok());
         assert!(check_uris(&["com.example.app:/cb".into()]).is_ok());
-        assert!(check_uris(&["http://evil.example.com/cb".into()]).is_err(), "plain http only for loopback");
+        assert!(
+            check_uris(&["http://evil.example.com/cb".into()]).is_err(),
+            "plain http only for loopback"
+        );
         assert!(check_uris(&["https://a.example/cb#frag".into()]).is_err());
         assert!(check_uris(&["javascript:alert(1)".into()]).is_err());
         assert!(check_uris(&[]).is_err());
@@ -636,19 +909,28 @@ mod tests {
 
     #[test]
     fn error_redirect_keeps_state_and_query() {
-        assert_eq!(redirect_error("https://a/cb?x=1", "access_denied", Some("s 1")), "https://a/cb?x=1&error=access_denied&state=s+1");
+        assert_eq!(
+            redirect_error("https://a/cb?x=1", "access_denied", Some("s 1")),
+            "https://a/cb?x=1&error=access_denied&state=s+1"
+        );
     }
 
     #[test]
     fn es256_signature_verifies() {
         let rng = SystemRandom::new();
         let doc = EcdsaKeyPair::generate_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, &rng).unwrap();
-        let pair = EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, doc.as_ref(), &rng).unwrap();
+        let pair =
+            EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, doc.as_ref(), &rng).unwrap();
         let pubkey = pair.public_key().as_ref().to_vec();
-        let k = SigningKey { kid: "k".into(), pair };
+        let k = SigningKey {
+            kid: "k".into(),
+            pair,
+        };
         let t = jwt(&k, &json!({"sub": "x"})).map_err(|e| e.0).unwrap();
         let (input, sig) = t.rsplit_once('.').unwrap();
         let sig = URL_SAFE_NO_PAD.decode(sig).unwrap();
-        ring::signature::UnparsedPublicKey::new(&ring::signature::ECDSA_P256_SHA256_FIXED, &pubkey).verify(input.as_bytes(), &sig).unwrap();
+        ring::signature::UnparsedPublicKey::new(&ring::signature::ECDSA_P256_SHA256_FIXED, &pubkey)
+            .verify(input.as_bytes(), &sig)
+            .unwrap();
     }
 }

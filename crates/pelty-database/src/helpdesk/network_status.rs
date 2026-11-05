@@ -9,7 +9,13 @@ use uuid::Uuid;
 
 pub const KINDS: [&str; 3] = ["outage", "degraded", "maintenance"];
 pub const PRIORITIES: [&str; 4] = ["low", "medium", "high", "critical"];
-pub const STATUSES: [&str; 5] = ["scheduled", "investigating", "identified", "monitoring", "resolved"];
+pub const STATUSES: [&str; 5] = [
+    "scheduled",
+    "investigating",
+    "identified",
+    "monitoring",
+    "resolved",
+];
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct IssueBody {
@@ -38,7 +44,11 @@ pub struct UpdateBody {
 /// Validate an issue body (pure; unit-tested).
 pub fn validate(b: &IssueBody) -> Result<(), AppError> {
     let t = b.title.trim().chars().count();
-    if t == 0 || t > 200 || b.description.chars().count() > 20_000 || b.component.chars().count() > 120 {
+    if t == 0
+        || t > 200
+        || b.description.chars().count() > 20_000
+        || b.component.chars().count() > 120
+    {
         return Err(AppError::Validation("error.validation"));
     }
     if !KINDS.contains(&b.kind.as_str())
@@ -64,13 +74,21 @@ const ISSUE_JSON: &str = "json_build_object('id', i.id, 'title', i.title, 'descr
 /// Issues as JSON (with timeline), open first. `public` limits to open
 /// issues plus those resolved in the last 14 days.
 pub async fn list(pool: &PgPool, public: bool, limit: i64) -> AppResult<Value> {
-    let filter = if public { "i.status <> 'resolved' OR i.updated_at > now() - interval '14 days'" } else { "TRUE" };
+    let filter = if public {
+        "i.status <> 'resolved' OR i.updated_at > now() - interval '14 days'"
+    } else {
+        "TRUE"
+    };
     let q = format!(
         "SELECT COALESCE(json_agg(x.j), '[]'::json)::jsonb FROM (
             SELECT {ISSUE_JSON} AS j FROM network_issues i WHERE {filter}
             ORDER BY (i.status = 'resolved'), i.starts_at DESC LIMIT $1) x"
     );
-    sqlx::query_scalar(&q).bind(limit).fetch_one(pool).await.map_err(db_err)
+    sqlx::query_scalar(&q)
+        .bind(limit)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn create(pool: &PgPool, b: &IssueBody, by: Uuid) -> AppResult<Uuid> {
@@ -121,7 +139,11 @@ pub async fn add_update(pool: &PgPool, id: Uuid, b: &UpdateBody, by: Uuid) -> Ap
 }
 
 pub async fn delete(pool: &PgPool, id: Uuid) -> AppResult<()> {
-    let r = sqlx::query("DELETE FROM network_issues WHERE id=$1").bind(id).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("DELETE FROM network_issues WHERE id=$1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
@@ -131,15 +153,41 @@ pub async fn delete(pool: &PgPool, id: Uuid) -> AppResult<()> {
 mod tests {
     use super::*;
     fn body() -> IssueBody {
-        IssueBody { title: "EU-1 down".into(), description: String::new(), component: "EU-1".into(), kind: "outage".into(), priority: "high".into(), status: "investigating".into(), starts_at: None, ends_at: None }
+        IssueBody {
+            title: "EU-1 down".into(),
+            description: String::new(),
+            component: "EU-1".into(),
+            kind: "outage".into(),
+            priority: "high".into(),
+            status: "investigating".into(),
+            starts_at: None,
+            ends_at: None,
+        }
     }
     #[test]
     fn validates() {
         assert!(validate(&body()).is_ok());
-        assert!(validate(&IssueBody { title: "  ".into(), ..body() }).is_err());
-        assert!(validate(&IssueBody { kind: "boom".into(), ..body() }).is_err());
-        assert!(validate(&IssueBody { status: "done".into(), ..body() }).is_err());
+        assert!(validate(&IssueBody {
+            title: "  ".into(),
+            ..body()
+        })
+        .is_err());
+        assert!(validate(&IssueBody {
+            kind: "boom".into(),
+            ..body()
+        })
+        .is_err());
+        assert!(validate(&IssueBody {
+            status: "done".into(),
+            ..body()
+        })
+        .is_err());
         let now = OffsetDateTime::now_utc();
-        assert!(validate(&IssueBody { starts_at: Some(now), ends_at: Some(now - time::Duration::hours(1)), ..body() }).is_err());
+        assert!(validate(&IssueBody {
+            starts_at: Some(now),
+            ends_at: Some(now - time::Duration::hours(1)),
+            ..body()
+        })
+        .is_err());
     }
 }

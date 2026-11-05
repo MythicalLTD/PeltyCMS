@@ -29,12 +29,22 @@ fn try_power(v: &Value) -> Value {
         "db_write" => parsed(power::db_write(&s(v, "op"), &v["input"].to_string())),
         "sql" => parsed(power::sql(&s(v, "statement"), &v["params"].to_string())),
         "exec" => {
-            let args: Vec<String> = v["args"].as_array().into_iter().flatten().filter_map(|a| a.as_str().map(str::to_string)).collect();
-            wrap(power::exec(&s(v, "program"), &args, "").map(|o| json!({ "status": o.status, "stdout": o.stdout })))
+            let args: Vec<String> = v["args"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|a| a.as_str().map(str::to_string))
+                .collect();
+            wrap(
+                power::exec(&s(v, "program"), &args, "")
+                    .map(|o| json!({ "status": o.status, "stdout": o.stdout })),
+            )
         }
         "fs" => wrap(fs_roundtrip(&s(v, "path"))),
         "job" => wrap(power::job_enqueue(&s(v, "op"), "{}", 0).map(|_| true)),
-        "fetch" => wrap(pelty_addon_sdk::fetch("GET", &s(v, "url"), vec![], String::new()).map(|(st, _)| st)),
+        "fetch" => wrap(
+            pelty_addon_sdk::fetch("GET", &s(v, "url"), vec![], String::new()).map(|(st, _)| st),
+        ),
         p => json!({ "err": format!("unknown power {p}") }),
     }
 }
@@ -49,7 +59,11 @@ fn hook(v: &Value) -> Value {
     if p["query"].as_str().unwrap_or("").contains("cancel=1") {
         return json!({ "action": "cancel", "reason": "fixture" });
     }
-    let saw = p["body"].as_object().into_iter().flatten().any(|(k, x)| k.contains("password") && x != "[redacted]");
+    let saw = p["body"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .any(|(k, x)| k.contains("password") && x != "[redacted]");
     if let Some(items) = p["body"]["items"].as_array_mut() {
         for i in items {
             if let Some(n) = i["unit_price"].as_str().and_then(|a| a.parse::<f64>().ok()) {
@@ -104,7 +118,9 @@ impl pelty_addon_sdk::Guest for PeltyAddon {
                     json!({ "ok": false })
                 }
             }
-            "http" if v["path"] == "/try" => json!({ "status": 200, "body": try_power(&v["body"]) }),
+            "http" if v["path"] == "/try" => {
+                json!({ "status": 200, "body": try_power(&v["body"]) })
+            }
             "http" => json!({ "status": 404, "body": null }),
             _ => return Err(format!("unknown op {op}")),
         };

@@ -23,14 +23,27 @@ thread_local! {
 pub const DEFAULT_FILTER: &str = "info,sqlx=warn,tower_http=info";
 
 pub fn init(json: bool) {
-    let spec = std::env::var("RUST_LOG").ok().filter(|v| EnvFilter::try_new(v).is_ok()).unwrap_or_else(|| DEFAULT_FILTER.into());
+    let spec = std::env::var("RUST_LOG")
+        .ok()
+        .filter(|v| EnvFilter::try_new(v).is_ok())
+        .unwrap_or_else(|| DEFAULT_FILTER.into());
     let (filter, handle) = reload::Layer::new(EnvFilter::new(&spec));
     let fmt = if json {
-        tracing_subscriber::fmt::layer().json().with_writer(Sink::default).boxed()
+        tracing_subscriber::fmt::layer()
+            .json()
+            .with_writer(Sink::default)
+            .boxed()
     } else {
-        tracing_subscriber::fmt::layer().with_writer(Sink::default).boxed()
+        tracing_subscriber::fmt::layer()
+            .with_writer(Sink::default)
+            .boxed()
     };
-    if tracing_subscriber::registry().with(filter).with(fmt).try_init().is_ok() {
+    if tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt)
+        .try_init()
+        .is_ok()
+    {
         let _ = FILTER.set(handle);
         if let Ok(mut c) = CURRENT.lock() {
             *c = spec;
@@ -41,7 +54,11 @@ pub fn init(json: bool) {
 /// Replace the log filter (`info`, `debug`, `info,sqlx=debug`, ...).
 pub fn set_filter(spec: &str) -> Result<(), String> {
     let f = EnvFilter::try_new(spec).map_err(|e| format!("invalid filter: {e}"))?;
-    FILTER.get().ok_or("logging is not initialised")?.reload(f).map_err(|e| e.to_string())?;
+    FILTER
+        .get()
+        .ok_or("logging is not initialised")?
+        .reload(f)
+        .map_err(|e| e.to_string())?;
     if let Ok(mut c) = CURRENT.lock() {
         *c = spec.to_string();
     }
@@ -56,12 +73,14 @@ pub fn current_filter() -> String {
 pub fn set_printer(p: Option<Printer>) {
     let tx = p.map(|mut p| {
         let (tx, rx) = mpsc::channel::<String>();
-        let _ = std::thread::Builder::new().name("log-printer".into()).spawn(move || {
-            for line in rx {
-                IN_PRINT.with(|f| f.set(true));
-                p(line);
-            }
-        });
+        let _ = std::thread::Builder::new()
+            .name("log-printer".into())
+            .spawn(move || {
+                for line in rx {
+                    IN_PRINT.with(|f| f.set(true));
+                    p(line);
+                }
+            });
         tx
     });
     // Dropping the old sender ends the old printer thread once it drains.

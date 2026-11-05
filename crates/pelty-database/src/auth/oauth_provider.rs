@@ -21,13 +21,22 @@ pub struct Client {
 const COLS: &str = "id, client_id, secret_hash, name, redirect_uris, scopes, trusted, enabled";
 
 pub async fn client_by_public_id(pool: &PgPool, cid: &str) -> AppResult<Option<Client>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM oauth_clients WHERE client_id=$1"))
-        .bind(cid).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {COLS} FROM oauth_clients WHERE client_id=$1"
+    ))
+    .bind(cid)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn list_clients(pool: &PgPool) -> AppResult<Vec<Client>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM oauth_clients ORDER BY created_at DESC"))
-        .fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {COLS} FROM oauth_clients ORDER BY created_at DESC"
+    ))
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub struct NewClient<'a> {
@@ -57,7 +66,11 @@ pub struct ClientPatch<'a> {
 }
 
 /// Disabling a client also revokes all its live tokens.
-pub async fn update_client(pool: &PgPool, id: Uuid, p: &ClientPatch<'_>) -> AppResult<Option<Client>> {
+pub async fn update_client(
+    pool: &PgPool,
+    id: Uuid,
+    p: &ClientPatch<'_>,
+) -> AppResult<Option<Client>> {
     let row: Option<Client> = sqlx::query_as(&format!(
         "UPDATE oauth_clients SET name=COALESCE($2,name), redirect_uris=COALESCE($3,redirect_uris), scopes=COALESCE($4,scopes), \
          trusted=COALESCE($5,trusted), enabled=COALESCE($6,enabled) WHERE id=$1 RETURNING {COLS}"
@@ -65,27 +78,43 @@ pub async fn update_client(pool: &PgPool, id: Uuid, p: &ClientPatch<'_>) -> AppR
     .bind(id).bind(p.name).bind(p.redirect_uris).bind(p.scopes).bind(p.trusted).bind(p.enabled)
     .fetch_optional(pool).await.map_err(db_err)?;
     if row.is_some() && p.enabled == Some(false) {
-        sqlx::query("UPDATE oauth_tokens SET revoked_at = now() WHERE client_id=$1 AND revoked_at IS NULL")
-            .bind(id).execute(pool).await.map_err(db_err)?;
+        sqlx::query(
+            "UPDATE oauth_tokens SET revoked_at = now() WHERE client_id=$1 AND revoked_at IS NULL",
+        )
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     }
     Ok(row)
 }
 
 pub async fn delete_client(pool: &PgPool, id: Uuid) -> AppResult<Option<String>> {
     sqlx::query_scalar("DELETE FROM oauth_clients WHERE id=$1 RETURNING client_id")
-        .bind(id).fetch_optional(pool).await.map_err(db_err)
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn set_secret(pool: &PgPool, id: Uuid, secret_hash: &str) -> AppResult<Option<String>> {
     sqlx::query_scalar("UPDATE oauth_clients SET secret_hash=$2 WHERE id=$1 RETURNING client_id")
-        .bind(id).bind(secret_hash).fetch_optional(pool).await.map_err(db_err)
+        .bind(id)
+        .bind(secret_hash)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 // ---- signing keys
 
 pub async fn active_key(pool: &PgPool) -> AppResult<Option<(String, Vec<u8>)>> {
-    sqlx::query_as("SELECT kid, pkcs8 FROM oauth_signing_keys WHERE active ORDER BY created_at DESC LIMIT 1")
-        .fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as(
+        "SELECT kid, pkcs8 FROM oauth_signing_keys WHERE active ORDER BY created_at DESC LIMIT 1",
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn insert_key(pool: &PgPool, kid: &str, pkcs8: &[u8], x: &str, y: &str) -> AppResult<()> {
@@ -96,19 +125,36 @@ pub async fn insert_key(pool: &PgPool, kid: &str, pkcs8: &[u8], x: &str, y: &str
 
 /// (kid, x, y) of every published key, newest first.
 pub async fn public_keys(pool: &PgPool) -> AppResult<Vec<(String, String, String)>> {
-    sqlx::query_as("SELECT kid, public_x, public_y FROM oauth_signing_keys ORDER BY created_at DESC")
-        .fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(
+        "SELECT kid, public_x, public_y FROM oauth_signing_keys ORDER BY created_at DESC",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 // ---- consents
 
-pub async fn consent_scopes(pool: &PgPool, user: Uuid, client: Uuid) -> AppResult<Option<Vec<String>>> {
+pub async fn consent_scopes(
+    pool: &PgPool,
+    user: Uuid,
+    client: Uuid,
+) -> AppResult<Option<Vec<String>>> {
     sqlx::query_scalar("SELECT scopes FROM oauth_consents WHERE user_id=$1 AND client_id=$2")
-        .bind(user).bind(client).fetch_optional(pool).await.map_err(db_err)
+        .bind(user)
+        .bind(client)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 /// Adds `scopes` to the stored consent (union).
-pub async fn grant_consent(pool: &PgPool, user: Uuid, client: Uuid, scopes: &[String]) -> AppResult<()> {
+pub async fn grant_consent(
+    pool: &PgPool,
+    user: Uuid,
+    client: Uuid,
+    scopes: &[String],
+) -> AppResult<()> {
     sqlx::query(
         "INSERT INTO oauth_consents (user_id, client_id, scopes) VALUES ($1,$2,$3) \
          ON CONFLICT (user_id, client_id) DO UPDATE SET scopes = (SELECT array_agg(DISTINCT x) FROM unnest(oauth_consents.scopes || EXCLUDED.scopes) x), granted_at = now()",
@@ -118,7 +164,10 @@ pub async fn grant_consent(pool: &PgPool, user: Uuid, client: Uuid, scopes: &[St
 }
 
 /// (client uuid, client name, scopes, granted_at)
-pub async fn consents_of(pool: &PgPool, user: Uuid) -> AppResult<Vec<(Uuid, String, Vec<String>, OffsetDateTime)>> {
+pub async fn consents_of(
+    pool: &PgPool,
+    user: Uuid,
+) -> AppResult<Vec<(Uuid, String, Vec<String>, OffsetDateTime)>> {
     sqlx::query_as(
         "SELECT c.id, c.name, k.scopes, k.granted_at FROM oauth_consents k JOIN oauth_clients c ON c.id=k.client_id WHERE k.user_id=$1 ORDER BY k.granted_at DESC",
     )
@@ -129,7 +178,11 @@ pub async fn consents_of(pool: &PgPool, user: Uuid) -> AppResult<Vec<(Uuid, Stri
 pub async fn revoke_consent(pool: &PgPool, user: Uuid, client: Uuid) -> AppResult<bool> {
     let mut tx = pool.begin().await.map_err(db_err)?;
     let r = sqlx::query("DELETE FROM oauth_consents WHERE user_id=$1 AND client_id=$2")
-        .bind(user).bind(client).execute(&mut *tx).await.map_err(db_err)?;
+        .bind(user)
+        .bind(client)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     sqlx::query("UPDATE oauth_tokens SET revoked_at = now() WHERE user_id=$1 AND client_id=$2 AND revoked_at IS NULL")
         .bind(user).bind(client).execute(&mut *tx).await.map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
@@ -150,7 +203,10 @@ pub struct NewCode<'a> {
 }
 
 pub async fn insert_code(pool: &PgPool, c: &NewCode<'_>) -> AppResult<()> {
-    sqlx::query("DELETE FROM oauth_codes WHERE expires_at < now() - interval '1 day'").execute(pool).await.map_err(db_err)?;
+    sqlx::query("DELETE FROM oauth_codes WHERE expires_at < now() - interval '1 day'")
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     sqlx::query("INSERT INTO oauth_codes (code_hash, client_id, user_id, redirect_uri, scope, nonce, code_challenge, expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)")
         .bind(c.code_hash).bind(c.client).bind(c.user).bind(c.redirect_uri).bind(c.scope).bind(c.nonce).bind(c.code_challenge).bind(c.expires_at)
         .execute(pool).await.map_err(db_err)?;
@@ -171,15 +227,21 @@ pub struct Code {
 pub enum Redeem {
     Unknown,
     /// Second use of a code: every token minted from it was revoked.
-    Replayed { user: Uuid },
+    Replayed {
+        user: Uuid,
+    },
     Fresh(Code),
 }
 
 /// Marks the code used atomically. A replay revokes its token family.
 pub async fn redeem_code(pool: &PgPool, code_hash: &str) -> AppResult<Redeem> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let row: Option<(Uuid, Option<OffsetDateTime>)> = sqlx::query_as("SELECT user_id, used_at FROM oauth_codes WHERE code_hash=$1 FOR UPDATE")
-        .bind(code_hash).fetch_optional(&mut *tx).await.map_err(db_err)?;
+    let row: Option<(Uuid, Option<OffsetDateTime>)> =
+        sqlx::query_as("SELECT user_id, used_at FROM oauth_codes WHERE code_hash=$1 FOR UPDATE")
+            .bind(code_hash)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_err)?;
     let out = match row {
         None => Redeem::Unknown,
         Some((user, Some(_))) => {
@@ -219,7 +281,11 @@ pub async fn insert_token(pool: &PgPool, t: &NewToken<'_>) -> AppResult<()> {
 }
 
 /// Burns a live refresh token of `client`: (user, scope, code_hash).
-pub async fn take_refresh(pool: &PgPool, token_hash: &str, client: Uuid) -> AppResult<Option<(Uuid, String, Option<String>)>> {
+pub async fn take_refresh(
+    pool: &PgPool,
+    token_hash: &str,
+    client: Uuid,
+) -> AppResult<Option<(Uuid, String, Option<String>)>> {
     sqlx::query_as(
         "UPDATE oauth_tokens SET revoked_at = now() WHERE token_hash=$1 AND client_id=$2 AND kind='refresh' AND revoked_at IS NULL AND expires_at > now() \
          RETURNING user_id, scope, code_hash",

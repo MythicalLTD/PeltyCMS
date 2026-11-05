@@ -74,7 +74,10 @@ impl MacroInput {
     pub fn normalize(mut self) -> Result<Self, &'static str> {
         self.name = self.name.trim().to_string();
         self.description = self.description.trim().to_string();
-        if self.name.is_empty() || self.name.chars().count() > 100 || self.description.chars().count() > 500 {
+        if self.name.is_empty()
+            || self.name.chars().count() > 100
+            || self.description.chars().count() > 500
+        {
             return Err("error.validation");
         }
         if self.reply_body.chars().count() > 20000 {
@@ -84,7 +87,11 @@ impl MacroInput {
             self.reply_body.clear();
             self.reply_internal = false;
         }
-        if self.set_priority.as_deref().is_some_and(|p| !crate::ticket_sla::PRIORITIES.contains(&p)) {
+        if self
+            .set_priority
+            .as_deref()
+            .is_some_and(|p| !crate::ticket_sla::PRIORITIES.contains(&p))
+        {
             return Err("error.validation");
         }
         if !ASSIGN_MODES.contains(&self.assign_mode.as_str()) {
@@ -108,8 +115,12 @@ impl MacroInput {
             }
         }
         self.add_tags = tags;
-        let does_something = !self.reply_body.is_empty() || self.set_status.is_some() || self.set_priority.is_some()
-            || self.assign_mode != "keep" || self.set_department.is_some() || !self.add_tags.is_empty();
+        let does_something = !self.reply_body.is_empty()
+            || self.set_status.is_some()
+            || self.set_priority.is_some()
+            || self.assign_mode != "keep"
+            || self.set_department.is_some()
+            || !self.add_tags.is_empty();
         if !does_something {
             return Err("error.macro_empty");
         }
@@ -127,12 +138,19 @@ pub async fn list(pool: &PgPool, department: Option<Uuid>) -> AppResult<Vec<Macr
          WHERE $1::uuid IS NULL OR (is_active AND (department_id IS NULL OR department_id = $1))
          ORDER BY sort_order, name"
     ))
-    .bind(department).fetch_all(pool).await.map_err(db_err)
+    .bind(department)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Macro> {
     sqlx::query_as(&format!("SELECT {COLS} FROM ticket_macros WHERE id = $1"))
-        .bind(id).fetch_optional(pool).await.map_err(db_err)?.ok_or(AppError::NotFound)
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?
+        .ok_or(AppError::NotFound)
 }
 
 pub async fn create(pool: &PgPool, m: &MacroInput) -> AppResult<Macro> {
@@ -157,7 +175,12 @@ pub async fn update(pool: &PgPool, id: Uuid, m: &MacroInput) -> AppResult<Macro>
 }
 
 pub async fn delete(pool: &PgPool, id: Uuid) -> AppResult<()> {
-    let n = sqlx::query("DELETE FROM ticket_macros WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?.rows_affected();
+    let n = sqlx::query("DELETE FROM ticket_macros WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?
+        .rows_affected();
     if n == 0 {
         return Err(AppError::NotFound);
     }
@@ -165,7 +188,11 @@ pub async fn delete(pool: &PgPool, id: Uuid) -> AppResult<()> {
 }
 
 pub async fn count_use(pool: &PgPool, id: Uuid) -> AppResult<()> {
-    sqlx::query("UPDATE ticket_macros SET uses = uses + 1 WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?;
+    sqlx::query("UPDATE ticket_macros SET uses = uses + 1 WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(())
 }
 
@@ -191,7 +218,11 @@ pub struct Vars<'a> {
 /// `{ticket_number}`, `{ticket_subject}`, `{department}` and `{staff_name}`.
 /// Unknown placeholders are left as they are.
 pub fn render(body: &str, v: &Vars) -> String {
-    let name = if v.customer_name.trim().is_empty() { v.customer_email } else { v.customer_name.trim() };
+    let name = if v.customer_name.trim().is_empty() {
+        v.customer_email
+    } else {
+        v.customer_name.trim()
+    };
     let first = name.split_whitespace().next().unwrap_or(name);
     body.replace("{customer_name}", name)
         .replace("{customer_first_name}", first)
@@ -207,7 +238,10 @@ mod tests {
     use super::*;
 
     fn input() -> MacroInput {
-        serde_json::from_value(serde_json::json!({ "name": " Close as solved ", "set_status": "closed" })).unwrap()
+        serde_json::from_value(
+            serde_json::json!({ "name": " Close as solved ", "set_status": "closed" }),
+        )
+        .unwrap()
     }
 
     #[test]
@@ -216,25 +250,93 @@ mod tests {
         assert_eq!(m.name, "Close as solved");
         assert_eq!(m.assign_mode, "keep");
         assert!(m.is_active);
-        let empty: MacroInput = serde_json::from_value(serde_json::json!({ "name": "x", "reply_body": "   " })).unwrap();
+        let empty: MacroInput =
+            serde_json::from_value(serde_json::json!({ "name": "x", "reply_body": "   " }))
+                .unwrap();
         assert_eq!(empty.normalize().unwrap_err(), "error.macro_empty");
-        assert_eq!(MacroInput { set_priority: Some("asap".into()), ..input() }.normalize().unwrap_err(), "error.validation");
-        assert_eq!(MacroInput { assign_mode: "user".into(), ..input() }.normalize().unwrap_err(), "error.invalid_assignee");
-        assert_eq!(MacroInput { assign_mode: "boss".into(), ..input() }.normalize().unwrap_err(), "error.validation");
-        assert_eq!(MacroInput { add_tags: vec!["!bad".into()], ..input() }.normalize().unwrap_err(), "error.invalid_tag");
-        let m = MacroInput { add_tags: vec!["Needs Info".into(), "needs-info".into()], assign_mode: "self".into(), assign_to: Some(Uuid::nil()), ..input() }.normalize().unwrap();
+        assert_eq!(
+            MacroInput {
+                set_priority: Some("asap".into()),
+                ..input()
+            }
+            .normalize()
+            .unwrap_err(),
+            "error.validation"
+        );
+        assert_eq!(
+            MacroInput {
+                assign_mode: "user".into(),
+                ..input()
+            }
+            .normalize()
+            .unwrap_err(),
+            "error.invalid_assignee"
+        );
+        assert_eq!(
+            MacroInput {
+                assign_mode: "boss".into(),
+                ..input()
+            }
+            .normalize()
+            .unwrap_err(),
+            "error.validation"
+        );
+        assert_eq!(
+            MacroInput {
+                add_tags: vec!["!bad".into()],
+                ..input()
+            }
+            .normalize()
+            .unwrap_err(),
+            "error.invalid_tag"
+        );
+        let m = MacroInput {
+            add_tags: vec!["Needs Info".into(), "needs-info".into()],
+            assign_mode: "self".into(),
+            assign_to: Some(Uuid::nil()),
+            ..input()
+        }
+        .normalize()
+        .unwrap();
         assert_eq!(m.add_tags, vec!["needs-info"]);
         assert_eq!(m.assign_to, None, "only `user` keeps an assignee");
-        assert_eq!(MacroInput { name: "  ".into(), ..input() }.normalize().unwrap_err(), "error.validation");
-        let note = MacroInput { reply_body: " ".into(), reply_internal: true, ..input() }.normalize().unwrap();
+        assert_eq!(
+            MacroInput {
+                name: "  ".into(),
+                ..input()
+            }
+            .normalize()
+            .unwrap_err(),
+            "error.validation"
+        );
+        let note = MacroInput {
+            reply_body: " ".into(),
+            reply_internal: true,
+            ..input()
+        }
+        .normalize()
+        .unwrap();
         assert!(!note.reply_internal);
     }
 
     #[test]
     fn render_placeholders() {
-        let v = Vars { customer_name: "Ana Pop", customer_email: "ana@x.test", ticket_number: 42, ticket_subject: "Disk", department: "Billing", staff_name: "Ion" };
+        let v = Vars {
+            customer_name: "Ana Pop",
+            customer_email: "ana@x.test",
+            ticket_number: 42,
+            ticket_subject: "Disk",
+            department: "Billing",
+            staff_name: "Ion",
+        };
         assert_eq!(render("Hi {customer_first_name}, #{ticket_number} ({ticket_subject}) {department}. {staff_name} {unknown}", &v), "Hi Ana, #42 (Disk) Billing. Ion {unknown}");
-        let v = Vars { customer_name: " ", ..v };
-        assert_eq!(render("{customer_name}/{customer_first_name}", &v), "ana@x.test/ana@x.test");
+        let v = Vars {
+            customer_name: " ",
+            ..v
+        };
+        assert_eq!(
+            render("{customer_name}/{customer_first_name}", &v),
+            "ana@x.test/ana@x.test"
+        );
     }
 }

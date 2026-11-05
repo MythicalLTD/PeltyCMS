@@ -17,7 +17,10 @@ pub fn router() -> Router<AppState> {
         .route("/admin/currencies/{code}", put(update))
         .route("/admin/currencies/{code}/default", post(make_default))
         .route("/admin/currencies/sync-prices", post(sync_prices))
-        .route("/admin/currencies/rates/settings", get(rate_settings).put(save_rate_settings))
+        .route(
+            "/admin/currencies/rates/settings",
+            get(rate_settings).put(save_rate_settings),
+        )
         .route("/admin/currencies/rates/update", post(update_rates))
         .route("/admin/currencies/rates/history", get(rate_history))
 }
@@ -30,23 +33,60 @@ pub async fn list(State(s): State<AppState>, _p: Sm) -> ApiResult<Json<Value>> {
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/currencies", request_body = CurrencyInput, responses((status = 200), (status = 409), (status = 422)))]
-pub async fn create(State(s): State<AppState>, RequirePermission(u, _): Sm, Json(b): Json<CurrencyInput>) -> ApiResult<Json<Value>> {
+pub async fn create(
+    State(s): State<AppState>,
+    RequirePermission(u, _): Sm,
+    Json(b): Json<CurrencyInput>,
+) -> ApiResult<Json<Value>> {
     let code = cur::create(&s.pool, &b).await?;
-    audit::record(&s.pool, Some(u.user_id), "currency.created", Some(&code), u.ip.as_deref(), json!({ "rate": b.rate.to_string() })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "currency.created",
+        Some(&code),
+        u.ip.as_deref(),
+        json!({ "rate": b.rate.to_string() }),
+    )
+    .await?;
     Ok(Json(json!({ "code": code })))
 }
 
 #[utoipa::path(put, path = "/api/v1/admin/currencies/{code}", request_body = CurrencyInput, responses((status = 200), (status = 404), (status = 409), (status = 422)))]
-pub async fn update(State(s): State<AppState>, RequirePermission(u, _): Sm, Path(code): Path<String>, Json(b): Json<CurrencyInput>) -> ApiResult<Json<Value>> {
+pub async fn update(
+    State(s): State<AppState>,
+    RequirePermission(u, _): Sm,
+    Path(code): Path<String>,
+    Json(b): Json<CurrencyInput>,
+) -> ApiResult<Json<Value>> {
     cur::update(&s.pool, &code, &b).await?;
-    audit::record(&s.pool, Some(u.user_id), "currency.updated", Some(&code.to_ascii_uppercase()), u.ip.as_deref(), json!({ "rate": b.rate.to_string(), "enabled": b.enabled })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "currency.updated",
+        Some(&code.to_ascii_uppercase()),
+        u.ip.as_deref(),
+        json!({ "rate": b.rate.to_string(), "enabled": b.enabled }),
+    )
+    .await?;
     Ok(Json(json!({ "ok": true })))
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/currencies/{code}/default", responses((status = 200), (status = 404), (status = 422)))]
-pub async fn make_default(State(s): State<AppState>, RequirePermission(u, _): Sm, Path(code): Path<String>) -> ApiResult<Json<Value>> {
+pub async fn make_default(
+    State(s): State<AppState>,
+    RequirePermission(u, _): Sm,
+    Path(code): Path<String>,
+) -> ApiResult<Json<Value>> {
     cur::set_default(&s.pool, &code).await?;
-    audit::record(&s.pool, Some(u.user_id), "currency.default_set", Some(&code.to_ascii_uppercase()), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "currency.default_set",
+        Some(&code.to_ascii_uppercase()),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -61,15 +101,29 @@ fn yes() -> bool {
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/currencies/sync-prices", request_body = SyncBody, responses((status = 200)))]
-pub async fn sync_prices(State(s): State<AppState>, RequirePermission(u, _): Sm, Json(b): Json<SyncBody>) -> ApiResult<Json<Value>> {
+pub async fn sync_prices(
+    State(s): State<AppState>,
+    RequirePermission(u, _): Sm,
+    Json(b): Json<SyncBody>,
+) -> ApiResult<Json<Value>> {
     let n = cur::sync_prices(&s.pool, b.only_missing).await?;
-    audit::record(&s.pool, Some(u.user_id), "currency.prices_synced", None, u.ip.as_deref(), json!({ "rows": n, "only_missing": b.only_missing })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "currency.prices_synced",
+        None,
+        u.ip.as_deref(),
+        json!({ "rows": n, "only_missing": b.only_missing }),
+    )
+    .await?;
     Ok(Json(json!({ "updated": n })))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/currencies/rates/settings", responses((status = 200), (status = 403)))]
 pub async fn rate_settings(State(s): State<AppState>, _p: Sm) -> ApiResult<Json<Value>> {
-    Ok(Json(json!(pelty_database::exchange_rates::settings(&s.pool).await?)))
+    Ok(Json(json!(
+        pelty_database::exchange_rates::settings(&s.pool).await?
+    )))
 }
 
 #[utoipa::path(put, path = "/api/v1/admin/currencies/rates/settings", request_body = pelty_database::exchange_rates::RateSettingsInput, responses((status = 200), (status = 422)))]
@@ -79,16 +133,31 @@ pub async fn save_rate_settings(
     Json(b): Json<pelty_database::exchange_rates::RateSettingsInput>,
 ) -> ApiResult<Json<Value>> {
     pelty_database::exchange_rates::save_settings(&s.pool, &b).await?;
-    audit::record(&s.pool, Some(u.user_id), "currency.rate_settings_updated", None, u.ip.as_deref(), json!({ "enabled": b.enabled, "source": b.source, "markup": b.markup_percent.to_string() })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "currency.rate_settings_updated",
+        None,
+        u.ip.as_deref(),
+        json!({ "enabled": b.enabled, "source": b.source, "markup": b.markup_percent.to_string() }),
+    )
+    .await?;
     Ok(Json(json!({ "ok": true })))
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/currencies/rates/update", responses((status = 200), (status = 409), (status = 422)))]
-pub async fn update_rates(State(s): State<AppState>, RequirePermission(u, _): Sm) -> ApiResult<Json<Value>> {
-    Ok(Json(crate::exchange_rates::update_now(&s, Some(u.user_id)).await?))
+pub async fn update_rates(
+    State(s): State<AppState>,
+    RequirePermission(u, _): Sm,
+) -> ApiResult<Json<Value>> {
+    Ok(Json(
+        crate::exchange_rates::update_now(&s, Some(u.user_id)).await?,
+    ))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/currencies/rates/history", responses((status = 200)))]
 pub async fn rate_history(State(s): State<AppState>, _p: Sm) -> ApiResult<Json<Value>> {
-    Ok(Json(json!({ "items": pelty_database::exchange_rates::history(&s.pool, 200).await? })))
+    Ok(Json(
+        json!({ "items": pelty_database::exchange_rates::history(&s.pool, 200).await? }),
+    ))
 }

@@ -35,12 +35,20 @@ pub const COLORS: &[&str] = &["default", "secondary", "destructive", "outline"];
 
 pub fn valid_slug(s: &str) -> bool {
     let b = s.as_bytes();
-    (2..=32).contains(&b.len()) && b[0].is_ascii_lowercase() && b.iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'_')
+    (2..=32).contains(&b.len())
+        && b[0].is_ascii_lowercase()
+        && b.iter()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'_')
 }
 
 pub fn validate(i: &StatusInput, creating: bool) -> Result<(), AppError> {
     let n = i.name.trim().chars().count();
-    if (creating && !valid_slug(&i.slug)) || n == 0 || n > 60 || !COLORS.contains(&i.color.as_str()) || !(-1000..=1000).contains(&i.sort_order) {
+    if (creating && !valid_slug(&i.slug))
+        || n == 0
+        || n > 60
+        || !COLORS.contains(&i.color.as_str())
+        || !(-1000..=1000).contains(&i.sort_order)
+    {
         return Err(AppError::Validation("error.invalid_ticket_status"));
     }
     Ok(())
@@ -54,7 +62,11 @@ pub async fn list(pool: &PgPool) -> Result<Vec<TicketStatus>, AppError> {
 }
 
 pub async fn exists(pool: &PgPool, slug: &str) -> Result<bool, AppError> {
-    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM ticket_statuses WHERE slug = $1)").bind(slug).fetch_one(pool).await.map_err(db_err)
+    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM ticket_statuses WHERE slug = $1)")
+        .bind(slug)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn create(pool: &PgPool, i: &StatusInput) -> Result<(), AppError> {
@@ -73,8 +85,14 @@ pub async fn update(pool: &PgPool, slug: &str, i: &StatusInput) -> Result<(), Ap
         "UPDATE ticket_statuses SET name = $2, color = $3, sort_order = $4,
             awaiting_staff = CASE WHEN builtin THEN awaiting_staff ELSE $5 END WHERE slug = $1",
     )
-    .bind(slug).bind(i.name.trim()).bind(&i.color).bind(i.sort_order).bind(i.awaiting_staff)
-    .execute(pool).await.map_err(db_err)?;
+    .bind(slug)
+    .bind(i.name.trim())
+    .bind(&i.color)
+    .bind(i.sort_order)
+    .bind(i.awaiting_staff)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
@@ -89,7 +107,11 @@ pub async fn delete(pool: &PgPool, slug: &str) -> Result<(), AppError> {
         Some((true, _)) => Err(AppError::Conflict("error.ticket_status_builtin")),
         Some((_, n)) if n > 0 => Err(AppError::Conflict("error.ticket_status_in_use")),
         _ => {
-            sqlx::query("DELETE FROM ticket_statuses WHERE slug = $1").bind(slug).execute(pool).await.map_err(db_err)?;
+            sqlx::query("DELETE FROM ticket_statuses WHERE slug = $1")
+                .bind(slug)
+                .execute(pool)
+                .await
+                .map_err(db_err)?;
             Ok(())
         }
     }
@@ -104,7 +126,13 @@ mod tests {
         assert!(!valid_slug("A"));
         assert!(!valid_slug("1abc"));
         assert!(!valid_slug("has-dash"));
-        let i = StatusInput { slug: "x".into(), name: "X".into(), color: "default".into(), sort_order: 0, awaiting_staff: false };
+        let i = StatusInput {
+            slug: "x".into(),
+            name: "X".into(),
+            color: "default".into(),
+            sort_order: 0,
+            awaiting_staff: false,
+        };
         assert!(validate(&i, true).is_err());
         assert!(validate(&i, false).is_ok());
     }

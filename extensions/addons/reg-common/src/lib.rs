@@ -14,7 +14,11 @@ pub struct SettingField {
 }
 
 pub const fn f(key: &'static str, kind: &'static str, required: bool) -> SettingField {
-    SettingField { key, kind, required }
+    SettingField {
+        key,
+        kind,
+        required,
+    }
 }
 
 /// A registrar's configured connection. Unconfigured (empty settings)
@@ -27,7 +31,11 @@ pub struct Conn {
 
 impl Conn {
     pub fn new(name: &'static str, transport: Arc<dyn RegTransport>, settings: &Value) -> Self {
-        Conn { name, transport, cfg: settings.as_object().cloned().unwrap_or_default() }
+        Conn {
+            name,
+            transport,
+            cfg: settings.as_object().cloned().unwrap_or_default(),
+        }
     }
     pub fn s(&self, k: &str) -> String {
         match self.cfg.get(k) {
@@ -42,7 +50,10 @@ impl Conn {
     pub fn need(&self, keys: &[&str]) -> RegistrarResult<()> {
         for k in keys {
             if self.s(k).is_empty() {
-                return Err(RegistrarError::Remote(format!("{} is not configured ({k})", self.name)));
+                return Err(RegistrarError::Remote(format!(
+                    "{} is not configured ({k})",
+                    self.name
+                )));
             }
         }
         Ok(())
@@ -112,7 +123,9 @@ pub fn xml_all(xml: &str, tag: &str) -> Vec<String> {
     while let Some(v) = xml_text(rest, tag) {
         out.push(v);
         let lower = rest.to_ascii_lowercase();
-        let Some(p) = lower.find(&format!("</{}>", tag.to_ascii_lowercase())) else { break };
+        let Some(p) = lower.find(&format!("</{}>", tag.to_ascii_lowercase())) else {
+            break;
+        };
         rest = &rest[p + tag.len() + 3..];
     }
     out
@@ -120,7 +133,9 @@ pub fn xml_all(xml: &str, tag: &str) -> Vec<String> {
 
 /// Attribute value on the first `<tag ...>` element.
 pub fn xml_attr(xml: &str, tag: &str, attr: &str) -> Option<String> {
-    let start = xml.find(&format!("<{tag} ")).or_else(|| xml.find(&format!("<{tag}\n")))?;
+    let start = xml
+        .find(&format!("<{tag} "))
+        .or_else(|| xml.find(&format!("<{tag}\n")))?;
     let end = start + xml[start..].find('>')?;
     let el = &xml[start..end];
     let key = format!("{attr}=\"");
@@ -130,11 +145,18 @@ pub fn xml_attr(xml: &str, tag: &str, attr: &str) -> Option<String> {
 }
 
 pub fn xml_unescape(s: &str) -> String {
-    s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&")
+    s.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&amp;", "&")
 }
 
 pub fn xml_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 /// `MM/DD/YYYY…` → `YYYY-MM-DD`.
@@ -151,7 +173,8 @@ pub fn us_date(s: &str) -> Option<String> {
 pub fn iso_date(s: &str) -> Option<String> {
     let d = s.get(..10)?;
     let b = d.as_bytes();
-    (b[4] == b'-' && b[7] == b'-' && d.chars().filter(|c| c.is_ascii_digit()).count() == 8).then(|| d.to_string())
+    (b[4] == b'-' && b[7] == b'-' && d.chars().filter(|c| c.is_ascii_digit()).count() == 8)
+        .then(|| d.to_string())
 }
 
 pub fn epoch_date(secs: i64) -> String {
@@ -185,11 +208,22 @@ pub fn norm_status(s: &str) -> String {
 pub fn remote(msg: impl Into<String>) -> RegistrarError {
     let m: String = msg.into();
     let l = m.to_ascii_lowercase();
-    if l.contains("auth") && (l.contains("code") || l.contains("info") || l.contains("epp")) && (l.contains("invalid") || l.contains("incorrect") || l.contains("wrong")) {
+    if l.contains("auth")
+        && (l.contains("code") || l.contains("info") || l.contains("epp"))
+        && (l.contains("invalid") || l.contains("incorrect") || l.contains("wrong"))
+    {
         RegistrarError::BadAuthCode
-    } else if l.contains("not available") || l.contains("unavailable") || l.contains("already registered") || l.contains("is taken") {
+    } else if l.contains("not available")
+        || l.contains("unavailable")
+        || l.contains("already registered")
+        || l.contains("is taken")
+    {
         RegistrarError::Unavailable
-    } else if l.contains("not found") || l.contains("does not exist") || l.contains("unknown domain") || l.contains("not in your account") {
+    } else if l.contains("not found")
+        || l.contains("does not exist")
+        || l.contains("unknown domain")
+        || l.contains("not in your account")
+    {
         RegistrarError::UnknownDomain
     } else {
         RegistrarError::Remote(m.chars().take(300).collect())
@@ -212,7 +246,13 @@ mod tests {
         assert_eq!(epoch_date(0), "1970-01-01");
         assert_eq!(epoch_date(1_830_297_600), "2028-01-01");
         assert_eq!(us_date("3/7/2028"), Some("2028-03-07".into()));
-        assert_eq!(split("Sub.Example.co.uk"), ("sub".into(), "example.co.uk".into()));
-        assert_eq!(xml_text("<a><B x=\"1\">hi &amp; yo</B></a>", "b").as_deref(), Some("hi & yo"));
+        assert_eq!(
+            split("Sub.Example.co.uk"),
+            ("sub".into(), "example.co.uk".into())
+        );
+        assert_eq!(
+            xml_text("<a><B x=\"1\">hi &amp; yo</B></a>", "b").as_deref(),
+            Some("hi & yo")
+        );
     }
 }

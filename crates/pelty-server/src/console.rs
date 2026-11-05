@@ -60,11 +60,21 @@ pub enum Cmd {
     AddonsList,
     AddonsEnable(String),
     AddonsDisable(String),
-    AddonsInstall { target: String, approve: bool },
+    AddonsInstall {
+        target: String,
+        approve: bool,
+    },
     AddonsUninstall(String),
     AddonsHealth,
-    AdminCreate { email: String, password: Option<String>, name: Option<String> },
-    AdminResetPassword { email: String, password: Option<String> },
+    AdminCreate {
+        email: String,
+        password: Option<String>,
+        name: Option<String>,
+    },
+    AdminResetPassword {
+        email: String,
+        password: Option<String>,
+    },
     UsersList(i64),
     Migrate,
     Reload,
@@ -210,11 +220,18 @@ fn err(e: pelty_core::AppError) -> String {
 /// A random password that passes every password-policy option.
 pub fn generate_password() -> String {
     use rand::Rng;
-    const SETS: [&[u8]; 4] = [b"ABCDEFGHJKLMNPQRSTUVWXYZ", b"abcdefghijkmnopqrstuvwxyz", b"23456789", b"-_.!@#%+="];
+    const SETS: [&[u8]; 4] = [
+        b"ABCDEFGHJKLMNPQRSTUVWXYZ",
+        b"abcdefghijkmnopqrstuvwxyz",
+        b"23456789",
+        b"-_.!@#%+=",
+    ];
     let mut rng = rand::rngs::OsRng;
     loop {
         let all: Vec<u8> = SETS.concat();
-        let p: String = (0..20).map(|_| all[rng.gen_range(0..all.len())] as char).collect();
+        let p: String = (0..20)
+            .map(|_| all[rng.gen_range(0..all.len())] as char)
+            .collect();
         if SETS.iter().all(|s| p.bytes().any(|b| s.contains(&b))) {
             return p;
         }
@@ -231,7 +248,9 @@ fn uptime(d: std::time::Duration) -> String {
 }
 
 fn fmt_ts(t: i64) -> String {
-    time::OffsetDateTime::from_unix_timestamp(t).map(|d| format!("{} {:02}:{:02}", d.date(), d.hour(), d.minute())).unwrap_or_default()
+    time::OffsetDateTime::from_unix_timestamp(t)
+        .map(|d| format!("{} {:02}:{:02}", d.date(), d.hour(), d.minute()))
+        .unwrap_or_default()
 }
 
 fn task_err(t: &str, e: pelty_core::AppError) -> String {
@@ -472,13 +491,28 @@ pub async fn exec(c: &Ctx, cmd: Cmd) -> Result<String, String> {
 async fn reset_password(s: &AppState, email: &str, password: &str) -> pelty_core::AppResult<u64> {
     use pelty_database::{audit, sessions, users};
     let email = pelty_auth::service::normalize_email(email)?;
-    let u = users::find_by_email(&s.pool, &email).await?.ok_or(pelty_core::AppError::NotFound)?;
-    pelty_auth::policy::load(&s.pool).await?.check_password(password, &email)?;
+    let u = users::find_by_email(&s.pool, &email)
+        .await?
+        .ok_or(pelty_core::AppError::NotFound)?;
+    pelty_auth::policy::load(&s.pool)
+        .await?
+        .check_password(password, &email)?;
     users::set_password(&s.pool, u.id, &pelty_auth::password::hash(password)?).await?;
     let revoked = sessions::revoke_all(&s.pool, u.id).await?;
     pelty_database::api_keys::revoke_all(&s.pool, u.id).await?;
-    audit::record(&s.pool, None, "auth.password_reset", Some(&u.id.to_string()), None, json!({ "sessions_revoked": revoked, "via": "console" })).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("user.password_reset", json!({ "user_id": u.id, "sessions_revoked": revoked })));
+    audit::record(
+        &s.pool,
+        None,
+        "auth.password_reset",
+        Some(&u.id.to_string()),
+        None,
+        json!({ "sessions_revoked": revoked, "via": "console" }),
+    )
+    .await?;
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "user.password_reset",
+        json!({ "user_id": u.id, "sessions_revoked": revoked }),
+    ));
     Ok(revoked)
 }
 
@@ -494,11 +528,21 @@ pub fn start(ctx: Arc<Ctx>, tty: bool) {
                 Ok(None) => (String::new(), false),
                 Ok(Some(cmd)) => {
                     let stop = cmd == Cmd::Stop;
-                    let changes = matches!(cmd, Cmd::AddonsEnable(_) | Cmd::AddonsDisable(_) | Cmd::AddonsInstall { .. } | Cmd::AddonsUninstall(_));
+                    let changes = matches!(
+                        cmd,
+                        Cmd::AddonsEnable(_)
+                            | Cmd::AddonsDisable(_)
+                            | Cmd::AddonsInstall { .. }
+                            | Cmd::AddonsUninstall(_)
+                    );
                     match exec(&ctx, cmd).await {
                         Ok(t) => {
                             if changes {
-                                pelty_api::cluster::publish(&ctx.state, pelty_api::cluster::Topic::Addons).await;
+                                pelty_api::cluster::publish(
+                                    &ctx.state,
+                                    pelty_api::cluster::Topic::Addons,
+                                )
+                                .await;
                             }
                             (t, stop)
                         }
@@ -510,13 +554,9 @@ pub fn start(ctx: Arc<Ctx>, tty: bool) {
             let _ = reply.send((text, stop));
         }
     });
-    let spawned = std::thread::Builder::new().name("console".into()).spawn(move || {
-        if tty {
-            tty_loop(tx)
-        } else {
-            plain_loop(tx)
-        }
-    });
+    let spawned = std::thread::Builder::new()
+        .name("console".into())
+        .spawn(move || if tty { tty_loop(tx) } else { plain_loop(tx) });
     if let Err(e) = spawned {
         tracing::warn!(error = %e, "console not started");
     }
@@ -549,7 +589,10 @@ fn plain_loop(tx: mpsc::Sender<Request>) {
 fn tty_loop(tx: mpsc::Sender<Request>) {
     use rustyline::error::ReadlineError;
     use rustyline::ExternalPrinter;
-    let cfg = rustyline::Config::builder().auto_add_history(true).max_history_size(500).map(|b| b.build());
+    let cfg = rustyline::Config::builder()
+        .auto_add_history(true)
+        .max_history_size(500)
+        .map(|b| b.build());
     let mut rl = match cfg.and_then(rustyline::DefaultEditor::with_config) {
         Ok(rl) => rl,
         Err(e) => {
@@ -563,7 +606,9 @@ fn tty_loop(tx: mpsc::Sender<Request>) {
                 print!("{msg}");
             }
         }))),
-        Err(e) => tracing::warn!(error = %e, "console: log lines may overwrite the prompt (is TERM set to a real terminal type?)"),
+        Err(e) => {
+            tracing::warn!(error = %e, "console: log lines may overwrite the prompt (is TERM set to a real terminal type?)")
+        }
     }
     println!("Console ready. Type `help` for commands, `stop` (or Ctrl+C) to shut down.");
     loop {
@@ -610,45 +655,143 @@ mod tests {
         assert_eq!(parse("/stop").unwrap(), Some(Cmd::Stop));
         assert_eq!(parse("STATUS").unwrap(), Some(Cmd::Status));
         assert_eq!(parse("version").unwrap(), Some(Cmd::Version));
-        assert_eq!(parse("update --check").unwrap(), Some(Cmd::Update(vec!["--check".into()])));
-        assert_eq!(parse("import whmcs --file a.sql --dry-run").unwrap(), Some(Cmd::ImportWhmcs(vec!["--file".into(), "a.sql".into(), "--dry-run".into()])));
+        assert_eq!(
+            parse("update --check").unwrap(),
+            Some(Cmd::Update(vec!["--check".into()]))
+        );
+        assert_eq!(
+            parse("import whmcs --file a.sql --dry-run").unwrap(),
+            Some(Cmd::ImportWhmcs(vec![
+                "--file".into(),
+                "a.sql".into(),
+                "--dry-run".into()
+            ]))
+        );
         assert!(parse("import blesta").is_err());
         assert_eq!(parse("addons").unwrap(), Some(Cmd::AddonsList));
         assert_eq!(parse("addons list").unwrap(), Some(Cmd::AddonsList));
-        assert_eq!(parse("addons enable gateway-stripe").unwrap(), Some(Cmd::AddonsEnable("gateway-stripe".into())));
-        assert_eq!(parse("addons disable x").unwrap(), Some(Cmd::AddonsDisable("x".into())));
-        assert_eq!(parse("addons uninstall x").unwrap(), Some(Cmd::AddonsUninstall("x".into())));
+        assert_eq!(
+            parse("addons enable gateway-stripe").unwrap(),
+            Some(Cmd::AddonsEnable("gateway-stripe".into()))
+        );
+        assert_eq!(
+            parse("addons disable x").unwrap(),
+            Some(Cmd::AddonsDisable("x".into()))
+        );
+        assert_eq!(
+            parse("addons uninstall x").unwrap(),
+            Some(Cmd::AddonsUninstall("x".into()))
+        );
         assert_eq!(parse("addons health").unwrap(), Some(Cmd::AddonsHealth));
-        assert_eq!(parse(r#"addons install "C:\My Addons\a.zip""#).unwrap(), Some(Cmd::AddonsInstall { target: r"C:\My Addons\a.zip".into(), approve: false }));
-        assert_eq!(parse("addons install --approve ./a.zip").unwrap(), Some(Cmd::AddonsInstall { target: "./a.zip".into(), approve: true }));
-        assert_eq!(parse("admin create a@b.co").unwrap(), Some(Cmd::AdminCreate { email: "a@b.co".into(), password: None, name: None }));
-        assert_eq!(parse("admin create a@b.co --name Jane  Doe").unwrap(), Some(Cmd::AdminCreate { email: "a@b.co".into(), password: None, name: Some("Jane Doe".into()) }));
-        assert_eq!(parse("admin create a@b.co Secret-Pass-123 --name Ops").unwrap(), Some(Cmd::AdminCreate { email: "a@b.co".into(), password: Some("Secret-Pass-123".into()), name: Some("Ops".into()) }));
+        assert_eq!(
+            parse(r#"addons install "C:\My Addons\a.zip""#).unwrap(),
+            Some(Cmd::AddonsInstall {
+                target: r"C:\My Addons\a.zip".into(),
+                approve: false
+            })
+        );
+        assert_eq!(
+            parse("addons install --approve ./a.zip").unwrap(),
+            Some(Cmd::AddonsInstall {
+                target: "./a.zip".into(),
+                approve: true
+            })
+        );
+        assert_eq!(
+            parse("admin create a@b.co").unwrap(),
+            Some(Cmd::AdminCreate {
+                email: "a@b.co".into(),
+                password: None,
+                name: None
+            })
+        );
+        assert_eq!(
+            parse("admin create a@b.co --name Jane  Doe").unwrap(),
+            Some(Cmd::AdminCreate {
+                email: "a@b.co".into(),
+                password: None,
+                name: Some("Jane Doe".into())
+            })
+        );
+        assert_eq!(
+            parse("admin create a@b.co Secret-Pass-123 --name Ops").unwrap(),
+            Some(Cmd::AdminCreate {
+                email: "a@b.co".into(),
+                password: Some("Secret-Pass-123".into()),
+                name: Some("Ops".into())
+            })
+        );
         assert!(parse("admin create a@b.co --name").is_err());
-        assert_eq!(parse("admin reset-password a@b.co 'p w'").unwrap(), Some(Cmd::AdminResetPassword { email: "a@b.co".into(), password: Some("p w".into()) }));
+        assert_eq!(
+            parse("admin reset-password a@b.co 'p w'").unwrap(),
+            Some(Cmd::AdminResetPassword {
+                email: "a@b.co".into(),
+                password: Some("p w".into())
+            })
+        );
         assert_eq!(parse("users list").unwrap(), Some(Cmd::UsersList(25)));
         assert_eq!(parse("users list 5").unwrap(), Some(Cmd::UsersList(5)));
         assert_eq!(parse("migrate").unwrap(), Some(Cmd::Migrate));
         assert_eq!(parse("cron").unwrap(), Some(Cmd::CronList));
-        assert_eq!(parse("cron run billing.recurring").unwrap(), Some(Cmd::CronRun("billing.recurring".into())));
-        assert_eq!(parse("cron disable acme:sync").unwrap(), Some(Cmd::CronEnable("acme:sync".into(), false)));
-        assert_eq!(parse("cron history x 5").unwrap(), Some(Cmd::CronHistory("x".into(), 5)));
-        assert_eq!(parse("cron schedule x \"0 3 * * 1\"").unwrap(), Some(Cmd::CronSchedule("x".into(), Some("0 3 * * 1".into()))));
-        assert_eq!(parse("cron schedule x 0 3 * * 1").unwrap(), Some(Cmd::CronSchedule("x".into(), Some("0 3 * * 1".into()))));
-        assert_eq!(parse("cron schedule x default").unwrap(), Some(Cmd::CronSchedule("x".into(), None)));
-        assert_eq!(parse("cron reset acme:sync").unwrap(), Some(Cmd::CronReset("acme:sync".into())));
-        assert_eq!(parse("cron missed x run_once").unwrap(), Some(Cmd::CronMissed("x".into(), "run_once".into())));
+        assert_eq!(
+            parse("cron run billing.recurring").unwrap(),
+            Some(Cmd::CronRun("billing.recurring".into()))
+        );
+        assert_eq!(
+            parse("cron disable acme:sync").unwrap(),
+            Some(Cmd::CronEnable("acme:sync".into(), false))
+        );
+        assert_eq!(
+            parse("cron history x 5").unwrap(),
+            Some(Cmd::CronHistory("x".into(), 5))
+        );
+        assert_eq!(
+            parse("cron schedule x \"0 3 * * 1\"").unwrap(),
+            Some(Cmd::CronSchedule("x".into(), Some("0 3 * * 1".into())))
+        );
+        assert_eq!(
+            parse("cron schedule x 0 3 * * 1").unwrap(),
+            Some(Cmd::CronSchedule("x".into(), Some("0 3 * * 1".into())))
+        );
+        assert_eq!(
+            parse("cron schedule x default").unwrap(),
+            Some(Cmd::CronSchedule("x".into(), None))
+        );
+        assert_eq!(
+            parse("cron reset acme:sync").unwrap(),
+            Some(Cmd::CronReset("acme:sync".into()))
+        );
+        assert_eq!(
+            parse("cron missed x run_once").unwrap(),
+            Some(Cmd::CronMissed("x".into(), "run_once".into()))
+        );
         assert!(parse("cron missed x always").is_err());
         assert!(parse("cron history x many").is_err() && parse("cron run").is_err());
         assert_eq!(parse("cluster").unwrap(), Some(Cmd::Cluster));
         assert_eq!(parse("reload").unwrap(), Some(Cmd::Reload));
         assert_eq!(parse("log level").unwrap(), Some(Cmd::LogLevel(None)));
-        assert_eq!(parse("log level info,sqlx=debug").unwrap(), Some(Cmd::LogLevel(Some("info,sqlx=debug".into()))));
+        assert_eq!(
+            parse("log level info,sqlx=debug").unwrap(),
+            Some(Cmd::LogLevel(Some("info,sqlx=debug".into())))
+        );
     }
 
     #[test]
     fn rejects_bad_input() {
-        for bad in ["frobnicate", "addons enable", "addons install", "addons install a b", "addons nope", "admin create", "admin delete x", "users list 0", "users list x", "stop now", "log", "addons install \"unterminated"] {
+        for bad in [
+            "frobnicate",
+            "addons enable",
+            "addons install",
+            "addons install a b",
+            "addons nope",
+            "admin create",
+            "admin delete x",
+            "users list 0",
+            "users list x",
+            "stop now",
+            "log",
+            "addons install \"unterminated",
+        ] {
             assert!(parse(bad).is_err(), "{bad}");
         }
         assert!(parse("frobnicate").unwrap_err().contains("help"));
@@ -656,7 +799,10 @@ mod tests {
 
     #[test]
     fn splits_words() {
-        assert_eq!(split(r#"a  "b c" '' d"#).unwrap(), vec!["a", "b c", "", "d"]);
+        assert_eq!(
+            split(r#"a  "b c" '' d"#).unwrap(),
+            vec!["a", "b c", "", "d"]
+        );
     }
 
     #[test]
@@ -671,7 +817,13 @@ mod tests {
     #[test]
     fn formats_uptime() {
         assert_eq!(uptime(std::time::Duration::from_secs(65)), "1m 05s");
-        assert_eq!(uptime(std::time::Duration::from_secs(3 * 3600 + 61)), "3h 01m 01s");
-        assert_eq!(uptime(std::time::Duration::from_secs(2 * 86400 + 3600)), "2d 1h 00m");
+        assert_eq!(
+            uptime(std::time::Duration::from_secs(3 * 3600 + 61)),
+            "3h 01m 01s"
+        );
+        assert_eq!(
+            uptime(std::time::Duration::from_secs(2 * 86400 + 3600)),
+            "2d 1h 00m"
+        );
     }
 }

@@ -68,7 +68,9 @@ pub fn parse_ecb(xml: &str) -> AppResult<Feed> {
             let rest = &t[i + 1..];
             Some(rest[..rest.find(q)?].to_string())
         };
-        let (Some(c), Some(r)) = (attr("currency"), attr("rate")) else { continue };
+        let (Some(c), Some(r)) = (attr("currency"), attr("rate")) else {
+            continue;
+        };
         let r = Decimal::from_str(r.trim()).map_err(|_| bad())?;
         if valid_code(&c) && r > Decimal::ZERO {
             rates.insert(c, r);
@@ -78,18 +80,28 @@ pub fn parse_ecb(xml: &str) -> AppResult<Feed> {
         return Err(bad());
     }
     rates.insert("EUR".into(), Decimal::ONE);
-    Ok(Feed { base: "EUR".into(), rates })
+    Ok(Feed {
+        base: "EUR".into(),
+        rates,
+    })
 }
 
 /// Parse `{"base": "USD", "rates": {"EUR": 0.92, ...}}` (exchangerate.host /
 /// openexchangerates style; numbers or numeric strings).
 pub fn parse_json(body: &str) -> AppResult<Feed> {
     let v: serde_json::Value = serde_json::from_str(body).map_err(|_| bad())?;
-    let base = v["base"].as_str().or_else(|| v["base_code"].as_str()).ok_or_else(bad)?.to_ascii_uppercase();
+    let base = v["base"]
+        .as_str()
+        .or_else(|| v["base_code"].as_str())
+        .ok_or_else(bad)?
+        .to_ascii_uppercase();
     if !valid_code(&base) {
         return Err(bad());
     }
-    let obj = v["rates"].as_object().or_else(|| v["conversion_rates"].as_object()).ok_or_else(bad)?;
+    let obj = v["rates"]
+        .as_object()
+        .or_else(|| v["conversion_rates"].as_object())
+        .ok_or_else(bad)?;
     let mut rates = BTreeMap::new();
     for (k, x) in obj {
         let s = match x {
@@ -97,7 +109,9 @@ pub fn parse_json(body: &str) -> AppResult<Feed> {
             serde_json::Value::String(s) => s.clone(),
             _ => continue,
         };
-        let Ok(r) = Decimal::from_str(&s).or_else(|_| Decimal::from_scientific(&s)) else { continue };
+        let Ok(r) = Decimal::from_str(&s).or_else(|_| Decimal::from_scientific(&s)) else {
+            continue;
+        };
         let k = k.to_ascii_uppercase();
         if valid_code(&k) && r > Decimal::ZERO {
             rates.insert(k, r);
@@ -173,7 +187,12 @@ pub struct Applied {
 
 /// Apply a feed to every currency with `auto_update` (except the default,
 /// which stays at 1). Changes are logged in `currency_rate_history`.
-pub async fn apply(pool: &PgPool, feed: &Feed, markup: Decimal, source: &str) -> AppResult<Applied> {
+pub async fn apply(
+    pool: &PgPool,
+    feed: &Feed,
+    markup: Decimal,
+    source: &str,
+) -> AppResult<Applied> {
     let mut tx = pool.begin().await.map_err(db_err)?;
     let default: String = sqlx::query_scalar("SELECT code::text FROM currencies WHERE is_default")
         .fetch_one(&mut *tx)
@@ -187,7 +206,10 @@ pub async fn apply(pool: &PgPool, feed: &Feed, markup: Decimal, source: &str) ->
             .fetch_all(&mut *tx)
             .await
             .map_err(db_err)?;
-    let mut out = Applied { updated: vec![], missing: vec![] };
+    let mut out = Applied {
+        updated: vec![],
+        missing: vec![],
+    };
     for (code, old) in rows {
         let Some(new) = relative_rate(feed, &default, &code, markup) else {
             out.missing.push(code);
@@ -265,7 +287,8 @@ mod tests {
 
     #[test]
     fn parses_json() {
-        let f = parse_json(r#"{"base":"usd","rates":{"EUR":0.92,"RON":"4.6","XX":1,"JPY":"abc"}}"#).unwrap();
+        let f = parse_json(r#"{"base":"usd","rates":{"EUR":0.92,"RON":"4.6","XX":1,"JPY":"abc"}}"#)
+            .unwrap();
         assert_eq!(f.base, "USD");
         assert_eq!(f.rates["EUR"], d("0.92"));
         assert_eq!(f.rates["USD"], Decimal::ONE);
@@ -278,7 +301,10 @@ mod tests {
         let f = parse_json(r#"{"base":"USD","rates":{"EUR":"0.8","RON":"4"}}"#).unwrap();
         // Default EUR: RON per EUR = 4 / 0.8 = 5.
         assert_eq!(relative_rate(&f, "EUR", "RON", Decimal::ZERO), Some(d("5")));
-        assert_eq!(relative_rate(&f, "EUR", "USD", Decimal::ZERO), Some(d("1.25")));
+        assert_eq!(
+            relative_rate(&f, "EUR", "USD", Decimal::ZERO),
+            Some(d("1.25"))
+        );
         assert_eq!(relative_rate(&f, "EUR", "RON", d("2")), Some(d("5.1")));
         assert_eq!(relative_rate(&f, "EUR", "EUR", d("2")), Some(Decimal::ONE));
         assert_eq!(relative_rate(&f, "EUR", "GBP", Decimal::ZERO), None);

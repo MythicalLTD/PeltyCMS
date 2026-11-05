@@ -20,7 +20,11 @@ pub fn parse_args(args: &[&str]) -> Result<Opts, String> {
     let mut o = Opts::default();
     let mut it = args.iter();
     while let Some(a) = it.next() {
-        let mut val = || it.next().map(|s| s.to_string()).ok_or(format!("{a} needs a value; usage: {USAGE}"));
+        let mut val = || {
+            it.next()
+                .map(|s| s.to_string())
+                .ok_or(format!("{a} needs a value; usage: {USAGE}"))
+        };
         match *a {
             "--dry-run" => o.dry_run = true,
             "--file" => o.file = Some(val()?),
@@ -35,10 +39,14 @@ pub fn parse_args(args: &[&str]) -> Result<Opts, String> {
     }
     if o.cc_hash.is_none() {
         // WHMCS_CC_ENCRYPTION_HASH: `$cc_encryption_hash` from WHMCS configuration.php, used by `import whmcs` to decrypt server passwords (safer than --cc-hash, which shows up in the process list).
-        o.cc_hash = std::env::var("WHMCS_CC_ENCRYPTION_HASH").ok().filter(|s| !s.is_empty());
+        o.cc_hash = std::env::var("WHMCS_CC_ENCRYPTION_HASH")
+            .ok()
+            .filter(|s| !s.is_empty());
     }
     match (&o.file, &o.dsn) {
-        (None, None) => Err(format!("missing --file or --dsn (or WHMCS_DSN); usage: {USAGE}")),
+        (None, None) => Err(format!(
+            "missing --file or --dsn (or WHMCS_DSN); usage: {USAGE}"
+        )),
         (Some(_), Some(_)) => Err("use either --file or --dsn, not both".into()),
         _ => Ok(o),
     }
@@ -51,7 +59,9 @@ async fn load(o: &Opts) -> Result<pelty_import::WhmcsData, String> {
         let sql = String::from_utf8_lossy(&bytes);
         let t = pelty_import::sqldump::parse(&sql).map_err(|e| format!("{f}: {e}"))?;
         if !t.has("tblclients") {
-            return Err(format!("{f}: no tblclients table found; is this a WHMCS export?"));
+            return Err(format!(
+                "{f}: no tblclients table found; is this a WHMCS export?"
+            ));
         }
         return Ok(pelty_import::WhmcsData::from_tables(&t));
     }
@@ -60,7 +70,9 @@ async fn load(o: &Opts) -> Result<pelty_import::WhmcsData, String> {
 
 #[cfg(feature = "whmcs-mysql")]
 async fn load_mysql(dsn: &str) -> Result<pelty_import::WhmcsData, String> {
-    pelty_import::whmcs::load_mysql(dsn).await.map_err(|e| e.to_string())
+    pelty_import::whmcs::load_mysql(dsn)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(not(feature = "whmcs-mysql"))]
@@ -90,7 +102,9 @@ pub async fn run(pool: &PgPool, cfg: &Config, o: &Opts) -> Result<String, String
     };
     let sealer = sb.as_ref().map(|b| move |p: &[u8]| b.seal(p));
     let seal: Option<pelty_import::Sealer> = sealer.as_ref().map(|f| f as _);
-    let mut report = pelty_import::run_with(pool, &data, o.dry_run, "whmcs", seal).await.map_err(|e| e.to_string())?;
+    let mut report = pelty_import::run_with(pool, &data, o.dry_run, "whmcs", seal)
+        .await
+        .map_err(|e| e.to_string())?;
     warnings.append(&mut report.warnings);
     report.warnings = warnings;
     Ok(report.render())
@@ -102,7 +116,15 @@ mod tests {
     #[test]
     fn args() {
         let o = parse_args(&["--file", "a.sql", "--cc-hash", "x", "--dry-run"]).unwrap();
-        assert_eq!(o, Opts { file: Some("a.sql".into()), dsn: None, cc_hash: Some("x".into()), dry_run: true });
+        assert_eq!(
+            o,
+            Opts {
+                file: Some("a.sql".into()),
+                dsn: None,
+                cc_hash: Some("x".into()),
+                dry_run: true
+            }
+        );
         assert!(parse_args(&["--file"]).is_err());
         assert!(parse_args(&["--file", "a", "--dsn", "b"]).is_err());
         assert!(parse_args(&["--bogus"]).is_err());

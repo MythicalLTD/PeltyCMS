@@ -69,9 +69,18 @@ mod tests {
     fn escapes_and_guards() {
         let mut c = Csv::new(&["a", "b"]);
         c.row([Cell::Text("x,y"), Cell::Text("say \"hi\"")]);
-        c.row([Cell::Text("=SUM(A1)"), Cell::Dec(Decimal::from_str("-12.5000").unwrap())]);
-        c.row([Cell::Text("Ștefan"), Cell::Dec(Decimal::from_str("0.1234").unwrap())]);
-        assert_eq!(c.finish(), "a,b\r\n\"x,y\",\"say \"\"hi\"\"\"\r\n\"'=SUM(A1)\",-12.50\r\nȘtefan,0.1234\r\n");
+        c.row([
+            Cell::Text("=SUM(A1)"),
+            Cell::Dec(Decimal::from_str("-12.5000").unwrap()),
+        ]);
+        c.row([
+            Cell::Text("Ștefan"),
+            Cell::Dec(Decimal::from_str("0.1234").unwrap()),
+        ]);
+        assert_eq!(
+            c.finish(),
+            "a,b\r\n\"x,y\",\"say \"\"hi\"\"\"\r\n\"'=SUM(A1)\",-12.50\r\nȘtefan,0.1234\r\n"
+        );
         assert_eq!(dec(Decimal::from_str("100").unwrap()), "100.00");
         assert_eq!(dec(Decimal::from_str("0.000").unwrap()), "0.00");
     }

@@ -56,7 +56,12 @@ pub async fn get_cart(pool: &PgPool, id: Uuid) -> AppResult<Option<Cart>> {
 }
 
 /// Create or replace a cart. A cart that already became an order is frozen.
-pub async fn save_cart(pool: &PgPool, id: Uuid, customer: Option<Uuid>, i: &CartInput) -> AppResult<Cart> {
+pub async fn save_cart(
+    pool: &PgPool,
+    id: Uuid,
+    customer: Option<Uuid>,
+    i: &CartInput,
+) -> AppResult<Cart> {
     if i.items.len() > MAX_ITEMS {
         return Err(AppError::Validation("error.cart_invalid"));
     }
@@ -64,20 +69,29 @@ pub async fn save_cart(pool: &PgPool, id: Uuid, customer: Option<Uuid>, i: &Cart
         return Err(AppError::Validation("error.invalid_cycle"));
     }
     let country = i.country.trim().to_ascii_uppercase();
-    if !(country.is_empty() || (country.len() == 2 && country.bytes().all(|b| b.is_ascii_uppercase()))) {
+    if !(country.is_empty()
+        || (country.len() == 2 && country.bytes().all(|b| b.is_ascii_uppercase())))
+    {
         return Err(AppError::Validation("error.invalid_country"));
     }
     let email = i.email.as_deref().map(str::trim).filter(|e| !e.is_empty());
     if email.is_some_and(|e| e.len() > 254 || !e.contains('@')) {
         return Err(AppError::Validation("error.invalid_email"));
     }
-    let coupon = i.coupon.as_deref().map(str::trim).filter(|c| !c.is_empty()).map(|c| c.chars().take(64).collect::<String>());
-    let items = serde_json::to_value(&i.items).map_err(|_| AppError::Validation("error.cart_invalid"))?;
-    let enabled: Option<String> = sqlx::query_scalar("SELECT code::text FROM currencies WHERE code = $1 AND enabled")
-        .bind(i.currency.to_ascii_uppercase())
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?;
+    let coupon = i
+        .coupon
+        .as_deref()
+        .map(str::trim)
+        .filter(|c| !c.is_empty())
+        .map(|c| c.chars().take(64).collect::<String>());
+    let items =
+        serde_json::to_value(&i.items).map_err(|_| AppError::Validation("error.cart_invalid"))?;
+    let enabled: Option<String> =
+        sqlx::query_scalar("SELECT code::text FROM currencies WHERE code = $1 AND enabled")
+            .bind(i.currency.to_ascii_uppercase())
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?;
     let currency = enabled.ok_or(AppError::Validation("error.invalid_currency"))?;
     sqlx::query_as(&format!(
         "INSERT INTO carts (id, customer_id, email, currency, country, items, coupon, locale)
@@ -103,7 +117,12 @@ pub async fn save_cart(pool: &PgPool, id: Uuid, customer: Option<Uuid>, i: &Cart
     .ok_or(AppError::Conflict("error.cart_closed"))
 }
 
-pub async fn mark_converted(pool: &PgPool, cart: Uuid, customer: Uuid, order: Uuid) -> AppResult<()> {
+pub async fn mark_converted(
+    pool: &PgPool,
+    cart: Uuid,
+    customer: Uuid,
+    order: Uuid,
+) -> AppResult<()> {
     sqlx::query("UPDATE carts SET order_id = $3, customer_id = $2, updated_at = now() WHERE id = $1 AND order_id IS NULL")
         .bind(cart)
         .bind(customer)
@@ -215,23 +234,27 @@ pub async fn preview(
     let exp = crate::invoices::exponent(&mut tx, &currency).await?;
     let mut coupon_error = None;
     let promo = match coupon.map(str::trim).filter(|c| !c.is_empty()) {
-        Some(code) => match coupons::check(pool, code, customer.unwrap_or(Uuid::nil()), &currency).await {
-            Ok(c) => Some(c),
-            Err(AppError::Validation(k)) => {
-                coupon_error = Some(k);
-                None
+        Some(code) => {
+            match coupons::check(pool, code, customer.unwrap_or(Uuid::nil()), &currency).await {
+                Ok(c) => Some(c),
+                Err(AppError::Validation(k)) => {
+                    coupon_error = Some(k);
+                    None
+                }
+                Err(e) => return Err(e),
             }
-            Err(e) => return Err(e),
-        },
+        }
         None => None,
     };
     let (cust, group_pct) = match customer {
         Some(cid) => {
-            let c: Option<TaxCust> = sqlx::query_as("SELECT country, region, vat_number, tax_exempt FROM customers WHERE id = $1")
-                .bind(cid)
-                .fetch_optional(&mut *tx)
-                .await
-                .map_err(db_err)?;
+            let c: Option<TaxCust> = sqlx::query_as(
+                "SELECT country, region, vat_number, tax_exempt FROM customers WHERE id = $1",
+            )
+            .bind(cid)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_err)?;
             let pct: Option<Decimal> = sqlx::query_scalar(
                 "SELECT g.discount_percent FROM customers c JOIN client_groups g ON g.id = c.client_group_id WHERE c.id = $1 AND g.discount_percent > 0",
             )
@@ -255,9 +278,12 @@ pub async fn preview(
     let mut group = Decimal::ZERO;
     for it in items {
         let q = catalog::quote(&mut tx, it.product_id, &it.cycle, &currency, &it.config).await?;
-        let extras = addons::quote(&mut tx, it.product_id, &it.cycle, &currency, &it.addons).await?;
+        let extras =
+            addons::quote(&mut tx, it.product_id, &it.cycle, &currency, &it.addons).await?;
         let d = match &promo {
-            Some(c) if c.applies_to(q.product_id) => coupons::line_discount(&c.kind, c.value, q.amount, exp),
+            Some(c) if c.applies_to(q.product_id) => {
+                coupons::line_discount(&c.kind, c.value, q.amount, exp)
+            }
             _ => Decimal::ZERO,
         };
         discount += d;
@@ -284,7 +310,13 @@ pub async fn preview(
             labels: q.labels,
             addons: extras
                 .into_iter()
-                .map(|a| PreviewAddon { addon_id: a.addon_id, name: a.name, cycle: a.cycle, amount: a.amount, setup_fee: a.setup_fee })
+                .map(|a| PreviewAddon {
+                    addon_id: a.addon_id,
+                    name: a.name,
+                    cycle: a.cycle,
+                    amount: a.amount,
+                    setup_fee: a.setup_fee,
+                })
                 .collect(),
             discount: d,
         });
@@ -304,13 +336,23 @@ pub async fn preview(
     let reverse = cfg.enabled
         && cfg.reverse_charge
         && !cust.tax_exempt
-        && engine::reverse_charge(&cfg.home_country, &cust.country, &cust.vat_number, &FormatOnly);
+        && engine::reverse_charge(
+            &cfg.home_country,
+            &cust.country,
+            &cust.vat_number,
+            &FormatOnly,
+        );
     let rules: Vec<Rule> = if cfg.enabled && !cust.tax_exempt {
         let all = tax::list_rules(pool).await?;
         tax::select(&all, &cust.country, &cust.region)
             .into_iter()
             .filter(|r| !(reverse && r.is_vat))
-            .map(|r| Rule { name: r.name, rate: r.rate, compound: r.compound, is_vat: r.is_vat })
+            .map(|r| Rule {
+                name: r.name,
+                rate: r.rate,
+                compound: r.compound,
+                is_vat: r.is_vat,
+            })
             .collect()
     } else {
         vec![]
@@ -319,13 +361,27 @@ pub async fn preview(
     let (mut net, mut tax_total, mut taxes) = (Decimal::ZERO, Decimal::ZERO, Vec::new());
     for a in amounts {
         let v = round(a, exp);
-        let l = if inclusive { engine::on_gross(v, &rules, exp) } else { engine::on_net(v, &rules, exp) }
-            .map_err(|_| AppError::Validation("error.invalid_amount"))?;
+        let l = if inclusive {
+            engine::on_gross(v, &rules, exp)
+        } else {
+            engine::on_net(v, &rules, exp)
+        }
+        .map_err(|_| AppError::Validation("error.invalid_amount"))?;
         engine::merge(&mut taxes, &l.parts);
         net += l.net;
         tax_total += l.tax;
     }
-    let subtotal = lines.iter().map(|l| l.amount + l.setup_fee + l.addons.iter().map(|a| a.amount + a.setup_fee).sum::<Decimal>()).sum();
+    let subtotal = lines
+        .iter()
+        .map(|l| {
+            l.amount
+                + l.setup_fee
+                + l.addons
+                    .iter()
+                    .map(|a| a.amount + a.setup_fee)
+                    .sum::<Decimal>()
+        })
+        .sum();
     Ok(Preview {
         currency,
         lines,
@@ -357,7 +413,8 @@ pub struct Contact {
     pub created_at: OffsetDateTime,
 }
 
-const CONTACT_COLS: &str = "c.id, c.customer_id, c.user_id, u.email::text AS email, c.name, c.permissions, c.created_at";
+const CONTACT_COLS: &str =
+    "c.id, c.customer_id, c.user_id, u.email::text AS email, c.name, c.permissions, c.created_at";
 
 pub fn check_perms(p: &[String]) -> AppResult<Vec<String>> {
     let mut v: Vec<String> = p.iter().map(|s| s.trim().to_string()).collect();
@@ -380,7 +437,11 @@ pub async fn contacts(pool: &PgPool, customer: Uuid) -> AppResult<Vec<Contact>> 
 }
 
 pub async fn mark_invited(pool: &PgPool, id: Uuid) -> AppResult<()> {
-    sqlx::query("UPDATE customer_subaccounts SET invited_at = now() WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?;
+    sqlx::query("UPDATE customer_subaccounts SET invited_at = now() WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(())
 }
 
@@ -394,7 +455,13 @@ pub async fn contact_for_user(pool: &PgPool, user: Uuid) -> AppResult<Option<Con
     .map_err(db_err)
 }
 
-pub async fn add_contact(pool: &PgPool, customer: Uuid, user: Uuid, name: &str, perms: &[String]) -> AppResult<Contact> {
+pub async fn add_contact(
+    pool: &PgPool,
+    customer: Uuid,
+    user: Uuid,
+    name: &str,
+    perms: &[String],
+) -> AppResult<Contact> {
     let id = Uuid::new_v4();
     sqlx::query("INSERT INTO customer_subaccounts (id, customer_id, user_id, name, permissions) VALUES ($1,$2,$3,$4,$5)")
         .bind(id)
@@ -408,10 +475,18 @@ pub async fn add_contact(pool: &PgPool, customer: Uuid, user: Uuid, name: &str, 
             sqlx::Error::Database(d) if d.is_unique_violation() => AppError::Conflict("error.contact_exists"),
             _ => db_err(e),
         })?;
-    contact_for_user(pool, user).await?.ok_or(AppError::NotFound)
+    contact_for_user(pool, user)
+        .await?
+        .ok_or(AppError::NotFound)
 }
 
-pub async fn update_contact(pool: &PgPool, customer: Uuid, id: Uuid, name: &str, perms: &[String]) -> AppResult<bool> {
+pub async fn update_contact(
+    pool: &PgPool,
+    customer: Uuid,
+    id: Uuid,
+    name: &str,
+    perms: &[String],
+) -> AppResult<bool> {
     let r = sqlx::query("UPDATE customer_subaccounts SET name = $3, permissions = $4 WHERE id = $1 AND customer_id = $2")
         .bind(id)
         .bind(customer)
@@ -426,12 +501,14 @@ pub async fn update_contact(pool: &PgPool, customer: Uuid, id: Uuid, name: &str,
 /// Remove a contact; returns the contact's user id so the caller can
 /// revoke its sessions.
 pub async fn remove_contact(pool: &PgPool, customer: Uuid, id: Uuid) -> AppResult<Option<Uuid>> {
-    sqlx::query_scalar("DELETE FROM customer_subaccounts WHERE id = $1 AND customer_id = $2 RETURNING user_id")
-        .bind(id)
-        .bind(customer)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_scalar(
+        "DELETE FROM customer_subaccounts WHERE id = $1 AND customer_id = $2 RETURNING user_id",
+    )
+    .bind(id)
+    .bind(customer)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 // email prefs
@@ -447,7 +524,12 @@ pub struct EmailPrefs {
 
 impl Default for EmailPrefs {
     fn default() -> Self {
-        Self { invoices: true, services: true, support: true, marketing: true }
+        Self {
+            invoices: true,
+            services: true,
+            support: true,
+            marketing: true,
+        }
     }
 }
 
@@ -525,7 +607,12 @@ pub async fn order_notes(pool: &PgPool, order: Uuid) -> AppResult<Vec<OrderNote>
     .map_err(db_err)
 }
 
-pub async fn add_order_note(pool: &PgPool, order: Uuid, author: Uuid, body: &str) -> AppResult<Uuid> {
+pub async fn add_order_note(
+    pool: &PgPool,
+    order: Uuid,
+    author: Uuid,
+    body: &str,
+) -> AppResult<Uuid> {
     let body = body.trim();
     if body.is_empty() || body.chars().count() > 5000 {
         return Err(AppError::Validation("error.invalid_note"));
@@ -579,16 +666,23 @@ async fn json_rows(pool: &PgPool, sql: &str, customer: Uuid, on: bool) -> AppRes
     if !on {
         return Ok(Value::Null);
     }
-    sqlx::query_scalar::<_, Value>(&format!("SELECT COALESCE(json_agg(t), '[]'::json)::jsonb FROM ({sql}) t"))
-        .bind(customer)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_scalar::<_, Value>(&format!(
+        "SELECT COALESCE(json_agg(t), '[]'::json)::jsonb FROM ({sql}) t"
+    ))
+    .bind(customer)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Client home: active services, unpaid invoices, open tickets, latest
 /// announcements and suggested knowledge-base articles (locale-aware).
-pub async fn home(pool: &PgPool, customer: Uuid, scope: HomeScope, locale: &str) -> AppResult<Value> {
+pub async fn home(
+    pool: &PgPool,
+    customer: Uuid,
+    scope: HomeScope,
+    locale: &str,
+) -> AppResult<Value> {
     let services = json_rows(
         pool,
         "SELECT s.id, p.name AS product_name, s.status, s.cycle, s.currency::text AS currency, s.recurring_amount, s.next_due_date

@@ -38,7 +38,11 @@ pub fn resolve_config(row: &pelty_database::extensions::GatewayRow) -> GatewayCo
 pub fn lower_headers(headers: &HeaderMap) -> Headers {
     headers
         .iter()
-        .filter_map(|(k, v)| v.to_str().ok().map(|v| (k.as_str().to_ascii_lowercase(), v.to_string())))
+        .filter_map(|(k, v)| {
+            v.to_str()
+                .ok()
+                .map(|v| (k.as_str().to_ascii_lowercase(), v.to_string()))
+        })
         .collect()
 }
 
@@ -69,13 +73,19 @@ pub async fn receive(
     })?;
     let hdrs = lower_headers(&headers);
     let now = time::OffsetDateTime::now_utc().unix_timestamp();
-    let mut log = NewDelivery { gateway: &gw, body_bytes: body.len().min(i32::MAX as usize) as i32, ..Default::default() };
+    let mut log = NewDelivery {
+        gateway: &gw,
+        body_bytes: body.len().min(i32::MAX as usize) as i32,
+        ..Default::default()
+    };
     let ev = match gateway.handle_webhook(&hdrs, &body, now).await {
         Ok(ev) => ev,
         Err(e) => {
             let msg = e.to_string();
             let (code, err) = match e {
-                GatewayError::InvalidSignature => (400, AppError::BadRequest("error.webhook_signature")),
+                GatewayError::InvalidSignature => {
+                    (400, AppError::BadRequest("error.webhook_signature"))
+                }
                 GatewayError::Unsupported => (404, AppError::NotFound),
                 _ => (400, AppError::BadRequest("error.bad_request")),
             };
@@ -91,7 +101,9 @@ pub async fn receive(
     log.kind = Some(kind_str(&ev.kind));
     log.provider_ref = ev.provider_ref.as_deref();
     log.status_code = 200;
-    if !pelty_database::extensions::record_webhook(&s.pool, &gw, &ev.event_id, &ev.event_type).await? {
+    if !pelty_database::extensions::record_webhook(&s.pool, &gw, &ev.event_id, &ev.event_type)
+        .await?
+    {
         tracing::info!(gateway = %gw, event = %ev.event_id, "duplicate webhook ignored");
         log.duplicate = true;
         pelty_database::gateway_admin::log_delivery(&s.pool, &log).await?;
@@ -100,7 +112,10 @@ pub async fn receive(
     let updated = apply_event(&s, &gw, &ev).await?;
     pelty_database::extensions::mark_webhook_processed(&s.pool, &gw, &ev.event_id).await?;
     pelty_database::gateway_admin::log_delivery(&s.pool, &log).await?;
-    Ok(ack(&gw, json!({ "received": true, "duplicate": false, "payments_updated": updated })))
+    Ok(ack(
+        &gw,
+        json!({ "received": true, "duplicate": false, "payments_updated": updated }),
+    ))
 }
 
 /// Adyen-style notifications expect the literal body `[accepted]`.
@@ -124,8 +139,15 @@ pub async fn apply_event(s: &AppState, gw: &str, ev: &WebhookEvent) -> ApiResult
                 "payment.disputed",
                 json!({ "gateway": gw, "provider_ref": ev.provider_ref, "payment_id": ev.payment_id, "event_type": ev.event_type }),
             ));
-            pelty_database::audit::record(&s.pool, None, "payment.disputed", ev.provider_ref.as_deref(), None,
-                json!({ "gateway": gw, "event_id": ev.event_id, "payment_id": ev.payment_id })).await?;
+            pelty_database::audit::record(
+                &s.pool,
+                None,
+                "payment.disputed",
+                ev.provider_ref.as_deref(),
+                None,
+                json!({ "gateway": gw, "event_id": ev.event_id, "payment_id": ev.payment_id }),
+            )
+            .await?;
             None
         }
         WebhookKind::Ignored => None,
@@ -138,7 +160,9 @@ pub async fn apply_event(s: &AppState, gw: &str, ev: &WebhookEvent) -> ApiResult
             None => false,
         };
         if !known {
-            if let Some(r) = pelty_database::gateway_admin::provider_ref_for(&s.pool, gw, pid).await? {
+            if let Some(r) =
+                pelty_database::gateway_admin::provider_ref_for(&s.pool, gw, pid).await?
+            {
                 pref = Some(r);
             }
         }
@@ -158,21 +182,33 @@ pub async fn apply_event(s: &AppState, gw: &str, ev: &WebhookEvent) -> ApiResult
                         ));
                     }
                     if a.invoice_paid {
-                        s.emit(DomainEvent::new("invoice.paid", json!({ "invoice_id": a.invoice_id })));
+                        s.emit(DomainEvent::new(
+                            "invoice.paid",
+                            json!({ "invoice_id": a.invoice_id }),
+                        ));
                         crate::changes::after_payment(s, a.invoice_id).await;
                     }
                 }
                 None => {
-                    updated = pelty_database::extensions::set_payment_status_by_ref(&s.pool, gw, r, st).await?;
+                    updated =
+                        pelty_database::extensions::set_payment_status_by_ref(&s.pool, gw, r, st)
+                            .await?;
                     if updated > 0 {
-                        s.emit(DomainEvent::new("payment.succeeded", json!({ "gateway": gw, "provider_ref": r })));
+                        s.emit(DomainEvent::new(
+                            "payment.succeeded",
+                            json!({ "gateway": gw, "provider_ref": r }),
+                        ));
                     }
                 }
             }
         } else {
-            updated = pelty_database::extensions::set_payment_status_by_ref(&s.pool, gw, r, st).await?;
+            updated =
+                pelty_database::extensions::set_payment_status_by_ref(&s.pool, gw, r, st).await?;
             if st == "failed" && updated > 0 {
-                s.emit(DomainEvent::new("payment.failed", json!({ "gateway": gw, "provider_ref": r })));
+                s.emit(DomainEvent::new(
+                    "payment.failed",
+                    json!({ "gateway": gw, "provider_ref": r }),
+                ));
             }
         }
     }

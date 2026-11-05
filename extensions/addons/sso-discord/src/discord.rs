@@ -15,7 +15,12 @@ pub const PROVIDER: Provider = Provider {
 };
 
 fn profile(v: &Value) -> Option<Value> {
-    sso::profile(sso::id(v)?, sso::s(v, "email").unwrap_or_default(), v["verified"].as_bool().unwrap_or(false), sso::name(v))
+    sso::profile(
+        sso::id(v)?,
+        sso::s(v, "email").unwrap_or_default(),
+        v["verified"].as_bool().unwrap_or(false),
+        sso::name(v),
+    )
 }
 
 #[cfg(test)]
@@ -24,7 +29,13 @@ mod tests {
 
     #[test]
     fn maps_claims() {
-        let d = (PROVIDER.profile)(&json!({"id": "7", "verified": true, "email": "c@x", "global_name": "C"})).unwrap();
-        assert_eq!(d, json!({"subject": "7", "email": "c@x", "email_verified": true, "name": "C"}));
+        let d = (PROVIDER.profile)(
+            &json!({"id": "7", "verified": true, "email": "c@x", "global_name": "C"}),
+        )
+        .unwrap();
+        assert_eq!(
+            d,
+            json!({"subject": "7", "email": "c@x", "email_verified": true, "name": "C"})
+        );
     }
 }

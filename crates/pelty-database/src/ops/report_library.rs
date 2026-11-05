@@ -16,7 +16,6 @@ pub struct Def {
     sql: &'static str,
 }
 
-
 pub const REPORTS: &[Def] = &[
     Def { key: "annual_income", category: "income", columns: &["year", "currency", "income", "payments"], chart: Some((0, 2)),
         sql: "SELECT to_char(applied_at,'YYYY'), currency, sum(amount)::text, count(*)::text FROM payments
@@ -90,7 +89,6 @@ pub const REPORTS: &[Def] = &[
 ];
 
 pub fn find(key: &str) -> Option<&'static Def> {
-
     REPORTS.iter().find(|d| d.key == key)
 }
 
@@ -102,23 +100,65 @@ pub struct Table {
     pub rows: Vec<Vec<Option<String>>>,
 }
 
-pub async fn run(pool: &PgPool, key: &str, from: OffsetDateTime, to: OffsetDateTime) -> AppResult<Table> {
+pub async fn run(
+    pool: &PgPool,
+    key: &str,
+    from: OffsetDateTime,
+    to: OffsetDateTime,
+) -> AppResult<Table> {
     let d = find(key).ok_or(AppError::NotFound)?;
-    let rows = sqlx::query(d.sql).bind(from).bind(to).fetch_all(pool).await.map_err(db_err)?;
-    let rows = rows.iter().map(|r| (0..r.len()).map(|i| r.try_get::<Option<String>, _>(i).ok().flatten()).collect()).collect();
-    Ok(Table { key: d.key, columns: d.columns, chart: d.chart, rows })
+    let rows = sqlx::query(d.sql)
+        .bind(from)
+        .bind(to)
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?;
+    let rows = rows
+        .iter()
+        .map(|r| {
+            (0..r.len())
+                .map(|i| r.try_get::<Option<String>, _>(i).ok().flatten())
+                .collect()
+        })
+        .collect();
+    Ok(Table {
+        key: d.key,
+        columns: d.columns,
+        chart: d.chart,
+        rows,
+    })
 }
 
 /// RFC 4180 CSV with formula-injection guard (cells starting with = + - @ are quoted with a leading ').
 pub fn to_csv(t: &Table) -> String {
     fn cell(s: &str) -> String {
-        let s = if s.starts_with(['=', '+', '@']) || (s.starts_with('-') && s.parse::<f64>().is_err()) { format!("'{s}") } else { s.to_string() };
-        if s.contains([',', '"', '\n', '\r']) { format!("\"{}\"", s.replace('"', "\"\"")) } else { s }
+        let s = if s.starts_with(['=', '+', '@'])
+            || (s.starts_with('-') && s.parse::<f64>().is_err())
+        {
+            format!("'{s}")
+        } else {
+            s.to_string()
+        };
+        if s.contains([',', '"', '\n', '\r']) {
+            format!("\"{}\"", s.replace('"', "\"\""))
+        } else {
+            s
+        }
     }
-    let mut out = t.columns.iter().map(|c| cell(c)).collect::<Vec<_>>().join(",");
+    let mut out = t
+        .columns
+        .iter()
+        .map(|c| cell(c))
+        .collect::<Vec<_>>()
+        .join(",");
     out.push_str("\r\n");
     for r in &t.rows {
-        out.push_str(&r.iter().map(|c| cell(c.as_deref().unwrap_or(""))).collect::<Vec<_>>().join(","));
+        out.push_str(
+            &r.iter()
+                .map(|c| cell(c.as_deref().unwrap_or("")))
+                .collect::<Vec<_>>()
+                .join(","),
+        );
         out.push_str("\r\n");
     }
     out
@@ -129,7 +169,15 @@ mod tests {
     use super::*;
     #[test]
     fn csv_escapes() {
-        let t = Table { key: "x", columns: &["a", "b"], chart: None, rows: vec![vec![Some("=1+1".into()), Some("x,\"y\"".into())], vec![Some("-12.50".into()), None]] };
+        let t = Table {
+            key: "x",
+            columns: &["a", "b"],
+            chart: None,
+            rows: vec![
+                vec![Some("=1+1".into()), Some("x,\"y\"".into())],
+                vec![Some("-12.50".into()), None],
+            ],
+        };
         assert_eq!(to_csv(&t), "a,b\r\n'=1+1,\"x,\"\"y\"\"\"\r\n-12.50,\r\n");
     }
     #[test]
@@ -139,7 +187,9 @@ mod tests {
         k.dedup();
         assert_eq!(k.len(), REPORTS.len());
         for d in REPORTS {
-            if let Some((a, b)) = d.chart { assert!(a < d.columns.len() && b < d.columns.len(), "{}", d.key); }
+            if let Some((a, b)) = d.chart {
+                assert!(a < d.columns.len() && b < d.columns.len(), "{}", d.key);
+            }
         }
     }
 }

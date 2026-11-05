@@ -28,7 +28,14 @@ mod tests {
     #[test]
     fn maps_claims() {
         // Facebook only returns confirmed emails.
-        assert_eq!((PROVIDER.profile)(&json!({"id": "5", "email": "f@x", "name": "F"})).unwrap()["email_verified"], true);
-        assert_eq!((PROVIDER.profile)(&json!({"id": "5"})).unwrap()["email_verified"], false);
+        assert_eq!(
+            (PROVIDER.profile)(&json!({"id": "5", "email": "f@x", "name": "F"})).unwrap()
+                ["email_verified"],
+            true
+        );
+        assert_eq!(
+            (PROVIDER.profile)(&json!({"id": "5"})).unwrap()["email_verified"],
+            false
+        );
     }
 }

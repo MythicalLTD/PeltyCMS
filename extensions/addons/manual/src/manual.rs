@@ -1,7 +1,14 @@
 //! Manual bank transfer: shows instructions; staff mark payments as received.
 use pelty_payments::*;
 #[allow(unused_imports)]
-use {pelty_core::money::Money, serde::{Deserialize, Serialize}, std::collections::{BTreeMap, HashMap}, std::future::Future, std::pin::Pin, std::sync::Arc};
+use {
+    pelty_core::money::Money,
+    serde::{Deserialize, Serialize},
+    std::collections::{BTreeMap, HashMap},
+    std::future::Future,
+    std::pin::Pin,
+    std::sync::Arc,
+};
 
 pub struct ManualGateway {
     instructions: String,

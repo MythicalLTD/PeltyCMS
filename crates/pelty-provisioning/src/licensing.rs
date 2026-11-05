@@ -16,8 +16,19 @@ const ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 /// `PREFIX-XXXXX-XXXXX-XXXXX-XXXXX` (100 bits of randomness, no 0/O/1/I).
 pub fn generate_key(prefix: &str) -> String {
     let mut rng = rand::thread_rng();
-    let groups: Vec<String> = (0..4).map(|_| (0..5).map(|_| ALPHABET[rng.gen_range(0..ALPHABET.len())] as char).collect()).collect();
-    let p: String = prefix.chars().filter(|c| c.is_ascii_alphanumeric()).take(10).collect::<String>().to_ascii_uppercase();
+    let groups: Vec<String> = (0..4)
+        .map(|_| {
+            (0..5)
+                .map(|_| ALPHABET[rng.gen_range(0..ALPHABET.len())] as char)
+                .collect()
+        })
+        .collect();
+    let p: String = prefix
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(10)
+        .collect::<String>()
+        .to_ascii_uppercase();
     if p.is_empty() {
         groups.join("-")
     } else {
@@ -26,7 +37,9 @@ pub fn generate_key(prefix: &str) -> String {
 }
 
 pub fn valid_key_format(k: &str) -> bool {
-    k.len() <= 40 && k.split('-').count() >= 4 && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    k.len() <= 40
+        && k.split('-').count() >= 4
+        && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -47,24 +60,48 @@ pub struct Verdict {
 }
 
 fn norm(s: &Option<String>) -> Option<String> {
-    s.as_deref().map(|v| v.trim().to_ascii_lowercase().trim_start_matches("www.").to_string()).filter(|v| !v.is_empty())
+    s.as_deref()
+        .map(|v| {
+            v.trim()
+                .to_ascii_lowercase()
+                .trim_start_matches("www.")
+                .to_string()
+        })
+        .filter(|v| !v.is_empty())
 }
 
 /// Decide a license check. `service_status` is the PeltyCMS service status;
 /// `product` the product module config (`bind_domain`, `bind_ip`,
 /// `bind_directory` booleans); `data` the service `module_data`.
 pub fn decide(service_status: &str, product: &Value, data: &Value, check: &Check) -> Verdict {
-    let v = |status: &str, message: &str| Verdict { status: status.into(), message: message.into(), bind: None };
+    let v = |status: &str, message: &str| Verdict {
+        status: status.into(),
+        message: message.into(),
+        bind: None,
+    };
     match service_status {
         "active" => {}
         "suspended" => return v("suspended", "license suspended"),
         "terminated" | "cancelled" | "fraud" => return v("expired", "license is no longer valid"),
         _ => return v("invalid", "license is not active"),
     }
-    let flag = |k: &str| product.get(k).map(|x| x.as_bool().unwrap_or(x == "1" || x == "true")).unwrap_or(k != "bind_directory");
+    let flag = |k: &str| {
+        product
+            .get(k)
+            .map(|x| x.as_bool().unwrap_or(x == "1" || x == "true"))
+            .unwrap_or(k != "bind_directory")
+    };
     let bound = |k: &str| data.get(k).and_then(Value::as_str).map(str::to_string);
-    let req = Check { domain: norm(&check.domain), ip: norm(&check.ip), directory: norm(&check.directory) };
-    let pairs = [("bind_domain", "bound_domain", &req.domain), ("bind_ip", "bound_ip", &req.ip), ("bind_directory", "bound_directory", &req.directory)];
+    let req = Check {
+        domain: norm(&check.domain),
+        ip: norm(&check.ip),
+        directory: norm(&check.directory),
+    };
+    let pairs = [
+        ("bind_domain", "bound_domain", &req.domain),
+        ("bind_ip", "bound_ip", &req.ip),
+        ("bind_directory", "bound_directory", &req.directory),
+    ];
     let mut needs_bind = false;
     for (flag_key, bound_key, value) in pairs {
         if !flag(flag_key) {
@@ -72,18 +109,28 @@ pub fn decide(service_status: &str, product: &Value, data: &Value, check: &Check
         }
         match (bound(bound_key), value) {
             (Some(b), Some(v)) if b == *v => {}
-            (Some(_), _) => return v("invalid", "license is bound to another installation; reissue it in the client area"),
+            (Some(_), _) => {
+                return v(
+                    "invalid",
+                    "license is bound to another installation; reissue it in the client area",
+                )
+            }
             (None, Some(_)) => needs_bind = true,
             (None, None) => return v("invalid", "missing installation details"),
         }
     }
-    Verdict { status: "active".into(), message: "ok".into(), bind: needs_bind.then_some(req) }
+    Verdict {
+        status: "active".into(),
+        message: "ok".into(),
+        bind: needs_bind.then_some(req),
+    }
 }
 
 /// Signature over the canonical response JSON (keys sorted by serde_json's
 /// BTreeMap order), clients recompute it with the shared secret.
 pub fn sign(secret: &str, payload: &Value) -> String {
-    let mut m = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap_or_else(|_| unreachable!());
+    let mut m =
+        Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap_or_else(|_| unreachable!());
     m.update(payload.to_string().as_bytes());
     hex::encode(m.finalize().into_bytes())
 }
@@ -104,7 +151,11 @@ mod tests {
     #[test]
     fn binds_then_enforces() {
         let p = json!({});
-        let c = Check { domain: Some("www.Example.com".into()), ip: Some("1.2.3.4".into()), directory: None };
+        let c = Check {
+            domain: Some("www.Example.com".into()),
+            ip: Some("1.2.3.4".into()),
+            directory: None,
+        };
         let v = decide("active", &p, &json!({}), &c);
         assert_eq!(v.status, "active");
         let b = v.bind.unwrap();
@@ -113,7 +164,10 @@ mod tests {
         let v2 = decide("active", &p, &data, &c);
         assert_eq!(v2.status, "active");
         assert!(v2.bind.is_none());
-        let other = Check { domain: Some("evil.com".into()), ..c.clone() };
+        let other = Check {
+            domain: Some("evil.com".into()),
+            ..c.clone()
+        };
         assert_eq!(decide("active", &p, &data, &other).status, "invalid");
         assert_eq!(decide("suspended", &p, &data, &c).status, "suspended");
         assert_eq!(decide("terminated", &p, &data, &c).status, "expired");

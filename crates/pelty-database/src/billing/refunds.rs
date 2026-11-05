@@ -47,7 +47,16 @@ pub struct Reserved {
     pub replay: bool,
 }
 
-type PaymentRow = (Option<Uuid>, Option<Uuid>, String, Option<String>, Decimal, String, String, Option<OffsetDateTime>);
+type PaymentRow = (
+    Option<Uuid>,
+    Option<Uuid>,
+    String,
+    Option<String>,
+    Decimal,
+    String,
+    String,
+    Option<OffsetDateTime>,
+);
 
 /// Amount of a payment still refundable (succeeded payments only).
 pub async fn refundable(pool: &PgPool, payment_id: Uuid) -> AppResult<Decimal> {
@@ -85,9 +94,14 @@ pub async fn reserve(
     .fetch_optional(&mut *tx)
     .await
     .map_err(db_err)?;
-    let (invoice_id, customer_id, gateway, pref, paid, currency, status, applied) = p.ok_or(AppError::NotFound)?;
+    let (invoice_id, customer_id, gateway, pref, paid, currency, status, applied) =
+        p.ok_or(AppError::NotFound)?;
     if let Some(r) = by_key(&mut tx, &key).await? {
-        return Ok(Reserved { refund: r, payment_ref: pref, replay: true });
+        return Ok(Reserved {
+            refund: r,
+            payment_ref: pref,
+            replay: true,
+        });
     }
     let (Some(invoice_id), Some(customer_id)) = (invoice_id, customer_id) else {
         return Err(AppError::Conflict("error.payment_not_refundable"));
@@ -95,11 +109,13 @@ pub async fn reserve(
     if !matches!(status.as_str(), "succeeded" | "refunded") || applied.is_none() {
         return Err(AppError::Conflict("error.payment_not_refundable"));
     }
-    let used: Decimal = sqlx::query_scalar("SELECT COALESCE(sum(amount), 0) FROM refunds WHERE payment_id = $1 AND status <> 'failed'")
-        .bind(payment_id)
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(db_err)?;
+    let used: Decimal = sqlx::query_scalar(
+        "SELECT COALESCE(sum(amount), 0) FROM refunds WHERE payment_id = $1 AND status <> 'failed'",
+    )
+    .bind(payment_id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(db_err)?;
     let left = paid - used;
     if left <= Decimal::ZERO {
         return Err(AppError::Conflict("error.payment_fully_refunded"));
@@ -131,13 +147,19 @@ pub async fn reserve(
     .await
     .map_err(db_err)?;
     // Add-funds deposit: the credit it produced must come back out first.
-    let funded: Option<String> = sqlx::query_scalar("SELECT currency::text FROM add_funds WHERE invoice_id = $1 AND credited_at IS NOT NULL")
-        .bind(invoice_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db_err)?;
+    let funded: Option<String> = sqlx::query_scalar(
+        "SELECT currency::text FROM add_funds WHERE invoice_id = $1 AND credited_at IS NOT NULL",
+    )
+    .bind(invoice_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_err)?;
     if let Some(cur) = funded {
-        sqlx::query("SELECT 1 FROM customers WHERE id = $1 FOR UPDATE").bind(customer_id).execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query("SELECT 1 FROM customers WHERE id = $1 FOR UPDATE")
+            .bind(customer_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
         let bal: Decimal = sqlx::query_scalar("SELECT COALESCE(sum(amount), 0) FROM credit_ledger WHERE customer_id = $1 AND currency = $2")
             .bind(customer_id)
             .bind(&cur)
@@ -145,7 +167,9 @@ pub async fn reserve(
             .await
             .map_err(db_err)?;
         if bal < amount {
-            return Err(AppError::Conflict("error.add_funds_refund_insufficient_credit"));
+            return Err(AppError::Conflict(
+                "error.add_funds_refund_insufficient_credit",
+            ));
         }
         sqlx::query("INSERT INTO credit_ledger (id, customer_id, currency, amount, kind, invoice_id, note, actor_id) VALUES ($1,$2,$3,$4,'add_funds',$5,$6,$7)")
             .bind(Uuid::new_v4())
@@ -160,15 +184,21 @@ pub async fn reserve(
             .map_err(db_err)?;
     }
     tx.commit().await.map_err(db_err)?;
-    Ok(Reserved { refund: r, payment_ref: pref, replay: false })
+    Ok(Reserved {
+        refund: r,
+        payment_ref: pref,
+        replay: false,
+    })
 }
 
 async fn by_key(tx: &mut Tx<'_>, key: &str) -> AppResult<Option<Refund>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM refunds WHERE idempotency_key = $1"))
-        .bind(key)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {COLS} FROM refunds WHERE idempotency_key = $1"
+    ))
+    .bind(key)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Refund>> {
@@ -180,11 +210,13 @@ pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Refund>> {
 }
 
 pub async fn for_invoice(pool: &PgPool, invoice_id: Uuid) -> AppResult<Vec<Refund>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM refunds WHERE invoice_id = $1 ORDER BY created_at"))
-        .bind(invoice_id)
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {COLS} FROM refunds WHERE invoice_id = $1 ORDER BY created_at"
+    ))
+    .bind(invoice_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// The gateway rejected the refund: release the reserved capacity.
@@ -213,7 +245,11 @@ pub async fn fail(pool: &PgPool, id: Uuid, error: &str) -> AppResult<Refund> {
 }
 
 /// The gateway accepted the refund but settles it later (webhook).
-pub async fn mark_pending_ref(pool: &PgPool, id: Uuid, provider_ref: Option<&str>) -> AppResult<()> {
+pub async fn mark_pending_ref(
+    pool: &PgPool,
+    id: Uuid,
+    provider_ref: Option<&str>,
+) -> AppResult<()> {
     sqlx::query("UPDATE refunds SET provider_ref = COALESCE($2, provider_ref), updated_at = now() WHERE id = $1")
         .bind(id)
         .bind(provider_ref)
@@ -227,7 +263,9 @@ pub async fn mark_pending_ref(pool: &PgPool, id: Uuid, provider_ref: Option<&str
 /// and invoice status, and (for credit-balance payments) return the credit.
 /// Idempotent: completing an already-succeeded refund is a no-op.
 pub async fn complete(pool: &PgPool, id: Uuid, provider_ref: Option<&str>) -> AppResult<Refund> {
-    complete_opts(pool, id, provider_ref, None).await.map(|(r, _)| r)
+    complete_opts(pool, id, provider_ref, None)
+        .await
+        .map(|(r, _)| r)
 }
 
 /// What a reversal does to the invoice it reverses.
@@ -240,27 +278,50 @@ pub struct Reopen {
 
 /// Settle a reversal by reopening the invoice as unpaid: no credit note,
 /// the reversed amount comes off `amount_paid`. Returns suspended services.
-pub async fn complete_reopen(pool: &PgPool, id: Uuid, opts: Reopen) -> AppResult<(Refund, Vec<Uuid>)> {
+pub async fn complete_reopen(
+    pool: &PgPool,
+    id: Uuid,
+    opts: Reopen,
+) -> AppResult<(Refund, Vec<Uuid>)> {
     complete_opts(pool, id, None, Some(opts)).await
 }
 
-async fn complete_opts(pool: &PgPool, id: Uuid, provider_ref: Option<&str>, reopen: Option<Reopen>) -> AppResult<(Refund, Vec<Uuid>)> {
+async fn complete_opts(
+    pool: &PgPool,
+    id: Uuid,
+    provider_ref: Option<&str>,
+    reopen: Option<Reopen>,
+) -> AppResult<(Refund, Vec<Uuid>)> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let r: Refund = sqlx::query_as(&format!("SELECT {COLS} FROM refunds WHERE id = $1 FOR UPDATE"))
-        .bind(id)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db_err)?
-        .ok_or(AppError::NotFound)?;
+    let r: Refund = sqlx::query_as(&format!(
+        "SELECT {COLS} FROM refunds WHERE id = $1 FOR UPDATE"
+    ))
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_err)?
+    .ok_or(AppError::NotFound)?;
     if r.status == "succeeded" {
         return Ok((r, Vec::new()));
     }
     if r.status != "pending" {
         return Err(AppError::Conflict("error.refund_not_pending"));
     }
-    let cn = if reopen.is_some() { None } else { Some(credit_note_for(&mut tx, &r).await?) };
+    let cn = if reopen.is_some() {
+        None
+    } else {
+        Some(credit_note_for(&mut tx, &r).await?)
+    };
     if r.to_credit || r.gateway == "credit" {
-        credit::return_locked(&mut tx, r.customer_id, &r.currency, r.amount, r.invoice_id, r.payment_id).await?;
+        credit::return_locked(
+            &mut tx,
+            r.customer_id,
+            &r.currency,
+            r.amount,
+            r.invoice_id,
+            r.payment_id,
+        )
+        .await?;
     }
     // Payment fully refunded?
     sqlx::query(
@@ -302,7 +363,7 @@ async fn complete_opts(pool: &PgPool, id: Uuid, provider_ref: Option<&str>, reop
         }
     } else {
         // Invoice fully refunded: every succeeded payment refunded in full.
-    sqlx::query(
+        sqlx::query(
         "UPDATE invoices i SET status = 'refunded' WHERE i.id = $1 AND i.status = 'paid' AND NOT EXISTS (
             SELECT 1 FROM payments p WHERE p.invoice_id = i.id AND p.status = 'succeeded')",
     )
@@ -337,13 +398,23 @@ pub async fn mark_reversal(pool: &PgPool, id: Uuid) -> AppResult<()> {
 
 /// Net/tax split of a gross refund using the invoice's effective tax rate,
 /// rounded to `exp` decimals; net + tax == gross exactly.
-pub fn split_gross(gross: Decimal, subtotal: Decimal, tax_total: Decimal, exp: u32) -> (Decimal, Decimal, Decimal) {
+pub fn split_gross(
+    gross: Decimal,
+    subtotal: Decimal,
+    tax_total: Decimal,
+    exp: u32,
+) -> (Decimal, Decimal, Decimal) {
     let total = subtotal + tax_total;
     if total.is_zero() || tax_total.is_zero() {
         return (gross, Decimal::ZERO, Decimal::ZERO);
     }
-    let net = (gross * subtotal / total).round_dp_with_strategy(exp, rust_decimal::RoundingStrategy::MidpointAwayFromZero);
-    let rate = if subtotal.is_zero() { Decimal::ZERO } else { (tax_total * Decimal::from(100) / subtotal).round_dp(4) };
+    let net = (gross * subtotal / total)
+        .round_dp_with_strategy(exp, rust_decimal::RoundingStrategy::MidpointAwayFromZero);
+    let rate = if subtotal.is_zero() {
+        Decimal::ZERO
+    } else {
+        (tax_total * Decimal::from(100) / subtotal).round_dp(4)
+    };
     (net, gross - net, rate)
 }
 
@@ -365,7 +436,15 @@ async fn credit_note_for(tx: &mut Tx<'_>, r: &Refund) -> AppResult<Uuid> {
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
-    let desc = format!("Refund, {}{}", number.unwrap_or_default(), if r.reason.is_empty() { String::new() } else { format!(" ({})", r.reason) });
+    let desc = format!(
+        "Refund, {}{}",
+        number.unwrap_or_default(),
+        if r.reason.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", r.reason)
+        }
+    );
     sqlx::query(
         "INSERT INTO invoice_items (id, invoice_id, description, quantity, unit_price, tax_rate, amount, tax_amount, sort_order)
          VALUES ($1,$2,$3,1,$4,$5,$4,$6,0)",
@@ -408,9 +487,18 @@ mod tests {
 
     #[test]
     fn split_is_exact() {
-        assert_eq!(split_gross(dec("10"), dec("100"), dec("19"), 2), (dec("8.40"), dec("1.60"), dec("19")));
-        assert_eq!(split_gross(dec("119"), dec("100"), dec("19"), 2), (dec("100.00"), dec("19.00"), dec("19")));
-        assert_eq!(split_gross(dec("5"), dec("50"), dec("0"), 2), (dec("5"), dec("0"), dec("0")));
+        assert_eq!(
+            split_gross(dec("10"), dec("100"), dec("19"), 2),
+            (dec("8.40"), dec("1.60"), dec("19"))
+        );
+        assert_eq!(
+            split_gross(dec("119"), dec("100"), dec("19"), 2),
+            (dec("100.00"), dec("19.00"), dec("19"))
+        );
+        assert_eq!(
+            split_gross(dec("5"), dec("50"), dec("0"), 2),
+            (dec("5"), dec("0"), dec("0"))
+        );
         for g in [dec("0.01"), dec("0.03"), dec("33.33"), dec("99.99")] {
             let (n, t, _) = split_gross(g, dec("37.5"), dec("7.13"), 2);
             assert_eq!(n + t, g);

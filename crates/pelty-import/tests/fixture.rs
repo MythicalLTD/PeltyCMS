@@ -279,25 +279,111 @@ fn fixture(tag: &str) -> WhmcsData {
             },
         ],
         domains: vec![
-            Domain { id: 70, userid: 1, type_: "Register".into(), domain: format!("ana-{tag}.com"), registrar: "Enom".into(), registrationperiod: 2, registrationdate: date("2024-01-01"), expirydate: date("2026-01-01"), status: "Active".into(), donotrenew: true, dnsmanagement: true, idprotection: false },
-            Domain { id: 71, userid: 1, type_: "Transfer".into(), domain: format!("{tag}.co.uk"), registrar: "".into(), registrationperiod: 1, status: "Pending Transfer".into(), ..Default::default() },
-            Domain { id: 72, userid: 99, domain: "orphan.com".into(), ..Default::default() },
+            Domain {
+                id: 70,
+                userid: 1,
+                type_: "Register".into(),
+                domain: format!("ana-{tag}.com"),
+                registrar: "Enom".into(),
+                registrationperiod: 2,
+                registrationdate: date("2024-01-01"),
+                expirydate: date("2026-01-01"),
+                status: "Active".into(),
+                donotrenew: true,
+                dnsmanagement: true,
+                idprotection: false,
+            },
+            Domain {
+                id: 71,
+                userid: 1,
+                type_: "Transfer".into(),
+                domain: format!("{tag}.co.uk"),
+                registrar: "".into(),
+                registrationperiod: 1,
+                status: "Pending Transfer".into(),
+                ..Default::default()
+            },
+            Domain {
+                id: 72,
+                userid: 99,
+                domain: "orphan.com".into(),
+                ..Default::default()
+            },
         ],
-        config_groups: vec![ConfigGroup { id: 80, name: "VPS opts".into(), product_ids: vec![7] }],
+        config_groups: vec![ConfigGroup {
+            id: 80,
+            name: "VPS opts".into(),
+            product_ids: vec![7],
+        }],
         config_options: vec![
-            ConfigOption { id: 81, gid: 80, optionname: "ram|RAM".into(), optiontype: 1, order: 1, ..Default::default() },
-            ConfigOption { id: 82, gid: 80, optionname: "IPs".into(), optiontype: 4, qtyminimum: 1, qtymaximum: 8, order: 2, ..Default::default() },
-            ConfigOption { id: 83, gid: 80, optionname: "Hidden".into(), optiontype: 1, hidden: true, ..Default::default() },
+            ConfigOption {
+                id: 81,
+                gid: 80,
+                optionname: "ram|RAM".into(),
+                optiontype: 1,
+                order: 1,
+                ..Default::default()
+            },
+            ConfigOption {
+                id: 82,
+                gid: 80,
+                optionname: "IPs".into(),
+                optiontype: 4,
+                qtyminimum: 1,
+                qtymaximum: 8,
+                order: 2,
+                ..Default::default()
+            },
+            ConfigOption {
+                id: 83,
+                gid: 80,
+                optionname: "Hidden".into(),
+                optiontype: 1,
+                hidden: true,
+                ..Default::default()
+            },
         ],
         config_subs: vec![
-            ConfigSub { id: 91, configid: 81, optionname: "2gb|2 GB".into(), sortorder: 1, hidden: false },
-            ConfigSub { id: 92, configid: 81, optionname: "4 GB".into(), sortorder: 2, hidden: false },
-            ConfigSub { id: 93, configid: 81, optionname: "old".into(), sortorder: 3, hidden: true },
-            ConfigSub { id: 94, configid: 82, optionname: "IP".into(), sortorder: 1, hidden: false },
+            ConfigSub {
+                id: 91,
+                configid: 81,
+                optionname: "2gb|2 GB".into(),
+                sortorder: 1,
+                hidden: false,
+            },
+            ConfigSub {
+                id: 92,
+                configid: 81,
+                optionname: "4 GB".into(),
+                sortorder: 2,
+                hidden: false,
+            },
+            ConfigSub {
+                id: 93,
+                configid: 81,
+                optionname: "old".into(),
+                sortorder: 3,
+                hidden: true,
+            },
+            ConfigSub {
+                id: 94,
+                configid: 82,
+                optionname: "IP".into(),
+                sortorder: 1,
+                hidden: false,
+            },
         ],
-        config_pricing: vec![
-            Pricing { relid: 92, currency: 1, monthly: d("4.25"), quarterly: d("-1"), semiannually: d("-1"), annually: d("40.00"), biennially: d("-1"), triennially: d("-1"), ..Default::default() },
-        ],
+        config_pricing: vec![Pricing {
+            relid: 92,
+            currency: 1,
+            monthly: d("4.25"),
+            quarterly: d("-1"),
+            semiannually: d("-1"),
+            annually: d("40.00"),
+            biennially: d("-1"),
+            triennially: d("-1"),
+            ..Default::default()
+        }],
         ..Default::default()
     }
 }
@@ -428,23 +514,49 @@ async fn import_is_exact_idempotent_and_dry_run_writes_nothing() {
     // domains, configurable options, credit
     assert_eq!(rep.entities["domains"].created, 2);
     assert!(rep.warnings.iter().any(|w| w.contains("domain 72")));
-    let (st, ar, years, tld): (String, bool, i32, String) = sqlx::query_as("SELECT status, auto_renew, years, tld FROM domains WHERE name=$1")
-        .bind(format!("ana-{tag}.com")).fetch_one(&pool).await.unwrap();
-    assert_eq!((st.as_str(), ar, years, tld.as_str()), ("active", false, 2, "com"));
-    let (st, kind, tld): (String, String, String) = sqlx::query_as("SELECT status, kind, tld FROM domains WHERE name=$1")
-        .bind(format!("{tag}.co.uk")).fetch_one(&pool).await.unwrap();
-    assert_eq!((st.as_str(), kind.as_str(), tld.as_str()), ("transferring", "transfer", "co.uk"));
+    let (st, ar, years, tld): (String, bool, i32, String) =
+        sqlx::query_as("SELECT status, auto_renew, years, tld FROM domains WHERE name=$1")
+            .bind(format!("ana-{tag}.com"))
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        (st.as_str(), ar, years, tld.as_str()),
+        ("active", false, 2, "com")
+    );
+    let (st, kind, tld): (String, String, String) =
+        sqlx::query_as("SELECT status, kind, tld FROM domains WHERE name=$1")
+            .bind(format!("{tag}.co.uk"))
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        (st.as_str(), kind.as_str(), tld.as_str()),
+        ("transferring", "transfer", "co.uk")
+    );
     assert_eq!(rep.entities["config_options"].created, 2);
     assert_eq!(rep.entities["config_choices"].created, 3);
     let opts: Vec<(String, String, i32, i32)> = sqlx::query_as(
         "SELECT o.name, o.option_type, o.qty_min, o.qty_max FROM product_config_options o JOIN products p ON p.id=o.product_id WHERE p.name=$1 ORDER BY o.sort_order",
     ).bind(format!("Starter {tag}")).fetch_all(&pool).await.unwrap();
-    assert_eq!(opts, vec![("RAM".into(), "dropdown".into(), 0, 100), ("IPs".into(), "quantity".into(), 1, 8)]);
+    assert_eq!(
+        opts,
+        vec![
+            ("RAM".into(), "dropdown".into(), 0, 100),
+            ("IPs".into(), "quantity".into(), 1, 8)
+        ]
+    );
     let prices: Vec<(String, String, Decimal)> = sqlx::query_as(
         "SELECT ch.label, pr.cycle, pr.amount FROM product_config_prices pr JOIN product_config_choices ch ON ch.id=pr.choice_id \
          JOIN product_config_options o ON o.id=ch.option_id JOIN products p ON p.id=o.product_id WHERE p.name=$1 ORDER BY pr.cycle",
     ).bind(format!("Starter {tag}")).fetch_all(&pool).await.unwrap();
-    assert_eq!(prices, vec![("4 GB".into(), "annual".into(), d("40.00")), ("4 GB".into(), "monthly".into(), d("4.25"))]);
+    assert_eq!(
+        prices,
+        vec![
+            ("4 GB".into(), "annual".into(), d("40.00")),
+            ("4 GB".into(), "monthly".into(), d("4.25"))
+        ]
+    );
     let credit: Decimal = sqlx::query_scalar("SELECT sum(l.amount) FROM credit_ledger l JOIN customers c ON c.id=l.customer_id WHERE c.email=$1")
         .bind(format!("ana-{tag}@example.com")).fetch_one(&pool).await.unwrap();
     assert_eq!(credit, d("12.50"));

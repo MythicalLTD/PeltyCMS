@@ -16,7 +16,8 @@ use axum::response::Response;
 
 // `blob:` on frame-src: admin email-template HTML preview (object URL iframe).
 pub const CSP: &str = "default-src 'self'; script-src 'self' https://challenges.cloudflare.com https://js.hcaptcha.com https://*.hcaptcha.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; frame-src 'self' blob: https://challenges.cloudflare.com https://js.hcaptcha.com https://*.hcaptcha.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.hcaptcha.com; object-src 'none'; base-uri 'self'; form-action 'self' https:; frame-ancestors 'none'";
-pub const PERMISSIONS: &str = "camera=(), microphone=(), geolocation=(), payment=(self), usb=(), interest-cohort=()";
+pub const PERMISSIONS: &str =
+    "camera=(), microphone=(), geolocation=(), payment=(self), usb=(), interest-cohort=()";
 pub const HSTS: &str = "max-age=31536000; includeSubDomains";
 
 pub async fn apply(State(s): State<AppState>, req: Request, next: Next) -> Response {

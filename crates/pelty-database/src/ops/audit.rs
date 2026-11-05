@@ -65,7 +65,9 @@ pub async fn list(pool: &PgPool, limit: i64, offset: i64) -> AppResult<(Vec<Audi
 /// Escape LIKE wildcards (default escape char is `\\`) so `_` in action
 /// names such as `webhook_endpoint.` matches literally.
 fn like_escape(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
 }
 
 /// Admin audit-log filters. Blank fields are ignored.
@@ -97,7 +99,17 @@ const WHERE: &str = "WHERE ($1::text IS NULL OR a.action LIKE $1) AND ($2::text 
      AND ($6::text IS NULL OR a.action ILIKE $6 OR a.target ILIKE $6 OR a.metadata::text ILIKE $6) \
      AND ($7::timestamptz IS NULL OR a.created_at >= $7) AND ($8::timestamptz IS NULL OR a.created_at < $8) AND (NOT $9 OR a.actor_id IS NULL)";
 
-type Binds = (Option<String>, Option<String>, Option<String>, Option<Uuid>, Option<String>, Option<String>, Option<OffsetDateTime>, Option<OffsetDateTime>, bool);
+type Binds = (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<Uuid>,
+    Option<String>,
+    Option<String>,
+    Option<OffsetDateTime>,
+    Option<OffsetDateTime>,
+    bool,
+);
 
 fn binds(f: &AuditFilter) -> Binds {
     (
@@ -115,17 +127,39 @@ fn binds(f: &AuditFilter) -> Binds {
 
 macro_rules! bind_all {
     ($q:expr, $b:expr) => {
-        $q.bind(&$b.0).bind(&$b.1).bind(&$b.2).bind($b.3).bind(&$b.4).bind(&$b.5).bind($b.6).bind($b.7).bind($b.8)
+        $q.bind(&$b.0)
+            .bind(&$b.1)
+            .bind(&$b.2)
+            .bind($b.3)
+            .bind(&$b.4)
+            .bind(&$b.5)
+            .bind($b.6)
+            .bind($b.7)
+            .bind($b.8)
     };
 }
 
 /// Filtered, paged audit search, newest first. Returns rows and the total match count.
-pub async fn filter(pool: &PgPool, f: &AuditFilter, limit: i64, offset: i64) -> AppResult<(Vec<AuditEntry>, i64)> {
+pub async fn filter(
+    pool: &PgPool,
+    f: &AuditFilter,
+    limit: i64,
+    offset: i64,
+) -> AppResult<(Vec<AuditEntry>, i64)> {
     let b = binds(f);
     let sql = format!("{SELECT} {WHERE} ORDER BY a.id DESC LIMIT $10 OFFSET $11");
-    let rows = bind_all!(sqlx::query_as::<_, AuditEntry>(&sql), b).bind(limit).bind(offset).fetch_all(pool).await.map_err(db_err)?;
-    let count = format!("SELECT count(*) FROM audit_logs a LEFT JOIN users u ON u.id = a.actor_id {WHERE}");
-    let total = bind_all!(sqlx::query_scalar::<_, i64>(&count), b).fetch_one(pool).await.map_err(db_err)?;
+    let rows = bind_all!(sqlx::query_as::<_, AuditEntry>(&sql), b)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?;
+    let count =
+        format!("SELECT count(*) FROM audit_logs a LEFT JOIN users u ON u.id = a.actor_id {WHERE}");
+    let total = bind_all!(sqlx::query_scalar::<_, i64>(&count), b)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
     Ok((rows, total))
 }
 
@@ -139,7 +173,19 @@ pub async fn action_counts(pool: &PgPool, limit: i64) -> AppResult<Vec<(String, 
 }
 
 /// Filtered audit search: action prefix (e.g. `invoice.`), actor email substring, target exact.
-pub async fn search(pool: &PgPool, action: Option<&str>, actor: Option<&str>, target: Option<&str>, limit: i64, offset: i64) -> AppResult<(Vec<AuditEntry>, i64)> {
-    let f = AuditFilter { action: action.map(Into::into), actor: actor.map(Into::into), target: target.map(Into::into), ..Default::default() };
+pub async fn search(
+    pool: &PgPool,
+    action: Option<&str>,
+    actor: Option<&str>,
+    target: Option<&str>,
+    limit: i64,
+    offset: i64,
+) -> AppResult<(Vec<AuditEntry>, i64)> {
+    let f = AuditFilter {
+        action: action.map(Into::into),
+        actor: actor.map(Into::into),
+        target: target.map(Into::into),
+        ..Default::default()
+    };
     filter(pool, &f, limit, offset).await
 }

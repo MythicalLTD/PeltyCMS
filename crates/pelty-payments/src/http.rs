@@ -60,7 +60,8 @@ impl ReqwestTransport {
 impl HttpTransport for ReqwestTransport {
     fn send(&self, req: HttpRequestSpec) -> BoxFuture<'_, Result<(u16, String), String>> {
         Box::pin(async move {
-            let m = reqwest::Method::from_bytes(req.method.as_bytes()).map_err(|e| e.to_string())?;
+            let m =
+                reqwest::Method::from_bytes(req.method.as_bytes()).map_err(|e| e.to_string())?;
             let mut b = self.client.request(m, &req.url);
             for (k, v) in &req.headers {
                 b = b.header(k, v);
@@ -123,7 +124,8 @@ pub async fn send_json(
     let v: serde_json::Value = if body.trim().is_empty() {
         serde_json::Value::Null
     } else {
-        serde_json::from_str(&body).map_err(|_| GatewayError::Provider(format!("bad json (HTTP {status})")))?
+        serde_json::from_str(&body)
+            .map_err(|_| GatewayError::Provider(format!("bad json (HTTP {status})")))?
     };
     if !(200..300).contains(&status) {
         let msg = [
@@ -156,7 +158,9 @@ pub fn api_base(cfg: &serde_json::Value, default: &str) -> Result<String, Gatewa
             if ok {
                 Ok(b.trim_end_matches('/').to_string())
             } else {
-                Err(GatewayError::Config("api_base must be https (or http on loopback)".into()))
+                Err(GatewayError::Config(
+                    "api_base must be https (or http on loopback)".into(),
+                ))
             }
         }
     }
@@ -174,7 +178,9 @@ pub fn form_encode(pairs: &[(&str, String)]) -> String {
 pub fn url_encode(s: &str) -> String {
     s.bytes()
         .map(|b| match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
             b' ' => "+".into(),
             _ => format!("%{b:02X}"),
         })
@@ -240,20 +246,29 @@ mod tests {
     fn form_roundtrip() {
         let e = form_encode(&[("a b", "x&y=z%".into())]);
         assert_eq!(e, "a+b=x%26y%3Dz%25");
-        assert_eq!(form_decode(e.as_bytes()), vec![("a b".into(), "x&y=z%".into())]);
+        assert_eq!(
+            form_decode(e.as_bytes()),
+            vec![("a b".into(), "x&y=z%".into())]
+        );
         assert_eq!(form_decode(b"id=tr_1"), vec![("id".into(), "tr_1".into())]);
     }
     #[test]
     fn api_base_guard() {
         let d = "https://api.example";
         assert_eq!(api_base(&serde_json::json!({}), d).unwrap(), d);
-        assert_eq!(api_base(&serde_json::json!({"api_base":"http://127.0.0.1:9/"}), d).unwrap(), "http://127.0.0.1:9");
+        assert_eq!(
+            api_base(&serde_json::json!({"api_base":"http://127.0.0.1:9/"}), d).unwrap(),
+            "http://127.0.0.1:9"
+        );
         assert!(api_base(&serde_json::json!({"api_base":"http://evil.example"}), d).is_err());
     }
     #[test]
     fn hmac_rfc4231_case2() {
         // RFC 4231 test case 2.
         let mac = hmac_sha256(b"Jefe", b"what do ya want for nothing?");
-        assert_eq!(hex::encode(mac), "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843");
+        assert_eq!(
+            hex::encode(mac),
+            "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"
+        );
     }
 }

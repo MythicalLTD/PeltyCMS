@@ -1,7 +1,7 @@
 //! SMTP mailer built on lettre: builds and sends multipart emails.
 use lettre::message::{header::ContentType, Mailbox, MultiPart, SinglePart};
-pub use lettre::Address;
 use lettre::transport::smtp::AsyncSmtpTransport;
+pub use lettre::Address;
 use lettre::{AsyncTransport, Message, Tokio1Executor};
 use std::future::Future;
 use std::pin::Pin;
@@ -56,7 +56,11 @@ pub struct TicketHeaders {
 
 pub trait Mailer: Send + Sync {
     fn send<'a>(&'a self, e: &'a Email) -> BoxFuture<'a, Result<(), String>>;
-    fn send_ticket<'a>(&'a self, e: &'a Email, _headers: &'a TicketHeaders) -> BoxFuture<'a, Result<(), String>> {
+    fn send_ticket<'a>(
+        &'a self,
+        e: &'a Email,
+        _headers: &'a TicketHeaders,
+    ) -> BoxFuture<'a, Result<(), String>> {
         self.send(e)
     }
     fn name(&self) -> &'static str;
@@ -125,40 +129,54 @@ pub fn build_message(from: &Mailbox, e: &Email) -> Result<Message, String> {
     build_ticket_message(from, e, None)
 }
 
-pub fn build_ticket_message(from: &Mailbox, e: &Email, ticket: Option<&TicketHeaders>) -> Result<Message, String> {
+pub fn build_ticket_message(
+    from: &Mailbox,
+    e: &Email,
+    ticket: Option<&TicketHeaders>,
+) -> Result<Message, String> {
     let to: Mailbox = e.to.parse().map_err(|err| format!("recipient: {err}"))?;
     // Header injection is impossible: lettre encodes header values, and we
     // also refuse control characters in the subject.
     if e.subject.chars().any(char::is_control) {
         return Err("subject contains control characters".into());
     }
-    let mut b = Message::builder().from(from.clone()).to(to).subject(&e.subject)
+    let mut b = Message::builder()
+        .from(from.clone())
+        .to(to)
+        .subject(&e.subject)
         .raw_header(lettre::message::header::HeaderValue::new(
-            lettre::message::header::HeaderName::new_from_ascii_str("Auto-Submitted"), "auto-generated".into()));
+            lettre::message::header::HeaderName::new_from_ascii_str("Auto-Submitted"),
+            "auto-generated".into(),
+        ));
     if let Some(t) = ticket {
-        b = b.reply_to(t.reply_to.parse().map_err(|e| format!("reply-to: {e}"))?)
+        b = b
+            .reply_to(t.reply_to.parse().map_err(|e| format!("reply-to: {e}"))?)
             .message_id(Some(t.message_id.clone()));
     }
     if let Some(u) = &e.list_unsubscribe {
-        if !u.starts_with("https://") && !u.starts_with("http://") || u.chars().any(|c| c.is_control() || c == '>' || c == ' ') {
+        if !u.starts_with("https://") && !u.starts_with("http://")
+            || u.chars().any(|c| c.is_control() || c == '>' || c == ' ')
+        {
             return Err("invalid unsubscribe url".into());
         }
-        b = b.header(ListUnsubscribe(u.clone())).header(ListUnsubscribePost);
+        b = b
+            .header(ListUnsubscribe(u.clone()))
+            .header(ListUnsubscribePost);
     }
     b.multipart(
-            MultiPart::alternative()
-                .singlepart(
-                    SinglePart::builder()
-                        .header(ContentType::TEXT_PLAIN)
-                        .body(e.text.clone()),
-                )
-                .singlepart(
-                    SinglePart::builder()
-                        .header(ContentType::TEXT_HTML)
-                        .body(e.html.clone()),
-                ),
-        )
-        .map_err(|err| err.to_string())
+        MultiPart::alternative()
+            .singlepart(
+                SinglePart::builder()
+                    .header(ContentType::TEXT_PLAIN)
+                    .body(e.text.clone()),
+            )
+            .singlepart(
+                SinglePart::builder()
+                    .header(ContentType::TEXT_HTML)
+                    .body(e.html.clone()),
+            ),
+    )
+    .map_err(|err| err.to_string())
 }
 
 impl Mailer for SmtpMailer {
@@ -172,10 +190,18 @@ impl Mailer for SmtpMailer {
                 .map_err(|err| err.to_string())
         })
     }
-    fn send_ticket<'a>(&'a self, e: &'a Email, headers: &'a TicketHeaders) -> BoxFuture<'a, Result<(), String>> {
+    fn send_ticket<'a>(
+        &'a self,
+        e: &'a Email,
+        headers: &'a TicketHeaders,
+    ) -> BoxFuture<'a, Result<(), String>> {
         Box::pin(async move {
             let msg = build_ticket_message(&self.from, e, Some(headers))?;
-            self.transport.send(msg).await.map(|_| ()).map_err(|err| err.to_string())
+            self.transport
+                .send(msg)
+                .await
+                .map(|_| ())
+                .map_err(|err| err.to_string())
         })
     }
     fn name(&self) -> &'static str {
@@ -238,8 +264,16 @@ mod tests {
         };
         let raw = String::from_utf8(build_message(&from, &e).unwrap().formatted()).unwrap();
         assert!(raw.contains("Auto-Submitted: auto-generated"));
-        let headers = TicketHeaders { reply_to: "desk@example.test".into(), message_id: "<ticket.test.delivery@pelty.invalid>".into() };
-        let ticket_raw = String::from_utf8(build_ticket_message(&from, &e, Some(&headers)).unwrap().formatted()).unwrap();
+        let headers = TicketHeaders {
+            reply_to: "desk@example.test".into(),
+            message_id: "<ticket.test.delivery@pelty.invalid>".into(),
+        };
+        let ticket_raw = String::from_utf8(
+            build_ticket_message(&from, &e, Some(&headers))
+                .unwrap()
+                .formatted(),
+        )
+        .unwrap();
         assert!(ticket_raw.contains("Reply-To: desk@example.test"));
         assert!(ticket_raw.contains("Message-ID: <ticket.test.delivery@pelty.invalid>"));
         assert!(raw.contains("multipart/alternative") && raw.contains("To: ana@example.com"));
@@ -248,11 +282,24 @@ mod tests {
             ..e.clone()
         };
         assert!(build_message(&from, &bad).is_err());
-        let bulk = Email { list_unsubscribe: Some("https://x.test/api/v1/unsubscribe/abc".into()), ..e.clone() };
+        let bulk = Email {
+            list_unsubscribe: Some("https://x.test/api/v1/unsubscribe/abc".into()),
+            ..e.clone()
+        };
         let raw = String::from_utf8(build_message(&from, &bulk).unwrap().formatted()).unwrap();
-        assert!(raw.contains("List-Unsubscribe: <https://x.test/api/v1/unsubscribe/abc>"), "{raw}");
+        assert!(
+            raw.contains("List-Unsubscribe: <https://x.test/api/v1/unsubscribe/abc>"),
+            "{raw}"
+        );
         assert!(raw.contains("List-Unsubscribe-Post: List-Unsubscribe=One-Click"));
-        assert!(build_message(&from, &Email { list_unsubscribe: Some("javascript:x".into()), ..e.clone() }).is_err());
+        assert!(build_message(
+            &from,
+            &Email {
+                list_unsubscribe: Some("javascript:x".into()),
+                ..e.clone()
+            }
+        )
+        .is_err());
         assert!(build_message(
             &from,
             &Email {

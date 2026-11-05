@@ -44,7 +44,16 @@ pub async fn count_active(pool: &PgPool, user_id: Uuid) -> AppResult<i64> {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn create(pool: &PgPool, user_id: Uuid, name: &str, prefix: &str, hash: &[u8], scopes: &[String], allowed_ips: &[String], expires_at: Option<OffsetDateTime>) -> AppResult<ApiKey> {
+pub async fn create(
+    pool: &PgPool,
+    user_id: Uuid,
+    name: &str,
+    prefix: &str,
+    hash: &[u8],
+    scopes: &[String],
+    allowed_ips: &[String],
+    expires_at: Option<OffsetDateTime>,
+) -> AppResult<ApiKey> {
     sqlx::query_as(&format!(
         "INSERT INTO api_keys (user_id, name, prefix, key_hash, scopes, allowed_ips, expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING {COLS}"
     ))
@@ -62,7 +71,13 @@ pub async fn create(pool: &PgPool, user_id: Uuid, name: &str, prefix: &str, hash
 
 /// Change a live key's IP allowlist and/or expiry. `user_id = None` lets
 /// staff edit any key. `expires_at`: `None` keeps it, `Some(None)` clears it.
-pub async fn update(pool: &PgPool, id: Uuid, user_id: Option<Uuid>, allowed_ips: Option<&[String]>, expires_at: Option<Option<OffsetDateTime>>) -> AppResult<Option<ApiKey>> {
+pub async fn update(
+    pool: &PgPool,
+    id: Uuid,
+    user_id: Option<Uuid>,
+    allowed_ips: Option<&[String]>,
+    expires_at: Option<Option<OffsetDateTime>>,
+) -> AppResult<Option<ApiKey>> {
     sqlx::query_as(&format!(
         "UPDATE api_keys SET allowed_ips = COALESCE($3, allowed_ips),
                              expires_at = CASE WHEN $4 THEN $5 ELSE expires_at END
@@ -92,11 +107,13 @@ pub async fn revoke(pool: &PgPool, id: Uuid, user_id: Uuid, any_user: bool) -> A
 }
 
 pub async fn revoke_all(pool: &PgPool, user_id: Uuid) -> AppResult<u64> {
-    let r = sqlx::query("UPDATE api_keys SET revoked_at = now() WHERE user_id=$1 AND revoked_at IS NULL")
-        .bind(user_id)
-        .execute(pool)
-        .await
-        .map_err(db_err)?;
+    let r = sqlx::query(
+        "UPDATE api_keys SET revoked_at = now() WHERE user_id=$1 AND revoked_at IS NULL",
+    )
+    .bind(user_id)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
     Ok(r.rows_affected())
 }
 
@@ -116,7 +133,11 @@ pub struct KeyContext {
 
 /// Resolve a key hash: active owner, key not revoked or expired. Touches
 /// `last_used_*` at most once a minute.
-pub async fn resolve(pool: &PgPool, hash: &[u8], ip: Option<&str>) -> AppResult<Option<KeyContext>> {
+pub async fn resolve(
+    pool: &PgPool,
+    hash: &[u8],
+    ip: Option<&str>,
+) -> AppResult<Option<KeyContext>> {
     sqlx::query_as(
         "WITH k AS (
              SELECT id, user_id, scopes,
@@ -155,11 +176,22 @@ pub struct OwnedKey {
 }
 
 /// All keys (newest first), optionally only active ones or one owner's.
-pub async fn list_all(pool: &PgPool, active_only: bool, user_id: Option<Uuid>, q: Option<&str>, limit: i64, offset: i64) -> AppResult<(Vec<OwnedKey>, i64)> {
+pub async fn list_all(
+    pool: &PgPool,
+    active_only: bool,
+    user_id: Option<Uuid>,
+    q: Option<&str>,
+    limit: i64,
+    offset: i64,
+) -> AppResult<(Vec<OwnedKey>, i64)> {
     let filter = "($1 = false OR (k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at > now())))
          AND ($2::uuid IS NULL OR k.user_id = $2)
          AND ($3::text IS NULL OR u.email ILIKE '%' || $3 || '%' OR k.name ILIKE '%' || $3 || '%' OR k.prefix = $3)";
-    let cols = COLS.split(", ").map(|c| format!("k.{c}")).collect::<Vec<_>>().join(", ");
+    let cols = COLS
+        .split(", ")
+        .map(|c| format!("k.{c}"))
+        .collect::<Vec<_>>()
+        .join(", ");
     let items = sqlx::query_as(&format!(
         "SELECT {cols}, k.user_id, u.email AS user_email FROM api_keys k JOIN users u ON u.id = k.user_id
          WHERE {filter} ORDER BY k.created_at DESC, k.id LIMIT $4 OFFSET $5"
@@ -172,17 +204,23 @@ pub async fn list_all(pool: &PgPool, active_only: bool, user_id: Option<Uuid>, q
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    let total = sqlx::query_scalar(&format!("SELECT count(*) FROM api_keys k JOIN users u ON u.id = k.user_id WHERE {filter}"))
-        .bind(active_only)
-        .bind(user_id)
-        .bind(q)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+    let total = sqlx::query_scalar(&format!(
+        "SELECT count(*) FROM api_keys k JOIN users u ON u.id = k.user_id WHERE {filter}"
+    ))
+    .bind(active_only)
+    .bind(user_id)
+    .bind(q)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
     Ok((items, total))
 }
 
 /// Owner of a key, if it exists.
 pub async fn owner(pool: &PgPool, id: Uuid) -> AppResult<Option<Uuid>> {
-    sqlx::query_scalar("SELECT user_id FROM api_keys WHERE id = $1").bind(id).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_scalar("SELECT user_id FROM api_keys WHERE id = $1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }

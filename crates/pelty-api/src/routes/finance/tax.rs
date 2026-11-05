@@ -35,15 +35,34 @@ pub async fn admin_verify_vat(
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<Value>> {
     let r = crate::vies::verify_customer(&s, id).await?;
-    audit::record(&s.pool, Some(u.user_id), "customer.vat_verified", Some(&id.to_string()), u.ip.as_deref(), json!({ "valid": r.valid })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "customer.vat_verified",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "valid": r.valid }),
+    )
+    .await?;
     Ok(Json(json!(r)))
 }
 
 #[utoipa::path(post, path = "/api/v1/client/vat/verify", responses((status = 200), (status = 409), (status = 422)))]
-pub async fn client_verify_vat(State(s): State<AppState>, u: crate::extract::CurrentUser) -> ApiResult<Json<Value>> {
+pub async fn client_verify_vat(
+    State(s): State<AppState>,
+    u: crate::extract::CurrentUser,
+) -> ApiResult<Json<Value>> {
     let cid = crate::routes::customers::customer_of(&s, &u).await?;
     let r = crate::vies::verify_customer(&s, cid).await?;
-    audit::record(&s.pool, Some(u.user_id), "customer.vat_verified", Some(&cid.to_string()), u.ip.as_deref(), json!({ "valid": r.valid })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "customer.vat_verified",
+        Some(&cid.to_string()),
+        u.ip.as_deref(),
+        json!({ "valid": r.valid }),
+    )
+    .await?;
     Ok(Json(json!(r)))
 }
 

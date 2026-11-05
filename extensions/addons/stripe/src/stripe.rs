@@ -5,12 +5,19 @@
 //! Verified here: `Stripe-Signature` verification against a vector computed
 //! independently, event mapping, request building, and the full HTTP flow
 //! against in-memory and local mock HTTP servers. NOT verified against Stripe.
+use hmac::{Hmac, Mac};
 use pelty_payments::http::{api_base, form_encode, send_json};
 use pelty_payments::*;
-#[allow(unused_imports)]
-use {pelty_core::money::Money, serde::{Deserialize, Serialize}, std::collections::{BTreeMap, HashMap}, std::future::Future, std::pin::Pin, std::sync::Arc};
-use hmac::{Hmac, Mac};
 use sha2::Sha256;
+#[allow(unused_imports)]
+use {
+    pelty_core::money::Money,
+    serde::{Deserialize, Serialize},
+    std::collections::{BTreeMap, HashMap},
+    std::future::Future,
+    std::pin::Pin,
+    std::sync::Arc,
+};
 
 pub use pelty_payments::http::HttpRequestSpec;
 /// Kept for compatibility: Stripe's transport is the shared HTTP transport.
@@ -40,22 +47,42 @@ const SETTINGS: &[SettingField] = &[
 ];
 
 /// Parse the dynamic payment method settings.
-pub fn dynamic_settings(cfg: &serde_json::Value) -> Result<(Option<String>, Vec<String>), GatewayError> {
-    let pmc = cfg.get("payment_method_configuration").and_then(|v| v.as_str()).map(str::trim).filter(|v| !v.is_empty());
+pub fn dynamic_settings(
+    cfg: &serde_json::Value,
+) -> Result<(Option<String>, Vec<String>), GatewayError> {
+    let pmc = cfg
+        .get("payment_method_configuration")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|v| !v.is_empty());
     if let Some(p) = pmc {
-        if !p.starts_with("pmc_") || p.len() > 64 || !p.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_') {
-            return Err(GatewayError::Config("payment_method_configuration must be a pmc_… id".into()));
+        if !p.starts_with("pmc_")
+            || p.len() > 64
+            || !p.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+        {
+            return Err(GatewayError::Config(
+                "payment_method_configuration must be a pmc_… id".into(),
+            ));
         }
     }
     let mut types = Vec::new();
-    for t in cfg.get("payment_method_types").and_then(|v| v.as_str()).unwrap_or("").split(',').map(str::trim).filter(|t| !t.is_empty()) {
+    for t in cfg
+        .get("payment_method_types")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .split(',')
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+    {
         if t.len() > 40 || !t.bytes().all(|b| b.is_ascii_lowercase() || b == b'_') {
             return Err(GatewayError::Config("invalid payment_method_types".into()));
         }
         types.push(t.to_string());
     }
     if pmc.is_some() && !types.is_empty() {
-        return Err(GatewayError::Config("set either payment_method_configuration or payment_method_types".into()));
+        return Err(GatewayError::Config(
+            "set either payment_method_configuration or payment_method_types".into(),
+        ));
     }
     Ok((pmc.map(String::from), types))
 }
@@ -96,7 +123,11 @@ impl StripeGateway {
         Self::with_transport(secret_key, webhook_secret, Arc::from(transport))
     }
 
-    pub fn with_transport(secret_key: &str, webhook_secret: &str, transport: Arc<dyn HttpTransport>) -> Self {
+    pub fn with_transport(
+        secret_key: &str,
+        webhook_secret: &str,
+        transport: Arc<dyn HttpTransport>,
+    ) -> Self {
         StripeGateway {
             secret_key: secret_key.into(),
             webhook_secret: webhook_secret.into(),
@@ -110,8 +141,14 @@ impl StripeGateway {
 
     fn auth_headers(&self, idempotency_key: Option<&str>) -> Vec<(String, String)> {
         let mut h = vec![
-            ("Authorization".into(), format!("Bearer {}", self.secret_key)),
-            ("Content-Type".into(), "application/x-www-form-urlencoded".into()),
+            (
+                "Authorization".into(),
+                format!("Bearer {}", self.secret_key),
+            ),
+            (
+                "Content-Type".into(),
+                "application/x-www-form-urlencoded".into(),
+            ),
         ];
         if let Some(k) = idempotency_key {
             h.push(("Idempotency-Key".into(), k.into()));
@@ -145,11 +182,20 @@ impl StripeGateway {
             ("cancel_url", r.cancel_url.clone()),
             ("client_reference_id", r.payment_id.clone()),
             ("line_items[0][quantity]", "1".into()),
-            ("line_items[0][price_data][currency]", r.amount.currency.as_str().to_ascii_lowercase()),
+            (
+                "line_items[0][price_data][currency]",
+                r.amount.currency.as_str().to_ascii_lowercase(),
+            ),
             ("line_items[0][price_data][unit_amount]", minor.to_string()),
-            ("line_items[0][price_data][product_data][name]", r.description.clone()),
+            (
+                "line_items[0][price_data][product_data][name]",
+                r.description.clone(),
+            ),
             ("metadata[pelty_payment_id]", r.payment_id.clone()),
-            ("payment_intent_data[metadata][pelty_payment_id]", r.payment_id.clone()),
+            (
+                "payment_intent_data[metadata][pelty_payment_id]",
+                r.payment_id.clone(),
+            ),
         ];
         if let Some(e) = &r.customer_email {
             p.push(("customer_email", e.clone()));
@@ -166,7 +212,11 @@ impl StripeGateway {
     pub fn session_request(&self, id: &str) -> HttpRequestSpec {
         HttpRequestSpec {
             method: "GET",
-            url: format!("{}/checkout/sessions/{}", self.base, pelty_payments::http::url_encode(id)),
+            url: format!(
+                "{}/checkout/sessions/{}",
+                self.base,
+                pelty_payments::http::url_encode(id)
+            ),
             headers: self.auth_headers(None),
             body: String::new(),
         }
@@ -183,7 +233,10 @@ impl StripeGateway {
             method: "POST",
             url: format!("{}/refunds", self.base),
             headers: self.auth_headers(Some(idem)),
-            body: form_encode(&[("payment_intent", payment_intent.into()), ("amount", minor.to_string())]),
+            body: form_encode(&[
+                ("payment_intent", payment_intent.into()),
+                ("amount", minor.to_string()),
+            ]),
         })
     }
 
@@ -210,8 +263,18 @@ impl StripeGateway {
     }
 
     /// Attach a payment method to a customer (step 2).
-    pub fn attach_request(&self, pm: &str, customer: &str, idem: &str) -> Result<HttpRequestSpec, GatewayError> {
-        if !pm.starts_with("pm_") || !pm[3..].chars().all(|c| c.is_ascii_alphanumeric() || c == '_') || pm.len() > 255 {
+    pub fn attach_request(
+        &self,
+        pm: &str,
+        customer: &str,
+        idem: &str,
+    ) -> Result<HttpRequestSpec, GatewayError> {
+        if !pm.starts_with("pm_")
+            || !pm[3..]
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+            || pm.len() > 255
+        {
             return Err(GatewayError::Config("invalid payment method token".into()));
         }
         Ok(HttpRequestSpec {
@@ -223,9 +286,18 @@ impl StripeGateway {
     }
 
     /// Off-session PaymentIntent for a saved `cus_…|pm_…` token.
-    pub fn charge_request(&self, token: &str, r: &PaymentRequest) -> Result<HttpRequestSpec, GatewayError> {
-        let (customer, pm) = token.split_once('|').ok_or_else(|| GatewayError::Config("invalid saved token".into()))?;
-        let minor = r.amount.to_minor_units().ok_or_else(|| GatewayError::Config("amount out of range".into()))?;
+    pub fn charge_request(
+        &self,
+        token: &str,
+        r: &PaymentRequest,
+    ) -> Result<HttpRequestSpec, GatewayError> {
+        let (customer, pm) = token
+            .split_once('|')
+            .ok_or_else(|| GatewayError::Config("invalid saved token".into()))?;
+        let minor = r
+            .amount
+            .to_minor_units()
+            .ok_or_else(|| GatewayError::Config("amount out of range".into()))?;
         Ok(HttpRequestSpec {
             method: "POST",
             url: format!("{}/payment_intents", self.base),
@@ -243,14 +315,27 @@ impl StripeGateway {
         })
     }
 
-    async fn post_json(&self, spec: HttpRequestSpec) -> Result<(u16, serde_json::Value), GatewayError> {
-        let (status, body) = self.transport.send(spec).await.map_err(GatewayError::Provider)?;
-        let v: serde_json::Value = serde_json::from_str(&body).map_err(|_| GatewayError::Provider("bad json".into()))?;
+    async fn post_json(
+        &self,
+        spec: HttpRequestSpec,
+    ) -> Result<(u16, serde_json::Value), GatewayError> {
+        let (status, body) = self
+            .transport
+            .send(spec)
+            .await
+            .map_err(GatewayError::Provider)?;
+        let v: serde_json::Value =
+            serde_json::from_str(&body).map_err(|_| GatewayError::Provider("bad json".into()))?;
         Ok((status, v))
     }
 
     /// Verify a `Stripe-Signature` header.
-    pub fn verify_signature(&self, header: &str, body: &[u8], now: i64) -> Result<(), GatewayError> {
+    pub fn verify_signature(
+        &self,
+        header: &str,
+        body: &[u8],
+        now: i64,
+    ) -> Result<(), GatewayError> {
         let mut ts: Option<i64> = None;
         let mut sigs = Vec::new();
         for part in header.split(',') {
@@ -270,7 +355,10 @@ impl StripeGateway {
         mac.update(b".");
         mac.update(body);
         let expected = mac.finalize().into_bytes();
-        if sigs.iter().any(|s| hex::decode(s).is_ok_and(|b| pelty_payments::http::ct_eq(&b, &expected))) {
+        if sigs
+            .iter()
+            .any(|s| hex::decode(s).is_ok_and(|b| pelty_payments::http::ct_eq(&b, &expected)))
+        {
             Ok(())
         } else {
             Err(GatewayError::InvalidSignature)
@@ -288,21 +376,41 @@ impl PaymentGateway for StripeGateway {
     fn capabilities(&self) -> Capabilities {
         descriptor().capabilities
     }
-    fn create_payment<'a>(&'a self, req: &'a PaymentRequest) -> BoxFuture<'a, Result<PaymentInit, GatewayError>> {
+    fn create_payment<'a>(
+        &'a self,
+        req: &'a PaymentRequest,
+    ) -> BoxFuture<'a, Result<PaymentInit, GatewayError>> {
         Box::pin(async move {
             let v = send_json(self.transport.as_ref(), self.checkout_request(req)?).await?;
             match (v["url"].as_str(), v["id"].as_str()) {
-                (Some(u), Some(id)) => Ok(PaymentInit::Redirect { url: u.into(), provider_ref: id.into() }),
+                (Some(u), Some(id)) => Ok(PaymentInit::Redirect {
+                    url: u.into(),
+                    provider_ref: id.into(),
+                }),
                 _ => Err(GatewayError::Provider("missing url/id".into())),
             }
         })
     }
-    fn parse_webhook(&self, headers: &Headers, body: &[u8], now: i64) -> Result<WebhookEvent, GatewayError> {
-        let sig = headers.get("stripe-signature").ok_or(GatewayError::InvalidSignature)?;
+    fn parse_webhook(
+        &self,
+        headers: &Headers,
+        body: &[u8],
+        now: i64,
+    ) -> Result<WebhookEvent, GatewayError> {
+        let sig = headers
+            .get("stripe-signature")
+            .ok_or(GatewayError::InvalidSignature)?;
         self.verify_signature(sig, body, now)?;
-        let v: serde_json::Value = serde_json::from_slice(body).map_err(|_| GatewayError::MalformedPayload)?;
-        let event_id = v["id"].as_str().ok_or(GatewayError::MalformedPayload)?.to_string();
-        let event_type = v["type"].as_str().ok_or(GatewayError::MalformedPayload)?.to_string();
+        let v: serde_json::Value =
+            serde_json::from_slice(body).map_err(|_| GatewayError::MalformedPayload)?;
+        let event_id = v["id"]
+            .as_str()
+            .ok_or(GatewayError::MalformedPayload)?
+            .to_string();
+        let event_type = v["type"]
+            .as_str()
+            .ok_or(GatewayError::MalformedPayload)?
+            .to_string();
         let obj = &v["data"]["object"];
         let s = |k: &str| obj[k].as_str().map(str::to_string);
         let (kind, provider_ref) = match event_type.as_str() {
@@ -316,19 +424,29 @@ impl PaymentGateway for StripeGateway {
                 s("id"),
             ),
             "checkout.session.async_payment_succeeded" => (WebhookKind::PaymentSucceeded, s("id")),
-            "checkout.session.async_payment_failed" | "checkout.session.expired" => (WebhookKind::PaymentFailed, s("id")),
+            "checkout.session.async_payment_failed" | "checkout.session.expired" => {
+                (WebhookKind::PaymentFailed, s("id"))
+            }
             "payment_intent.payment_failed" => (WebhookKind::PaymentFailed, s("id")),
             // Only a full refund flips the payment; partial refunds are
             // tracked by the refunds ledger.
             "charge.refunded" => (
-                if obj["refunded"].as_bool() == Some(false) { WebhookKind::Ignored } else { WebhookKind::Refunded },
+                if obj["refunded"].as_bool() == Some(false) {
+                    WebhookKind::Ignored
+                } else {
+                    WebhookKind::Refunded
+                },
                 s("payment_intent"),
             ),
-            "charge.dispute.created" | "charge.dispute.funds_withdrawn" => (WebhookKind::Disputed, s("payment_intent")),
+            "charge.dispute.created" | "charge.dispute.funds_withdrawn" => {
+                (WebhookKind::Disputed, s("payment_intent"))
+            }
             _ => (WebhookKind::Ignored, s("id")),
         };
         let mut e = WebhookEvent::new(event_id, event_type, kind, provider_ref);
-        e.payment_id = obj["metadata"]["pelty_payment_id"].as_str().map(str::to_string);
+        e.payment_id = obj["metadata"]["pelty_payment_id"]
+            .as_str()
+            .map(str::to_string);
         Ok(e)
     }
     fn complete_payment<'a>(
@@ -345,49 +463,113 @@ impl PaymentGateway for StripeGateway {
             })
         })
     }
-    fn save_method<'a>(&'a self, token: &'a str, email: &'a str, idem: &'a str) -> BoxFuture<'a, Result<SavedMethod, GatewayError>> {
+    fn save_method<'a>(
+        &'a self,
+        token: &'a str,
+        email: &'a str,
+        idem: &'a str,
+    ) -> BoxFuture<'a, Result<SavedMethod, GatewayError>> {
         Box::pin(async move {
             let (st, c) = self.post_json(self.customer_request(email, idem)).await?;
-            let customer = c["id"].as_str().filter(|_| (200..300).contains(&st)).ok_or_else(|| GatewayError::Provider(c["error"]["message"].as_str().unwrap_or("customer failed").into()))?.to_string();
-            let (st, pm) = self.post_json(self.attach_request(token, &customer, idem)?).await?;
+            let customer = c["id"]
+                .as_str()
+                .filter(|_| (200..300).contains(&st))
+                .ok_or_else(|| {
+                    GatewayError::Provider(
+                        c["error"]["message"]
+                            .as_str()
+                            .unwrap_or("customer failed")
+                            .into(),
+                    )
+                })?
+                .to_string();
+            let (st, pm) = self
+                .post_json(self.attach_request(token, &customer, idem)?)
+                .await?;
             if !(200..300).contains(&st) {
-                return Err(GatewayError::Provider(pm["error"]["message"].as_str().unwrap_or("attach failed").into()));
+                return Err(GatewayError::Provider(
+                    pm["error"]["message"]
+                        .as_str()
+                        .unwrap_or("attach failed")
+                        .into(),
+                ));
             }
             let card = &pm["card"];
             Ok(SavedMethod {
                 token: format!("{customer}|{token}"),
-                brand: card["brand"].as_str().unwrap_or("card").chars().take(30).collect(),
-                last4: card["last4"].as_str().unwrap_or("").chars().filter(char::is_ascii_digit).take(4).collect(),
-                exp_month: card["exp_month"].as_u64().and_then(|m| u8::try_from(m).ok()).filter(|m| (1..=12).contains(m)).unwrap_or(1),
-                exp_year: card["exp_year"].as_u64().and_then(|y| u16::try_from(y).ok()).unwrap_or(0),
+                brand: card["brand"]
+                    .as_str()
+                    .unwrap_or("card")
+                    .chars()
+                    .take(30)
+                    .collect(),
+                last4: card["last4"]
+                    .as_str()
+                    .unwrap_or("")
+                    .chars()
+                    .filter(char::is_ascii_digit)
+                    .take(4)
+                    .collect(),
+                exp_month: card["exp_month"]
+                    .as_u64()
+                    .and_then(|m| u8::try_from(m).ok())
+                    .filter(|m| (1..=12).contains(m))
+                    .unwrap_or(1),
+                exp_year: card["exp_year"]
+                    .as_u64()
+                    .and_then(|y| u16::try_from(y).ok())
+                    .unwrap_or(0),
             })
         })
     }
-    fn charge_saved<'a>(&'a self, token: &'a str, req: &'a PaymentRequest) -> BoxFuture<'a, Result<ChargeOutcome, GatewayError>> {
+    fn charge_saved<'a>(
+        &'a self,
+        token: &'a str,
+        req: &'a PaymentRequest,
+    ) -> BoxFuture<'a, Result<ChargeOutcome, GatewayError>> {
         Box::pin(async move {
             let (st, v) = self.post_json(self.charge_request(token, req)?).await?;
             // Card errors (402) are declines; the PaymentIntent id is in the error object.
             if st == 402 || v["error"]["type"] == "card_error" {
                 return Ok(ChargeOutcome::Declined {
-                    reason: v["error"]["decline_code"].as_str().or(v["error"]["code"].as_str()).unwrap_or("declined").chars().take(100).collect(),
+                    reason: v["error"]["decline_code"]
+                        .as_str()
+                        .or(v["error"]["code"].as_str())
+                        .unwrap_or("declined")
+                        .chars()
+                        .take(100)
+                        .collect(),
                 });
             }
             if !(200..300).contains(&st) {
-                return Err(GatewayError::Provider(v["error"]["message"].as_str().unwrap_or("error").into()));
+                return Err(GatewayError::Provider(
+                    v["error"]["message"].as_str().unwrap_or("error").into(),
+                ));
             }
             let id = v["id"].as_str().unwrap_or_default().to_string();
             Ok(match v["status"].as_str() {
                 Some("succeeded") => ChargeOutcome::Succeeded { provider_ref: id },
                 Some("processing") => ChargeOutcome::Pending { provider_ref: id },
-                Some(other) => ChargeOutcome::Declined { reason: other.into() },
+                Some(other) => ChargeOutcome::Declined {
+                    reason: other.into(),
+                },
                 None => return Err(GatewayError::Provider("missing status".into())),
             })
         })
     }
-    fn refund<'a>(&'a self, provider_ref: &'a str, amount: Money, idem: &'a str) -> BoxFuture<'a, Result<RefundResult, GatewayError>> {
+    fn refund<'a>(
+        &'a self,
+        provider_ref: &'a str,
+        amount: Money,
+        idem: &'a str,
+    ) -> BoxFuture<'a, Result<RefundResult, GatewayError>> {
         Box::pin(async move {
             let pi = self.payment_intent_for(provider_ref).await?;
-            let v = send_json(self.transport.as_ref(), self.refund_request(&pi, amount, idem)?).await?;
+            let v = send_json(
+                self.transport.as_ref(),
+                self.refund_request(&pi, amount, idem)?,
+            )
+            .await?;
             Ok(RefundResult {
                 provider_ref: v["id"].as_str().map(str::to_string),
                 status: v["status"].as_str().unwrap_or("pending").into(),
@@ -508,21 +690,42 @@ mod tests {
     #[test]
     fn pinned_configuration_and_override() {
         let g = gw().with_methods(Some("pmc_123".into()), vec![]);
-        assert!(g.checkout_request(&req()).unwrap().body.contains("payment_method_configuration=pmc_123"));
+        assert!(g
+            .checkout_request(&req())
+            .unwrap()
+            .body
+            .contains("payment_method_configuration=pmc_123"));
         let g = gw().with_methods(None, vec!["card".into(), "sepa_debit".into()]);
         let b = g.checkout_request(&req()).unwrap().body;
-        assert!(b.contains("payment_method_types%5B%5D=card") && b.contains("payment_method_types%5B%5D=sepa_debit"));
+        assert!(
+            b.contains("payment_method_types%5B%5D=card")
+                && b.contains("payment_method_types%5B%5D=sepa_debit")
+        );
     }
 
     #[test]
     fn dynamic_settings_validation() {
         use serde_json::json;
         assert_eq!(dynamic_settings(&json!({})).unwrap(), (None, vec![]));
-        assert_eq!(dynamic_settings(&json!({"payment_method_configuration":" pmc_Ab1 "})).unwrap().0.as_deref(), Some("pmc_Ab1"));
-        assert_eq!(dynamic_settings(&json!({"payment_method_types":"card, ideal"})).unwrap().1, vec!["card", "ideal"]);
+        assert_eq!(
+            dynamic_settings(&json!({"payment_method_configuration":" pmc_Ab1 "}))
+                .unwrap()
+                .0
+                .as_deref(),
+            Some("pmc_Ab1")
+        );
+        assert_eq!(
+            dynamic_settings(&json!({"payment_method_types":"card, ideal"}))
+                .unwrap()
+                .1,
+            vec!["card", "ideal"]
+        );
         assert!(dynamic_settings(&json!({"payment_method_configuration":"x&y"})).is_err());
         assert!(dynamic_settings(&json!({"payment_method_types":"Card"})).is_err());
-        assert!(dynamic_settings(&json!({"payment_method_configuration":"pmc_1","payment_method_types":"card"})).is_err());
+        assert!(dynamic_settings(
+            &json!({"payment_method_configuration":"pmc_1","payment_method_types":"card"})
+        )
+        .is_err());
     }
 
     struct Mock(Mutex<Vec<HttpRequestSpec>>);
@@ -577,14 +780,37 @@ mod tests {
     async fn save_and_charge_off_session() {
         let g = StripeGateway::new("sk", SECRET, Box::new(Saved));
         let m = g.save_method("pm_1", "a@x.io", "k").await.unwrap();
-        assert_eq!((m.token.as_str(), m.brand.as_str(), m.last4.as_str(), m.exp_month, m.exp_year), ("cus_9|pm_1", "visa", "4242", 12, 2030));
+        assert_eq!(
+            (
+                m.token.as_str(),
+                m.brand.as_str(),
+                m.last4.as_str(),
+                m.exp_month,
+                m.exp_year
+            ),
+            ("cus_9|pm_1", "visa", "4242", 12, 2030)
+        );
         assert!(g.save_method("pm_../x", "a@x.io", "k").await.is_err());
         let spec = g.charge_request("cus_9|pm_1", &req()).unwrap();
-        assert!(spec.body.contains("off_session=true") && spec.body.contains("customer=cus_9") && spec.body.contains("payment_method=pm_1"));
-        assert_eq!(g.charge_saved("cus_9|pm_1", &req()).await.unwrap(), ChargeOutcome::Succeeded { provider_ref: "pi_5".into() });
+        assert!(
+            spec.body.contains("off_session=true")
+                && spec.body.contains("customer=cus_9")
+                && spec.body.contains("payment_method=pm_1")
+        );
+        assert_eq!(
+            g.charge_saved("cus_9|pm_1", &req()).await.unwrap(),
+            ChargeOutcome::Succeeded {
+                provider_ref: "pi_5".into()
+            }
+        );
         let mut r = req();
         r.amount = Money::new(Decimal::new(777, 2), Currency::parse("EUR").unwrap());
-        assert_eq!(g.charge_saved("cus_9|pm_1", &r).await.unwrap(), ChargeOutcome::Declined { reason: "insufficient_funds".into() });
+        assert_eq!(
+            g.charge_saved("cus_9|pm_1", &r).await.unwrap(),
+            ChargeOutcome::Declined {
+                reason: "insufficient_funds".into()
+            }
+        );
         assert!(g.charge_saved("bad", &req()).await.is_err());
     }
 }
@@ -595,15 +821,31 @@ mod flow_tests {
     use pelty_payments::test_util::*;
 
     fn g(t: &MockTransport) -> Box<dyn PaymentGateway> {
-        factory(&cfg("stripe", serde_json::json!({}), &[("secret_key", "sk_test"), ("webhook_secret", "whsec")], t)).unwrap()
+        factory(&cfg(
+            "stripe",
+            serde_json::json!({}),
+            &[("secret_key", "sk_test"), ("webhook_secret", "whsec")],
+            t,
+        ))
+        .unwrap()
     }
 
     #[tokio::test]
     async fn refund_resolves_checkout_session_to_payment_intent() {
         let t = MockTransport::new();
-        t.push(200, r#"{"id":"cs_1","payment_intent":"pi_9"}"#).push(200, r#"{"id":"re_1","status":"succeeded"}"#);
-        let r = g(&t).refund("cs_1", money("5.00", "EUR"), "k1").await.unwrap();
-        assert_eq!(r, RefundResult { provider_ref: Some("re_1".into()), status: "succeeded".into() });
+        t.push(200, r#"{"id":"cs_1","payment_intent":"pi_9"}"#)
+            .push(200, r#"{"id":"re_1","status":"succeeded"}"#);
+        let r = g(&t)
+            .refund("cs_1", money("5.00", "EUR"), "k1")
+            .await
+            .unwrap();
+        assert_eq!(
+            r,
+            RefundResult {
+                provider_ref: Some("re_1".into()),
+                status: "succeeded".into()
+            }
+        );
         let sent = t.requests();
         assert_eq!(sent[0].method, "GET");
         assert!(sent[0].url.ends_with("/checkout/sessions/cs_1"));
@@ -615,7 +857,10 @@ mod flow_tests {
     async fn provider_error_surfaces_message() {
         let t = MockTransport::new();
         t.push(402, r#"{"error":{"message":"card_declined"}}"#);
-        let e = g(&t).refund("pi_1", money("1.00", "EUR"), "k").await.unwrap_err();
+        let e = g(&t)
+            .refund("pi_1", money("1.00", "EUR"), "k")
+            .await
+            .unwrap_err();
         assert_eq!(e, GatewayError::Provider("HTTP 402: card_declined".into()));
     }
 
@@ -627,13 +872,25 @@ mod flow_tests {
             .push(200, r#"{"status":"expired","payment_status":"unpaid"}"#);
         let gw = g(&t);
         let q = HashMap::new();
-        assert_eq!(gw.complete_payment("cs_1", &q).await.unwrap(), CompleteStatus::Succeeded);
-        assert_eq!(gw.complete_payment("cs_1", &q).await.unwrap(), CompleteStatus::Pending);
-        assert_eq!(gw.complete_payment("cs_1", &q).await.unwrap(), CompleteStatus::Failed);
+        assert_eq!(
+            gw.complete_payment("cs_1", &q).await.unwrap(),
+            CompleteStatus::Succeeded
+        );
+        assert_eq!(
+            gw.complete_payment("cs_1", &q).await.unwrap(),
+            CompleteStatus::Pending
+        );
+        assert_eq!(
+            gw.complete_payment("cs_1", &q).await.unwrap(),
+            CompleteStatus::Failed
+        );
     }
 
     fn signed(body: &str, t: i64) -> Headers {
-        let sig = hex::encode(pelty_payments::http::hmac_sha256(b"whsec", format!("{t}.{body}").as_bytes()));
+        let sig = hex::encode(pelty_payments::http::hmac_sha256(
+            b"whsec",
+            format!("{t}.{body}").as_bytes(),
+        ));
         hdrs(&[("stripe-signature", &format!("t={t},v1={sig}"))])
     }
 
@@ -642,18 +899,46 @@ mod flow_tests {
         let t = MockTransport::new();
         let gw = g(&t);
         let cases = [
-            (r#"{"id":"e1","type":"charge.refunded","data":{"object":{"refunded":true,"payment_intent":"pi_1"}}}"#, WebhookKind::Refunded, Some("pi_1")),
-            (r#"{"id":"e2","type":"charge.refunded","data":{"object":{"refunded":false,"payment_intent":"pi_1"}}}"#, WebhookKind::Ignored, Some("pi_1")),
-            (r#"{"id":"e3","type":"charge.dispute.created","data":{"object":{"payment_intent":"pi_2"}}}"#, WebhookKind::Disputed, Some("pi_2")),
-            (r#"{"id":"e4","type":"checkout.session.completed","data":{"object":{"id":"cs_1","payment_status":"unpaid"}}}"#, WebhookKind::Ignored, Some("cs_1")),
-            (r#"{"id":"e5","type":"payment_intent.payment_failed","data":{"object":{"id":"pi_3","metadata":{"pelty_payment_id":"p-1"}}}}"#, WebhookKind::PaymentFailed, Some("pi_3")),
+            (
+                r#"{"id":"e1","type":"charge.refunded","data":{"object":{"refunded":true,"payment_intent":"pi_1"}}}"#,
+                WebhookKind::Refunded,
+                Some("pi_1"),
+            ),
+            (
+                r#"{"id":"e2","type":"charge.refunded","data":{"object":{"refunded":false,"payment_intent":"pi_1"}}}"#,
+                WebhookKind::Ignored,
+                Some("pi_1"),
+            ),
+            (
+                r#"{"id":"e3","type":"charge.dispute.created","data":{"object":{"payment_intent":"pi_2"}}}"#,
+                WebhookKind::Disputed,
+                Some("pi_2"),
+            ),
+            (
+                r#"{"id":"e4","type":"checkout.session.completed","data":{"object":{"id":"cs_1","payment_status":"unpaid"}}}"#,
+                WebhookKind::Ignored,
+                Some("cs_1"),
+            ),
+            (
+                r#"{"id":"e5","type":"payment_intent.payment_failed","data":{"object":{"id":"pi_3","metadata":{"pelty_payment_id":"p-1"}}}}"#,
+                WebhookKind::PaymentFailed,
+                Some("pi_3"),
+            ),
         ];
         for (b, k, r) in cases.clone() {
-            let e = gw.parse_webhook(&signed(b, 100), b.as_bytes(), 100).unwrap();
+            let e = gw
+                .parse_webhook(&signed(b, 100), b.as_bytes(), 100)
+                .unwrap();
             assert_eq!(e.kind, k, "{b}");
             assert_eq!(e.provider_ref.as_deref(), r);
         }
         let b = cases[4].0;
-        assert_eq!(gw.parse_webhook(&signed(b, 100), b.as_bytes(), 100).unwrap().payment_id.as_deref(), Some("p-1"));
+        assert_eq!(
+            gw.parse_webhook(&signed(b, 100), b.as_bytes(), 100)
+                .unwrap()
+                .payment_id
+                .as_deref(),
+            Some("p-1")
+        );
     }
 }

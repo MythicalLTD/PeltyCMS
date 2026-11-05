@@ -14,26 +14,47 @@ pub const JOB_KIND: &str = "currency.update_rates";
 pub async fn update_now(s: &AppState, actor: Option<uuid::Uuid>) -> AppResult<Value> {
     let cfg = er::settings(&s.pool).await?;
     let res = fetch_and_apply(s, &cfg).await;
-    er::record_run(&s.pool, res.as_ref().err().map(|e| e.to_string()).as_deref()).await?;
+    er::record_run(
+        &s.pool,
+        res.as_ref().err().map(|e| e.to_string()).as_deref(),
+    )
+    .await?;
     let applied = res?;
     let mut synced = 0;
     if cfg.update_prices && !applied.updated.is_empty() {
         synced = currencies::sync_prices(&s.pool, false).await?;
     }
-    audit::record(&s.pool, actor, "currency.rates_updated", None, None, json!({ "updated": applied.updated, "missing": applied.missing, "prices": synced })).await?;
+    audit::record(
+        &s.pool,
+        actor,
+        "currency.rates_updated",
+        None,
+        None,
+        json!({ "updated": applied.updated, "missing": applied.missing, "prices": synced }),
+    )
+    .await?;
     Ok(json!({ "updated": applied.updated, "missing": applied.missing, "prices_synced": synced }))
 }
 
 async fn fetch_and_apply(s: &AppState, cfg: &er::RateSettings) -> AppResult<er::Applied> {
     let t = s.http();
     let (status, body) = t
-        .send(HttpRequestSpec { method: "GET", url: cfg.url.clone(), headers: vec![("accept".into(), "application/xml, application/json".into())], body: String::new() })
+        .send(HttpRequestSpec {
+            method: "GET",
+            url: cfg.url.clone(),
+            headers: vec![("accept".into(), "application/xml, application/json".into())],
+            body: String::new(),
+        })
         .await
         .map_err(|_| AppError::Conflict("error.rate_feed_unavailable"))?;
     if !(200..300).contains(&status) {
         return Err(AppError::Conflict("error.rate_feed_unavailable"));
     }
-    let feed = if cfg.source == "ecb" { er::parse_ecb(&body)? } else { er::parse_json(&body)? };
+    let feed = if cfg.source == "ecb" {
+        er::parse_ecb(&body)?
+    } else {
+        er::parse_json(&body)?
+    };
     er::apply(&s.pool, &feed, cfg.markup_percent, &cfg.source).await
 }
 

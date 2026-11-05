@@ -9,9 +9,9 @@ use super::invoices;
 use super::invoices::*;
 #[allow(unused_imports)]
 use pelty_core::AppResult;
-use sqlx::PgPool;
 #[allow(unused_imports)]
 use rust_decimal::Decimal;
+use sqlx::PgPool;
 #[allow(unused_imports)]
 use uuid::Uuid;
 
@@ -63,7 +63,13 @@ impl InvoiceService {
     }
 
     /// Same as [`invoices::debit_note`].
-    pub async fn debit_note(&self, invoice_id: Uuid, lines: &[DebitLine], reason: &str, due_days: i64) -> AppResult<Invoice> {
+    pub async fn debit_note(
+        &self,
+        invoice_id: Uuid,
+        lines: &[DebitLine],
+        reason: &str,
+        due_days: i64,
+    ) -> AppResult<Invoice> {
         invoices::debit_note(&self.pool, invoice_id, lines, reason, due_days).await
     }
 
@@ -83,17 +89,35 @@ impl InvoiceService {
     }
 
     /// Same as [`invoices::list`].
-    pub async fn list(&self, customer: Option<Uuid>, status: Option<&str>, limit: i64, offset: i64) -> AppResult<(Vec<Invoice>, i64)> {
+    pub async fn list(
+        &self,
+        customer: Option<Uuid>,
+        status: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> AppResult<(Vec<Invoice>, i64)> {
         invoices::list(&self.pool, customer, status, limit, offset).await
     }
 
     /// Same as [`invoices::create_pending`].
-    pub async fn create_pending(&self, inv: &Invoice, gateway: &str, user: Option<Uuid>, key: &str) -> AppResult<Payment> {
+    pub async fn create_pending(
+        &self,
+        inv: &Invoice,
+        gateway: &str,
+        user: Option<Uuid>,
+        key: &str,
+    ) -> AppResult<Payment> {
         invoices::create_pending(&self.pool, inv, gateway, user, key).await
     }
 
     /// Same as [`invoices::create_pending_multi`].
-    pub async fn create_pending_multi(&self, invs: &[Invoice], gateway: &str, user: Option<Uuid>, key: &str) -> AppResult<Payment> {
+    pub async fn create_pending_multi(
+        &self,
+        invs: &[Invoice],
+        gateway: &str,
+        user: Option<Uuid>,
+        key: &str,
+    ) -> AppResult<Payment> {
         invoices::create_pending_multi(&self.pool, invs, gateway, user, key).await
     }
 
@@ -103,12 +127,33 @@ impl InvoiceService {
     }
 
     /// Same as [`invoices::record_payment`].
-    pub async fn record_payment(&self, invoice_id: Uuid, gateway: &str, provider_ref: Option<&str>, amount: Decimal, key: &str, actor: Option<Uuid>) -> AppResult<Applied> {
-        invoices::record_payment(&self.pool, invoice_id, gateway, provider_ref, amount, key, actor).await
+    pub async fn record_payment(
+        &self,
+        invoice_id: Uuid,
+        gateway: &str,
+        provider_ref: Option<&str>,
+        amount: Decimal,
+        key: &str,
+        actor: Option<Uuid>,
+    ) -> AppResult<Applied> {
+        invoices::record_payment(
+            &self.pool,
+            invoice_id,
+            gateway,
+            provider_ref,
+            amount,
+            key,
+            actor,
+        )
+        .await
     }
 
     /// Same as [`invoices::apply_by_ref`].
-    pub async fn apply_by_ref(&self, gateway: &str, provider_ref: &str) -> AppResult<Option<Applied>> {
+    pub async fn apply_by_ref(
+        &self,
+        gateway: &str,
+        provider_ref: &str,
+    ) -> AppResult<Option<Applied>> {
         invoices::apply_by_ref(&self.pool, gateway, provider_ref).await
     }
 }

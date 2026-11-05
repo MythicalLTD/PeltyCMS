@@ -18,7 +18,10 @@ pub fn router() -> Router<AppState> {
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/license", responses((status = 200, body = Status), (status = 403)))]
-pub async fn status(State(s): State<AppState>, _p: RequirePermission<perms::AdminAccess>) -> ApiResult<Json<Status>> {
+pub async fn status(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::AdminAccess>,
+) -> ApiResult<Json<Status>> {
     Ok(Json(lic::status(&s.pool).await?))
 }
 
@@ -29,12 +32,24 @@ pub struct AcceptBody {
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/license/accept", request_body = AcceptBody, responses((status = 200, body = Status), (status = 422), (status = 403)))]
-pub async fn accept(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::AdminAccess>, Json(b): Json<AcceptBody>) -> ApiResult<Json<Status>> {
+pub async fn accept(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::AdminAccess>,
+    Json(b): Json<AcceptBody>,
+) -> ApiResult<Json<Status>> {
     if !b.accept {
         return Err(pelty_core::AppError::Validation("error.validation").into());
     }
     let st = lic::accept(&s.pool, Some(u.user_id), "admin").await?;
-    audit::record(&s.pool, Some(u.user_id), "license.accepted", None, u.ip.as_deref(), json!({ "version": st.version })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "license.accepted",
+        None,
+        u.ip.as_deref(),
+        json!({ "version": st.version }),
+    )
+    .await?;
     Ok(Json(st))
 }
 
@@ -50,6 +65,14 @@ pub async fn overage_notice(
     Json(b): Json<OverageBody>,
 ) -> ApiResult<Json<Status>> {
     let st = lic::set_overage_dismissed(&s.pool, b.dismissed).await?;
-    audit::record(&s.pool, Some(u.user_id), "license.overage_notice", None, u.ip.as_deref(), json!({ "dismissed": b.dismissed })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "license.overage_notice",
+        None,
+        u.ip.as_deref(),
+        json!({ "dismissed": b.dismissed }),
+    )
+    .await?;
     Ok(Json(st))
 }

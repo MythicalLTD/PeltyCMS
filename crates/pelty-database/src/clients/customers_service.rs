@@ -66,22 +66,48 @@ impl ClientService {
     }
 
     /// Same as [`customers::update_admin`].
-    pub async fn update_admin(&self, id: Uuid, status: Option<&str>, notes: Option<&str>, tax_exempt: Option<bool>) -> AppResult<Option<Customer>> {
+    pub async fn update_admin(
+        &self,
+        id: Uuid,
+        status: Option<&str>,
+        notes: Option<&str>,
+        tax_exempt: Option<bool>,
+    ) -> AppResult<Option<Customer>> {
         customers::update_admin(&self.pool, id, status, notes, tax_exempt).await
     }
 
     /// Same as [`customers::list`].
-    pub async fn list(&self, q: Option<&str>, limit: i64, offset: i64) -> AppResult<(Vec<Customer>, i64)> {
+    pub async fn list(
+        &self,
+        q: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> AppResult<(Vec<Customer>, i64)> {
         customers::list(&self.pool, q, limit, offset).await
     }
 
     /// Same as [`customers::add_contact`].
-    pub async fn add_contact(&self, customer_id: Uuid, name: &str, email: &str, phone: &str, is_billing: bool) -> AppResult<Contact> {
+    pub async fn add_contact(
+        &self,
+        customer_id: Uuid,
+        name: &str,
+        email: &str,
+        phone: &str,
+        is_billing: bool,
+    ) -> AppResult<Contact> {
         customers::add_contact(&self.pool, customer_id, name, email, phone, is_billing).await
     }
 
     /// Same as [`customers::update_contact`].
-    pub async fn update_contact(&self, customer_id: Uuid, id: Uuid, name: &str, email: &str, phone: &str, is_billing: bool) -> AppResult<Option<Contact>> {
+    pub async fn update_contact(
+        &self,
+        customer_id: Uuid,
+        id: Uuid,
+        name: &str,
+        email: &str,
+        phone: &str,
+        is_billing: bool,
+    ) -> AppResult<Option<Contact>> {
         customers::update_contact(&self.pool, customer_id, id, name, email, phone, is_billing).await
     }
 }

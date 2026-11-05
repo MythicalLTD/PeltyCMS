@@ -1,10 +1,10 @@
 //! Downloads area: staff upload (`downloads.manage`, raw body, ≤ 25 MiB,
 //! allow-listed types by magic bytes); customers download what their active
 //! services entitle them to. Files are always served as attachments.
-use crate::routes::customers::customer_of;
-use crate::routes::ticket_attachments::{clean_name, serve};
 use crate::error::ApiResult;
 use crate::extract::{perms, CurrentUser, RequirePermission};
+use crate::routes::customers::customer_of;
+use crate::routes::ticket_attachments::{clean_name, serve};
 use crate::AppState;
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Path, Query, State};
@@ -22,7 +22,9 @@ use uuid::Uuid;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/admin/downloads", get(admin_list).post(admin_upload))
-        .layer(DefaultBodyLimit::max(pelty_core::config::upload_limits().download + 1024))
+        .layer(DefaultBodyLimit::max(
+            pelty_core::config::upload_limits().download + 1024,
+        ))
         .route(
             "/admin/downloads/{id}",
             get(admin_file).delete(admin_delete),

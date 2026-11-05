@@ -24,7 +24,10 @@ fn req() -> PaymentRequest {
     PaymentRequest {
         payment_id: "p-1".into(),
         reference: "INV-1".into(),
-        amount: Money::new(rust_decimal::Decimal::from_str("19.99").unwrap(), Currency::parse("EUR").unwrap()),
+        amount: Money::new(
+            rust_decimal::Decimal::from_str("19.99").unwrap(),
+            Currency::parse("EUR").unwrap(),
+        ),
         description: "Hosting".into(),
         customer_email: None,
         success_url: "https://panel.example/ok".into(),
@@ -36,7 +39,10 @@ fn req() -> PaymentRequest {
 
 fn reg() -> GatewayRegistry {
     let mut r = GatewayRegistry::with_transport(Arc::new(ReqwestTransport::new().unwrap()));
-    r.register(pelty_addon_gateway_stripe::stripe::descriptor(), pelty_addon_gateway_stripe::stripe::factory);
+    r.register(
+        pelty_addon_gateway_stripe::stripe::descriptor(),
+        pelty_addon_gateway_stripe::stripe::factory,
+    );
     r
 }
 
@@ -59,18 +65,45 @@ async fn stripe_checkout_and_refund_over_http() {
     let base = serve(app).await;
     let cfg = GatewayConfig {
         config: json!({"api_base": format!("{base}/v1")}),
-        secrets: [("secret_key".into(), "sk_test_local".into()), ("webhook_secret".into(), "whsec".into())].into(),
+        secrets: [
+            ("secret_key".into(), "sk_test_local".into()),
+            ("webhook_secret".into(), "whsec".into()),
+        ]
+        .into(),
         ..Default::default()
     };
     let gw = reg().build("stripe", &cfg).unwrap();
     let init = gw.create_payment(&req()).await.unwrap();
-    assert_eq!(init, PaymentInit::Redirect { url: "https://checkout.example/cs_t1".into(), provider_ref: "cs_t1".into() });
-    assert_eq!(gw.complete_payment("cs_t1", &Default::default()).await.unwrap(), CompleteStatus::Succeeded);
-    let r = gw.refund("cs_t1", Money::new(rust_decimal::Decimal::new(500, 2), Currency::parse("EUR").unwrap()), "rf-1").await.unwrap();
+    assert_eq!(
+        init,
+        PaymentInit::Redirect {
+            url: "https://checkout.example/cs_t1".into(),
+            provider_ref: "cs_t1".into()
+        }
+    );
+    assert_eq!(
+        gw.complete_payment("cs_t1", &Default::default())
+            .await
+            .unwrap(),
+        CompleteStatus::Succeeded
+    );
+    let r = gw
+        .refund(
+            "cs_t1",
+            Money::new(
+                rust_decimal::Decimal::new(500, 2),
+                Currency::parse("EUR").unwrap(),
+            ),
+            "rf-1",
+        )
+        .await
+        .unwrap();
     assert_eq!(r.status, "succeeded");
     let l = log.lock().unwrap().clone();
     assert_eq!(l[0].1, "Bearer sk_test_local");
     assert!(l[0].2.contains("unit_amount%5D=1999"));
-    assert_eq!((l[1].1.as_str(), l[1].2.as_str()), ("rf-1", "payment_intent=pi_t1&amount=500"));
+    assert_eq!(
+        (l[1].1.as_str(), l[1].2.as_str()),
+        ("rf-1", "payment_intent=pi_t1&amount=500")
+    );
 }
-

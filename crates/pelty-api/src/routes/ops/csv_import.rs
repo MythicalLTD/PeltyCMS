@@ -17,7 +17,9 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/admin/import/csv/analyze", post(analyze))
         .route("/admin/import/csv/run", post(run))
-        .layer(DefaultBodyLimit::max(pelty_core::config::upload_limits().import + 64 * 1024))
+        .layer(DefaultBodyLimit::max(
+            pelty_core::config::upload_limits().import + 64 * 1024,
+        ))
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -45,9 +47,15 @@ fn rows(kind: &str, csv: &str) -> ApiResult<Parsed> {
 
 /// Headers, a 5-row preview, the target fields and a suggested mapping.
 #[utoipa::path(post, path = "/api/v1/admin/import/csv/analyze", request_body = CsvAnalyze, responses((status = 200), (status = 422)))]
-pub async fn analyze(_p: RequirePermission<perms::SettingsManage>, Json(b): Json<CsvAnalyze>) -> ApiResult<Json<Value>> {
+pub async fn analyze(
+    _p: RequirePermission<perms::SettingsManage>,
+    Json(b): Json<CsvAnalyze>,
+) -> ApiResult<Json<Value>> {
     let (spec, rows) = rows(&b.kind, &b.csv)?;
-    let fields: Vec<Value> = spec.iter().map(|(f, r)| json!({ "key": f, "required": r })).collect();
+    let fields: Vec<Value> = spec
+        .iter()
+        .map(|(f, r)| json!({ "key": f, "required": r }))
+        .collect();
     Ok(Json(json!({
         "headers": rows[0],
         "preview": rows.iter().skip(1).take(5).collect::<Vec<_>>(),
@@ -74,11 +82,23 @@ fn yes() -> bool {
 
 /// Validate every row; unless `dry_run`, import them all-or-nothing.
 #[utoipa::path(post, path = "/api/v1/admin/import/csv/run", request_body = CsvRun, responses((status = 200), (status = 422)))]
-pub async fn run(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::SettingsManage>, Json(b): Json<CsvRun>) -> ApiResult<Json<Value>> {
+pub async fn run(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::SettingsManage>,
+    Json(b): Json<CsvRun>,
+) -> ApiResult<Json<Value>> {
     let (_, rows) = rows(&b.kind, &b.csv)?;
     let rep = ci::run(&s.pool, &b.kind, &rows, &b.mapping, b.dry_run).await?;
     if rep.committed {
-        audit::record(&s.pool, Some(u.user_id), "import.csv", Some(&b.kind), u.ip.as_deref(), json!({ "created": rep.created, "skipped": rep.skipped })).await?;
+        audit::record(
+            &s.pool,
+            Some(u.user_id),
+            "import.csv",
+            Some(&b.kind),
+            u.ip.as_deref(),
+            json!({ "created": rep.created, "skipped": rep.skipped }),
+        )
+        .await?;
     }
     Ok(Json(serde_json::to_value(&rep).unwrap_or_default()))
 }

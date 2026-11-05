@@ -1,9 +1,9 @@
 //! Client SSO into the provisioned panel via a signed one-time token.
 //! `POST /client/services/{id}/sso` returns the redirect URL;
 //! `POST /sso/consume` lets the panel burn the token exactly once.
-use crate::routes::customers::customer_of;
 use crate::error::ApiResult;
 use crate::extract::CurrentUser;
+use crate::routes::customers::customer_of;
 use crate::AppState;
 use axum::extract::{Path, State};
 use axum::routing::post;
@@ -33,12 +33,17 @@ async fn load(s: &AppState, sid: Uuid) -> ApiResult<(ServerConn, ServiceCtx, Str
     let t = pdb::target(&s.pool, sid).await?.ok_or(AppError::NotFound)?;
     let module = t.module.clone().ok_or_else(unsupported)?;
     let server_id = t.server_id.ok_or_else(unsupported)?;
-    let (srv_module, base_url, sealed, config, enabled) = pdb::server_secret(&s.pool, server_id).await?.ok_or_else(unsupported)?;
+    let (srv_module, base_url, sealed, config, enabled) = pdb::server_secret(&s.pool, server_id)
+        .await?
+        .ok_or_else(unsupported)?;
     if srv_module != module || !enabled {
         return Err(unsupported().into());
     }
     let key = s.secret_box.as_ref().ok_or_else(unsupported)?;
-    let api_key = key.open(&sealed).and_then(|k| String::from_utf8(k).ok()).ok_or_else(unsupported)?;
+    let api_key = key
+        .open(&sealed)
+        .and_then(|k| String::from_utf8(k).ok())
+        .ok_or_else(unsupported)?;
     let ctx = ServiceCtx {
         service_id: sid.to_string(),
         customer_email: t.email,
@@ -49,23 +54,49 @@ async fn load(s: &AppState, sid: Uuid) -> ApiResult<(ServerConn, ServiceCtx, Str
         remote_id: t.remote_id,
         module_data: t.module_data,
     };
-    Ok((ServerConn { base_url, api_key, config }, ctx, module))
+    Ok((
+        ServerConn {
+            base_url,
+            api_key,
+            config,
+        },
+        ctx,
+        module,
+    ))
 }
 
 #[utoipa::path(post, path = "/api/v1/client/services/{id}/sso", responses((status = 200), (status = 404), (status = 409)))]
-pub async fn start(State(s): State<AppState>, u: CurrentUser, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
+pub async fn start(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
     let c = customer_of(&s, &u).await?;
-    let svc = s.hosting().get(id).await?.filter(|x| x.customer_id == c).ok_or(AppError::NotFound)?;
+    let svc = s
+        .hosting()
+        .get(id)
+        .await?
+        .filter(|x| x.customer_id == c)
+        .ok_or(AppError::NotFound)?;
     if svc.status != "active" {
         return Err(AppError::Conflict("error.service_not_active").into());
     }
     let (conn, ctx, module) = load(&s, id).await?;
-    let m = s.provisioning.get(&module).ok_or(AppError::Conflict("error.sso_unsupported"))?;
+    let m = s
+        .provisioning
+        .get(&module)
+        .ok_or(AppError::Conflict("error.sso_unsupported"))?;
     if !crate::addons::provisioning_enabled(&s, &module).await? {
         return Err(AppError::Conflict("error.sso_unsupported").into());
     }
     let now = OffsetDateTime::now_utc();
-    let claims = Claims { sid: id.to_string(), rid: ctx.remote_id.clone(), email: ctx.customer_email.clone(), exp: now.unix_timestamp() + TTL_SECS, nonce: pelty_auth::token::generate() };
+    let claims = Claims {
+        sid: id.to_string(),
+        rid: ctx.remote_id.clone(),
+        email: ctx.customer_email.clone(),
+        exp: now.unix_timestamp() + TTL_SECS,
+        nonce: pelty_auth::token::generate(),
+    };
     let token = sso::sign(&conn.api_key, &claims);
     let url = m
         .sso_url(&conn, &ctx, &token)
@@ -75,8 +106,23 @@ pub async fn start(State(s): State<AppState>, u: CurrentUser, Path(id): Path<Uui
             AppError::Conflict("error.sso_failed")
         })?
         .ok_or(AppError::Conflict("error.sso_unsupported"))?;
-    db::issue(&s.pool, &claims.nonce, id, u.user_id, now + time::Duration::seconds(TTL_SECS)).await?;
-    audit::record(&s.pool, Some(u.user_id), "service.sso", Some(&id.to_string()), u.ip.as_deref(), json!({ "module": module })).await?;
+    db::issue(
+        &s.pool,
+        &claims.nonce,
+        id,
+        u.user_id,
+        now + time::Duration::seconds(TTL_SECS),
+    )
+    .await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "service.sso",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "module": module }),
+    )
+    .await?;
     Ok(Json(json!({ "url": url, "expires_in": TTL_SECS })))
 }
 
@@ -87,7 +133,10 @@ pub struct ConsumeBody {
 
 /// Called by the panel. 200 with the claims the first time; 401 otherwise.
 #[utoipa::path(post, path = "/api/v1/sso/consume", request_body = ConsumeBody, responses((status = 200), (status = 401)))]
-pub async fn consume(State(s): State<AppState>, Json(b): Json<ConsumeBody>) -> ApiResult<Json<Value>> {
+pub async fn consume(
+    State(s): State<AppState>,
+    Json(b): Json<ConsumeBody>,
+) -> ApiResult<Json<Value>> {
     let bad = || AppError::Unauthenticated;
     if b.token.len() > 4096 {
         return Err(bad().into());
@@ -95,9 +144,16 @@ pub async fn consume(State(s): State<AppState>, Json(b): Json<ConsumeBody>) -> A
     let peek = sso::peek(&b.token).ok_or_else(bad)?;
     let sid: Uuid = peek.sid.parse().map_err(|_| bad())?;
     let (conn, _, _) = load(&s, sid).await.map_err(|_| bad())?;
-    let c = sso::verify(&conn.api_key, &b.token, OffsetDateTime::now_utc().unix_timestamp()).ok_or_else(bad)?;
+    let c = sso::verify(
+        &conn.api_key,
+        &b.token,
+        OffsetDateTime::now_utc().unix_timestamp(),
+    )
+    .ok_or_else(bad)?;
     if !db::consume(&s.pool, &c.nonce, sid).await? {
         return Err(bad().into());
     }
-    Ok(Json(json!({ "service_id": c.sid, "remote_id": c.rid, "email": c.email })))
+    Ok(Json(
+        json!({ "service_id": c.sid, "remote_id": c.rid, "email": c.email }),
+    ))
 }

@@ -97,7 +97,17 @@ struct Svc {
 }
 
 async fn load(pool: &PgPool, id: Uuid) -> AppResult<Svc> {
-    type Row = (Uuid, Uuid, Uuid, String, String, String, Decimal, Option<Date>, String);
+    type Row = (
+        Uuid,
+        Uuid,
+        Uuid,
+        String,
+        String,
+        String,
+        Decimal,
+        Option<Date>,
+        String,
+    );
     let r: Option<Row> = sqlx::query_as(
         "SELECT s.customer_id, s.product_id, p.group_id, s.status, s.cycle, s.currency::text, s.recurring_amount, s.next_due_date, p.name
          FROM services s JOIN products p ON p.id = s.product_id WHERE s.id = $1",
@@ -106,8 +116,19 @@ async fn load(pool: &PgPool, id: Uuid) -> AppResult<Svc> {
     .fetch_optional(pool)
     .await
     .map_err(db_err)?;
-    let (customer_id, product_id, group_id, status, cycle, currency, amount, next_due, name) = r.ok_or(AppError::NotFound)?;
-    Ok(Svc { customer_id, product_id, group_id, status, cycle, currency, amount, next_due, name })
+    let (customer_id, product_id, group_id, status, cycle, currency, amount, next_due, name) =
+        r.ok_or(AppError::NotFound)?;
+    Ok(Svc {
+        customer_id,
+        product_id,
+        group_id,
+        status,
+        cycle,
+        currency,
+        amount,
+        next_due,
+        name,
+    })
 }
 
 async fn exponent(pool: &PgPool, currency: &str) -> AppResult<u32> {
@@ -121,7 +142,12 @@ async fn exponent(pool: &PgPool, currency: &str) -> AppResult<u32> {
 
 /// The billed period containing `today` (from invoice lines), else the
 /// period ending at `next_due_date`.
-async fn current_period(pool: &PgPool, sid: Uuid, s: &Svc, today: Date) -> AppResult<Option<(Date, Date)>> {
+async fn current_period(
+    pool: &PgPool,
+    sid: Uuid,
+    s: &Svc,
+    today: Date,
+) -> AppResult<Option<(Date, Date)>> {
     let billed: Option<(Date, Date)> = sqlx::query_as(
         "SELECT i.period_start, i.period_end FROM invoice_items i JOIN invoices v ON v.id = i.invoice_id
          WHERE i.service_id = $1 AND v.status IN ('unpaid','paid') AND i.period_start <= $2 AND i.period_end > $2
@@ -196,11 +222,29 @@ pub async fn options(pool: &PgPool, sid: Uuid, today: Date) -> AppResult<Vec<Cha
         .map(|(product_id, name, base)| {
             let amount = base + addons;
             if amount > s.amount {
-                let p = period.and_then(|(a, b)| proration::prorate(s.amount, amount, a, b, today, exp));
-                let due = p.as_ref().map(|p| p.net).unwrap_or_default() + (amount - s.amount) * Decimal::from(ahead);
-                ChangeOption { product_id, name, amount, kind: "upgrade", due_now: due, proration: p, effective_date: None }
+                let p = period
+                    .and_then(|(a, b)| proration::prorate(s.amount, amount, a, b, today, exp));
+                let due = p.as_ref().map(|p| p.net).unwrap_or_default()
+                    + (amount - s.amount) * Decimal::from(ahead);
+                ChangeOption {
+                    product_id,
+                    name,
+                    amount,
+                    kind: "upgrade",
+                    due_now: due,
+                    proration: p,
+                    effective_date: None,
+                }
             } else {
-                ChangeOption { product_id, name, amount, kind: "downgrade", due_now: Decimal::ZERO, proration: None, effective_date: s.next_due }
+                ChangeOption {
+                    product_id,
+                    name,
+                    amount,
+                    kind: "downgrade",
+                    due_now: Decimal::ZERO,
+                    proration: None,
+                    effective_date: s.next_due,
+                }
             }
         })
         .collect())
@@ -231,8 +275,13 @@ pub async fn request_change(
     let id = Uuid::new_v4();
     let mut invoice = None;
     let status = if opt.kind == "upgrade" {
-        let p = opt.proration.clone().ok_or(AppError::Conflict("error.service_not_changeable"))?;
-        let (start, end) = current_period(pool, sid, &s, today).await?.ok_or(AppError::Conflict("error.service_not_changeable"))?;
+        let p = opt
+            .proration
+            .clone()
+            .ok_or(AppError::Conflict("error.service_not_changeable"))?;
+        let (start, end) = current_period(pool, sid, &s, today)
+            .await?
+            .ok_or(AppError::Conflict("error.service_not_changeable"))?;
         let ahead = billed_ahead(pool, sid, end).await?;
         let mut items = vec![
             NewItem {
@@ -290,9 +339,15 @@ pub async fn request_change(
         .map_err(|e| unique_conflict(e, "error.change_pending"))?;
         let paid = fin.status == "paid";
         invoice = Some(fin);
-        if paid { "paid" } else { "awaiting_payment" }
+        if paid {
+            "paid"
+        } else {
+            "awaiting_payment"
+        }
     } else {
-        let eff = s.next_due.ok_or(AppError::Conflict("error.service_not_changeable"))?;
+        let eff = s
+            .next_due
+            .ok_or(AppError::Conflict("error.service_not_changeable"))?;
         sqlx::query(
             "INSERT INTO service_changes (id, service_id, kind, from_product, to_product, old_amount, new_amount, status, effective_date, requested_by)
              VALUES ($1,$2,'downgrade',$3,$4,$5,$6,'scheduled',$7,$8)",
@@ -344,7 +399,9 @@ async fn apply(tx: &mut invoices::Tx<'_>, change: Uuid) -> AppResult<Option<Uuid
     .fetch_optional(&mut **tx)
     .await
     .map_err(db_err)?;
-    let Some((sid, product, amount)) = r else { return Ok(None) };
+    let Some((sid, product, amount)) = r else {
+        return Ok(None);
+    };
     sqlx::query("UPDATE services SET product_id = $2, recurring_amount = $3, updated_at = now() WHERE id = $1")
         .bind(sid)
         .bind(product)
@@ -436,7 +493,13 @@ pub async fn changes_for(pool: &PgPool, sid: Uuid) -> AppResult<Vec<Change>> {
 pub const CANCEL_KINDS: &[&str] = &["immediate", "end_of_period"];
 pub const CANCEL_STATUSES: &[&str] = &["pending", "approved", "rejected", "withdrawn", "completed"];
 
-pub async fn request_cancel(pool: &PgPool, sid: Uuid, kind: &str, reason: &str, by: Option<Uuid>) -> AppResult<Cancellation> {
+pub async fn request_cancel(
+    pool: &PgPool,
+    sid: Uuid,
+    kind: &str,
+    reason: &str,
+    by: Option<Uuid>,
+) -> AppResult<Cancellation> {
     if !CANCEL_KINDS.contains(&kind) {
         return Err(AppError::Validation("error.invalid_kind"));
     }
@@ -462,11 +525,13 @@ pub async fn request_cancel(pool: &PgPool, sid: Uuid, kind: &str, reason: &str, 
 }
 
 pub async fn get_cancel(pool: &PgPool, id: Uuid) -> AppResult<Option<Cancellation>> {
-    sqlx::query_as(&format!("SELECT {CANCEL_COLS} FROM {CANCEL_FROM} WHERE r.id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {CANCEL_COLS} FROM {CANCEL_FROM} WHERE r.id = $1"
+    ))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Open (pending/approved) request of a service.
@@ -478,7 +543,12 @@ pub async fn open_cancel(pool: &PgPool, sid: Uuid) -> AppResult<Option<Cancellat
         .map_err(db_err)
 }
 
-pub async fn list_cancels(pool: &PgPool, status: Option<&str>, limit: i64, offset: i64) -> AppResult<(Vec<Cancellation>, i64)> {
+pub async fn list_cancels(
+    pool: &PgPool,
+    status: Option<&str>,
+    limit: i64,
+    offset: i64,
+) -> AppResult<(Vec<Cancellation>, i64)> {
     let rows = sqlx::query_as(&format!(
         "SELECT {CANCEL_COLS} FROM {CANCEL_FROM} WHERE ($1::text IS NULL OR r.status = $1) ORDER BY r.created_at DESC, r.id LIMIT $2 OFFSET $3"
     ))
@@ -488,11 +558,13 @@ pub async fn list_cancels(pool: &PgPool, status: Option<&str>, limit: i64, offse
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    let total: i64 = sqlx::query_scalar("SELECT count(*) FROM cancellation_requests WHERE ($1::text IS NULL OR status = $1)")
-        .bind(status)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+    let total: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM cancellation_requests WHERE ($1::text IS NULL OR status = $1)",
+    )
+    .bind(status)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
     Ok((rows, total))
 }
 
@@ -524,7 +596,13 @@ pub struct Decision {
     pub cancel_now: bool,
 }
 
-pub async fn decide(pool: &PgPool, id: Uuid, approve: bool, note: &str, by: Uuid) -> AppResult<Decision> {
+pub async fn decide(
+    pool: &PgPool,
+    id: Uuid,
+    approve: bool,
+    note: &str,
+    by: Uuid,
+) -> AppResult<Decision> {
     if note.chars().count() > 2000 {
         return Err(AppError::Validation("error.field_too_long"));
     }
@@ -570,18 +648,23 @@ pub async fn decide(pool: &PgPool, id: Uuid, approve: bool, note: &str, by: Uuid
     }
     tx.commit().await.map_err(db_err)?;
     let request = get_cancel(pool, id).await?.ok_or(AppError::NotFound)?;
-    Ok(Decision { request, cancel_now })
+    Ok(Decision {
+        request,
+        cancel_now,
+    })
 }
 
 /// Due work for `today`: apply scheduled downgrades and return services
 /// whose approved end-of-period cancellation is now effective (the caller
 /// transitions them so provisioning hooks run).
 pub async fn sweep(pool: &PgPool, today: Date) -> AppResult<(Vec<Uuid>, Vec<Uuid>)> {
-    let due: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM service_changes WHERE status = 'scheduled' AND effective_date <= $1")
-        .bind(today)
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)?;
+    let due: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM service_changes WHERE status = 'scheduled' AND effective_date <= $1",
+    )
+    .bind(today)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
     let mut changed = apply_all(pool, due).await?;
     // Fallback for upgrades whose payment hook did not run.
     let paid: Vec<Uuid> = sqlx::query_scalar(

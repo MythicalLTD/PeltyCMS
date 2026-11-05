@@ -21,7 +21,10 @@ pub fn router() -> Router<AppState> {
         .route("/auth/login", post(login))
         .route("/auth/logout", post(logout))
         .route("/auth/me", get(me))
-        .route("/auth/sessions", get(list_sessions).delete(revoke_other_sessions))
+        .route(
+            "/auth/sessions",
+            get(list_sessions).delete(revoke_other_sessions),
+        )
         .route("/auth/sessions/{id}", delete(revoke_session))
         .route("/auth/locale", put(set_locale))
 }
@@ -113,8 +116,18 @@ pub async fn register(
     }
     // Pre-event: addons may cancel, or rewrite the display name. The
     // password never leaves the host.
-    let pre = crate::addon_ext::pre_event(&s, "client.before_register", json!({ "email": b.email, "display_name": b.display_name, "ip": g.ip })).await?;
-    let display_name = pre.get("display_name").and_then(|v| v.as_str()).filter(|d| d.len() <= 200).map(String::from).unwrap_or_else(|| b.display_name.clone());
+    let pre = crate::addon_ext::pre_event(
+        &s,
+        "client.before_register",
+        json!({ "email": b.email, "display_name": b.display_name, "ip": g.ip }),
+    )
+    .await?;
+    let display_name = pre
+        .get("display_name")
+        .and_then(|v| v.as_str())
+        .filter(|d| d.len() <= 200)
+        .map(String::from)
+        .unwrap_or_else(|| b.display_name.clone());
     let user = s
         .auth
         .register(
@@ -151,7 +164,12 @@ pub async fn login(
     Json(b): Json<LoginBody>,
 ) -> ApiResult<Response> {
     crate::captcha::require(&s, &headers, "login", g.ip.as_deref()).await?;
-    crate::addon_ext::pre_event(&s, "login.before", json!({ "email": b.email, "ip": g.ip, "user_agent": g.user_agent })).await?;
+    crate::addon_ext::pre_event(
+        &s,
+        "login.before",
+        json!({ "email": b.email, "ip": g.ip, "user_agent": g.user_agent }),
+    )
+    .await?;
     let input = LoginInput {
         email: &b.email,
         password: &b.password,
@@ -160,19 +178,29 @@ pub async fn login(
     };
     let user = match s.auth.check_credentials(&input).await {
         Ok(u) => u,
-        Err(e) => match crate::addon_ext::external_login(&s, &b.email, &b.password, g.ip.as_deref()).await? {
-            Some(u) => u,
-            None => return Err(e.into()),
-        },
+        Err(e) => {
+            match crate::addon_ext::external_login(&s, &b.email, &b.password, g.ip.as_deref())
+                .await?
+            {
+                Some(u) => u,
+                None => return Err(e.into()),
+            }
+        }
     };
     if crate::duo::applies(&s, user.id).await? {
         let challenge = crate::routes::mfa::start_challenge(&s, user.id).await?;
-        return Ok(Json(json!({ "mfa_required": true, "duo_required": true, "challenge": challenge })).into_response());
+        return Ok(Json(
+            json!({ "mfa_required": true, "duo_required": true, "challenge": challenge }),
+        )
+        .into_response());
     }
     let methods = pelty_database::mfa::login_methods(&s.pool, user.id).await?;
     if !methods.is_empty() {
         let challenge = crate::routes::mfa::start_challenge(&s, user.id).await?;
-        return Ok(Json(json!({ "mfa_required": true, "challenge": challenge, "methods": methods })).into_response());
+        return Ok(Json(
+            json!({ "mfa_required": true, "challenge": challenge, "methods": methods }),
+        )
+        .into_response());
     }
     session_response(&s, &g, &headers, user).await
 }
@@ -202,7 +230,14 @@ pub(crate) async fn session_response(
                 .await;
         }
     }
-    login_alert(s, issued.user.id, issued.session.id, g.ip.as_deref(), g.user_agent.as_deref()).await;
+    login_alert(
+        s,
+        issued.user.id,
+        issued.session.id,
+        g.ip.as_deref(),
+        g.user_agent.as_deref(),
+    )
+    .await;
     s.emit(pelty_extensions::events::DomainEvent::new(
         "user.logged_in",
         json!({ "user_id": issued.user.id }),
@@ -247,7 +282,10 @@ pub async fn logout(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Resp
     s.auth
         .revoke(u.user_id, u.session_id, u.ip.as_deref(), "auth.logout")
         .await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("user.logged_out", json!({ "user_id": u.user_id })));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "user.logged_out",
+        json!({ "user_id": u.user_id }),
+    ));
     let mut r = StatusCode::NO_CONTENT.into_response();
     r.headers_mut().append(
         header::SET_COOKIE,
@@ -278,12 +316,23 @@ pub async fn list_sessions(State(s): State<AppState>, u: CurrentUser) -> ApiResu
 
 /// Sign out every other device; the calling session stays valid.
 #[utoipa::path(delete, path = "/api/v1/auth/sessions", responses((status = 200), (status = 401), (status = 403)))]
-pub async fn revoke_other_sessions(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Json<Value>> {
+pub async fn revoke_other_sessions(
+    State(s): State<AppState>,
+    u: CurrentUser,
+) -> ApiResult<Json<Value>> {
     if u.api_key {
         return Err(AppError::Forbidden.into());
     }
     let n = pelty_database::sessions::revoke_others(&s.pool, u.user_id, u.session_id).await?;
-    pelty_database::audit::record(&s.pool, Some(u.user_id), "auth.sessions_revoked_others", None, u.ip.as_deref(), json!({ "count": n })).await?;
+    pelty_database::audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "auth.sessions_revoked_others",
+        None,
+        u.ip.as_deref(),
+        json!({ "count": n }),
+    )
+    .await?;
     Ok(Json(json!({ "revoked": n })))
 }
 
@@ -334,12 +383,21 @@ pub async fn set_locale(
 /// event (mail templates / addons can react). Best effort, never blocks login.
 async fn login_alert(s: &AppState, user: Uuid, session: Uuid, ip: Option<&str>, ua: Option<&str>) {
     let Some(ip) = ip else { return };
-    let Ok(pol) = pelty_auth::policy::load(&s.pool).await else { return };
+    let Ok(pol) = pelty_auth::policy::load(&s.pool).await else {
+        return;
+    };
     if !pol.login_alerts {
         return;
     }
-    let staff = pelty_database::users::permissions(&s.pool, user).await.map(|p| p.iter().any(|x| x == "admin.access")).unwrap_or(false);
-    if !staff || pelty_database::sessions::seen_ip(&s.pool, user, ip, session).await.unwrap_or(true) {
+    let staff = pelty_database::users::permissions(&s.pool, user)
+        .await
+        .map(|p| p.iter().any(|x| x == "admin.access"))
+        .unwrap_or(false);
+    if !staff
+        || pelty_database::sessions::seen_ip(&s.pool, user, ip, session)
+            .await
+            .unwrap_or(true)
+    {
         return;
     }
     let geo = s.geoip.lookup(ip);
@@ -369,14 +427,42 @@ async fn login_alert(s: &AppState, user: Uuid, session: Uuid, ip: Option<&str>, 
         let mut v = crate::mail::Vars::new();
         v.insert("email".into(), u.email.clone());
         v.insert("ip".into(), ip.to_string());
-        v.insert("user_agent".into(), ua.unwrap_or("unknown").chars().take(200).collect());
-        v.insert("time".into(), time::OffsetDateTime::now_utc().format(&time::format_description::well_known::Rfc3339).unwrap_or_default());
+        v.insert(
+            "user_agent".into(),
+            ua.unwrap_or("unknown").chars().take(200).collect(),
+        );
+        v.insert(
+            "time".into(),
+            time::OffsetDateTime::now_utc()
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap_or_default(),
+        );
         v.insert("location".into(), geo.location.clone());
-        v.insert("city".into(), geo.city.clone().unwrap_or_else(|| "-".into()));
-        v.insert("region".into(), geo.region.clone().unwrap_or_else(|| "-".into()));
-        v.insert("country".into(), geo.country.clone().unwrap_or_else(|| "-".into()));
-        v.insert("country_name".into(), geo.country_name.clone().unwrap_or_else(|| "-".into()));
-        if let Err(e) = crate::mail::enqueue(s, "admin_login_alert", u.locale.as_deref().unwrap_or("en"), &u.email, v).await {
+        v.insert(
+            "city".into(),
+            geo.city.clone().unwrap_or_else(|| "-".into()),
+        );
+        v.insert(
+            "region".into(),
+            geo.region.clone().unwrap_or_else(|| "-".into()),
+        );
+        v.insert(
+            "country".into(),
+            geo.country.clone().unwrap_or_else(|| "-".into()),
+        );
+        v.insert(
+            "country_name".into(),
+            geo.country_name.clone().unwrap_or_else(|| "-".into()),
+        );
+        if let Err(e) = crate::mail::enqueue(
+            s,
+            "admin_login_alert",
+            u.locale.as_deref().unwrap_or("en"),
+            &u.email,
+            v,
+        )
+        .await
+        {
             tracing::error!(error = %e, "could not queue login alert");
         }
     }

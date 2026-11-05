@@ -53,7 +53,10 @@ async fn smtp_settings_encrypted_and_test_send() {
     let admin = sess(&app, &state, "admin").await;
     let staff = sess(&app, &state, "staff").await;
     let url = "/api/v1/admin/settings/smtp";
-    assert_eq!(call(&app, "GET", url, None, &staff.h()).await.status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        call(&app, "GET", url, None, &staff.h()).await.status,
+        StatusCode::FORBIDDEN
+    );
 
     let r = call(&app, "PUT", url, Some(json!({"enabled": true, "host": "bad host!", "port": 25, "security": "none", "from_address": "a@b.test"})), &admin.h()).await;
     assert_eq!(r.body["error"]["code"], "error.smtp_invalid");
@@ -69,8 +72,15 @@ async fn smtp_settings_encrypted_and_test_send() {
     assert_eq!(r.body["password_set"], true);
     assert_eq!(r.body["source"], "settings");
     assert!(!r.body.to_string().contains("Sup3r-Secret-PW"));
-    let raw: serde_json::Value = sqlx::query_scalar("SELECT value FROM system_settings WHERE key = 'mail.smtp'").fetch_one(&state.pool).await.unwrap();
-    assert!(!raw.to_string().contains("Sup3r-Secret-PW"), "password sealed at rest");
+    let raw: serde_json::Value =
+        sqlx::query_scalar("SELECT value FROM system_settings WHERE key = 'mail.smtp'")
+            .fetch_one(&state.pool)
+            .await
+            .unwrap();
+    assert!(
+        !raw.to_string().contains("Sup3r-Secret-PW"),
+        "password sealed at rest"
+    );
     assert_eq!(state.active_mailer().name(), "smtp");
 
     // Keep password when omitted.
@@ -78,20 +88,40 @@ async fn smtp_settings_encrypted_and_test_send() {
     assert_eq!(r.body["password_set"], true);
 
     let to = email();
-    let r = call(&app, "POST", "/api/v1/admin/settings/smtp/test", Some(json!({"to": to})), &admin.h()).await;
+    let r = call(
+        &app,
+        "POST",
+        "/api/v1/admin/settings/smtp/test",
+        Some(json!({"to": to})),
+        &admin.h(),
+    )
+    .await;
     assert_eq!(r.status, StatusCode::OK);
     assert_eq!(r.body["ok"], true, "{:?}", r.body);
     let data = sink.await.unwrap();
-    assert!(data.contains(&format!("To: {to}")) && data.contains("Pelty"), "{data}");
+    assert!(
+        data.contains(&format!("To: {to}")) && data.contains("Pelty"),
+        "{data}"
+    );
 
     // Unreachable server reports the error instead of failing the request.
     let r = call(&app, "PUT", url, Some(json!({"enabled": false, "host": "127.0.0.1", "port": 1, "security": "none", "clear_password": true, "from_address": "billing@pelty.test"})), &admin.h()).await;
     assert_eq!(r.body["password_set"], false);
     assert_ne!(r.body["source"], "settings");
     assert_eq!(state.active_mailer().name(), "memory");
-    let r = call(&app, "POST", "/api/v1/admin/settings/smtp/test", Some(json!({"to": email()})), &admin.h()).await;
+    let r = call(
+        &app,
+        "POST",
+        "/api/v1/admin/settings/smtp/test",
+        Some(json!({"to": email()})),
+        &admin.h(),
+    )
+    .await;
     assert_eq!(r.body["ok"], false);
     assert!(r.body["error"].is_string());
 
-    sqlx::query("DELETE FROM system_settings WHERE key = 'mail.smtp'").execute(&state.pool).await.unwrap();
+    sqlx::query("DELETE FROM system_settings WHERE key = 'mail.smtp'")
+        .execute(&state.pool)
+        .await
+        .unwrap();
 }

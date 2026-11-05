@@ -3,11 +3,11 @@
 //! Modules are re-exported at the crate root (`pelty_api::<module>`), so existing paths keep working.
 //! Covered by the pelty-api unit tests in these files and the integration suite in tests/integration.
 
+pub mod chat_bus;
+pub mod event_mail;
 pub mod mail;
 pub mod mailbox;
-pub mod pipe;
 pub mod notify;
-pub mod event_mail;
-pub mod webhooks_out;
-pub mod chat_bus;
+pub mod pipe;
 pub mod support_ext;
+pub mod webhooks_out;

@@ -47,19 +47,33 @@ const ENV_FAILS: &str = "PELTY_ADDON_BREAKER_FAILS";
 const ENV_COOL: &str = "PELTY_ADDON_BREAKER_COOLDOWN_SECS";
 
 fn env_num(k: &str, d: u64) -> u64 {
-    std::env::var(k).ok().and_then(|v| v.parse().ok()).unwrap_or(d)
+    std::env::var(k)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(d)
 }
 
 fn now_unix() -> i64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 impl Health {
     pub fn get(&self, addon: &str) -> Stats {
-        self.0.lock().ok().and_then(|m| m.get(addon).cloned()).unwrap_or_default()
+        self.0
+            .lock()
+            .ok()
+            .and_then(|m| m.get(addon).cloned())
+            .unwrap_or_default()
     }
     pub fn all(&self) -> Vec<(String, Stats)> {
-        let mut v: Vec<_> = self.0.lock().map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect()).unwrap_or_default();
+        let mut v: Vec<_> = self
+            .0
+            .lock()
+            .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+            .unwrap_or_default();
         v.sort_by(|a, b| a.0.cmp(&b.0));
         v
     }
@@ -70,7 +84,9 @@ impl Health {
     }
     /// `true` while the breaker is open (the call is then counted as skipped).
     pub fn open(&self, addon: &str) -> bool {
-        let Ok(mut m) = self.0.lock() else { return false };
+        let Ok(mut m) = self.0.lock() else {
+            return false;
+        };
         let st = m.entry(addon.to_string()).or_default();
         match st.open_until {
             Some(t) if Instant::now() < t => {
@@ -87,7 +103,14 @@ impl Health {
             None => false,
         }
     }
-    pub fn record(&self, addon: &str, kind: &str, elapsed: Duration, err: Option<&str>, timed_out: bool) {
+    pub fn record(
+        &self,
+        addon: &str,
+        kind: &str,
+        elapsed: Duration,
+        err: Option<&str>,
+        timed_out: bool,
+    ) {
         let Ok(mut m) = self.0.lock() else { return };
         let st = m.entry(addon.to_string()).or_default();
         let ms = elapsed.as_millis() as u64;
@@ -127,23 +150,44 @@ pub struct Budget {
 /// Call op `kind` (`hook`, `mixin`, `filter`; also the stats kind) on `a`
 /// with the per-listener budget, the breaker and stats. `context` is what the
 /// addon reads through `host.context()`.
-pub async fn guarded_call(s: &AppState, a: &Arc<WasmAddon>, kind: &str, input: Value, budget: Budget, depth: u8, context: Value) -> Result<Value, String> {
+pub async fn guarded_call(
+    s: &AppState,
+    a: &Arc<WasmAddon>,
+    kind: &str,
+    input: Value,
+    budget: Budget,
+    depth: u8,
+    context: Value,
+) -> Result<Value, String> {
     if s.addon_health.open(&a.id) {
         return Err("circuit breaker open".into());
     }
     let timeout = Duration::from_millis(budget.timeout_ms.clamp(1, 5000));
-    let ctx = pelty_wasm::CallCtx { settings: crate::wasm_addons::addon_settings(s, &a.id).await, event_depth: depth, timeout: Some(timeout), fuel: budget.fuel, context, ..Default::default() };
+    let ctx = pelty_wasm::CallCtx {
+        settings: crate::wasm_addons::addon_settings(s, &a.id).await,
+        event_depth: depth,
+        timeout: Some(timeout),
+        fuel: budget.fuel,
+        context,
+        ..Default::default()
+    };
     let started = Instant::now();
     // The store stops itself at `timeout`; the outer timeout only guards
     // against a blocked host call.
-    let r = match tokio::time::timeout(timeout + Duration::from_millis(250), a.call_async(ctx, kind.to_string(), input)).await {
+    let r = match tokio::time::timeout(
+        timeout + Duration::from_millis(250),
+        a.call_async(ctx, kind.to_string(), input),
+    )
+    .await
+    {
         Ok(Ok(v)) => Ok(v),
         Ok(Err(e)) => Err(e.to_string()),
         Err(_) => Err(format!("{kind} timed out")),
     };
     let err = r.as_ref().err().map(String::as_str);
     let timed_out = err.is_some_and(|e| e.contains("timed out") || e.contains("fuel"));
-    s.addon_health.record(&a.id, kind, started.elapsed(), err, timed_out);
+    s.addon_health
+        .record(&a.id, kind, started.elapsed(), err, timed_out);
     r
 }
 
@@ -158,10 +202,19 @@ mod tests {
             h.record("a", "hook", Duration::from_millis(3), Some("boom"), false);
         }
         assert!(!h.open("a"));
-        h.record("a", "hook", Duration::from_millis(3), Some("timed out"), true);
+        h.record(
+            "a",
+            "hook",
+            Duration::from_millis(3),
+            Some("timed out"),
+            true,
+        );
         assert!(h.open("a"));
         let st = h.get("a");
-        assert_eq!((st.calls, st.failures, st.timeouts, st.skipped), (5, 5, 1, 1));
+        assert_eq!(
+            (st.calls, st.failures, st.timeouts, st.skipped),
+            (5, 5, 1, 1)
+        );
         assert!(st.tripped_until.is_some());
         h.reset("a");
         assert!(!h.open("a"));

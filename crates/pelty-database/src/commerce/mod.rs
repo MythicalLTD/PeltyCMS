@@ -2,11 +2,11 @@
 //!
 //! Re-exported at the crate root. Covered by the catalog/storefront/order integration tests.
 
-pub mod catalog;
 pub mod bundles;
-pub mod order_forms;
-pub mod storefront;
-pub mod orders;
+pub mod catalog;
 pub mod order_approval;
+pub mod order_forms;
+pub mod orders;
 pub mod orders_service;
+pub mod storefront;
 pub use orders_service::OrderService;

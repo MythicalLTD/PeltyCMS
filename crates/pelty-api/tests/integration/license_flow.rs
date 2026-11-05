@@ -15,16 +15,35 @@ async fn license_status_accept_and_soft_overage() {
     assert_eq!(r.body["enforcement"], "soft");
     assert_eq!(r.body["show_accept_gate"], true);
 
-    let r = call(&app, "POST", "/api/v1/admin/license/accept", Some(json!({ "accept": false })), &ah).await;
+    let r = call(
+        &app,
+        "POST",
+        "/api/v1/admin/license/accept",
+        Some(json!({ "accept": false })),
+        &ah,
+    )
+    .await;
     assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY);
 
-    let r = call(&app, "POST", "/api/v1/admin/license/accept", Some(json!({ "accept": true })), &ah).await;
+    let r = call(
+        &app,
+        "POST",
+        "/api/v1/admin/license/accept",
+        Some(json!({ "accept": true })),
+        &ah,
+    )
+    .await;
     assert_eq!(r.status, StatusCode::OK);
     assert_eq!(r.body["accepted"], true);
     assert_eq!(r.body["show_accept_gate"], false);
 
     let wiz = call(&app, "GET", "/api/v1/admin/setup-wizard", None, &ah).await;
-    let lic_step = wiz.body["steps"].as_array().unwrap().iter().find(|s| s["id"] == "license").unwrap();
+    let lic_step = wiz.body["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["id"] == "license")
+        .unwrap();
     assert_eq!(lic_step["done"], true);
 
     // Soft overage: many active customers, panel still answers; banner shows.
@@ -44,10 +63,22 @@ async fn license_status_accept_and_soft_overage() {
     assert_eq!(r.body["show_overage_banner"], true);
     assert_eq!(r.body["enforcement"], "soft");
 
-    let r = call(&app, "PUT", "/api/v1/admin/license/overage-notice", Some(json!({ "dismissed": true })), &ah).await;
+    let r = call(
+        &app,
+        "PUT",
+        "/api/v1/admin/license/overage-notice",
+        Some(json!({ "dismissed": true })),
+        &ah,
+    )
+    .await;
     assert_eq!(r.status, StatusCode::OK);
     assert_eq!(r.body["show_overage_banner"], false);
 
     let cust = sess(&app, &st, "customer").await;
-    assert_eq!(call(&app, "GET", "/api/v1/admin/license", None, &cust.h()).await.status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        call(&app, "GET", "/api/v1/admin/license", None, &cust.h())
+            .await
+            .status,
+        StatusCode::FORBIDDEN
+    );
 }

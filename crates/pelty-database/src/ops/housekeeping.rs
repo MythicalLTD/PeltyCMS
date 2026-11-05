@@ -26,17 +26,31 @@ pub struct HousekeepingSettings {
 
 impl HousekeepingSettings {
     pub fn validate(&self) -> Result<(), AppError> {
-        if (0..=3650).contains(&self.prune_attachments_days) && (self.log_retention_days == 0 || (30..=3650).contains(&self.log_retention_days)) { Ok(()) } else { Err(AppError::Validation("error.validation")) }
+        if (0..=3650).contains(&self.prune_attachments_days)
+            && (self.log_retention_days == 0 || (30..=3650).contains(&self.log_retention_days))
+        {
+            Ok(())
+        } else {
+            Err(AppError::Validation("error.validation"))
+        }
     }
 }
 
 pub async fn get(pool: &PgPool) -> AppResult<HousekeepingSettings> {
-    Ok(crate::settings::get(pool, KEY).await?.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default())
+    Ok(crate::settings::get(pool, KEY)
+        .await?
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default())
 }
 
 pub async fn put(pool: &PgPool, s: &HousekeepingSettings) -> AppResult<()> {
     s.validate()?;
-    crate::settings::set(pool, KEY, serde_json::to_value(s).map_err(|e| AppError::Internal(e.to_string()))?).await
+    crate::settings::set(
+        pool,
+        KEY,
+        serde_json::to_value(s).map_err(|e| AppError::Internal(e.to_string()))?,
+    )
+    .await
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -48,7 +62,13 @@ pub struct Report {
 }
 
 /// Log tables pruned by `log_retention_days`.
-const LOG_TABLES: [&str; 5] = ["email_log", "module_log", "ticket_pipe_log", "notification_deliveries", "plugin_deliveries"];
+const LOG_TABLES: [&str; 5] = [
+    "email_log",
+    "module_log",
+    "ticket_pipe_log",
+    "notification_deliveries",
+    "plugin_deliveries",
+];
 
 const LIVE: &str = "(EXISTS (SELECT 1 FROM services s WHERE s.customer_id = c.id AND s.status IN ('pending','active','suspended'))
      OR EXISTS (SELECT 1 FROM domains d WHERE d.customer_id = c.id AND d.status IN ('pending','active','grace','redemption','transferring')))";
@@ -70,17 +90,24 @@ pub async fn run(pool: &PgPool) -> AppResult<Report> {
     if cfg.client_status_sync {
         r.clients_inactivated = sqlx::query(&format!("UPDATE customers c SET status = 'inactive' WHERE c.status = 'active' AND c.merged_into IS NULL AND NOT {LIVE}"))
             .execute(pool).await.map_err(db_err)?.rows_affected();
-        r.clients_reactivated = sqlx::query(&format!("UPDATE customers c SET status = 'active' WHERE c.status = 'inactive' AND {LIVE}"))
-            .execute(pool).await.map_err(db_err)?.rows_affected();
+        r.clients_reactivated = sqlx::query(&format!(
+            "UPDATE customers c SET status = 'active' WHERE c.status = 'inactive' AND {LIVE}"
+        ))
+        .execute(pool)
+        .await
+        .map_err(db_err)?
+        .rows_affected();
     }
     if cfg.log_retention_days > 0 {
         for t in LOG_TABLES {
-            r.log_rows_pruned += sqlx::query(&format!("DELETE FROM {t} WHERE created_at < now() - make_interval(days => $1)"))
-                .bind(cfg.log_retention_days)
-                .execute(pool)
-                .await
-                .map_err(db_err)?
-                .rows_affected();
+            r.log_rows_pruned += sqlx::query(&format!(
+                "DELETE FROM {t} WHERE created_at < now() - make_interval(days => $1)"
+            ))
+            .bind(cfg.log_retention_days)
+            .execute(pool)
+            .await
+            .map_err(db_err)?
+            .rows_affected();
         }
     }
     Ok(r)

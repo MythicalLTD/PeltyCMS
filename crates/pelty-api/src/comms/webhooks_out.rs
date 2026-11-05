@@ -48,9 +48,23 @@ pub async fn on_event(s: &AppState, ev: &DomainEvent) {
 }
 
 /// New delivery row + job.
-pub async fn enqueue(s: &AppState, endpoint: Uuid, event: &str, payload: &Value, redelivery_of: Option<Uuid>) -> AppResult<Uuid> {
+pub async fn enqueue(
+    s: &AppState,
+    endpoint: Uuid,
+    event: &str,
+    payload: &Value,
+    redelivery_of: Option<Uuid>,
+) -> AppResult<Uuid> {
     let id = db::create_delivery(&s.pool, endpoint, event, payload, redelivery_of).await?;
-    jobs::enqueue(&s.pool, JOB_KIND, json!({ "delivery_id": id }), None, Some(&format!("webhook-delivery:{id}")), MAX_ATTEMPTS).await?;
+    jobs::enqueue(
+        &s.pool,
+        JOB_KIND,
+        json!({ "delivery_id": id }),
+        None,
+        Some(&format!("webhook-delivery:{id}")),
+        MAX_ATTEMPTS,
+    )
+    .await?;
     Ok(id)
 }
 
@@ -62,7 +76,11 @@ pub async fn redeliver(s: &AppState, id: Uuid) -> AppResult<Uuid> {
 
 /// 64 hex chars, shown once.
 pub fn new_secret() -> String {
-    format!("whsec_{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
+    format!(
+        "whsec_{}{}",
+        Uuid::new_v4().simple(),
+        Uuid::new_v4().simple()
+    )
 }
 
 fn retryable(status: u16) -> bool {
@@ -70,23 +88,51 @@ fn retryable(status: u16) -> bool {
 }
 
 pub async fn run_job(s: &AppState, job: &Job) -> Result<Value, JobError> {
-    let id: Uuid = job.payload.get("delivery_id").and_then(Value::as_str).and_then(|x| x.parse().ok()).ok_or_else(|| JobError::Permanent("bad payload".into()))?;
-    let d = db::delivery(&s.pool, id).await.map_err(|e| JobError::Retry(e.to_string()))?.ok_or_else(|| JobError::Permanent("delivery gone".into()))?;
+    let id: Uuid = job
+        .payload
+        .get("delivery_id")
+        .and_then(Value::as_str)
+        .and_then(|x| x.parse().ok())
+        .ok_or_else(|| JobError::Permanent("bad payload".into()))?;
+    let d = db::delivery(&s.pool, id)
+        .await
+        .map_err(|e| JobError::Retry(e.to_string()))?
+        .ok_or_else(|| JobError::Permanent("delivery gone".into()))?;
     if d.status != "pending" {
         return Ok(json!({ "skipped": d.status }));
     }
-    let ep = db::get(&s.pool, d.endpoint_id).await.map_err(|e| JobError::Retry(e.to_string()))?;
+    let ep = db::get(&s.pool, d.endpoint_id)
+        .await
+        .map_err(|e| JobError::Retry(e.to_string()))?;
     // `attempts` already counts this run (the claim increments it).
     let last = job.attempts >= job.max_attempts;
     let started = std::time::Instant::now();
     let finish = |status: Option<u16>, err: Option<String>, ok: bool, permanent: bool| async move {
         let final_fail = !ok && (permanent || last);
         let ms = i32::try_from(started.elapsed().as_millis()).unwrap_or(i32::MAX);
-        let streak = db::record(&s.pool, id, status, err.as_deref(), ok, final_fail, ms).await.unwrap_or(0);
-        if final_fail && streak >= DISABLE_AFTER && db::disable(&s.pool, d.endpoint_id, "too many failed deliveries").await.unwrap_or(false) {
+        let streak = db::record(&s.pool, id, status, err.as_deref(), ok, final_fail, ms)
+            .await
+            .unwrap_or(0);
+        if final_fail
+            && streak >= DISABLE_AFTER
+            && db::disable(&s.pool, d.endpoint_id, "too many failed deliveries")
+                .await
+                .unwrap_or(false)
+        {
             tracing::warn!(endpoint = %d.endpoint_id, "webhook endpoint disabled after repeated failures");
-            let _ = pelty_database::audit::record(&s.pool, None, "webhook_endpoint.auto_disabled", Some(&d.endpoint_id.to_string()), None, json!({ "failed_in_a_row": streak })).await;
-            s.emit(DomainEvent::new("webhook_endpoint.disabled", json!({ "endpoint_id": d.endpoint_id, "reason": "too many failed deliveries" })));
+            let _ = pelty_database::audit::record(
+                &s.pool,
+                None,
+                "webhook_endpoint.auto_disabled",
+                Some(&d.endpoint_id.to_string()),
+                None,
+                json!({ "failed_in_a_row": streak }),
+            )
+            .await;
+            s.emit(DomainEvent::new(
+                "webhook_endpoint.disabled",
+                json!({ "endpoint_id": d.endpoint_id, "reason": "too many failed deliveries" }),
+            ));
         }
         match (ok, err) {
             (true, _) => Ok(json!({ "status": status })),
@@ -94,13 +140,29 @@ pub async fn run_job(s: &AppState, job: &Job) -> Result<Value, JobError> {
             (false, e) => Err(JobError::Retry(e.unwrap_or_default())),
         }
     };
-    let Some(ep) = ep else { return finish(None, Some("endpoint deleted".into()), false, true).await };
+    let Some(ep) = ep else {
+        return finish(None, Some("endpoint deleted".into()), false, true).await;
+    };
     if !ep.enabled && d.event != PING_EVENT {
         return finish(None, Some("endpoint disabled".into()), false, true).await;
     }
-    let sealed = db::secret(&s.pool, ep.id).await.map_err(|e| JobError::Retry(e.to_string()))?.unwrap_or_default();
-    let Some(secret) = s.secret_box.as_ref().and_then(|sb| sb.open(&sealed)).and_then(|v| String::from_utf8(v).ok()) else {
-        return finish(None, Some("signing secret unavailable (PELTY_ENCRYPTION_KEY)".into()), false, true).await;
+    let sealed = db::secret(&s.pool, ep.id)
+        .await
+        .map_err(|e| JobError::Retry(e.to_string()))?
+        .unwrap_or_default();
+    let Some(secret) = s
+        .secret_box
+        .as_ref()
+        .and_then(|sb| sb.open(&sealed))
+        .and_then(|v| String::from_utf8(v).ok())
+    else {
+        return finish(
+            None,
+            Some("signing secret unavailable (PELTY_ENCRYPTION_KEY)".into()),
+            false,
+            true,
+        )
+        .await;
     };
     let body = json!({ "id": d.id, "event": d.event, "created_at": d.created_at.unix_timestamp(), "data": d.payload }).to_string();
     let ts = OffsetDateTime::now_utc().unix_timestamp();
@@ -108,7 +170,10 @@ pub async fn run_job(s: &AppState, job: &Job) -> Result<Value, JobError> {
         ("x-pelty-event".to_string(), d.event.clone()),
         ("x-pelty-delivery".to_string(), d.id.to_string()),
         ("x-pelty-timestamp".to_string(), ts.to_string()),
-        ("x-pelty-signature".to_string(), crate::plugin_hooks::signature(&secret, ts, &body)),
+        (
+            "x-pelty-signature".to_string(),
+            crate::plugin_hooks::signature(&secret, ts, &body),
+        ),
     ];
     match s.notify_transport.post(&ep.url, headers, body).await {
         Ok(st) if (200..300).contains(&st) => finish(Some(st), None, true, false).await,

@@ -30,57 +30,143 @@ async fn telegram_sms_and_signed_webhook_with_log() {
     assert_eq!(sme_r.status, StatusCode::OK, "{:?}", sme_r.body);
     let wh = call(&app, "POST", "/api/v1/admin/notification-rules", Some(json!({"name": "wh", "provider": "webhook", "url": format!("https://hooks.example/{tag}"), "events": ["invoice.paid"]})), &admin.h()).await;
     assert_eq!(wh.status, StatusCode::OK, "{:?}", wh.body);
-    let secret = wh.body["secret"].as_str().expect("secret shown once").to_string();
+    let secret = wh.body["secret"]
+        .as_str()
+        .expect("secret shown once")
+        .to_string();
     let wid = wh.body["id"].as_str().unwrap().to_string();
 
     // Use "test" deliveries so parallel tests' invoice.paid events don't interfere.
     let mut dids = vec![];
     for r in [&tg, &sms, &sme_r, &wh] {
-        let t = call(&app, "POST", &format!("/api/v1/admin/notification-rules/{}/test", r.body["id"].as_str().unwrap()), None, &admin.h()).await;
+        let t = call(
+            &app,
+            "POST",
+            &format!(
+                "/api/v1/admin/notification-rules/{}/test",
+                r.body["id"].as_str().unwrap()
+            ),
+            None,
+            &admin.h(),
+        )
+        .await;
         assert_eq!(t.status, StatusCode::OK, "{:?}", t.body);
         dids.push(t.body["delivery_id"].as_str().unwrap().to_string());
     }
-    for d in &dids { drain(&s2, d).await; }
+    for d in &dids {
+        drain(&s2, d).await;
+    }
 
     let sent = mem.sent.lock().unwrap().clone();
     let heads = mem.headers.lock().unwrap().clone();
     let raws = mem.raw.lock().unwrap().clone();
-    let tgm = sent.iter().find(|(u, _)| u.contains(&tag) && u.contains("telegram")).expect("telegram sent");
+    let tgm = sent
+        .iter()
+        .find(|(u, _)| u.contains(&tag) && u.contains("telegram"))
+        .expect("telegram sent");
     assert_eq!(tgm.1["chat_id"], "-100200");
     assert!(tgm.1["text"].as_str().unwrap().starts_with("test: "));
-    let smm = sent.iter().find(|(u, _)| u == &format!("https://sms.example/{tag}")).expect("sms sent");
+    let smm = sent
+        .iter()
+        .find(|(u, _)| u == &format!("https://sms.example/{tag}"))
+        .expect("sms sent");
     assert_eq!(smm.1["to"], "+40712345678");
-    let i = sent.iter().position(|(u, _)| u == &format!("https://hooks.example/{tag}")).expect("webhook sent");
+    let i = sent
+        .iter()
+        .position(|(u, _)| u == &format!("https://hooks.example/{tag}"))
+        .expect("webhook sent");
     let h = &heads[i];
-    let get = |k: &str| h.iter().find(|(a, _)| a == k).map(|(_, v)| v.clone()).unwrap();
+    let get = |k: &str| {
+        h.iter()
+            .find(|(a, _)| a == k)
+            .map(|(_, v)| v.clone())
+            .unwrap()
+    };
     let ts: i64 = get("x-pelty-timestamp").parse().unwrap();
-    assert_eq!(get("x-pelty-signature"), pelty_api::plugin_hooks::signature(&secret, ts, &raws[i]));
+    assert_eq!(
+        get("x-pelty-signature"),
+        pelty_api::plugin_hooks::signature(&secret, ts, &raws[i])
+    );
     assert_eq!(get("x-pelty-event"), "test");
     // Email-to-SMS went through the mailer.
     assert_eq!(mails_to(&st, &sme).await.len(), 1);
 
     // Delivery log shows delivered.
-    let log = call(&app, "GET", &format!("/api/v1/admin/notification-rules/{wid}/deliveries"), None, &admin.h()).await;
-    assert_eq!(log.body["items"][0]["status"], "delivered", "{:?}", log.body);
+    let log = call(
+        &app,
+        "GET",
+        &format!("/api/v1/admin/notification-rules/{wid}/deliveries"),
+        None,
+        &admin.h(),
+    )
+    .await;
+    assert_eq!(
+        log.body["items"][0]["status"], "delivered",
+        "{:?}",
+        log.body
+    );
     assert_eq!(log.body["items"][0]["response_status"], 200);
 
     // 500 retries (pending), 404 fails permanently and is logged.
-    let bad = Arc::new(MemoryNotify { status: 410, ..Default::default() });
+    let bad = Arc::new(MemoryNotify {
+        status: 410,
+        ..Default::default()
+    });
     s2.notify_transport = bad.clone();
-    let t = call(&app, "POST", &format!("/api/v1/admin/notification-rules/{wid}/test"), None, &admin.h()).await;
+    let t = call(
+        &app,
+        "POST",
+        &format!("/api/v1/admin/notification-rules/{wid}/test"),
+        None,
+        &admin.h(),
+    )
+    .await;
     let d = t.body["delivery_id"].as_str().unwrap().to_string();
     drain(&s2, &d).await;
-    let log = call(&app, "GET", &format!("/api/v1/admin/notification-rules/{wid}/deliveries"), None, &admin.h()).await;
-    let row = log.body["items"].as_array().unwrap().iter().find(|x| x["id"] == json!(d)).unwrap().clone();
+    let log = call(
+        &app,
+        "GET",
+        &format!("/api/v1/admin/notification-rules/{wid}/deliveries"),
+        None,
+        &admin.h(),
+    )
+    .await;
+    let row = log.body["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|x| x["id"] == json!(d))
+        .unwrap()
+        .clone();
     assert_eq!(row["status"], "failed");
     assert_eq!(row["last_error"], "HTTP 410");
 
     // Rotation changes the secret.
-    let r = call(&app, "POST", &format!("/api/v1/admin/notification-rules/{wid}/secret"), None, &admin.h()).await;
+    let r = call(
+        &app,
+        "POST",
+        &format!("/api/v1/admin/notification-rules/{wid}/secret"),
+        None,
+        &admin.h(),
+    )
+    .await;
     assert_eq!(r.status, StatusCode::OK);
     assert_ne!(r.body["secret"].as_str().unwrap(), secret);
-    let list = call(&app, "GET", "/api/v1/admin/notification-rules", None, &admin.h()).await;
-    let it = list.body["items"].as_array().unwrap().iter().find(|x| x["id"] == json!(wid)).unwrap().clone();
+    let list = call(
+        &app,
+        "GET",
+        "/api/v1/admin/notification-rules",
+        None,
+        &admin.h(),
+    )
+    .await;
+    let it = list.body["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|x| x["id"] == json!(wid))
+        .unwrap()
+        .clone();
     assert_eq!(it["signed"], true);
     assert!(it["stats"]["delivered"].as_i64().unwrap() >= 1);
 }

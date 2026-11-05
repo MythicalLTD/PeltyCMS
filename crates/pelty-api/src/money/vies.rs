@@ -17,7 +17,11 @@ pub struct VatCheck {
 
 /// Split `DE123456789` into (`DE`, `123456789`); Greece uses `EL` in VIES.
 pub fn split(vat: &str) -> Option<(String, String)> {
-    let v: String = vat.chars().filter(|c| !c.is_whitespace() && *c != '-' && *c != '.').collect::<String>().to_ascii_uppercase();
+    let v: String = vat
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '-' && *c != '.')
+        .collect::<String>()
+        .to_ascii_uppercase();
     if v.len() < 4 || v.len() > 15 || !v.chars().all(|c| c.is_ascii_alphanumeric()) {
         return None;
     }
@@ -39,16 +43,36 @@ pub async fn check(s: &AppState, vat: &str) -> AppResult<VatCheck> {
     let url = format!("{}/ms/{cc}/vat/{num}", base.trim_end_matches('/'));
     let (status, body) = s
         .http()
-        .send(HttpRequestSpec { method: "GET", url, headers: vec![("accept".into(), "application/json".into())], body: String::new() })
+        .send(HttpRequestSpec {
+            method: "GET",
+            url,
+            headers: vec![("accept".into(), "application/json".into())],
+            body: String::new(),
+        })
         .await
         .map_err(|_| AppError::Conflict("error.vies_unavailable"))?;
-    let v: serde_json::Value = serde_json::from_str(&body).map_err(|_| AppError::Conflict("error.vies_unavailable"))?;
-    let valid = match v.get("isValid").or_else(|| v.get("valid")).and_then(|x| x.as_bool()) {
+    let v: serde_json::Value =
+        serde_json::from_str(&body).map_err(|_| AppError::Conflict("error.vies_unavailable"))?;
+    let valid = match v
+        .get("isValid")
+        .or_else(|| v.get("valid"))
+        .and_then(|x| x.as_bool())
+    {
         Some(b) if (200..300).contains(&status) => b,
         _ => return Err(AppError::Conflict("error.vies_unavailable")),
     };
-    let name = v["name"].as_str().filter(|n| *n != "---").unwrap_or("").chars().take(300).collect();
-    Ok(VatCheck { vat_number: format!("{}{num}", if cc == "EL" { "EL" } else { &cc }), valid, name })
+    let name = v["name"]
+        .as_str()
+        .filter(|n| *n != "---")
+        .unwrap_or("")
+        .chars()
+        .take(300)
+        .collect();
+    Ok(VatCheck {
+        vat_number: format!("{}{num}", if cc == "EL" { "EL" } else { &cc }),
+        valid,
+        name,
+    })
 }
 
 /// Verify a customer's stored VAT number and persist the outcome.
@@ -68,8 +92,14 @@ mod tests {
     use super::*;
     #[test]
     fn splits() {
-        assert_eq!(split("de 123-456-789"), Some(("DE".into(), "123456789".into())));
-        assert_eq!(split("GR123456789"), Some(("EL".into(), "123456789".into())));
+        assert_eq!(
+            split("de 123-456-789"),
+            Some(("DE".into(), "123456789".into()))
+        );
+        assert_eq!(
+            split("GR123456789"),
+            Some(("EL".into(), "123456789".into()))
+        );
         assert_eq!(split("1234"), None);
         assert_eq!(split("DE"), None);
     }

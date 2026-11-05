@@ -31,22 +31,33 @@ pub struct PageInput<'a> {
     pub sort_order: i32,
 }
 
-const COLS: &str = "id, slug, title, description, blocks, published, show_in_nav, sort_order, updated_at";
+const COLS: &str =
+    "id, slug, title, description, blocks, published, show_in_nav, sort_order, updated_at";
 
 pub async fn list(pool: &PgPool, published_only: bool) -> AppResult<Vec<Page>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM site_pages WHERE published OR NOT $1 ORDER BY sort_order, slug"))
-        .bind(published_only)
-        .fetch_all(pool)
+    sqlx::query_as(&format!(
+        "SELECT {COLS} FROM site_pages WHERE published OR NOT $1 ORDER BY sort_order, slug"
+    ))
+    .bind(published_only)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
+}
+
+pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Page>> {
+    sqlx::query_as(&format!("SELECT {COLS} FROM site_pages WHERE id = $1"))
+        .bind(id)
+        .fetch_optional(pool)
         .await
         .map_err(db_err)
 }
 
-pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Page>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM site_pages WHERE id = $1")).bind(id).fetch_optional(pool).await.map_err(db_err)
-}
-
 pub async fn by_slug(pool: &PgPool, slug: &str) -> AppResult<Option<Page>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM site_pages WHERE slug = $1")).bind(slug).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as(&format!("SELECT {COLS} FROM site_pages WHERE slug = $1"))
+        .bind(slug)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn create(pool: &PgPool, p: &PageInput<'_>) -> AppResult<Page> {
@@ -83,6 +94,10 @@ pub async fn update(pool: &PgPool, id: Uuid, p: &PageInput<'_>) -> AppResult<Opt
 }
 
 pub async fn delete(pool: &PgPool, id: Uuid) -> AppResult<bool> {
-    let r = sqlx::query("DELETE FROM site_pages WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("DELETE FROM site_pages WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(r.rows_affected() == 1)
 }

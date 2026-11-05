@@ -14,29 +14,121 @@ pub const ADMIN: &str = "Administrator guide";
 pub const CLIENT: &str = "Client guide";
 
 const TEMPLATES: &[(&str, &str, &str)] = &[
-    ("admin-install", ADMIN, include_str!("../templates/user/admin-install.md")),
-    ("admin-setup", ADMIN, include_str!("../templates/user/admin-setup.md")),
-    ("admin-catalog", ADMIN, include_str!("../templates/user/admin-catalog.md")),
-    ("admin-billing", ADMIN, include_str!("../templates/user/admin-billing.md")),
-    ("admin-domains", ADMIN, include_str!("../templates/user/admin-domains.md")),
-    ("admin-provisioning", ADMIN, include_str!("../templates/user/admin-provisioning.md")),
-    ("admin-support", ADMIN, include_str!("../templates/user/admin-support.md")),
-    ("admin-security", ADMIN, include_str!("../templates/user/admin-security.md")),
-    ("admin-email", ADMIN, include_str!("../templates/user/admin-email.md")),
-    ("admin-automation", ADMIN, include_str!("../templates/user/admin-automation.md")),
-    ("admin-addons", ADMIN, include_str!("../templates/user/admin-addons.md")),
-    ("admin-maintenance", ADMIN, include_str!("../templates/user/admin-maintenance.md")),
-    ("admin-api", ADMIN, include_str!("../templates/user/admin-api.md")),
-    ("admin-map", ADMIN, include_str!("../templates/user/admin-map.md")),
-    ("client-account", CLIENT, include_str!("../templates/user/client-account.md")),
-    ("client-orders", CLIENT, include_str!("../templates/user/client-orders.md")),
-    ("client-billing", CLIENT, include_str!("../templates/user/client-billing.md")),
-    ("client-services", CLIENT, include_str!("../templates/user/client-services.md")),
-    ("client-domains", CLIENT, include_str!("../templates/user/client-domains.md")),
-    ("client-support", CLIENT, include_str!("../templates/user/client-support.md")),
-    ("client-security", CLIENT, include_str!("../templates/user/client-security.md")),
-    ("client-api", CLIENT, include_str!("../templates/user/client-api.md")),
-    ("client-map", CLIENT, include_str!("../templates/user/client-map.md")),
+    (
+        "admin-install",
+        ADMIN,
+        include_str!("../templates/user/admin-install.md"),
+    ),
+    (
+        "admin-setup",
+        ADMIN,
+        include_str!("../templates/user/admin-setup.md"),
+    ),
+    (
+        "admin-catalog",
+        ADMIN,
+        include_str!("../templates/user/admin-catalog.md"),
+    ),
+    (
+        "admin-billing",
+        ADMIN,
+        include_str!("../templates/user/admin-billing.md"),
+    ),
+    (
+        "admin-domains",
+        ADMIN,
+        include_str!("../templates/user/admin-domains.md"),
+    ),
+    (
+        "admin-provisioning",
+        ADMIN,
+        include_str!("../templates/user/admin-provisioning.md"),
+    ),
+    (
+        "admin-support",
+        ADMIN,
+        include_str!("../templates/user/admin-support.md"),
+    ),
+    (
+        "admin-security",
+        ADMIN,
+        include_str!("../templates/user/admin-security.md"),
+    ),
+    (
+        "admin-email",
+        ADMIN,
+        include_str!("../templates/user/admin-email.md"),
+    ),
+    (
+        "admin-automation",
+        ADMIN,
+        include_str!("../templates/user/admin-automation.md"),
+    ),
+    (
+        "admin-addons",
+        ADMIN,
+        include_str!("../templates/user/admin-addons.md"),
+    ),
+    (
+        "admin-maintenance",
+        ADMIN,
+        include_str!("../templates/user/admin-maintenance.md"),
+    ),
+    (
+        "admin-api",
+        ADMIN,
+        include_str!("../templates/user/admin-api.md"),
+    ),
+    (
+        "admin-map",
+        ADMIN,
+        include_str!("../templates/user/admin-map.md"),
+    ),
+    (
+        "client-account",
+        CLIENT,
+        include_str!("../templates/user/client-account.md"),
+    ),
+    (
+        "client-orders",
+        CLIENT,
+        include_str!("../templates/user/client-orders.md"),
+    ),
+    (
+        "client-billing",
+        CLIENT,
+        include_str!("../templates/user/client-billing.md"),
+    ),
+    (
+        "client-services",
+        CLIENT,
+        include_str!("../templates/user/client-services.md"),
+    ),
+    (
+        "client-domains",
+        CLIENT,
+        include_str!("../templates/user/client-domains.md"),
+    ),
+    (
+        "client-support",
+        CLIENT,
+        include_str!("../templates/user/client-support.md"),
+    ),
+    (
+        "client-security",
+        CLIENT,
+        include_str!("../templates/user/client-security.md"),
+    ),
+    (
+        "client-api",
+        CLIENT,
+        include_str!("../templates/user/client-api.md"),
+    ),
+    (
+        "client-map",
+        CLIENT,
+        include_str!("../templates/user/client-map.md"),
+    ),
 ];
 
 /// Template sources, for tests.
@@ -45,11 +137,20 @@ pub fn sources() -> impl Iterator<Item = (&'static str, &'static str)> {
 }
 
 fn nav_table(scope: &str, cat: Option<&str>) -> Vec<Block> {
-    let leaves: Vec<_> = extract::nav(scope).into_iter().filter(|l| cat.is_none_or(|c| l.category == c)).collect();
+    let leaves: Vec<_> = extract::nav(scope)
+        .into_iter()
+        .filter(|l| cat.is_none_or(|c| l.category == c))
+        .collect();
     assert!(!leaves.is_empty(), "nav:{scope}:{cat:?} matched nothing");
     let mut blocks = vec![];
     if cat.is_some() {
-        blocks.push(Block::Table(vec!["Page".into(), "Path".into(), "What it is for".into()], leaves.iter().map(|l| vec![format!("**{}**", l.label), c(&l.path), l.desc.clone()]).collect()));
+        blocks.push(Block::Table(
+            vec!["Page".into(), "Path".into(), "What it is for".into()],
+            leaves
+                .iter()
+                .map(|l| vec![format!("**{}**", l.label), c(&l.path), l.desc.clone()])
+                .collect(),
+        ));
         return blocks;
     }
     let mut cats: Vec<(String, String)> = vec![];
@@ -60,7 +161,14 @@ fn nav_table(scope: &str, cat: Option<&str>) -> Vec<Block> {
     }
     for (id, label) in cats {
         blocks.push(Block::H(2, label));
-        blocks.push(Block::Table(vec!["Page".into(), "Path".into(), "What it is for".into()], leaves.iter().filter(|l| l.category == id).map(|l| vec![format!("**{}**", l.label), c(&l.path), l.desc.clone()]).collect()));
+        blocks.push(Block::Table(
+            vec!["Page".into(), "Path".into(), "What it is for".into()],
+            leaves
+                .iter()
+                .filter(|l| l.category == id)
+                .map(|l| vec![format!("**{}**", l.label), c(&l.path), l.desc.clone()])
+                .collect(),
+        ));
     }
     blocks
 }
@@ -68,32 +176,65 @@ fn nav_table(scope: &str, cat: Option<&str>) -> Vec<Block> {
 /// Operations whose path starts with one of `prefixes` (comma separated,
 /// without `/api/v1`).
 fn routes_table(ctx: &Ctx, prefixes: &str) -> Vec<Block> {
-    let pre: Vec<String> = prefixes.split(',').map(|p| format!("/api/v1{}", p.trim())).collect();
+    let pre: Vec<String> = prefixes
+        .split(',')
+        .map(|p| format!("/api/v1{}", p.trim()))
+        .collect();
     let mut rows = vec![];
     for (path, item) in ctx.spec["paths"].as_object().unwrap() {
-        if !pre.iter().any(|p| path == p || path.starts_with(&format!("{p}/"))) {
+        if !pre
+            .iter()
+            .any(|p| path == p || path.starts_with(&format!("{p}/")))
+        {
             continue;
         }
         for (m, op) in item.as_object().unwrap() {
             if !op.is_object() {
                 continue;
             }
-            let s = op["summary"].as_str().or(op["description"].as_str()).unwrap_or("").lines().next().unwrap_or("").to_string();
+            let s = op["summary"]
+                .as_str()
+                .or(op["description"].as_str())
+                .unwrap_or("")
+                .lines()
+                .next()
+                .unwrap_or("")
+                .to_string();
             rows.push(vec![m.to_uppercase(), c(path), s]);
         }
     }
     assert!(!rows.is_empty(), "routes:{prefixes} matched nothing");
-    vec![Block::Table(vec!["Method".into(), "Path".into(), "Summary".into()], rows), Block::P("Full request and response details: [HTTP API](developers/api.md).".into())]
+    vec![
+        Block::Table(vec!["Method".into(), "Path".into(), "Summary".into()], rows),
+        Block::P("Full request and response details: [HTTP API](developers/api.md).".into()),
+    ]
 }
 
 fn addons_table(kind: &str) -> Vec<Block> {
     let rows: Vec<Vec<String>> = crate::addons::all()
         .into_iter()
         .filter(|a| !a.fixture && a.manifest["kind"] == kind)
-        .map(|a| vec![format!("[{}](developers/{}.md)", a.manifest["name"].as_str().unwrap_or(&a.dir), a.slug), c(a.manifest["id"].as_str().unwrap_or("")), a.settings.iter().map(|s| c(&s.0)).collect::<Vec<_>>().join(" ")])
+        .map(|a| {
+            vec![
+                format!(
+                    "[{}](developers/{}.md)",
+                    a.manifest["name"].as_str().unwrap_or(&a.dir),
+                    a.slug
+                ),
+                c(a.manifest["id"].as_str().unwrap_or("")),
+                a.settings
+                    .iter()
+                    .map(|s| c(&s.0))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            ]
+        })
         .collect();
     assert!(!rows.is_empty(), "addons:{kind} matched nothing");
-    vec![Block::Table(vec!["Addon".into(), "Id".into(), "Settings".into()], rows)]
+    vec![Block::Table(
+        vec!["Addon".into(), "Id".into(), "Settings".into()],
+        rows,
+    )]
 }
 
 fn expand(d: &str, ctx: &Ctx) -> Vec<Block> {
@@ -142,7 +283,12 @@ pub fn pages(ctx: &Ctx) -> Vec<Page> {
         .iter()
         .map(|(slug, section, src)| {
             let (title, blocks) = parse_template(src, &mut |d| expand(d, ctx));
-            Page { slug: slug.to_string(), title, section, blocks }
+            Page {
+                slug: slug.to_string(),
+                title,
+                section,
+                blocks,
+            }
         })
         .collect()
 }
@@ -152,7 +298,9 @@ pub fn landing(dev: &Site, user: &Site) -> Page {
     let mut p = Page::new("index", "PeltyCMS documentation", "Start");
     p.p("PeltyCMS is a self-hosted billing and automation panel for hosting companies. Pick the documentation for what you are doing:");
     let count = |s: &str| user.pages.iter().filter(|p| p.section == s).count();
-    let card = |href: &str, title: &str, body: &str, more: &str| format!("<a class=\"card\" href=\"{href}\"><h3>{}</h3><p>{}</p><span class=\"more\">{} →</span></a>", esc(title), esc(body), esc(more));
+    let card = |href: &str, title: &str, body: &str, more: &str| {
+        format!("<a class=\"card\" href=\"{href}\"><h3>{}</h3><p>{}</p><span class=\"more\">{} →</span></a>", esc(title), esc(body), esc(more))
+    };
     let html = format!(
         "<div class=\"cards\">{}{}{}</div>",
         card("admin-install.html", ADMIN, &format!("Planned installation (not released yet), configuration and running PeltyCMS: products, billing, domains, provisioning, support, staff security, backups and addons. {} pages.", count(ADMIN)), "For staff"),

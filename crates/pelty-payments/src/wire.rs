@@ -14,7 +14,10 @@ pub fn money_from(v: &Value) -> Result<Money, GatewayError> {
     let bad = || GatewayError::Config("bad money".into());
     let a = v["amount"].as_str().ok_or_else(bad)?;
     let c = Currency::parse(v["currency"].as_str().ok_or_else(bad)?).ok_or_else(bad)?;
-    Ok(Money::new(rust_decimal::Decimal::from_str(a).map_err(|_| bad())?, c))
+    Ok(Money::new(
+        rust_decimal::Decimal::from_str(a).map_err(|_| bad())?,
+        c,
+    ))
 }
 
 pub fn req_to(r: &PaymentRequest) -> Value {
@@ -91,7 +94,12 @@ fn leak(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
 }
 fn leak_list(v: Vec<String>) -> &'static [&'static str] {
-    Box::leak(v.into_iter().map(leak).collect::<Vec<_>>().into_boxed_slice())
+    Box::leak(
+        v.into_iter()
+            .map(leak)
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
+    )
 }
 
 impl OwnedDescriptor {
@@ -101,7 +109,12 @@ impl OwnedDescriptor {
         let settings: Vec<SettingField> = self
             .settings
             .into_iter()
-            .map(|f| SettingField { key: leak(f.key), kind: leak(f.kind), required: f.required, options: leak_list(f.options) })
+            .map(|f| SettingField {
+                key: leak(f.key),
+                kind: leak(f.kind),
+                required: f.required,
+                options: leak_list(f.options),
+            })
             .collect();
         GatewayDescriptor {
             id: leak(self.id),
@@ -115,7 +128,8 @@ impl OwnedDescriptor {
 }
 
 /// Drives one gateway future to completion inside the guest.
-pub type BlockOn = dyn Fn(BoxFuture<'_, Result<Value, GatewayError>>) -> Result<Value, GatewayError>;
+pub type BlockOn =
+    dyn Fn(BoxFuture<'_, Result<Value, GatewayError>>) -> Result<Value, GatewayError>;
 
 /// Guest-side dispatcher: run `op` against a gateway built by `factory`.
 /// `secret` reads declared secrets from the host. Async gateway futures are
@@ -130,7 +144,14 @@ pub fn dispatch(
     input: &Value,
 ) -> Result<Value, String> {
     let mut secrets = HashMap::new();
-    let extra: Vec<String> = input["secret_names"].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default();
+    let extra: Vec<String> = input["secret_names"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
     for k in desc.secrets.iter().map(|s| s.to_string()).chain(extra) {
         if secrets.contains_key(&k) {
             continue;
@@ -139,52 +160,104 @@ pub fn dispatch(
             secrets.insert(k, v);
         }
     }
-    let cfg = GatewayConfig { id: input["id"].as_str().unwrap_or(desc.id).to_string(), config: input["config"].clone(), secrets, transport };
+    let cfg = GatewayConfig {
+        id: input["id"].as_str().unwrap_or(desc.id).to_string(),
+        config: input["config"].clone(),
+        secrets,
+        transport,
+    };
     let gw = factory(&cfg).map_err(|e| err_to(&e))?;
     let gw = gw.as_ref();
-    let headers = || -> Headers { input["headers"].as_object().map(|m| m.iter().map(|(k, v)| (k.to_ascii_lowercase(), v.as_str().unwrap_or_default().to_string())).collect()).unwrap_or_default() };
+    let headers = || -> Headers {
+        input["headers"]
+            .as_object()
+            .map(|m| {
+                m.iter()
+                    .map(|(k, v)| {
+                        (
+                            k.to_ascii_lowercase(),
+                            v.as_str().unwrap_or_default().to_string(),
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
     let body = || -> Result<Vec<u8>, GatewayError> {
         use base64::Engine;
-        base64::engine::general_purpose::STANDARD.decode(input["body_b64"].as_str().unwrap_or_default()).map_err(|_| GatewayError::MalformedPayload)
+        base64::engine::general_purpose::STANDARD
+            .decode(input["body_b64"].as_str().unwrap_or_default())
+            .map_err(|_| GatewayError::MalformedPayload)
     };
     let now = input["now"].as_i64().unwrap_or(0);
     let to = |r: Result<Value, GatewayError>| r.map_err(|e| err_to(&e));
-    let ser = |v: Result<Value, serde_json::Error>| v.map_err(|e| GatewayError::Provider(e.to_string()));
+    let ser =
+        |v: Result<Value, serde_json::Error>| v.map_err(|e| GatewayError::Provider(e.to_string()));
     match op {
         // Factory ran above: config and secrets are valid.
         "validate" => Ok(Value::Null),
         "create_payment" => {
             let req = req_from(&input["req"]).map_err(|e| err_to(&e))?;
-            to(block_on(Box::pin(async move { ser(serde_json::to_value(gw.create_payment(&req).await?)) })))
+            to(block_on(Box::pin(async move {
+                ser(serde_json::to_value(gw.create_payment(&req).await?))
+            })))
         }
         "parse_webhook" => {
             let (h, b) = (headers(), body().map_err(|e| err_to(&e))?);
-            to(ser(serde_json::to_value(gw.parse_webhook(&h, &b, now).map_err(|e| err_to(&e))?)))
+            to(ser(serde_json::to_value(
+                gw.parse_webhook(&h, &b, now).map_err(|e| err_to(&e))?,
+            )))
         }
         "handle_webhook" => {
             let (h, b) = (headers(), body().map_err(|e| err_to(&e))?);
-            to(block_on(Box::pin(async move { ser(serde_json::to_value(gw.handle_webhook(&h, &b, now).await?)) })))
+            to(block_on(Box::pin(async move {
+                ser(serde_json::to_value(gw.handle_webhook(&h, &b, now).await?))
+            })))
         }
         "complete_payment" => {
-            let pr = input["provider_ref"].as_str().unwrap_or_default().to_string();
-            let q: HashMap<String, String> = input["query"].as_object().map(|m| m.iter().map(|(k, v)| (k.clone(), v.as_str().unwrap_or_default().to_string())).collect()).unwrap_or_default();
-            to(block_on(Box::pin(async move { ser(serde_json::to_value(gw.complete_payment(&pr, &q).await?)) })))
+            let pr = input["provider_ref"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string();
+            let q: HashMap<String, String> = input["query"]
+                .as_object()
+                .map(|m| {
+                    m.iter()
+                        .map(|(k, v)| (k.clone(), v.as_str().unwrap_or_default().to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            to(block_on(Box::pin(async move {
+                ser(serde_json::to_value(gw.complete_payment(&pr, &q).await?))
+            })))
         }
         "refund" => {
-            let pr = input["provider_ref"].as_str().unwrap_or_default().to_string();
+            let pr = input["provider_ref"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string();
             let amount = money_from(&input["amount"]).map_err(|e| err_to(&e))?;
-            let key = input["idempotency_key"].as_str().unwrap_or_default().to_string();
-            to(block_on(Box::pin(async move { ser(serde_json::to_value(gw.refund(&pr, amount, &key).await?)) })))
+            let key = input["idempotency_key"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string();
+            to(block_on(Box::pin(async move {
+                ser(serde_json::to_value(gw.refund(&pr, amount, &key).await?))
+            })))
         }
         "save_method" => {
             let s = |k: &str| input[k].as_str().unwrap_or_default().to_string();
             let (t, e, k) = (s("token"), s("customer_email"), s("idempotency_key"));
-            to(block_on(Box::pin(async move { ser(serde_json::to_value(gw.save_method(&t, &e, &k).await?)) })))
+            to(block_on(Box::pin(async move {
+                ser(serde_json::to_value(gw.save_method(&t, &e, &k).await?))
+            })))
         }
         "charge_saved" => {
             let t = input["token"].as_str().unwrap_or_default().to_string();
             let req = req_from(&input["req"]).map_err(|e| err_to(&e))?;
-            to(block_on(Box::pin(async move { ser(serde_json::to_value(gw.charge_saved(&t, &req).await?)) })))
+            to(block_on(Box::pin(async move {
+                ser(serde_json::to_value(gw.charge_saved(&t, &req).await?))
+            })))
         }
         other => Err(format!("unsupported:unknown op {other}")),
     }

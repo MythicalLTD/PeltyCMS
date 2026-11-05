@@ -162,7 +162,13 @@ pub async fn revoke_others(pool: &PgPool, user_id: Uuid, keep: Uuid) -> AppResul
 /// Last full authentication of a session: the step-up re-auth time or, if
 /// none, the login itself.
 pub async fn last_auth_at(pool: &PgPool, id: Uuid) -> AppResult<Option<OffsetDateTime>> {
-    sqlx::query_scalar("SELECT COALESCE(reauth_at, created_at) FROM sessions WHERE id = $1 AND revoked_at IS NULL").bind(id).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_scalar(
+        "SELECT COALESCE(reauth_at, created_at) FROM sessions WHERE id = $1 AND revoked_at IS NULL",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Record a successful step-up re-authentication.
@@ -173,5 +179,13 @@ pub async fn mark_reauth(pool: &PgPool, user_id: Uuid, id: Uuid) -> AppResult<bo
 
 /// Has this user signed in from `ip` before (any session other than `except`)?
 pub async fn seen_ip(pool: &PgPool, user_id: Uuid, ip: &str, except: Uuid) -> AppResult<bool> {
-    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM sessions WHERE user_id = $1 AND ip = $2 AND id <> $3)").bind(user_id).bind(ip).bind(except).fetch_one(pool).await.map_err(db_err)
+    sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM sessions WHERE user_id = $1 AND ip = $2 AND id <> $3)",
+    )
+    .bind(user_id)
+    .bind(ip)
+    .bind(except)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)
 }

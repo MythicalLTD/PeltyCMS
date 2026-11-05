@@ -46,23 +46,40 @@ pub fn route_key(path: &str, area: &str) -> (String, bool) {
             None => out.push(s.to_string()),
         }
     }
-    (if out.is_empty() { "dashboard".into() } else { out.join("-") }, detail)
+    (
+        if out.is_empty() {
+            "dashboard".into()
+        } else {
+            out.join("-")
+        },
+        detail,
+    )
 }
 
 fn block_end(lines: &[&str], start: usize) -> usize {
     let ind = lines[start].len() - lines[start].trim_start().len();
-    (start + 1..lines.len()).find(|&i| lines[i].trim() == "</Route>" && lines[i].len() - lines[i].trim_start().len() == ind).unwrap_or(lines.len())
+    (start + 1..lines.len())
+        .find(|&i| {
+            lines[i].trim() == "</Route>" && lines[i].len() - lines[i].trim_start().len() == ind
+        })
+        .unwrap_or(lines.len())
 }
 
 /// Pages rendered inside `Shell` (admin and client layouts), in router order.
 pub fn pages() -> Vec<PageSlots> {
     let src = read("frontend/src/App.tsx");
     let lines: Vec<&str> = src.lines().collect();
-    let re = regex::Regex::new(r#"<Route (?:path="([^"]+)"|(index)) element=\{(.*)\}\s*/>"#).unwrap();
+    let re =
+        regex::Regex::new(r#"<Route (?:path="([^"]+)"|(index)) element=\{(.*)\}\s*/>"#).unwrap();
     let comp = regex::Regex::new(r#"<([A-Z][A-Za-z]+Page)\b"#).unwrap();
     let mut out = vec![];
     for (area, marker) in [("client", "<ClientLayout"), ("admin", "<AdminLayout")] {
-        let Some(start) = lines.iter().position(|l| l.contains("<Route") && l.contains(marker)) else { continue };
+        let Some(start) = lines
+            .iter()
+            .position(|l| l.contains("<Route") && l.contains(marker))
+        else {
+            continue;
+        };
         for l in &lines[start + 1..block_end(&lines, start)] {
             let Some(c) = re.captures(l) else { continue };
             if c[3].contains("<Navigate") || c.get(1).is_some_and(|m| m.as_str() == "*") {
@@ -74,9 +91,18 @@ pub fn pages() -> Vec<PageSlots> {
                 ("admin", p) => format!("/admin/{p}"),
                 (_, p) => p.to_string(),
             };
-            let component = comp.captures(&c[3]).map(|m| m[1].to_string()).unwrap_or_default();
+            let component = comp
+                .captures(&c[3])
+                .map(|m| m[1].to_string())
+                .unwrap_or_default();
             let (key, detail) = route_key(&path, area);
-            out.push(PageSlots { area, path, component, key, detail });
+            out.push(PageSlots {
+                area,
+                path,
+                component,
+                key,
+                detail,
+            });
         }
     }
     out
@@ -87,7 +113,9 @@ fn ts_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
         let p = e.path();
         if p.is_dir() {
             ts_files(&p, out);
-        } else if p.extension().is_some_and(|x| x == "tsx" || x == "ts") && !p.to_string_lossy().contains(".test.") {
+        } else if p.extension().is_some_and(|x| x == "tsx" || x == "ts")
+            && !p.to_string_lossy().contains(".test.")
+        {
             out.push(p);
         }
     }
@@ -99,7 +127,8 @@ pub fn named() -> Vec<NamedSlot> {
     let mut files = vec![];
     ts_files(&root.join("frontend/src"), &mut files);
     files.sort();
-    let re = regex::Regex::new(r#"<(PluginSlot|PluginWidgets|Shell) slot="([a-z.]+)"([^>]*)/?>"#).unwrap();
+    let re = regex::Regex::new(r#"<(PluginSlot|PluginWidgets|Shell) slot="([a-z.]+)"([^>]*)/?>"#)
+        .unwrap();
     let ctx_re = regex::Regex::new(r#"([a-z_]+):"#).unwrap();
     let mut out: Vec<NamedSlot> = vec![];
     for f in files {
@@ -111,14 +140,22 @@ pub fn named() -> Vec<NamedSlot> {
                 "PluginWidgets" => "widget",
                 _ => "nav",
             };
-            let ctx: Vec<String> = c[3].split_once("ctx={{").map(|(_, r)| ctx_re.captures_iter(r).map(|m| m[1].to_string()).collect()).unwrap_or_default();
+            let ctx: Vec<String> = c[3]
+                .split_once("ctx={{")
+                .map(|(_, r)| ctx_re.captures_iter(r).map(|m| m[1].to_string()).collect())
+                .unwrap_or_default();
             match out.iter_mut().find(|n| n.slot == c[2] && n.kind == kind) {
                 Some(n) => {
                     if !n.files.contains(&rel) {
                         n.files.push(rel.clone());
                     }
                 }
-                None => out.push(NamedSlot { slot: c[2].to_string(), kind, files: vec![rel.clone()], ctx }),
+                None => out.push(NamedSlot {
+                    slot: c[2].to_string(),
+                    kind,
+                    files: vec![rel.clone()],
+                    ctx,
+                }),
             }
         }
     }
@@ -132,29 +169,58 @@ mod tests {
     #[test]
     fn keys_match_frontend_route_key() {
         assert_eq!(route_key("/admin", "admin"), ("dashboard".into(), false));
-        assert_eq!(route_key("/admin/invoices/:id", "admin"), ("invoices".into(), true));
-        assert_eq!(route_key("/admin/hub/:id", "admin"), ("hub-<id>".into(), false));
-        assert_eq!(route_key("/invoices/:id/pay", "client"), ("invoices-pay".into(), true));
-        assert_eq!(route_key("/p/:plugin/:page", "client"), ("p-<plugin>-<page>".into(), false));
+        assert_eq!(
+            route_key("/admin/invoices/:id", "admin"),
+            ("invoices".into(), true)
+        );
+        assert_eq!(
+            route_key("/admin/hub/:id", "admin"),
+            ("hub-<id>".into(), false)
+        );
+        assert_eq!(
+            route_key("/invoices/:id/pay", "client"),
+            ("invoices-pay".into(), true)
+        );
+        assert_eq!(
+            route_key("/p/:plugin/:page", "client"),
+            ("p-<plugin>-<page>".into(), false)
+        );
     }
     #[test]
     fn discovers_pages_and_slots() {
         let p = pages();
-        assert!(p.iter().filter(|x| x.area == "admin").count() >= 60, "{}", p.len());
+        assert!(
+            p.iter().filter(|x| x.area == "admin").count() >= 60,
+            "{}",
+            p.len()
+        );
         assert!(p.iter().filter(|x| x.area == "client").count() >= 20);
-        assert!(p.iter().any(|x| x.path == "/admin/invoices/:id" && x.key == "invoices" && x.detail));
+        assert!(p
+            .iter()
+            .any(|x| x.path == "/admin/invoices/:id" && x.key == "invoices" && x.detail));
         let n = named();
         for (s, _) in pelty_extensions::ui_schema::UI_RENDER_SLOTS {
-            assert!(n.iter().any(|x| x.slot == *s && x.kind == "render"), "{s} not found in the frontend");
+            assert!(
+                n.iter().any(|x| x.slot == *s && x.kind == "render"),
+                "{s} not found in the frontend"
+            );
         }
         assert!(n.iter().any(|x| x.slot == "admin.nav" && x.kind == "nav"));
     }
     /// Every page/layout position the backend accepts is rendered somewhere.
     #[test]
     fn every_position_is_rendered_by_the_frontend() {
-        let shell = read("frontend/src/layouts/Shell.tsx") + &read("frontend/src/components/PageHeader.tsx") + &read("frontend/src/components/plugin-ui/AddonSlots.tsx");
-        for p in pelty_extensions::ui_schema::LAYOUT_POSITIONS.iter().chain(pelty_extensions::ui_schema::PAGE_POSITIONS) {
-            assert!(shell.contains(&format!("\"{p}\"")), "position {p} is not rendered");
+        let shell = read("frontend/src/layouts/Shell.tsx")
+            + &read("frontend/src/components/PageHeader.tsx")
+            + &read("frontend/src/components/plugin-ui/AddonSlots.tsx");
+        for p in pelty_extensions::ui_schema::LAYOUT_POSITIONS
+            .iter()
+            .chain(pelty_extensions::ui_schema::PAGE_POSITIONS)
+        {
+            assert!(
+                shell.contains(&format!("\"{p}\"")),
+                "position {p} is not rendered"
+            );
         }
     }
 }

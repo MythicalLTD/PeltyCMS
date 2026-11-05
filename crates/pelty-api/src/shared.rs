@@ -27,9 +27,24 @@ pub struct Shared {
 
 impl Shared {
     pub fn new(url: Option<String>) -> Self {
-        let host = std::env::var("HOSTNAME").ok().or_else(|| std::fs::read_to_string("/etc/hostname").ok()).map(|h| h.trim().to_string()).filter(|h| !h.is_empty()).unwrap_or_else(|| "host".into());
-        let instance = format!("{host}-{}-{}", std::process::id(), &uuid::Uuid::new_v4().simple().to_string()[..6]);
-        Shared { instance, url, conn: Default::default(), last_try: Mutex::new(None), last_error: Mutex::new(None) }
+        let host = std::env::var("HOSTNAME")
+            .ok()
+            .or_else(|| std::fs::read_to_string("/etc/hostname").ok())
+            .map(|h| h.trim().to_string())
+            .filter(|h| !h.is_empty())
+            .unwrap_or_else(|| "host".into());
+        let instance = format!(
+            "{host}-{}-{}",
+            std::process::id(),
+            &uuid::Uuid::new_v4().simple().to_string()[..6]
+        );
+        Shared {
+            instance,
+            url,
+            conn: Default::default(),
+            last_try: Mutex::new(None),
+            last_error: Mutex::new(None),
+        }
     }
 
     pub fn url(&self) -> Option<&str> {
@@ -59,9 +74,21 @@ impl Shared {
             let client = redis::Client::open(url).map_err(|e| e.to_string())?;
             // One plain connection first: the manager retries a refused
             // port until the timeout and would only report "timeout".
-            let mut probe = tokio::time::timeout(Duration::from_secs(3), client.get_multiplexed_async_connection()).await.map_err(|_| "connect timeout".to_string())?.map_err(|e| e.to_string())?;
-            let _: String = redis::cmd("PING").query_async(&mut probe).await.map_err(|e| e.to_string())?;
-            tokio::time::timeout(Duration::from_secs(3), ConnectionManager::new(client)).await.map_err(|_| "connect timeout".to_string())?.map_err(|e| e.to_string())
+            let mut probe = tokio::time::timeout(
+                Duration::from_secs(3),
+                client.get_multiplexed_async_connection(),
+            )
+            .await
+            .map_err(|_| "connect timeout".to_string())?
+            .map_err(|e| e.to_string())?;
+            let _: String = redis::cmd("PING")
+                .query_async(&mut probe)
+                .await
+                .map_err(|e| e.to_string())?;
+            tokio::time::timeout(Duration::from_secs(3), ConnectionManager::new(client))
+                .await
+                .map_err(|_| "connect timeout".to_string())?
+                .map_err(|e| e.to_string())
         }
         .await;
         match res {
@@ -81,10 +108,20 @@ impl Shared {
     /// `PING` round trip, for `status` and the setup wizard.
     pub async fn ping(&self) -> Result<Duration, String> {
         let Some(mut c) = self.conn().await else {
-            return Err(self.last_error.lock().unwrap_or_else(|e| e.into_inner()).clone().unwrap_or_else(|| "not configured".into()));
+            return Err(self
+                .last_error
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone()
+                .unwrap_or_else(|| "not configured".into()));
         };
         let t = Instant::now();
-        let r: Result<String, _> = tokio::time::timeout(Duration::from_secs(2), redis::cmd("PING").query_async(&mut c)).await.map_err(|_| "timeout".to_string())?;
+        let r: Result<String, _> = tokio::time::timeout(
+            Duration::from_secs(2),
+            redis::cmd("PING").query_async(&mut c),
+        )
+        .await
+        .map_err(|_| "timeout".to_string())?;
         r.map(|_| t.elapsed()).map_err(|e| e.to_string())
     }
 
@@ -102,12 +139,23 @@ impl Shared {
     async fn incr(&self, key: &str, window: Duration) -> Option<u32> {
         let mut c = self.conn().await?;
         let k = format!("{PREFIX}rl:{key}");
-        redis::cmd("EVAL").arg(INCR_SCRIPT).arg(1).arg(&k).arg(window.as_millis() as u64).query_async(&mut c).await.ok()
+        redis::cmd("EVAL")
+            .arg(INCR_SCRIPT)
+            .arg(1)
+            .arg(&k)
+            .arg(window.as_millis() as u64)
+            .query_async(&mut c)
+            .await
+            .ok()
     }
 
     async fn get(&self, key: &str) -> Option<u32> {
         let mut c = self.conn().await?;
-        let v: Option<u32> = redis::cmd("GET").arg(format!("{PREFIX}rl:{key}")).query_async(&mut c).await.ok()?;
+        let v: Option<u32> = redis::cmd("GET")
+            .arg(format!("{PREFIX}rl:{key}"))
+            .query_async(&mut c)
+            .await
+            .ok()?;
         Some(v.unwrap_or(0))
     }
 
@@ -115,13 +163,25 @@ impl Shared {
     pub async fn lease(&self, key: &str, me: &str, ttl: Duration) -> Option<bool> {
         let mut c = self.conn().await?;
         let ms = ttl.as_millis() as u64;
-        let got: Option<String> = redis::cmd("SET").arg(key).arg(me).arg("NX").arg("PX").arg(ms).query_async(&mut c).await.ok()?;
+        let got: Option<String> = redis::cmd("SET")
+            .arg(key)
+            .arg(me)
+            .arg("NX")
+            .arg("PX")
+            .arg(ms)
+            .query_async(&mut c)
+            .await
+            .ok()?;
         if got.is_some() {
             return Some(true);
         }
         let holder: Option<String> = redis::cmd("GET").arg(key).query_async(&mut c).await.ok()?;
         if holder.as_deref() == Some(me) {
-            let _: Result<i64, _> = redis::cmd("PEXPIRE").arg(key).arg(ms).query_async(&mut c).await;
+            let _: Result<i64, _> = redis::cmd("PEXPIRE")
+                .arg(key)
+                .arg(ms)
+                .query_async(&mut c)
+                .await;
             return Some(true);
         }
         Some(false)
@@ -136,7 +196,10 @@ pub async fn is_scheduler_leader(s: &crate::AppState, worker: &str, every: Durat
     if !s.shared.enabled() {
         return true;
     }
-    s.shared.lease(LEADER_KEY, worker, every * 3).await.unwrap_or(true)
+    s.shared
+        .lease(LEADER_KEY, worker, every * 3)
+        .await
+        .unwrap_or(true)
 }
 
 /// Bridges the synchronous [`pelty_auth::rate_limit::RateLimiter`] to Redis.
@@ -150,7 +213,14 @@ impl RedisCounter {
         if h.runtime_flavor() != tokio::runtime::RuntimeFlavor::MultiThread {
             return None;
         }
-        tokio::task::block_in_place(|| h.block_on(async { tokio::time::timeout(Duration::from_millis(250), f).await.ok().flatten() }))
+        tokio::task::block_in_place(|| {
+            h.block_on(async {
+                tokio::time::timeout(Duration::from_millis(250), f)
+                    .await
+                    .ok()
+                    .flatten()
+            })
+        })
     }
 }
 

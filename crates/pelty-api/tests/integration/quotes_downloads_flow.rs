@@ -95,19 +95,38 @@ async fn quote_send_accept_creates_invoice_once() {
     assert_eq!(jobs, 1, "one quote email queued");
     // Quote PDF: owner and staff get a real PDF; other customers 404.
     for (uri, h, want) in [
-        (format!("/api/v1/client/quotes/{qid}/pdf"), alice.h(), StatusCode::OK),
-        (format!("/api/v1/admin/quotes/{qid}/pdf"), admin.h(), StatusCode::OK),
-        (format!("/api/v1/client/quotes/{qid}/pdf"), bob.h(), StatusCode::NOT_FOUND),
+        (
+            format!("/api/v1/client/quotes/{qid}/pdf"),
+            alice.h(),
+            StatusCode::OK,
+        ),
+        (
+            format!("/api/v1/admin/quotes/{qid}/pdf"),
+            admin.h(),
+            StatusCode::OK,
+        ),
+        (
+            format!("/api/v1/client/quotes/{qid}/pdf"),
+            bob.h(),
+            StatusCode::NOT_FOUND,
+        ),
     ] {
         let mut b = Request::builder().uri(&uri);
         for (k, v) in &h {
             b = b.header(*k, *v);
         }
-        let res = app.clone().oneshot(b.body(Body::empty()).unwrap()).await.unwrap();
+        let res = app
+            .clone()
+            .oneshot(b.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
         assert_eq!(res.status(), want, "{uri}");
         if want == StatusCode::OK {
             assert_eq!(res.headers()["content-type"], "application/pdf");
-            let bytes = http_body_util::BodyExt::collect(res.into_body()).await.unwrap().to_bytes();
+            let bytes = http_body_util::BodyExt::collect(res.into_body())
+                .await
+                .unwrap()
+                .to_bytes();
             assert!(bytes.starts_with(b"%PDF-"));
         }
     }

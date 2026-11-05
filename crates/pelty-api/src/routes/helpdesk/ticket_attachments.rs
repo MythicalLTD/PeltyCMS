@@ -2,9 +2,9 @@
 //! by the client's name or Content-Type alone); the declared type must agree
 //! with the sniffed one. Files are only ever served as downloads with
 //! `nosniff` and a sandbox CSP.
-use crate::routes::customers::customer_of;
 use crate::error::{ApiError, ApiResult};
 use crate::extract::{perms, CurrentUser, RequirePermission};
+use crate::routes::customers::customer_of;
 use crate::AppState;
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Path, Query, State};
@@ -23,7 +23,9 @@ use uuid::Uuid;
 /// Request cap: `PELTY_UPLOAD_ATTACHMENT_MB` (default and maximum 50 MB);
 /// the per-file limit in General settings applies below it.
 pub fn max_bytes() -> usize {
-    pelty_core::config::upload_limits().attachment.min(pelty_database::general_settings::ATTACHMENT_HARD_MAX_MB as usize * 1024 * 1024)
+    pelty_core::config::upload_limits()
+        .attachment
+        .min(pelty_database::general_settings::ATTACHMENT_HARD_MAX_MB as usize * 1024 * 1024)
 }
 
 pub fn router() -> Router<AppState> {
@@ -119,7 +121,10 @@ pub async fn upload(
     let ct = headers
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok());
-    let limit = pelty_database::general_settings::load(&s.pool).await?.support.max_bytes();
+    let limit = pelty_database::general_settings::load(&s.pool)
+        .await?
+        .support
+        .max_bytes();
     if body.len() > limit {
         return Err(AppError::BadRequest("error.attachment_too_large").into());
     }
@@ -175,7 +180,8 @@ pub async fn client_download(
     Path((tid, id)): Path<(Uuid, Uuid)>,
 ) -> ApiResult<Response> {
     let cid = customer_of(&s, &u).await?;
-    s.tickets().get(tid, Some(cid))
+    s.tickets()
+        .get(tid, Some(cid))
         .await?
         .ok_or(AppError::NotFound)?;
     let (n, ct, d) = att::download(&s.pool, tid, id, false)

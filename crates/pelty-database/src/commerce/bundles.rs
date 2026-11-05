@@ -55,10 +55,16 @@ pub fn validate(b: &BundleInput) -> AppResult<()> {
     if name.is_empty() || name.len() > 200 || b.description.len() > 2000 {
         return Err(AppError::Validation("error.invalid_bundle"));
     }
-    if b.discount_percent < Decimal::ZERO || b.discount_percent > Decimal::ONE_HUNDRED || b.discount_percent.scale() > 2 {
+    if b.discount_percent < Decimal::ZERO
+        || b.discount_percent > Decimal::ONE_HUNDRED
+        || b.discount_percent.scale() > 2
+    {
         return Err(AppError::Validation("error.invalid_bundle"));
     }
-    if b.items.len() < 2 || b.items.len() > MAX_ITEMS || b.items.iter().any(|i| !cycle::is_valid(&i.cycle)) {
+    if b.items.len() < 2
+        || b.items.len() > MAX_ITEMS
+        || b.items.iter().any(|i| !cycle::is_valid(&i.cycle))
+    {
         return Err(AppError::Validation("error.invalid_bundle"));
     }
     let mut ids: Vec<Uuid> = b.items.iter().map(|i| i.product_id).collect();
@@ -93,17 +99,35 @@ pub async fn list(pool: &PgPool, active_only: bool) -> AppResult<Vec<Bundle>> {
         if active_only && items.len() < 2 {
             continue;
         }
-        out.push(Bundle { id: r.id, name: r.name, description: r.description, active: r.active, discount_percent: r.discount_percent, items });
+        out.push(Bundle {
+            id: r.id,
+            name: r.name,
+            description: r.description,
+            active: r.active,
+            discount_percent: r.discount_percent,
+            items,
+        });
     }
     Ok(out)
 }
 
 pub async fn get(pool: &PgPool, id: Uuid, active_only: bool) -> AppResult<Option<Bundle>> {
-    Ok(list(pool, active_only).await?.into_iter().find(|b| b.id == id))
+    Ok(list(pool, active_only)
+        .await?
+        .into_iter()
+        .find(|b| b.id == id))
 }
 
-async fn write_items(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, id: Uuid, items: &[ItemInput]) -> AppResult<()> {
-    sqlx::query("DELETE FROM bundle_items WHERE bundle_id = $1").bind(id).execute(&mut **tx).await.map_err(db_err)?;
+async fn write_items(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    id: Uuid,
+    items: &[ItemInput],
+) -> AppResult<()> {
+    sqlx::query("DELETE FROM bundle_items WHERE bundle_id = $1")
+        .bind(id)
+        .execute(&mut **tx)
+        .await
+        .map_err(db_err)?;
     for (n, i) in items.iter().enumerate() {
         sqlx::query("INSERT INTO bundle_items (bundle_id, product_id, cycle, position) VALUES ($1,$2,$3,$4)")
             .bind(id).bind(i.product_id).bind(&i.cycle).bind(n as i32)
@@ -143,7 +167,11 @@ pub async fn update(pool: &PgPool, id: Uuid, b: &BundleInput) -> AppResult<()> {
 }
 
 pub async fn delete(pool: &PgPool, id: Uuid) -> AppResult<()> {
-    let r = sqlx::query("DELETE FROM bundles WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("DELETE FROM bundles WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
@@ -156,7 +184,10 @@ pub fn match_cart(b: &Bundle, cart: &[CartItem]) -> Option<Vec<usize>> {
     let mut used = vec![false; cart.len()];
     let mut out = Vec::with_capacity(b.items.len());
     for bi in &b.items {
-        let i = cart.iter().enumerate().position(|(i, c)| !used[i] && c.product_id == bi.product_id && c.cycle == bi.cycle)?;
+        let i = cart
+            .iter()
+            .enumerate()
+            .position(|(i, c)| !used[i] && c.product_id == bi.product_id && c.cycle == bi.cycle)?;
         used[i] = true;
         out.push(i);
     }
@@ -172,7 +203,11 @@ pub struct Recommendations {
 }
 
 /// Recommendations for a product; `public` hides non-active targets.
-pub async fn recommendations(pool: &PgPool, product: Uuid, public: bool) -> AppResult<Recommendations> {
+pub async fn recommendations(
+    pool: &PgPool,
+    product: Uuid,
+    public: bool,
+) -> AppResult<Recommendations> {
     let rows: Vec<(Uuid, String)> = sqlx::query_as(
         "SELECT r.target_id, r.kind FROM product_recommendations r JOIN products p ON p.id = r.target_id
          WHERE r.product_id = $1 AND ($2 = false OR p.status = 'active') ORDER BY r.kind, r.position",
@@ -180,12 +215,20 @@ pub async fn recommendations(pool: &PgPool, product: Uuid, public: bool) -> AppR
     .bind(product).bind(public).fetch_all(pool).await.map_err(db_err)?;
     let mut out = Recommendations::default();
     for (id, kind) in rows {
-        if kind == "upsell" { out.upsell.push(id) } else { out.cross_sell.push(id) }
+        if kind == "upsell" {
+            out.upsell.push(id)
+        } else {
+            out.cross_sell.push(id)
+        }
     }
     Ok(out)
 }
 
-pub async fn set_recommendations(pool: &PgPool, product: Uuid, r: &Recommendations) -> AppResult<()> {
+pub async fn set_recommendations(
+    pool: &PgPool,
+    product: Uuid,
+    r: &Recommendations,
+) -> AppResult<()> {
     let bad = |v: &[Uuid]| {
         let mut s = v.to_vec();
         s.sort();
@@ -196,7 +239,11 @@ pub async fn set_recommendations(pool: &PgPool, product: Uuid, r: &Recommendatio
         return Err(AppError::Validation("error.invalid_recommendations"));
     }
     let mut tx = pool.begin().await.map_err(db_err)?;
-    sqlx::query("DELETE FROM product_recommendations WHERE product_id = $1").bind(product).execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("DELETE FROM product_recommendations WHERE product_id = $1")
+        .bind(product)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     for (kind, ids) in [("upsell", &r.upsell), ("cross_sell", &r.cross_sell)] {
         for (n, t) in ids.iter().enumerate() {
             sqlx::query("INSERT INTO product_recommendations (product_id, target_id, kind, position) VALUES ($1,$2,$3,$4)")
@@ -223,18 +270,50 @@ mod tests {
     #[test]
     fn matches_bundle_lines() {
         let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
-        let bundle = Bundle { id: Uuid::nil(), name: "x".into(), description: String::new(), active: true, discount_percent: Decimal::TEN,
-            items: vec![BundleItem { product_id: a, product_name: "A".into(), cycle: "monthly".into() }, BundleItem { product_id: b, product_name: "B".into(), cycle: "annual".into() }] };
-        assert_eq!(match_cart(&bundle, &[cart(b, "annual"), cart(a, "monthly")]), Some(vec![1, 0]));
-        assert_eq!(match_cart(&bundle, &[cart(a, "monthly"), cart(b, "monthly")]), None);
+        let bundle = Bundle {
+            id: Uuid::nil(),
+            name: "x".into(),
+            description: String::new(),
+            active: true,
+            discount_percent: Decimal::TEN,
+            items: vec![
+                BundleItem {
+                    product_id: a,
+                    product_name: "A".into(),
+                    cycle: "monthly".into(),
+                },
+                BundleItem {
+                    product_id: b,
+                    product_name: "B".into(),
+                    cycle: "annual".into(),
+                },
+            ],
+        };
+        assert_eq!(
+            match_cart(&bundle, &[cart(b, "annual"), cart(a, "monthly")]),
+            Some(vec![1, 0])
+        );
+        assert_eq!(
+            match_cart(&bundle, &[cart(a, "monthly"), cart(b, "monthly")]),
+            None
+        );
         assert_eq!(match_cart(&bundle, &[cart(a, "monthly")]), None);
     }
 
     #[test]
     fn validates_input() {
         let a = Uuid::new_v4();
-        let mk = |items: Vec<ItemInput>, pct: &str| BundleInput { name: "B".into(), description: String::new(), active: true, discount_percent: pct.parse().unwrap(), items };
-        let it = |p: Uuid| ItemInput { product_id: p, cycle: "monthly".into() };
+        let mk = |items: Vec<ItemInput>, pct: &str| BundleInput {
+            name: "B".into(),
+            description: String::new(),
+            active: true,
+            discount_percent: pct.parse().unwrap(),
+            items,
+        };
+        let it = |p: Uuid| ItemInput {
+            product_id: p,
+            cycle: "monthly".into(),
+        };
         assert!(validate(&mk(vec![it(a), it(Uuid::new_v4())], "10")).is_ok());
         assert!(validate(&mk(vec![it(a), it(a)], "10")).is_err());
         assert!(validate(&mk(vec![it(a)], "10")).is_err());

@@ -70,7 +70,13 @@ mod tests {
     use serde_json::json;
 
     fn claims(exp: i64) -> Claims {
-        Claims { sid: "s".into(), rid: Some("42".into()), email: "a@b.c".into(), exp, nonce: "n1".into() }
+        Claims {
+            sid: "s".into(),
+            rid: Some("42".into()),
+            email: "a@b.c".into(),
+            exp,
+            nonce: "n1".into(),
+        }
     }
 
     #[test]
@@ -81,7 +87,13 @@ mod tests {
         assert_eq!(verify("k", &t, 101), None);
         assert_eq!(peek(&t).unwrap().nonce, "n1");
         let (b, s) = t.split_once('.').unwrap();
-        let forged = sign("k", &Claims { email: "x@y.z".into(), ..claims(100) });
+        let forged = sign(
+            "k",
+            &Claims {
+                email: "x@y.z".into(),
+                ..claims(100)
+            },
+        );
         let (fb, _) = forged.split_once('.').unwrap();
         assert_eq!(verify("k", &format!("{fb}.{s}"), 50), None);
         assert_eq!(verify("k", b, 50), None);
@@ -89,11 +101,27 @@ mod tests {
 
     #[test]
     fn url_template() {
-        let svc = ServiceCtx { service_id: "s".into(), customer_email: "a@b.c".into(), customer_first_name: String::new(), customer_last_name: String::new(), product_config: json!({}), custom_fields: json!({}), remote_id: Some("42".into()), module_data: json!({}) };
-        let mut srv = ServerConn { base_url: "https://panel.test/".into(), api_key: "k".into(), config: json!({}) };
+        let svc = ServiceCtx {
+            service_id: "s".into(),
+            customer_email: "a@b.c".into(),
+            customer_first_name: String::new(),
+            customer_last_name: String::new(),
+            product_config: json!({}),
+            custom_fields: json!({}),
+            remote_id: Some("42".into()),
+            module_data: json!({}),
+        };
+        let mut srv = ServerConn {
+            base_url: "https://panel.test/".into(),
+            api_key: "k".into(),
+            config: json!({}),
+        };
         assert_eq!(template_url(&srv, &svc, "T"), None);
         srv.config = json!({ "sso_url": "{base_url}/sso/{remote_id}?token={token}" });
-        assert_eq!(template_url(&srv, &svc, "T").as_deref(), Some("https://panel.test/sso/42?token=T"));
+        assert_eq!(
+            template_url(&srv, &svc, "T").as_deref(),
+            Some("https://panel.test/sso/42?token=T")
+        );
         srv.config = json!({ "sso_url": "javascript:{token}" });
         assert_eq!(template_url(&srv, &svc, "T"), None);
     }

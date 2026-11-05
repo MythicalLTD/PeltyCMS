@@ -33,11 +33,19 @@ async fn handle(s: &AppState, job: &Job) -> Result<Value, JobError> {
             let horizon = today + time::Duration::days(RENEW_AHEAD_DAYS);
             let mut total = 0;
             loop {
-                let items = pelty_database::billable::bill_recurring(&s.pool, horizon, RENEW_AHEAD_DAYS, 200)
-                    .await
-                    .map_err(|e| e.to_string())?;
+                let items = pelty_database::billable::bill_recurring(
+                    &s.pool,
+                    horizon,
+                    RENEW_AHEAD_DAYS,
+                    200,
+                )
+                .await
+                .map_err(|e| e.to_string())?;
                 for (inv, cust) in &items {
-                    s.emit(DomainEvent::new("invoice.created", json!({ "invoice_id": inv, "customer_id": cust, "billable": true })));
+                    s.emit(DomainEvent::new(
+                        "invoice.created",
+                        json!({ "invoice_id": inv, "customer_id": cust, "billable": true }),
+                    ));
                 }
                 total += items.len();
                 if items.is_empty() {
@@ -45,10 +53,15 @@ async fn handle(s: &AppState, job: &Job) -> Result<Value, JobError> {
                 }
             }
             loop {
-                let batch =
-                    pelty_database::services::bill_due_ahead(&s.pool, today, RENEW_AHEAD_DAYS, 200, RENEW_AHEAD_DAYS)
-                        .await
-                        .map_err(|e| e.to_string())?;
+                let batch = pelty_database::services::bill_due_ahead(
+                    &s.pool,
+                    today,
+                    RENEW_AHEAD_DAYS,
+                    200,
+                    RENEW_AHEAD_DAYS,
+                )
+                .await
+                .map_err(|e| e.to_string())?;
                 for r in &batch {
                     s.emit(DomainEvent::new("invoice.created", json!({ "invoice_id": r.invoice_id, "customer_id": r.customer_id, "service_id": r.service_id, "renewal": true })));
                 }
@@ -60,64 +73,125 @@ async fn handle(s: &AppState, job: &Job) -> Result<Value, JobError> {
             Ok(json!({ "invoices_created": total }))
         }
         crate::approval::DUE_JOB => {
-            let today = job.payload["date"].as_str().and_then(|d| time::Date::parse(d, &time::format_description::well_known::Iso8601::DATE).ok())
+            let today = job.payload["date"]
+                .as_str()
+                .and_then(|d| {
+                    time::Date::parse(d, &time::format_description::well_known::Iso8601::DATE).ok()
+                })
                 .unwrap_or_else(|| OffsetDateTime::now_utc().date());
-            Ok(crate::approval::run_due(s, today).await.map_err(|e| e.to_string())?)
+            Ok(crate::approval::run_due(s, today)
+                .await
+                .map_err(|e| e.to_string())?)
         }
         crate::overdue::JOB_KIND => {
-            let today = job.payload["date"].as_str().and_then(|d| time::Date::parse(d, &time::format_description::well_known::Iso8601::DATE).ok())
+            let today = job.payload["date"]
+                .as_str()
+                .and_then(|d| {
+                    time::Date::parse(d, &time::format_description::well_known::Iso8601::DATE).ok()
+                })
                 .unwrap_or_else(|| OffsetDateTime::now_utc().date());
-            Ok(crate::overdue::run(s, today).await.map_err(|e| e.to_string())?)
+            Ok(crate::overdue::run(s, today)
+                .await
+                .map_err(|e| e.to_string())?)
         }
-        crate::routes::campaigns::JOB_KIND => Ok(crate::routes::campaigns::run_job(s, &job.payload).await?),
+        crate::routes::campaigns::JOB_KIND => {
+            Ok(crate::routes::campaigns::run_job(s, &job.payload).await?)
+        }
         crate::autopay::JOB_KIND => {
-            let today = job.payload["date"].as_str().and_then(|d| time::Date::parse(d, &time::format_description::well_known::Iso8601::DATE).ok())
+            let today = job.payload["date"]
+                .as_str()
+                .and_then(|d| {
+                    time::Date::parse(d, &time::format_description::well_known::Iso8601::DATE).ok()
+                })
                 .unwrap_or_else(|| OffsetDateTime::now_utc().date());
-            Ok(crate::autopay::run(s, today).await.map_err(|e| e.to_string())?)
+            Ok(crate::autopay::run(s, today)
+                .await
+                .map_err(|e| e.to_string())?)
         }
         crate::mail::JOB_KIND => Ok(crate::mail::deliver(s, &job.payload).await?),
         crate::mail::RAW_JOB_KIND => Ok(crate::mail::deliver_raw(s, &job.payload).await?),
         pelty_database::provisioning::JOB_KIND => crate::provision::run_job(s, job).await,
         crate::routes::support::ESCALATE_JOB => {
-            let n = pelty_database::support::run_escalations(&s.pool).await.map_err(|e| e.to_string())?;
-            let closed = crate::routes::support::run_auto_close(s).await.map_err(|e| e.to_string())?;
-            let sla = crate::routes::ticket_sla::run_scan(s).await.map_err(|e| e.to_string())?;
+            let n = pelty_database::support::run_escalations(&s.pool)
+                .await
+                .map_err(|e| e.to_string())?;
+            let closed = crate::routes::support::run_auto_close(s)
+                .await
+                .map_err(|e| e.to_string())?;
+            let sla = crate::routes::ticket_sla::run_scan(s)
+                .await
+                .map_err(|e| e.to_string())?;
             Ok(json!({ "escalated": n, "auto_closed": closed, "sla_events": sla }))
         }
-        crate::support_ext::PIPE_JOB => Ok(crate::support_ext::run_pipe(s, None).await.map_err(|e| e.0.to_string())?),
-        pelty_database::support_ext::INBOUND_NOTIFY_JOB => Ok(crate::support_ext::notify_inbound(s, &job.payload).await?),
+        crate::support_ext::PIPE_JOB => Ok(crate::support_ext::run_pipe(s, None)
+            .await
+            .map_err(|e| e.0.to_string())?),
+        pelty_database::support_ext::INBOUND_NOTIFY_JOB => {
+            Ok(crate::support_ext::notify_inbound(s, &job.payload).await?)
+        }
         crate::routes::usage::BILL_JOB => {
-            let sampled = crate::routes::usage::sample_all(s).await.map_err(|e| e.0.to_string())?;
-            let n = pelty_database::usage::bill_due(&s.pool, time::OffsetDateTime::now_utc().date()).await.map_err(|e| e.to_string())?;
+            let sampled = crate::routes::usage::sample_all(s)
+                .await
+                .map_err(|e| e.0.to_string())?;
+            let n =
+                pelty_database::usage::bill_due(&s.pool, time::OffsetDateTime::now_utc().date())
+                    .await
+                    .map_err(|e| e.to_string())?;
             Ok(json!({ "invoices": n, "sampled": sampled }))
         }
         crate::domains::PROCESS_JOB => {
-            let st = crate::domains::process(s).await.map_err(|e| e.to_string())?;
+            let st = crate::domains::process(s)
+                .await
+                .map_err(|e| e.to_string())?;
             Ok(json!(st))
         }
         crate::domains::DAILY_JOB => {
-            let st = crate::domains::daily(s, time::OffsetDateTime::now_utc().date()).await.map_err(|e| e.to_string())?;
+            let st = crate::domains::daily(s, time::OffsetDateTime::now_utc().date())
+                .await
+                .map_err(|e| e.to_string())?;
             Ok(json!(st))
         }
         ORPHAN_UPLOADS => {
-            let n = pelty_database::ticket_attachments::purge_orphans(&s.pool, 24).await.map_err(|e| e.to_string())?;
-            let h = pelty_database::housekeeping::run(&s.pool).await.map_err(|e| e.to_string())?;
-            let erased = pelty_database::inactive_clients::run(&s.pool).await.map_err(|e| e.to_string())?;
+            let n = pelty_database::ticket_attachments::purge_orphans(&s.pool, 24)
+                .await
+                .map_err(|e| e.to_string())?;
+            let h = pelty_database::housekeeping::run(&s.pool)
+                .await
+                .map_err(|e| e.to_string())?;
+            let erased = pelty_database::inactive_clients::run(&s.pool)
+                .await
+                .map_err(|e| e.to_string())?;
             let fixed = crate::routes::billable::run_fixed_term(s).await;
-            let ssl = if pelty_database::housekeeping::get(&s.pool).await.is_ok_and(|c| c.ssl_monitoring) { crate::ssl_probe::run(s, 20).await } else { 0 };
-            Ok(json!({ "deleted": n, "housekeeping": h, "fixed_term_terminated": fixed, "ssl_checked": ssl, "inactive_clients_erased": erased }))
+            let ssl = if pelty_database::housekeeping::get(&s.pool)
+                .await
+                .is_ok_and(|c| c.ssl_monitoring)
+            {
+                crate::ssl_probe::run(s, 20).await
+            } else {
+                0
+            };
+            Ok(
+                json!({ "deleted": n, "housekeeping": h, "fixed_term_terminated": fixed, "ssl_checked": ssl, "inactive_clients_erased": erased }),
+            )
         }
         // Used by tests and ops to exercise retry/backoff.
         crate::plugin_hooks::JOB_KIND => crate::plugin_hooks::run_job(s, job).await,
         crate::routes::store::RECOVERY_JOB => {
-            let idle = job.payload["idle_minutes"].as_i64().unwrap_or(crate::routes::store::IDLE_MINUTES).max(0);
-            let n = crate::routes::store::run_recovery(s, idle).await.map_err(|e| e.to_string())?;
+            let idle = job.payload["idle_minutes"]
+                .as_i64()
+                .unwrap_or(crate::routes::store::IDLE_MINUTES)
+                .max(0);
+            let n = crate::routes::store::run_recovery(s, idle)
+                .await
+                .map_err(|e| e.to_string())?;
             Ok(json!({ "reminded": n }))
         }
-        crate::updates::JOB_KIND => Ok(crate::updates::check(s).await.map_err(|e| JobError::Retry(e.to_string()))?),
-        crate::exchange_rates::JOB_KIND => {
-            crate::exchange_rates::update_now(s, None).await.map_err(|e| JobError::Retry(e.to_string()))
-        }
+        crate::updates::JOB_KIND => Ok(crate::updates::check(s)
+            .await
+            .map_err(|e| JobError::Retry(e.to_string()))?),
+        crate::exchange_rates::JOB_KIND => crate::exchange_rates::update_now(s, None)
+            .await
+            .map_err(|e| JobError::Retry(e.to_string())),
         crate::notify::JOB_KIND => crate::notify::run_job(s, job).await,
         crate::webhooks_out::JOB_KIND => crate::webhooks_out::run_job(s, job).await,
         crate::addon_power::JOB_KIND => crate::addon_ext::run_job(s, &job.payload).await,
@@ -159,7 +233,10 @@ pub async fn run_claimed(s: &AppState, claimed: &[jobs::Job]) -> pelty_core::App
         match handle(s, job).await {
             Ok(v) => {
                 if is_automation(&job.kind) {
-                    s.emit(DomainEvent::new("automation.task_completed", json!({ "kind": job.kind, "job_id": job.id, "result": v })));
+                    s.emit(DomainEvent::new(
+                        "automation.task_completed",
+                        json!({ "kind": job.kind, "job_id": job.id, "result": v }),
+                    ));
                 }
                 if let Some(t) = crate::routes::automation::task_of(s, &job.kind, &job.payload) {
                     crate::routes::automation::record_outcome(s, &t, None).await;
@@ -176,12 +253,16 @@ pub async fn run_claimed(s: &AppState, claimed: &[jobs::Job]) -> pelty_core::App
                 }
                 // Only a run with no retries left counts towards the breaker.
                 if st == "dead" {
-                    if let Some(t) = crate::routes::automation::task_of(s, &job.kind, &job.payload) {
+                    if let Some(t) = crate::routes::automation::task_of(s, &job.kind, &job.payload)
+                    {
                         crate::routes::automation::record_outcome(s, &t, Some(&e)).await;
                     }
                 }
                 if is_automation(&job.kind) {
-                    s.emit(DomainEvent::new("automation.task_failed", json!({ "kind": job.kind, "job_id": job.id, "status": st, "error": e })));
+                    s.emit(DomainEvent::new(
+                        "automation.task_failed",
+                        json!({ "kind": job.kind, "job_id": job.id, "status": st, "error": e }),
+                    ));
                 }
                 tracing::warn!(job = job.id, kind = %job.kind, status = %st, error = %e, "job failed");
             }
@@ -200,7 +281,10 @@ pub const ORPHAN_UPLOADS: &str = "uploads.purge_orphans";
 
 /// Enqueue an hourly purge of never-linked ticket uploads (deduplicated).
 pub async fn schedule_orphan_purge(s: &AppState) -> pelty_core::AppResult<Option<i64>> {
-    let key = format!("{ORPHAN_UPLOADS}:{}", OffsetDateTime::now_utc().unix_timestamp() / 3600);
+    let key = format!(
+        "{ORPHAN_UPLOADS}:{}",
+        OffsetDateTime::now_utc().unix_timestamp() / 3600
+    );
     jobs::enqueue(&s.pool, ORPHAN_UPLOADS, json!({}), None, Some(&key), 3).await
 }
 
@@ -208,7 +292,15 @@ pub async fn schedule_orphan_purge(s: &AppState) -> pelty_core::AppResult<Option
 pub async fn schedule_escalations(s: &AppState) -> pelty_core::AppResult<Option<i64>> {
     let now = OffsetDateTime::now_utc();
     let key = format!("tickets.escalate:{}", now.unix_timestamp() / 300);
-    jobs::enqueue(&s.pool, crate::routes::support::ESCALATE_JOB, json!({}), None, Some(&key), 3).await
+    jobs::enqueue(
+        &s.pool,
+        crate::routes::support::ESCALATE_JOB,
+        json!({}),
+        None,
+        Some(&key),
+        3,
+    )
+    .await
 }
 
 /// One scheduler pass: recover stuck jobs and enqueue every due task
@@ -221,16 +313,19 @@ pub async fn schedule_tick(s: &AppState) {
     if let Err(e) = jobs::recover_stuck(&s.pool, STUCK_AFTER_SECS).await {
         tracing::error!(error = %e, "recover_stuck failed");
     }
-    if !ok(crate::routes::support::ESCALATE_JOB) {} else if let Err(e) = schedule_escalations(s).await {
+    if !ok(crate::routes::support::ESCALATE_JOB) {
+    } else if let Err(e) = schedule_escalations(s).await {
         tracing::error!(error = %e, "schedule_escalations failed");
     }
-    if !ok(ORPHAN_UPLOADS) {} else if let Err(e) = schedule_orphan_purge(s).await {
+    if !ok(ORPHAN_UPLOADS) {
+    } else if let Err(e) = schedule_orphan_purge(s).await {
         tracing::error!(error = %e, "schedule_orphan_purge failed");
     }
     if let Err(e) = crate::domains::schedule(s, &ok).await {
         tracing::error!(error = %e, "domains schedule failed");
     }
-    if !ok(RECURRING) {} else if let Err(e) = schedule_recurring(s).await {
+    if !ok(RECURRING) {
+    } else if let Err(e) = schedule_recurring(s).await {
         tracing::error!(error = %e, "schedule_recurring failed");
     }
     crate::routes::automation::cron_tick(s, &gate).await;
@@ -241,7 +336,8 @@ pub async fn schedule_tick(s: &AppState) {
     if let Err(e) = crate::approval::schedule_due(s).await {
         tracing::error!(error = %e, "schedule due reminders failed");
     }
-    if !ok(crate::overdue::JOB_KIND) {} else if let Err(e) = crate::overdue::schedule(s).await {
+    if !ok(crate::overdue::JOB_KIND) {
+    } else if let Err(e) = crate::overdue::schedule(s).await {
         tracing::error!(error = %e, "schedule overdue failed");
     }
     if let Err(e) = crate::translations::reload(s).await {
@@ -253,10 +349,12 @@ pub async fn schedule_tick(s: &AppState) {
     if let Err(e) = crate::exchange_rates::schedule(s).await {
         tracing::error!(error = %e, "schedule exchange rates failed");
     }
-    if !ok(crate::support_ext::PIPE_JOB) {} else if let Err(e) = crate::support_ext::schedule(s).await {
+    if !ok(crate::support_ext::PIPE_JOB) {
+    } else if let Err(e) = crate::support_ext::schedule(s).await {
         tracing::error!(error = %e, "schedule mail piping failed");
     }
-    if !ok(crate::autopay::JOB_KIND) {} else if let Err(e) = crate::autopay::schedule(s).await {
+    if !ok(crate::autopay::JOB_KIND) {
+    } else if let Err(e) = crate::autopay::schedule(s).await {
         tracing::error!(error = %e, "schedule autopay failed");
     }
 }

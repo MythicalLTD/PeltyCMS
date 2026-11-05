@@ -198,7 +198,11 @@ impl I18n {
         let mut w = self.overrides.write().unwrap_or_else(|e| e.into_inner());
         let mut next: Overrides = HashMap::new();
         for (lang, key, text) in rows {
-            let prev = w.get(&lang).and_then(|m| m.get(&key)).copied().filter(|p| *p == text);
+            let prev = w
+                .get(&lang)
+                .and_then(|m| m.get(&key))
+                .copied()
+                .filter(|p| *p == text);
             let v: &'static str = prev.unwrap_or_else(|| Box::leak(text.into_boxed_str()));
             next.entry(lang).or_default().insert(key, v);
         }
@@ -208,7 +212,13 @@ impl I18n {
     /// Overrides for one language (for `/i18n/{lang}`).
     pub fn overrides(&self, lang: &str) -> Vec<(String, String)> {
         let r = self.overrides.read().unwrap_or_else(|e| e.into_inner());
-        r.get(lang).map(|m| m.iter().map(|(k, v)| (k.clone(), (*v).to_string())).collect()).unwrap_or_default()
+        r.get(lang)
+            .map(|m| {
+                m.iter()
+                    .map(|(k, v)| (k.clone(), (*v).to_string()))
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     fn override_for(&self, lang: &str, key: &str) -> Option<&'static str> {
@@ -297,10 +307,17 @@ mod tests {
         i.set_overrides([("ro".to_string(), "a".to_string(), "Salut!".to_string())]);
         assert_eq!(i.t("ro", "a"), "Salut!");
         assert_ne!(i.t("en", "a"), "Salut!");
-        assert_eq!(i.overrides("ro"), vec![("a".to_string(), "Salut!".to_string())]);
+        assert_eq!(
+            i.overrides("ro"),
+            vec![("a".to_string(), "Salut!".to_string())]
+        );
         let p1 = i.t("ro", "a").as_ptr();
         i.set_overrides([("ro".to_string(), "a".to_string(), "Salut!".to_string())]);
-        assert_eq!(i.t("ro", "a").as_ptr(), p1, "unchanged value is reused, not re-leaked");
+        assert_eq!(
+            i.t("ro", "a").as_ptr(),
+            p1,
+            "unchanged value is reused, not re-leaked"
+        );
         // An English override reaches languages that lack the key.
         i.set_overrides([("en".to_string(), "b".to_string(), "Bee".to_string())]);
         assert_eq!(i.t("ro", "b"), "Bee");

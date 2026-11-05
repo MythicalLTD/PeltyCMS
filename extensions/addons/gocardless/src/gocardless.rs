@@ -16,7 +16,14 @@
 use pelty_payments::http::{api_base, ct_eq, hmac_sha256, send_json, url_encode};
 use pelty_payments::*;
 #[allow(unused_imports)]
-use {pelty_core::money::Money, serde::{Deserialize, Serialize}, std::collections::{BTreeMap, HashMap}, std::future::Future, std::pin::Pin, std::sync::Arc};
+use {
+    pelty_core::money::Money,
+    serde::{Deserialize, Serialize},
+    std::collections::{BTreeMap, HashMap},
+    std::future::Future,
+    std::pin::Pin,
+    std::sync::Arc,
+};
 
 pub const API_BASE: &str = "https://api.gocardless.com";
 pub const SANDBOX_BASE: &str = "https://api-sandbox.gocardless.com";
@@ -29,13 +36,21 @@ pub struct GoCardlessGateway {
     t: Arc<dyn HttpTransport>,
 }
 
-const SETTINGS: &[SettingField] = &[SettingField::of("sandbox", "bool"), SettingField::of("api_base", "url")];
+const SETTINGS: &[SettingField] = &[
+    SettingField::of("sandbox", "bool"),
+    SettingField::of("api_base", "url"),
+];
 
 pub fn descriptor() -> GatewayDescriptor {
     GatewayDescriptor {
         id: "gocardless",
         name: "GoCardless",
-        capabilities: Capabilities { checkout: true, webhooks: true, refunds: true, recurring: true },
+        capabilities: Capabilities {
+            checkout: true,
+            webhooks: true,
+            refunds: true,
+            recurring: true,
+        },
         secrets: &["access_token", "webhook_secret"],
         settings: SETTINGS,
         currencies: &["AUD", "CAD", "DKK", "EUR", "GBP", "NZD", "SEK", "USD"],
@@ -43,7 +58,11 @@ pub fn descriptor() -> GatewayDescriptor {
 }
 
 pub fn factory(cfg: &GatewayConfig) -> Result<Box<dyn PaymentGateway>, GatewayError> {
-    let default = if cfg.bool("sandbox") { SANDBOX_BASE } else { API_BASE };
+    let default = if cfg.bool("sandbox") {
+        SANDBOX_BASE
+    } else {
+        API_BASE
+    };
     Ok(Box::new(GoCardlessGateway {
         token: cfg.secret("access_token")?.into(),
         webhook_secret: cfg.secret("webhook_secret")?.into(),
@@ -64,15 +83,30 @@ pub fn classify(resource: &str, action: &str) -> (WebhookKind, u8) {
 }
 
 impl GoCardlessGateway {
-    fn spec(&self, method: &'static str, path: &str, body: Option<serde_json::Value>, idem: Option<&str>) -> HttpRequestSpec {
-        let mut headers = vec![("Authorization".into(), format!("Bearer {}", self.token)), ("GoCardless-Version".into(), VERSION.into()), ("Accept".into(), "application/json".into())];
+    fn spec(
+        &self,
+        method: &'static str,
+        path: &str,
+        body: Option<serde_json::Value>,
+        idem: Option<&str>,
+    ) -> HttpRequestSpec {
+        let mut headers = vec![
+            ("Authorization".into(), format!("Bearer {}", self.token)),
+            ("GoCardless-Version".into(), VERSION.into()),
+            ("Accept".into(), "application/json".into()),
+        ];
         if body.is_some() {
             headers.push(("Content-Type".into(), "application/json".into()));
         }
         if let Some(k) = idem {
             headers.push(("Idempotency-Key".into(), k.into()));
         }
-        HttpRequestSpec { method, url: format!("{}{path}", self.base), headers, body: body.map(|b| b.to_string()).unwrap_or_default() }
+        HttpRequestSpec {
+            method,
+            url: format!("{}{path}", self.base),
+            headers,
+            body: body.map(|b| b.to_string()).unwrap_or_default(),
+        }
     }
     pub fn verify(&self, h: &Headers, body: &[u8]) -> Result<(), GatewayError> {
         let sig = header(h, "webhook-signature").ok_or(GatewayError::InvalidSignature)?;
@@ -87,8 +121,18 @@ impl GoCardlessGateway {
         if r.starts_with("PM") {
             return Ok(r.to_string());
         }
-        let v = send_json(self.t.as_ref(), self.spec("GET", &format!("/billing_requests/{}", url_encode(r)), None, None)).await?;
-        obj_str(&v, "billing_requests.links.payment_request_payment").ok_or_else(|| GatewayError::Provider("billing request has no payment yet".into()))
+        let v = send_json(
+            self.t.as_ref(),
+            self.spec(
+                "GET",
+                &format!("/billing_requests/{}", url_encode(r)),
+                None,
+                None,
+            ),
+        )
+        .await?;
+        obj_str(&v, "billing_requests.links.payment_request_payment")
+            .ok_or_else(|| GatewayError::Provider("billing request has no payment yet".into()))
     }
 }
 
@@ -102,7 +146,10 @@ impl PaymentGateway for GoCardlessGateway {
     fn capabilities(&self) -> Capabilities {
         descriptor().capabilities
     }
-    fn create_payment<'a>(&'a self, r: &'a PaymentRequest) -> BoxFuture<'a, Result<PaymentInit, GatewayError>> {
+    fn create_payment<'a>(
+        &'a self,
+        r: &'a PaymentRequest,
+    ) -> BoxFuture<'a, Result<PaymentInit, GatewayError>> {
         Box::pin(async move {
             let meta = serde_json::json!({"pelty_payment_id": r.payment_id});
             let br = serde_json::json!({"billing_requests": {
@@ -110,21 +157,54 @@ impl PaymentGateway for GoCardlessGateway {
                 "mandate_request": {"metadata": meta},
                 "metadata": {"pelty_payment_id": r.payment_id, "reference": r.reference},
             }});
-            let v = send_json(self.t.as_ref(), self.spec("POST", "/billing_requests", Some(br), Some(&r.idempotency_key))).await?;
-            let id = obj_str(&v, "billing_requests.id").ok_or_else(|| GatewayError::Provider("missing billing request id".into()))?;
+            let v = send_json(
+                self.t.as_ref(),
+                self.spec(
+                    "POST",
+                    "/billing_requests",
+                    Some(br),
+                    Some(&r.idempotency_key),
+                ),
+            )
+            .await?;
+            let id = obj_str(&v, "billing_requests.id")
+                .ok_or_else(|| GatewayError::Provider("missing billing request id".into()))?;
             let mut flow = serde_json::json!({"billing_request_flows": {"redirect_uri": r.success_url, "exit_uri": r.cancel_url, "links": {"billing_request": id}}});
             if let Some(e) = &r.customer_email {
-                flow["billing_request_flows"]["prefilled_customer"] = serde_json::json!({"email": e});
+                flow["billing_request_flows"]["prefilled_customer"] =
+                    serde_json::json!({"email": e});
             }
-            let f = send_json(self.t.as_ref(), self.spec("POST", "/billing_request_flows", Some(flow), Some(&format!("{}-flow", r.idempotency_key)))).await?;
-            let url = obj_str(&f, "billing_request_flows.authorisation_url").ok_or_else(|| GatewayError::Provider("missing authorisation_url".into()))?;
-            Ok(PaymentInit::Redirect { url, provider_ref: id })
+            let f = send_json(
+                self.t.as_ref(),
+                self.spec(
+                    "POST",
+                    "/billing_request_flows",
+                    Some(flow),
+                    Some(&format!("{}-flow", r.idempotency_key)),
+                ),
+            )
+            .await?;
+            let url = obj_str(&f, "billing_request_flows.authorisation_url")
+                .ok_or_else(|| GatewayError::Provider("missing authorisation_url".into()))?;
+            Ok(PaymentInit::Redirect {
+                url,
+                provider_ref: id,
+            })
         })
     }
-    fn parse_webhook(&self, h: &Headers, body: &[u8], _now: i64) -> Result<WebhookEvent, GatewayError> {
+    fn parse_webhook(
+        &self,
+        h: &Headers,
+        body: &[u8],
+        _now: i64,
+    ) -> Result<WebhookEvent, GatewayError> {
         self.verify(h, body)?;
-        let v: serde_json::Value = serde_json::from_slice(body).map_err(|_| GatewayError::MalformedPayload)?;
-        let events = v["events"].as_array().filter(|a| !a.is_empty()).ok_or(GatewayError::MalformedPayload)?;
+        let v: serde_json::Value =
+            serde_json::from_slice(body).map_err(|_| GatewayError::MalformedPayload)?;
+        let events = v["events"]
+            .as_array()
+            .filter(|a| !a.is_empty())
+            .ok_or(GatewayError::MalformedPayload)?;
         let mut ids: Vec<&str> = events.iter().filter_map(|e| e["id"].as_str()).collect();
         if ids.len() != events.len() {
             return Err(GatewayError::MalformedPayload);
@@ -132,19 +212,44 @@ impl PaymentGateway for GoCardlessGateway {
         ids.sort_unstable();
         let best = events
             .iter()
-            .map(|e| (e, classify(e["resource_type"].as_str().unwrap_or(""), e["action"].as_str().unwrap_or(""))))
+            .map(|e| {
+                (
+                    e,
+                    classify(
+                        e["resource_type"].as_str().unwrap_or(""),
+                        e["action"].as_str().unwrap_or(""),
+                    ),
+                )
+            })
             .max_by_key(|(_, (_, p))| *p)
             .ok_or(GatewayError::MalformedPayload)?;
         let (e, (kind, _)) = best;
-        let ev_type = format!("{}.{}", e["resource_type"].as_str().unwrap_or(""), e["action"].as_str().unwrap_or(""));
+        let ev_type = format!(
+            "{}.{}",
+            e["resource_type"].as_str().unwrap_or(""),
+            e["action"].as_str().unwrap_or("")
+        );
         let r = obj_str(e, "links.payment").or_else(|| obj_str(e, "links.refund"));
         let mut out = WebhookEvent::new(ids.join(","), ev_type, kind, r);
         out.payment_id = obj_str(e, "resource_metadata.pelty_payment_id");
         Ok(out)
     }
-    fn complete_payment<'a>(&'a self, provider_ref: &'a str, _q: &'a HashMap<String, String>) -> BoxFuture<'a, Result<CompleteStatus, GatewayError>> {
+    fn complete_payment<'a>(
+        &'a self,
+        provider_ref: &'a str,
+        _q: &'a HashMap<String, String>,
+    ) -> BoxFuture<'a, Result<CompleteStatus, GatewayError>> {
         Box::pin(async move {
-            let v = send_json(self.t.as_ref(), self.spec("GET", &format!("/billing_requests/{}", url_encode(provider_ref)), None, None)).await?;
+            let v = send_json(
+                self.t.as_ref(),
+                self.spec(
+                    "GET",
+                    &format!("/billing_requests/{}", url_encode(provider_ref)),
+                    None,
+                    None,
+                ),
+            )
+            .await?;
             // Direct Debit settles days later; a fulfilled request is still pending.
             Ok(match v["billing_requests"]["status"].as_str() {
                 Some("cancelled") => CompleteStatus::Failed,
@@ -152,46 +257,95 @@ impl PaymentGateway for GoCardlessGateway {
             })
         })
     }
-    fn refund<'a>(&'a self, r: &'a str, amount: Money, idem: &'a str) -> BoxFuture<'a, Result<RefundResult, GatewayError>> {
+    fn refund<'a>(
+        &'a self,
+        r: &'a str,
+        amount: Money,
+        idem: &'a str,
+    ) -> BoxFuture<'a, Result<RefundResult, GatewayError>> {
         Box::pin(async move {
             let pm = self.payment_of(r).await?;
             let body = serde_json::json!({"refunds": {"amount": minor_units(amount)?, "total_amount_confirmation": minor_units(amount)?, "reference": idem.chars().take(18).collect::<String>(), "links": {"payment": pm}, "metadata": {"idempotency_key": idem.chars().take(50).collect::<String>()}}});
-            let v = send_json(self.t.as_ref(), self.spec("POST", "/refunds", Some(body), Some(idem))).await?;
+            let v = send_json(
+                self.t.as_ref(),
+                self.spec("POST", "/refunds", Some(body), Some(idem)),
+            )
+            .await?;
             let status = match v["refunds"]["status"].as_str() {
                 Some("paid") | Some("refund_settled") => "succeeded",
                 Some("failed") | Some("cancelled") => "failed",
                 _ => "pending",
             };
-            Ok(RefundResult { provider_ref: obj_str(&v, "refunds.id"), status: status.into() })
+            Ok(RefundResult {
+                provider_ref: obj_str(&v, "refunds.id"),
+                status: status.into(),
+            })
         })
     }
-    fn save_method<'a>(&'a self, token: &'a str, _email: &'a str, _idem: &'a str) -> BoxFuture<'a, Result<SavedMethod, GatewayError>> {
+    fn save_method<'a>(
+        &'a self,
+        token: &'a str,
+        _email: &'a str,
+        _idem: &'a str,
+    ) -> BoxFuture<'a, Result<SavedMethod, GatewayError>> {
         Box::pin(async move {
             if !token.starts_with("MD") {
                 return Err(GatewayError::Provider("expected a mandate id (MD…)".into()));
             }
-            let v = send_json(self.t.as_ref(), self.spec("GET", &format!("/mandates/{}", url_encode(token)), None, None)).await?;
+            let v = send_json(
+                self.t.as_ref(),
+                self.spec(
+                    "GET",
+                    &format!("/mandates/{}", url_encode(token)),
+                    None,
+                    None,
+                ),
+            )
+            .await?;
             let m = &v["mandates"];
             match m["status"].as_str() {
-                Some("pending_customer_approval" | "pending_submission" | "submitted" | "active") => {}
+                Some(
+                    "pending_customer_approval" | "pending_submission" | "submitted" | "active",
+                ) => {}
                 _ => return Err(GatewayError::Provider("mandate is not usable".into())),
             }
-            Ok(SavedMethod { token: token.into(), brand: m["scheme"].as_str().unwrap_or("direct_debit").into(), last4: String::new(), exp_month: 0, exp_year: 0 })
+            Ok(SavedMethod {
+                token: token.into(),
+                brand: m["scheme"].as_str().unwrap_or("direct_debit").into(),
+                last4: String::new(),
+                exp_month: 0,
+                exp_year: 0,
+            })
         })
     }
-    fn charge_saved<'a>(&'a self, token: &'a str, r: &'a PaymentRequest) -> BoxFuture<'a, Result<ChargeOutcome, GatewayError>> {
+    fn charge_saved<'a>(
+        &'a self,
+        token: &'a str,
+        r: &'a PaymentRequest,
+    ) -> BoxFuture<'a, Result<ChargeOutcome, GatewayError>> {
         Box::pin(async move {
             let body = serde_json::json!({"payments": {"amount": minor_units(r.amount)?, "currency": r.amount.currency.as_str(), "description": r.description, "metadata": {"pelty_payment_id": r.payment_id}, "links": {"mandate": token}}});
-            let (status, raw) = self.t.send(self.spec("POST", "/payments", Some(body), Some(&r.idempotency_key))).await.map_err(GatewayError::Provider)?;
-            let v: serde_json::Value = serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null);
+            let (status, raw) = self
+                .t
+                .send(self.spec("POST", "/payments", Some(body), Some(&r.idempotency_key)))
+                .await
+                .map_err(GatewayError::Provider)?;
+            let v: serde_json::Value =
+                serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null);
             if status == 422 || status == 409 {
-                let reason = v["error"]["errors"][0]["reason"].as_str().or(v["error"]["message"].as_str()).unwrap_or("declined");
-                return Ok(ChargeOutcome::Declined { reason: reason.chars().take(120).collect() });
+                let reason = v["error"]["errors"][0]["reason"]
+                    .as_str()
+                    .or(v["error"]["message"].as_str())
+                    .unwrap_or("declined");
+                return Ok(ChargeOutcome::Declined {
+                    reason: reason.chars().take(120).collect(),
+                });
             }
             if !(200..300).contains(&status) {
                 return Err(GatewayError::Provider(format!("HTTP {status}")));
             }
-            let id = obj_str(&v, "payments.id").ok_or_else(|| GatewayError::Provider("missing payment id".into()))?;
+            let id = obj_str(&v, "payments.id")
+                .ok_or_else(|| GatewayError::Provider("missing payment id".into()))?;
             Ok(ChargeOutcome::Pending { provider_ref: id })
         })
     }
@@ -203,7 +357,13 @@ mod tests {
     use pelty_payments::test_util::*;
 
     fn g(t: &MockTransport, sandbox: bool) -> Box<dyn PaymentGateway> {
-        factory(&cfg("gocardless", serde_json::json!({"sandbox": sandbox}), &[("access_token", "sandbox_tok"), ("webhook_secret", "whs")], t)).unwrap()
+        factory(&cfg(
+            "gocardless",
+            serde_json::json!({"sandbox": sandbox}),
+            &[("access_token", "sandbox_tok"), ("webhook_secret", "whs")],
+            t,
+        ))
+        .unwrap()
     }
 
     #[tokio::test]
@@ -211,9 +371,18 @@ mod tests {
         let t = MockTransport::new();
         t.push(201, r#"{"billing_requests":{"id":"BRQ1","status":"pending"}}"#).push(201, r#"{"billing_request_flows":{"id":"BRF1","authorisation_url":"https://pay-sandbox.gocardless.com/flow/BRF1"}}"#);
         let gw = g(&t, true);
-        assert_eq!(gw.create_payment(&req("12.34", "EUR")).await.unwrap(), PaymentInit::Redirect { url: "https://pay-sandbox.gocardless.com/flow/BRF1".into(), provider_ref: "BRQ1".into() });
+        assert_eq!(
+            gw.create_payment(&req("12.34", "EUR")).await.unwrap(),
+            PaymentInit::Redirect {
+                url: "https://pay-sandbox.gocardless.com/flow/BRF1".into(),
+                provider_ref: "BRQ1".into()
+            }
+        );
         let rq = t.requests();
-        assert_eq!(rq[0].url, "https://api-sandbox.gocardless.com/billing_requests");
+        assert_eq!(
+            rq[0].url,
+            "https://api-sandbox.gocardless.com/billing_requests"
+        );
         assert_eq!(rq[0].header("GoCardless-Version"), Some("2015-07-06"));
         assert_eq!(rq[0].header("Idempotency-Key"), Some("idem-1"));
         let b: serde_json::Value = serde_json::from_str(&rq[0].body).unwrap();
@@ -221,17 +390,38 @@ mod tests {
         assert_eq!(b["billing_requests"]["payment_request"]["currency"], "EUR");
         assert!(b["billing_requests"]["mandate_request"].is_object());
         let f: serde_json::Value = serde_json::from_str(&rq[1].body).unwrap();
-        assert_eq!(f["billing_request_flows"]["links"]["billing_request"], "BRQ1");
-        assert_eq!(f["billing_request_flows"]["prefilled_customer"]["email"], "a@example.test");
+        assert_eq!(
+            f["billing_request_flows"]["links"]["billing_request"],
+            "BRQ1"
+        );
+        assert_eq!(
+            f["billing_request_flows"]["prefilled_customer"]["email"],
+            "a@example.test"
+        );
         // Live base when sandbox is off.
         let t2 = MockTransport::new();
-        t2.push(201, r#"{"billing_requests":{"id":"BRQ2"}}"#).push(201, r#"{"billing_request_flows":{"authorisation_url":"https://pay.gocardless.com/x"}}"#);
-        g(&t2, false).create_payment(&req("1", "GBP")).await.unwrap();
-        assert!(t2.requests()[0].url.starts_with("https://api.gocardless.com/"));
+        t2.push(201, r#"{"billing_requests":{"id":"BRQ2"}}"#).push(
+            201,
+            r#"{"billing_request_flows":{"authorisation_url":"https://pay.gocardless.com/x"}}"#,
+        );
+        g(&t2, false)
+            .create_payment(&req("1", "GBP"))
+            .await
+            .unwrap();
+        assert!(t2.requests()[0]
+            .url
+            .starts_with("https://api.gocardless.com/"));
         // Return: fulfilled is still pending (DD clears later); cancelled fails.
-        t.push(200, r#"{"billing_requests":{"status":"fulfilled"}}"#).push(200, r#"{"billing_requests":{"status":"cancelled"}}"#);
-        assert_eq!(gw.complete_payment("BRQ1", &HashMap::new()).await.unwrap(), CompleteStatus::Pending);
-        assert_eq!(gw.complete_payment("BRQ1", &HashMap::new()).await.unwrap(), CompleteStatus::Failed);
+        t.push(200, r#"{"billing_requests":{"status":"fulfilled"}}"#)
+            .push(200, r#"{"billing_requests":{"status":"cancelled"}}"#);
+        assert_eq!(
+            gw.complete_payment("BRQ1", &HashMap::new()).await.unwrap(),
+            CompleteStatus::Pending
+        );
+        assert_eq!(
+            gw.complete_payment("BRQ1", &HashMap::new()).await.unwrap(),
+            CompleteStatus::Failed
+        );
     }
 
     // Signatures computed independently:
@@ -245,12 +435,51 @@ mod tests {
     fn webhooks() {
         let t = MockTransport::new();
         let gw = g(&t, true);
-        let e = gw.parse_webhook(&hdrs(&[("webhook-signature", BATCH_SIG)]), BATCH.as_bytes(), 0).unwrap();
-        assert_eq!((e.kind.clone(), e.provider_ref.as_deref(), e.payment_id.as_deref(), e.event_id.as_str(), e.event_type.as_str()), (WebhookKind::PaymentSucceeded, Some("PM1"), Some("pay_1"), "EV1,EV2", "payments.confirmed"));
-        let e = gw.parse_webhook(&hdrs(&[("webhook-signature", FAIL_SIG)]), FAIL.as_bytes(), 0).unwrap();
+        let e = gw
+            .parse_webhook(
+                &hdrs(&[("webhook-signature", BATCH_SIG)]),
+                BATCH.as_bytes(),
+                0,
+            )
+            .unwrap();
+        assert_eq!(
+            (
+                e.kind.clone(),
+                e.provider_ref.as_deref(),
+                e.payment_id.as_deref(),
+                e.event_id.as_str(),
+                e.event_type.as_str()
+            ),
+            (
+                WebhookKind::PaymentSucceeded,
+                Some("PM1"),
+                Some("pay_1"),
+                "EV1,EV2",
+                "payments.confirmed"
+            )
+        );
+        let e = gw
+            .parse_webhook(
+                &hdrs(&[("webhook-signature", FAIL_SIG)]),
+                FAIL.as_bytes(),
+                0,
+            )
+            .unwrap();
         assert_eq!(e.kind, WebhookKind::Disputed);
-        assert_eq!(gw.parse_webhook(&hdrs(&[("webhook-signature", BATCH_SIG)]), BATCH.replace("PM1", "PM9").as_bytes(), 0).unwrap_err(), GatewayError::InvalidSignature);
-        assert_eq!(gw.parse_webhook(&hdrs(&[]), BATCH.as_bytes(), 0).unwrap_err(), GatewayError::InvalidSignature);
+        assert_eq!(
+            gw.parse_webhook(
+                &hdrs(&[("webhook-signature", BATCH_SIG)]),
+                BATCH.replace("PM1", "PM9").as_bytes(),
+                0
+            )
+            .unwrap_err(),
+            GatewayError::InvalidSignature
+        );
+        assert_eq!(
+            gw.parse_webhook(&hdrs(&[]), BATCH.as_bytes(), 0)
+                .unwrap_err(),
+            GatewayError::InvalidSignature
+        );
         assert_eq!(classify("mandates", "cancelled").0, WebhookKind::Ignored);
         assert_eq!(classify("payments", "failed").0, WebhookKind::PaymentFailed);
     }
@@ -259,25 +488,67 @@ mod tests {
     async fn refund_and_mandate_charges() {
         let t = MockTransport::new();
         let gw = g(&t, true);
-        t.push(200, r#"{"billing_requests":{"links":{"payment_request_payment":"PM7"}}}"#).push(201, r#"{"refunds":{"id":"RF1","status":"created"}}"#);
-        let r = gw.refund("BRQ1", money("5.00", "EUR"), "refund-key").await.unwrap();
-        assert_eq!((r.status.as_str(), r.provider_ref.as_deref()), ("pending", Some("RF1")));
+        t.push(
+            200,
+            r#"{"billing_requests":{"links":{"payment_request_payment":"PM7"}}}"#,
+        )
+        .push(201, r#"{"refunds":{"id":"RF1","status":"created"}}"#);
+        let r = gw
+            .refund("BRQ1", money("5.00", "EUR"), "refund-key")
+            .await
+            .unwrap();
+        assert_eq!(
+            (r.status.as_str(), r.provider_ref.as_deref()),
+            ("pending", Some("RF1"))
+        );
         let rq = t.requests();
         let b: serde_json::Value = serde_json::from_str(&rq[1].body).unwrap();
-        assert_eq!((b["refunds"]["amount"].as_i64(), b["refunds"]["links"]["payment"].as_str()), (Some(500), Some("PM7")));
+        assert_eq!(
+            (
+                b["refunds"]["amount"].as_i64(),
+                b["refunds"]["links"]["payment"].as_str()
+            ),
+            (Some(500), Some("PM7"))
+        );
 
         assert!(gw.save_method("pm_card", "a@x", "k").await.is_err());
-        t.push(200, r#"{"mandates":{"id":"MD1","status":"active","scheme":"sepa_core"}}"#);
-        assert_eq!(gw.save_method("MD1", "a@x", "k").await.unwrap().brand, "sepa_core");
+        t.push(
+            200,
+            r#"{"mandates":{"id":"MD1","status":"active","scheme":"sepa_core"}}"#,
+        );
+        assert_eq!(
+            gw.save_method("MD1", "a@x", "k").await.unwrap().brand,
+            "sepa_core"
+        );
         t.push(200, r#"{"mandates":{"id":"MD2","status":"cancelled"}}"#);
         assert!(gw.save_method("MD2", "a@x", "k").await.is_err());
 
-        t.push(201, r#"{"payments":{"id":"PM9","status":"pending_submission"}}"#);
-        assert_eq!(gw.charge_saved("MD1", &req("9.99", "EUR")).await.unwrap(), ChargeOutcome::Pending { provider_ref: "PM9".into() });
-        let b: serde_json::Value = serde_json::from_str(&t.requests().last().unwrap().body).unwrap();
-        assert_eq!((b["payments"]["amount"].as_i64(), b["payments"]["links"]["mandate"].as_str()), (Some(999), Some("MD1")));
+        t.push(
+            201,
+            r#"{"payments":{"id":"PM9","status":"pending_submission"}}"#,
+        );
+        assert_eq!(
+            gw.charge_saved("MD1", &req("9.99", "EUR")).await.unwrap(),
+            ChargeOutcome::Pending {
+                provider_ref: "PM9".into()
+            }
+        );
+        let b: serde_json::Value =
+            serde_json::from_str(&t.requests().last().unwrap().body).unwrap();
+        assert_eq!(
+            (
+                b["payments"]["amount"].as_i64(),
+                b["payments"]["links"]["mandate"].as_str()
+            ),
+            (Some(999), Some("MD1"))
+        );
         t.push(422, r#"{"error":{"message":"Mandate is cancelled","errors":[{"reason":"mandate_is_inactive"}]}}"#);
-        assert_eq!(gw.charge_saved("MD1", &req("9.99", "EUR")).await.unwrap(), ChargeOutcome::Declined { reason: "mandate_is_inactive".into() });
+        assert_eq!(
+            gw.charge_saved("MD1", &req("9.99", "EUR")).await.unwrap(),
+            ChargeOutcome::Declined {
+                reason: "mandate_is_inactive".into()
+            }
+        );
         t.push(500, "{}");
         assert!(gw.charge_saved("MD1", &req("9.99", "EUR")).await.is_err());
     }

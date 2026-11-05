@@ -11,8 +11,8 @@
 //! else the official GitHub feed. The repository is private, so a token from
 //! `PELTY_UPDATE_TOKEN` (or `GH_TOKEN` / `GITHUB_TOKEN`) is sent as a bearer
 //! token when set.
-use crate::extract::{perms, RequirePermission};
 use crate::error::ApiResult;
+use crate::extract::{perms, RequirePermission};
 use crate::AppState;
 use axum::extract::State;
 use axum::routing::{get, post};
@@ -63,26 +63,50 @@ pub async fn config(s: &AppState) -> AppResult<(bool, String)> {
 /// `(enabled, feed URL)`; `PELTY_UPDATE_URL` wins over the saved URL.
 pub async fn config_in(pool: &pelty_database::Pool) -> AppResult<(bool, String)> {
     let v = settings::get(pool, CFG).await?.unwrap_or(Value::Null);
-    let saved = v["url"].as_str().filter(|u| !u.is_empty()).unwrap_or(DEFAULT_URL).to_string();
-    Ok((v["enabled"].as_bool().unwrap_or(true), env_url().unwrap_or(saved)))
+    let saved = v["url"]
+        .as_str()
+        .filter(|u| !u.is_empty())
+        .unwrap_or(DEFAULT_URL)
+        .to_string();
+    Ok((
+        v["enabled"].as_bool().unwrap_or(true),
+        env_url().unwrap_or(saved),
+    ))
 }
 
 /// `PELTY_UPDATE_URL`: release feed override (a mirror or a test server).
 pub fn env_url() -> Option<String> {
     // Release feed URL override: a GitHub releases API URL or a mirror's manifest.json.
-    std::env::var("PELTY_UPDATE_URL").ok().map(|u| u.trim().to_string()).filter(|u| u.starts_with("https://") || u.starts_with("http://"))
+    std::env::var("PELTY_UPDATE_URL")
+        .ok()
+        .map(|u| u.trim().to_string())
+        .filter(|u| u.starts_with("https://") || u.starts_with("http://"))
 }
 
 /// Token for a private release feed: `PELTY_UPDATE_TOKEN`, else `GH_TOKEN` / `GITHUB_TOKEN`.
 pub fn token() -> Option<String> {
     // Token for the private release feed (`PELTY_UPDATE_TOKEN`, else GH_TOKEN / GITHUB_TOKEN).
-    ["PELTY_UPDATE_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"].iter().find_map(|k| std::env::var(k).ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty()))
+    ["PELTY_UPDATE_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"]
+        .iter()
+        .find_map(|k| {
+            std::env::var(k)
+                .ok()
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty())
+        })
 }
 
 /// Request headers for the feed (and, with `binary`, for asset downloads).
 pub fn feed_headers(binary: bool) -> Vec<(String, String)> {
-    let accept = if binary { "application/octet-stream" } else { "application/vnd.github+json, application/json" };
-    let mut h = vec![("accept".into(), accept.into()), ("user-agent".into(), format!("PeltyCMS/{CURRENT}"))];
+    let accept = if binary {
+        "application/octet-stream"
+    } else {
+        "application/vnd.github+json, application/json"
+    };
+    let mut h = vec![
+        ("accept".into(), accept.into()),
+        ("user-agent".into(), format!("PeltyCMS/{CURRENT}")),
+    ];
     if let Some(t) = token() {
         h.push(("authorization".into(), format!("Bearer {t}")));
     }
@@ -131,7 +155,8 @@ impl Release {
     pub fn archive_for(&self, target: &str) -> Option<&Asset> {
         self.assets.iter().find(|a| {
             let archive = a.name.ends_with(".tar.gz") || a.name.ends_with(".zip");
-            archive && (a.target.as_deref() == Some(target) || a.name.contains(&format!("-{target}.")))
+            archive
+                && (a.target.as_deref() == Some(target) || a.name.contains(&format!("-{target}.")))
         })
     }
 }
@@ -139,31 +164,60 @@ impl Release {
 /// Parse a GitHub release JSON or a `manifest.json` (asset URLs relative to it).
 pub fn parse_feed(body: &str, feed_url: &str) -> Result<Release, &'static str> {
     let v: Value = serde_json::from_str(body).map_err(|_| "error.update_feed_invalid")?;
-    let tag = v["tag_name"].as_str().or(v["version"].as_str()).unwrap_or("");
+    let tag = v["tag_name"]
+        .as_str()
+        .or(v["version"].as_str())
+        .unwrap_or("");
     if parse_version(tag).is_none() {
         return Err("error.update_feed_invalid");
     }
     let github = v.get("tag_name").is_some();
-    let base = feed_url.rsplit_once('/').map(|(b, _)| b).unwrap_or(feed_url);
+    let base = feed_url
+        .rsplit_once('/')
+        .map(|(b, _)| b)
+        .unwrap_or(feed_url);
     let use_api = token().is_some();
-    let assets = v["assets"].as_array().map(Vec::as_slice).unwrap_or_default().iter().filter_map(|a| {
-        let name = a["name"].as_str()?.to_string();
-        if name.contains('/') || name.contains("..") {
-            return None;
-        }
-        let url = if github {
-            // Private repos: the API URL with a token (browser URLs need a session).
-            let api = a["url"].as_str().filter(|_| use_api);
-            api.or(a["browser_download_url"].as_str())?.to_string()
-        } else {
-            a["url"].as_str().map(str::to_string).unwrap_or_else(|| format!("{base}/{name}"))
-        };
-        Some(Asset { name, url, target: a["target"].as_str().map(str::to_string), sha256: a["sha256"].as_str().map(str::to_string) })
-    }).collect();
+    let assets = v["assets"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|a| {
+            let name = a["name"].as_str()?.to_string();
+            if name.contains('/') || name.contains("..") {
+                return None;
+            }
+            let url = if github {
+                // Private repos: the API URL with a token (browser URLs need a session).
+                let api = a["url"].as_str().filter(|_| use_api);
+                api.or(a["browser_download_url"].as_str())?.to_string()
+            } else {
+                a["url"]
+                    .as_str()
+                    .map(str::to_string)
+                    .unwrap_or_else(|| format!("{base}/{name}"))
+            };
+            Some(Asset {
+                name,
+                url,
+                target: a["target"].as_str().map(str::to_string),
+                sha256: a["sha256"].as_str().map(str::to_string),
+            })
+        })
+        .collect();
     Ok(Release {
         version: tag.trim_start_matches(['v', 'V']).to_string(),
-        notes: v["body"].as_str().or(v["notes"].as_str()).unwrap_or("").chars().take(4000).collect(),
-        html_url: v["html_url"].as_str().filter(|u| u.starts_with("https://")).map(str::to_string),
+        notes: v["body"]
+            .as_str()
+            .or(v["notes"].as_str())
+            .unwrap_or("")
+            .chars()
+            .take(4000)
+            .collect(),
+        html_url: v["html_url"]
+            .as_str()
+            .filter(|u| u.starts_with("https://"))
+            .map(str::to_string),
         published_at: v["published_at"].clone(),
         assets,
     })
@@ -184,10 +238,20 @@ pub async fn status(s: &AppState) -> AppResult<Value> {
 /// Fetch the feed now and store the outcome (errors too, so the page shows them).
 pub async fn check(s: &AppState) -> AppResult<Value> {
     let (_, url) = config(s).await?;
-    let now = OffsetDateTime::now_utc().format(&time::format_description::well_known::Rfc3339).unwrap_or_default();
+    let now = OffsetDateTime::now_utc()
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_default();
     let mut st = settings::get(&s.pool, STATUS).await?.unwrap_or(json!({}));
     st["checked_at"] = json!(now);
-    let res = s.http().send(HttpRequestSpec { method: "GET", url: url.clone(), headers: feed_headers(false), body: String::new() }).await;
+    let res = s
+        .http()
+        .send(HttpRequestSpec {
+            method: "GET",
+            url: url.clone(),
+            headers: feed_headers(false),
+            body: String::new(),
+        })
+        .await;
     let outcome = match res {
         Ok((200..=299, body)) => parse_feed(&body, &url),
         _ => Err("error.update_feed_unavailable"),
@@ -203,7 +267,15 @@ pub async fn check(s: &AppState) -> AppResult<Value> {
             st["error"] = Value::Null;
             settings::set(&s.pool, STATUS, st).await?;
             if is_newer(&tag, CURRENT) && was.as_deref() != Some(tag.as_str()) {
-                audit::record(&s.pool, None, "system.update_available", None, None, json!({ "current": CURRENT, "latest": tag })).await?;
+                audit::record(
+                    &s.pool,
+                    None,
+                    "system.update_available",
+                    None,
+                    None,
+                    json!({ "current": CURRENT, "latest": tag }),
+                )
+                .await?;
             }
         }
         Err(code) => {
@@ -229,7 +301,10 @@ pub fn router() -> Router<AppState> {
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/system/updates", responses((status = 200)))]
-pub async fn get_status(State(s): State<AppState>, _p: RequirePermission<perms::SettingsManage>) -> ApiResult<Json<Value>> {
+pub async fn get_status(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::SettingsManage>,
+) -> ApiResult<Json<Value>> {
     Ok(Json(status(&s).await?))
 }
 
@@ -242,18 +317,35 @@ pub struct UpdateConfig {
 }
 
 #[utoipa::path(put, path = "/api/v1/admin/system/updates", request_body = UpdateConfig, responses((status = 200), (status = 422)))]
-pub async fn put_config(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::SettingsManage>, Json(b): Json<UpdateConfig>) -> ApiResult<Json<Value>> {
+pub async fn put_config(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::SettingsManage>,
+    Json(b): Json<UpdateConfig>,
+) -> ApiResult<Json<Value>> {
     let url = b.url.trim();
-    if !url.is_empty() && (!url.starts_with("https://") || url.len() > 500 || url.contains(char::is_whitespace)) {
+    if !url.is_empty()
+        && (!url.starts_with("https://") || url.len() > 500 || url.contains(char::is_whitespace))
+    {
         return Err(AppError::Validation("error.update_url_invalid").into());
     }
     settings::set(&s.pool, CFG, json!({ "enabled": b.enabled, "url": url })).await?;
-    audit::record(&s.pool, Some(u.user_id), "settings.update_check", None, u.ip.as_deref(), json!({ "enabled": b.enabled, "url": url })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "settings.update_check",
+        None,
+        u.ip.as_deref(),
+        json!({ "enabled": b.enabled, "url": url }),
+    )
+    .await?;
     Ok(Json(status(&s).await?))
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/system/updates/check", responses((status = 200)))]
-pub async fn check_now(State(s): State<AppState>, _p: RequirePermission<perms::SettingsManage>) -> ApiResult<Json<Value>> {
+pub async fn check_now(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::SettingsManage>,
+) -> ApiResult<Json<Value>> {
     Ok(Json(check(&s).await?))
 }
 
@@ -291,11 +383,26 @@ mod tests {
         let m = r#"{"version":"0.3.0","notes":"n","assets":[{"target":"x86_64-pc-windows-msvc","name":"pelty-server-0.3.0-x86_64-pc-windows-msvc.zip","sha256":"ab"}]}"#;
         let r = parse_feed(m, "http://127.0.0.1:9/rel/latest/manifest.json").unwrap();
         let a = r.archive_for("x86_64-pc-windows-msvc").unwrap();
-        assert_eq!(a.url, "http://127.0.0.1:9/rel/latest/pelty-server-0.3.0-x86_64-pc-windows-msvc.zip");
+        assert_eq!(
+            a.url,
+            "http://127.0.0.1:9/rel/latest/pelty-server-0.3.0-x86_64-pc-windows-msvc.zip"
+        );
         assert_eq!(a.sha256.as_deref(), Some("ab"));
-        assert_eq!(parse_feed("{\"version\":\"x\"}", "u").err(), Some("error.update_feed_invalid"));
-        assert_eq!(feed_for_version(DEFAULT_URL, "v1.2.0").unwrap(), "https://api.github.com/repos/MythicalLTD/PeltyCMS/releases/tags/v1.2.0");
-        assert_eq!(feed_for_version("https://m.example/p/latest/manifest.json", "1.2.0").unwrap(), "https://m.example/p/1.2.0/manifest.json");
-        assert_eq!(feed_for_version("https://m.example/p/manifest.json", "1.2.0"), None);
+        assert_eq!(
+            parse_feed("{\"version\":\"x\"}", "u").err(),
+            Some("error.update_feed_invalid")
+        );
+        assert_eq!(
+            feed_for_version(DEFAULT_URL, "v1.2.0").unwrap(),
+            "https://api.github.com/repos/MythicalLTD/PeltyCMS/releases/tags/v1.2.0"
+        );
+        assert_eq!(
+            feed_for_version("https://m.example/p/latest/manifest.json", "1.2.0").unwrap(),
+            "https://m.example/p/1.2.0/manifest.json"
+        );
+        assert_eq!(
+            feed_for_version("https://m.example/p/manifest.json", "1.2.0"),
+            None
+        );
     }
 }

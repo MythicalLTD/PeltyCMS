@@ -46,7 +46,10 @@ pub async fn admin_create(
         json!({ "code": c.code }),
     )
     .await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("coupon.created", json!({ "coupon_id": c.id, "code": c.code })));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "coupon.created",
+        json!({ "coupon_id": c.id, "code": c.code }),
+    ));
     Ok(Json(json!(c)))
 }
 
@@ -67,7 +70,10 @@ pub async fn admin_update(
         json!({ "code": c.code }),
     )
     .await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("coupon.updated", json!({ "coupon_id": id, "code": c.code })));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "coupon.updated",
+        json!({ "coupon_id": id, "code": c.code }),
+    ));
     Ok(Json(json!(c)))
 }
 
@@ -87,7 +93,10 @@ pub async fn admin_delete(
         json!({}),
     )
     .await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("coupon.deleted", json!({ "coupon_id": id })));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "coupon.deleted",
+        json!({ "coupon_id": id }),
+    ));
     Ok(Json(json!({ "ok": true })))
 }
 

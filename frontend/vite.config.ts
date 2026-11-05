@@ -23,7 +23,7 @@ const quietLogger = {
       }
       return;
     }
-    viteLogger.error(msg, options);
+    viteLogger.error(text, options);
   },
 };
 

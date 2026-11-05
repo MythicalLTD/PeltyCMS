@@ -18,9 +18,38 @@ const MAX_ERRORS: usize = 200;
 /// Import kinds and their target fields (`*` = required).
 pub fn fields(kind: &str) -> Option<&'static [(&'static str, bool)]> {
     Some(match kind {
-        "clients" => &[("email", true), ("first_name", false), ("last_name", false), ("organization", false), ("phone", false), ("address_line1", false), ("city", false), ("region", false), ("postal_code", false), ("country", false), ("currency", false)],
-        "services" => &[("email", true), ("product", true), ("cycle", true), ("amount", true), ("status", false), ("next_due_date", false), ("currency", false)],
-        "invoices" => &[("email", true), ("number", true), ("amount", true), ("description", false), ("status", false), ("issued_at", false), ("due_at", false), ("currency", false)],
+        "clients" => &[
+            ("email", true),
+            ("first_name", false),
+            ("last_name", false),
+            ("organization", false),
+            ("phone", false),
+            ("address_line1", false),
+            ("city", false),
+            ("region", false),
+            ("postal_code", false),
+            ("country", false),
+            ("currency", false),
+        ],
+        "services" => &[
+            ("email", true),
+            ("product", true),
+            ("cycle", true),
+            ("amount", true),
+            ("status", false),
+            ("next_due_date", false),
+            ("currency", false),
+        ],
+        "invoices" => &[
+            ("email", true),
+            ("number", true),
+            ("amount", true),
+            ("description", false),
+            ("status", false),
+            ("issued_at", false),
+            ("due_at", false),
+            ("currency", false),
+        ],
         _ => return None,
     })
 }
@@ -80,7 +109,11 @@ pub fn parse(src: &str) -> AppResult<Vec<Vec<String>>> {
 /// `;` when the header line has more semicolons than commas (Excel EU).
 fn detect_delim(src: &str) -> char {
     let first = src.lines().next().unwrap_or("");
-    if first.matches(';').count() > first.matches(',').count() { ';' } else { ',' }
+    if first.matches(';').count() > first.matches(',').count() {
+        ';'
+    } else {
+        ','
+    }
 }
 
 fn norm(s: &str) -> String {
@@ -111,7 +144,9 @@ pub fn suggest(kind: &str, headers: &[String]) -> HashMap<String, String> {
     };
     let mut out = HashMap::new();
     for (f, _) in fields(kind).unwrap_or(&[]) {
-        let names: Vec<String> = std::iter::once(f.to_string()).chain(alias(f).iter().map(|s| s.to_string())).collect();
+        let names: Vec<String> = std::iter::once(f.to_string())
+            .chain(alias(f).iter().map(|s| s.to_string()))
+            .collect();
         if let Some(h) = headers.iter().find(|h| names.contains(&norm(h))) {
             out.insert(f.to_string(), h.clone());
         }
@@ -144,7 +179,11 @@ struct Row<'a> {
 
 impl Row<'_> {
     fn get(&self, f: &str) -> &str {
-        self.idx.get(f).and_then(|&i| self.cells.get(i)).map(|s| s.trim()).unwrap_or("")
+        self.idx
+            .get(f)
+            .and_then(|&i| self.cells.get(i))
+            .map(|s| s.trim())
+            .unwrap_or("")
     }
     fn opt(&self, f: &str) -> Option<&str> {
         Some(self.get(f)).filter(|s| !s.is_empty())
@@ -158,11 +197,13 @@ fn bad(f: &'static str, code: &'static str) -> Fail {
 
 fn date(v: Option<&str>, f: &'static str) -> Result<Option<Date>, Fail> {
     let fmt = time::macros::format_description!("[year]-[month]-[day]");
-    v.map(|s| Date::parse(s, &fmt).map_err(|_| bad(f, "error.import_bad_date"))).transpose()
+    v.map(|s| Date::parse(s, &fmt).map_err(|_| bad(f, "error.import_bad_date")))
+        .transpose()
 }
 
 fn money(v: &str, f: &'static str) -> Result<Decimal, Fail> {
-    let d = Decimal::from_str(&v.replace(' ', "")).map_err(|_| bad(f, "error.import_bad_amount"))?;
+    let d =
+        Decimal::from_str(&v.replace(' ', "")).map_err(|_| bad(f, "error.import_bad_amount"))?;
     if d < Decimal::ZERO || d > Decimal::from(1_000_000_000) {
         return Err(bad(f, "error.import_bad_amount"));
     }
@@ -170,25 +211,37 @@ fn money(v: &str, f: &'static str) -> Result<Decimal, Fail> {
 }
 
 fn valid_email(e: &str) -> bool {
-    e.len() <= 254 && e.split_once('@').is_some_and(|(a, d)| !a.is_empty() && d.contains('.') && !e.contains(char::is_whitespace))
+    e.len() <= 254
+        && e.split_once('@').is_some_and(|(a, d)| {
+            !a.is_empty() && d.contains('.') && !e.contains(char::is_whitespace)
+        })
 }
 
-async fn currency(tx: &mut Transaction<'_, Postgres>, v: Option<&str>, fallback: &str) -> Result<String, Fail> {
+async fn currency(
+    tx: &mut Transaction<'_, Postgres>,
+    v: Option<&str>,
+    fallback: &str,
+) -> Result<String, Fail> {
     let c = v.unwrap_or(fallback).to_ascii_uppercase();
     let ok: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM currencies WHERE code = $1)")
         .bind(&c)
         .fetch_one(&mut **tx)
         .await
         .map_err(|_| bad("currency", "error.import_bad_currency"))?;
-    if ok { Ok(c) } else { Err(bad("currency", "error.import_bad_currency")) }
+    if ok {
+        Ok(c)
+    } else {
+        Err(bad("currency", "error.import_bad_currency"))
+    }
 }
 
 async fn customer(tx: &mut Transaction<'_, Postgres>, email: &str) -> Result<(Uuid, String), Fail> {
-    let r: Option<(Uuid, String)> = sqlx::query_as("SELECT id, currency::text FROM customers WHERE email = $1::citext")
-        .bind(email)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(|_| bad("email", "error.import_db"))?;
+    let r: Option<(Uuid, String)> =
+        sqlx::query_as("SELECT id, currency::text FROM customers WHERE email = $1::citext")
+            .bind(email)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(|_| bad("email", "error.import_db"))?;
     r.ok_or(bad("email", "error.import_unknown_client"))
 }
 
@@ -197,21 +250,28 @@ enum Outcome {
     Skipped,
 }
 
-async fn client_row(tx: &mut Transaction<'_, Postgres>, r: &Row<'_>, default_cur: &str) -> Result<Outcome, Fail> {
+async fn client_row(
+    tx: &mut Transaction<'_, Postgres>,
+    r: &Row<'_>,
+    default_cur: &str,
+) -> Result<Outcome, Fail> {
     let email = r.get("email").to_ascii_lowercase();
     if !valid_email(&email) {
         return Err(bad("email", "error.import_bad_email"));
     }
-    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM customers WHERE email = $1::citext)")
-        .bind(&email)
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(|_| (None, "error.import_db"))?;
+    let exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM customers WHERE email = $1::citext)")
+            .bind(&email)
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(|_| (None, "error.import_db"))?;
     if exists {
         return Ok(Outcome::Skipped);
     }
     let country = r.get("country").to_ascii_uppercase();
-    if !(country.is_empty() || (country.len() == 2 && country.bytes().all(|b| b.is_ascii_uppercase()))) {
+    if !(country.is_empty()
+        || (country.len() == 2 && country.bytes().all(|b| b.is_ascii_uppercase())))
+    {
         return Err(bad("country", "error.invalid_country"));
     }
     let cur = currency(tx, r.opt("currency"), default_cur).await?;
@@ -279,11 +339,21 @@ async fn invoice_row(tx: &mut Transaction<'_, Postgres>, r: &Row<'_>) -> Result<
         return Err(bad("status", "error.import_bad_status"));
     }
     let to_ts = |d: Option<Date>| d.map(|d| d.midnight().assume_utc());
-    let issued = to_ts(date(r.opt("issued_at"), "issued_at")?).unwrap_or_else(OffsetDateTime::now_utc);
+    let issued =
+        to_ts(date(r.opt("issued_at"), "issued_at")?).unwrap_or_else(OffsetDateTime::now_utc);
     let due = to_ts(date(r.opt("due_at"), "due_at")?).unwrap_or(issued);
     let cur = currency(tx, r.opt("currency"), &ccur).await?;
-    let desc: String = r.opt("description").unwrap_or("Imported invoice").chars().take(500).collect();
-    let paid = if status == "paid" { amount } else { Decimal::ZERO };
+    let desc: String = r
+        .opt("description")
+        .unwrap_or("Imported invoice")
+        .chars()
+        .take(500)
+        .collect();
+    let paid = if status == "paid" {
+        amount
+    } else {
+        Decimal::ZERO
+    };
     let id = Uuid::new_v4();
     // Insert as draft so the item guard allows the line, then finalize.
     sqlx::query("INSERT INTO invoices (id, customer_id, currency, status, subtotal, total, amount_paid, issued_at, due_at, paid_at, created_at) VALUES ($1,$2,$3,'draft',$4,$4,$5,$6,$7,$8,$6)")
@@ -292,36 +362,70 @@ async fn invoice_row(tx: &mut Transaction<'_, Postgres>, r: &Row<'_>) -> Result<
     sqlx::query("INSERT INTO invoice_items (id, invoice_id, description, quantity, unit_price, amount) VALUES ($1,$2,$3,1,$4,$4)")
         .bind(Uuid::new_v4()).bind(id).bind(&desc).bind(amount)
         .execute(&mut **tx).await.map_err(|_| (None, "error.import_db"))?;
-    sqlx::query("UPDATE invoices SET number = $2, status = $3, finalized_at = issued_at WHERE id = $1")
-        .bind(id).bind(number).bind(&status)
-        .execute(&mut **tx).await.map_err(|_| (None, "error.import_db"))?;
+    sqlx::query(
+        "UPDATE invoices SET number = $2, status = $3, finalized_at = issued_at WHERE id = $1",
+    )
+    .bind(id)
+    .bind(number)
+    .bind(&status)
+    .execute(&mut **tx)
+    .await
+    .map_err(|_| (None, "error.import_db"))?;
     Ok(Outcome::Created)
 }
 
 /// Validate (and unless `dry_run`, apply) `rows[1..]` using `mapping`
 /// (field → header). Each row runs in a savepoint so one bad row can't poison
 /// the rest; the outer transaction is committed only for a clean live run.
-pub async fn run(pool: &PgPool, kind: &str, rows: &[Vec<String>], mapping: &HashMap<String, String>, dry_run: bool) -> AppResult<Report> {
+pub async fn run(
+    pool: &PgPool,
+    kind: &str,
+    rows: &[Vec<String>],
+    mapping: &HashMap<String, String>,
+    dry_run: bool,
+) -> AppResult<Report> {
     let spec = fields(kind).ok_or(AppError::Validation("error.import_kind"))?;
-    let headers = rows.first().ok_or(AppError::Validation("error.import_empty"))?;
+    let headers = rows
+        .first()
+        .ok_or(AppError::Validation("error.import_empty"))?;
     let mut idx: HashMap<&str, usize> = HashMap::new();
     for (f, _) in spec {
         if let Some(h) = mapping.get(*f).filter(|h| !h.is_empty()) {
-            let i = headers.iter().position(|x| x == h).ok_or(AppError::Validation("error.import_mapping"))?;
+            let i = headers
+                .iter()
+                .position(|x| x == h)
+                .ok_or(AppError::Validation("error.import_mapping"))?;
             idx.insert(f, i);
         }
     }
-    if mapping.keys().any(|k| !spec.iter().any(|(f, _)| f == k)) || spec.iter().any(|(f, req)| *req && !idx.contains_key(f)) {
+    if mapping.keys().any(|k| !spec.iter().any(|(f, _)| f == k))
+        || spec.iter().any(|(f, req)| *req && !idx.contains_key(f))
+    {
         return Err(AppError::Validation("error.import_mapping"));
     }
-    let default_cur: String = sqlx::query_scalar("SELECT code::text FROM currencies ORDER BY is_default DESC, code LIMIT 1")
-        .fetch_optional(pool).await.map_err(db_err)?.unwrap_or_else(|| "EUR".into());
+    let default_cur: String = sqlx::query_scalar(
+        "SELECT code::text FROM currencies ORDER BY is_default DESC, code LIMIT 1",
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?
+    .unwrap_or_else(|| "EUR".into());
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let mut rep = Report { total: rows.len() - 1, created: 0, skipped: 0, errors: Vec::new(), error_count: 0, committed: false };
+    let mut rep = Report {
+        total: rows.len() - 1,
+        created: 0,
+        skipped: 0,
+        errors: Vec::new(),
+        error_count: 0,
+        committed: false,
+    };
     for (n, cells) in rows.iter().enumerate().skip(1) {
         let r = Row { cells, idx: &idx };
         let missing = spec.iter().find(|(f, req)| *req && r.get(f).is_empty());
-        sqlx::query("SAVEPOINT row").execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query("SAVEPOINT row")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
         let res = match missing {
             Some((f, _)) => Err((Some(*f), "error.field_required")),
             None => match kind {
@@ -334,10 +438,17 @@ pub async fn run(pool: &PgPool, kind: &str, rows: &[Vec<String>], mapping: &Hash
             Ok(Outcome::Created) => rep.created += 1,
             Ok(Outcome::Skipped) => rep.skipped += 1,
             Err((field, code)) => {
-                sqlx::query("ROLLBACK TO SAVEPOINT row").execute(&mut *tx).await.map_err(db_err)?;
+                sqlx::query("ROLLBACK TO SAVEPOINT row")
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(db_err)?;
                 rep.error_count += 1;
                 if rep.errors.len() < MAX_ERRORS {
-                    rep.errors.push(RowError { row: n, field: field.map(str::to_string), code });
+                    rep.errors.push(RowError {
+                        row: n,
+                        field: field.map(str::to_string),
+                        code,
+                    });
                 }
             }
         }
@@ -358,14 +469,24 @@ mod tests {
     #[test]
     fn parses_quotes_crlf_and_semicolons() {
         let r = parse("\u{feff}a,b\r\n\"x, \"\"y\"\"\",2\n\n3,\"multi\nline\"").unwrap();
-        assert_eq!(r, vec![vec!["a", "b"], vec!["x, \"y\"", "2"], vec!["3", "multi\nline"]]);
+        assert_eq!(
+            r,
+            vec![
+                vec!["a", "b"],
+                vec!["x, \"y\"", "2"],
+                vec!["3", "multi\nline"]
+            ]
+        );
         assert_eq!(parse("a;b\n1;2").unwrap()[1], vec!["1", "2"]);
         assert!(parse("a,\"open").is_err());
     }
 
     #[test]
     fn suggests_aliases() {
-        let h: Vec<String> = ["E-mail", "Company Name", "Zip"].iter().map(|s| s.to_string()).collect();
+        let h: Vec<String> = ["E-mail", "Company Name", "Zip"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         let m = suggest("clients", &h);
         assert_eq!(m["email"], "E-mail");
         assert_eq!(m["organization"], "Company Name");

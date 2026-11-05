@@ -18,45 +18,108 @@ macro_rules! row {
     };
 }
 
-row!(PCurrency { code: String = "text" });
-row!(PUser {
-    id: i64 = "int", first_name: String = "text", last_name: String = "text",
-    email: String = "text", role_id: i64 = "int",
+row!(PCurrency {
+    code: String = "text"
 });
-row!(PCredit { user_id: i64 = "int", currency_code: String = "text", amount: Decimal = "dec" });
-row!(PCategory { id: i64 = "int", name: String = "text", sort: i64 = "int" });
+row!(PUser {
+    id: i64 = "int",
+    first_name: String = "text",
+    last_name: String = "text",
+    email: String = "text",
+    role_id: i64 = "int",
+});
+row!(PCredit {
+    user_id: i64 = "int",
+    currency_code: String = "text",
+    amount: Decimal = "dec"
+});
+row!(PCategory {
+    id: i64 = "int",
+    name: String = "text",
+    sort: i64 = "int"
+});
 row!(PProduct {
-    id: i64 = "int", category_id: i64 = "int", name: String = "text", description: String = "text",
-    hidden: bool = "flag", sort: i64 = "int",
+    id: i64 = "int",
+    category_id: i64 = "int",
+    name: String = "text",
+    description: String = "text",
+    hidden: bool = "flag",
+    sort: i64 = "int",
 });
 row!(PPlan {
-    id: i64 = "int", priceable_id: i64 = "int", priceable_type: String = "text", r#type: String = "text",
-    billing_period: i64 = "int", billing_unit: String = "text",
+    id: i64 = "int",
+    priceable_id: i64 = "int",
+    priceable_type: String = "text",
+    r#type: String = "text",
+    billing_period: i64 = "int",
+    billing_unit: String = "text",
 });
-row!(PPrice { plan_id: i64 = "int", currency_code: String = "text", price: Decimal = "dec", setup_fee: Decimal = "dec" });
+row!(PPrice {
+    plan_id: i64 = "int",
+    currency_code: String = "text",
+    price: Decimal = "dec",
+    setup_fee: Decimal = "dec"
+});
 row!(PService {
-    id: i64 = "int", user_id: i64 = "int", product_id: i64 = "int", plan_id: i64 = "int",
-    status: String = "text", price: Decimal = "dec", currency_code: String = "text",
-    expires_at: String = "text", created_at: String = "text",
+    id: i64 = "int",
+    user_id: i64 = "int",
+    product_id: i64 = "int",
+    plan_id: i64 = "int",
+    status: String = "text",
+    price: Decimal = "dec",
+    currency_code: String = "text",
+    expires_at: String = "text",
+    created_at: String = "text",
 });
 row!(PInvoice {
-    id: i64 = "int", number: String = "text", user_id: i64 = "int", status: String = "text",
-    currency_code: String = "text", due_at: String = "text", created_at: String = "text",
+    id: i64 = "int",
+    number: String = "text",
+    user_id: i64 = "int",
+    status: String = "text",
+    currency_code: String = "text",
+    due_at: String = "text",
+    created_at: String = "text",
 });
 row!(PInvoiceItem {
-    id: i64 = "int", invoice_id: i64 = "int", description: String = "text", price: Decimal = "dec",
-    quantity: Decimal = "dec", reference_id: i64 = "int", reference_type: String = "text",
+    id: i64 = "int",
+    invoice_id: i64 = "int",
+    description: String = "text",
+    price: Decimal = "dec",
+    quantity: Decimal = "dec",
+    reference_id: i64 = "int",
+    reference_type: String = "text",
 });
 row!(PTransaction {
-    id: i64 = "int", invoice_id: i64 = "int", gateway_id: i64 = "int", amount: Decimal = "dec",
-    fee: Decimal = "dec", transaction_id: String = "text", status: String = "text", created_at: String = "text",
+    id: i64 = "int",
+    invoice_id: i64 = "int",
+    gateway_id: i64 = "int",
+    amount: Decimal = "dec",
+    fee: Decimal = "dec",
+    transaction_id: String = "text",
+    status: String = "text",
+    created_at: String = "text",
 });
-row!(PGateway { id: i64 = "int", name: String = "text", extension: String = "text" });
+row!(PGateway {
+    id: i64 = "int",
+    name: String = "text",
+    extension: String = "text"
+});
 row!(PTicket {
-    id: i64 = "int", user_id: i64 = "int", subject: String = "text", status: String = "text",
-    priority: String = "text", department: String = "text", created_at: String = "text",
+    id: i64 = "int",
+    user_id: i64 = "int",
+    subject: String = "text",
+    status: String = "text",
+    priority: String = "text",
+    department: String = "text",
+    created_at: String = "text",
 });
-row!(PMessage { id: i64 = "int", ticket_id: i64 = "int", user_id: i64 = "int", message: String = "text", created_at: String = "text" });
+row!(PMessage {
+    id: i64 = "int",
+    ticket_id: i64 = "int",
+    user_id: i64 = "int",
+    message: String = "text",
+    created_at: String = "text"
+});
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
@@ -102,17 +165,24 @@ pub fn convert(x: &PaymenterExport) -> (WhmcsData, Vec<String>) {
     }
     let mut user_cur: HashMap<i64, String> = HashMap::new();
     for s in &x.services {
-        user_cur.entry(s.user_id).or_insert_with(|| s.currency_code.clone());
+        user_cur
+            .entry(s.user_id)
+            .or_insert_with(|| s.currency_code.clone());
     }
     for i in &x.invoices {
-        user_cur.entry(i.user_id).or_insert_with(|| i.currency_code.clone());
+        user_cur
+            .entry(i.user_id)
+            .or_insert_with(|| i.currency_code.clone());
     }
     for u in &x.users {
         if u.role_id > 0 {
             continue; // staff/admin accounts are not clients
         }
         let cr = credit.get(&u.id);
-        let code = cr.map(|c| c.currency_code.as_str()).or(user_cur.get(&u.id).map(String::as_str)).unwrap_or("");
+        let code = cr
+            .map(|c| c.currency_code.as_str())
+            .or(user_cur.get(&u.id).map(String::as_str))
+            .unwrap_or("");
         w.clients.push(Client {
             id: u.id,
             firstname: u.first_name.clone(),
@@ -124,10 +194,20 @@ pub fn convert(x: &PaymenterExport) -> (WhmcsData, Vec<String>) {
             ..Default::default()
         });
     }
-    let staff: std::collections::HashSet<i64> = x.users.iter().filter(|u| u.role_id > 0).map(|u| u.id).collect();
+    let staff: std::collections::HashSet<i64> = x
+        .users
+        .iter()
+        .filter(|u| u.role_id > 0)
+        .map(|u| u.id)
+        .collect();
 
     for c in &x.categories {
-        w.product_groups.push(ProductGroup { id: c.id, name: c.name.clone(), hidden: false, order: c.sort as i32 });
+        w.product_groups.push(ProductGroup {
+            id: c.id,
+            name: c.name.clone(),
+            hidden: false,
+            order: c.sort as i32,
+        });
     }
     for p in &x.products {
         w.products.push(Product {
@@ -149,13 +229,20 @@ pub fn convert(x: &PaymenterExport) -> (WhmcsData, Vec<String>) {
         .collect();
     let mut rows: HashMap<(i64, i64), Pricing> = HashMap::new();
     for pr in &x.prices {
-        let Some(plan) = plans.get(&pr.plan_id) else { continue };
+        let Some(plan) = plans.get(&pr.plan_id) else {
+            continue;
+        };
         let Some(cy) = plan_cycle(plan) else {
-            warn.push(format!("paymenter plan {}: unsupported period {} {}, skipped", plan.id, plan.billing_period, plan.billing_unit));
+            warn.push(format!(
+                "paymenter plan {}: unsupported period {} {}, skipped",
+                plan.id, plan.billing_period, plan.billing_unit
+            ));
             continue;
         };
         let cid = cur.id(&pr.currency_code);
-        let row = rows.entry((plan.priceable_id, cid)).or_insert_with(|| foreign::disabled_pricing(plan.priceable_id, cid));
+        let row = rows
+            .entry((plan.priceable_id, cid))
+            .or_insert_with(|| foreign::disabled_pricing(plan.priceable_id, cid));
         foreign::set_price(row, cy, pr.price, pr.setup_fee);
     }
     let mut rows: Vec<_> = rows.into_values().collect();
@@ -163,7 +250,10 @@ pub fn convert(x: &PaymenterExport) -> (WhmcsData, Vec<String>) {
     w.pricing = rows;
 
     for s in &x.services {
-        let cycle = plans.get(&s.plan_id).and_then(|p| plan_cycle(p)).unwrap_or("Monthly");
+        let cycle = plans
+            .get(&s.plan_id)
+            .and_then(|p| plan_cycle(p))
+            .unwrap_or("Monthly");
         w.hosting.push(Hosting {
             id: s.id,
             userid: s.user_id,
@@ -186,7 +276,11 @@ pub fn convert(x: &PaymenterExport) -> (WhmcsData, Vec<String>) {
 
     let mut totals: HashMap<i64, Decimal> = HashMap::new();
     for l in &x.invoice_items {
-        let qty = if l.quantity.is_zero() { Decimal::ONE } else { l.quantity };
+        let qty = if l.quantity.is_zero() {
+            Decimal::ONE
+        } else {
+            l.quantity
+        };
         let amount = (l.price * qty).round_dp(2);
         *totals.entry(l.invoice_id).or_default() += amount;
         let svc = l.reference_type.ends_with("Service");
@@ -202,17 +296,32 @@ pub fn convert(x: &PaymenterExport) -> (WhmcsData, Vec<String>) {
     }
     let mut paid_at: HashMap<i64, String> = HashMap::new();
     let gateways: HashMap<i64, &PGateway> = x.gateways.iter().map(|g| (g.id, g)).collect();
-    let inv_user: HashMap<i64, (i64, &str)> = x.invoices.iter().map(|i| (i.id, (i.user_id, i.currency_code.as_str()))).collect();
+    let inv_user: HashMap<i64, (i64, &str)> = x
+        .invoices
+        .iter()
+        .map(|i| (i.id, (i.user_id, i.currency_code.as_str())))
+        .collect();
     for t in &x.invoice_transactions {
         if !(t.status.is_empty() || t.status == "succeeded") {
             continue;
         }
         let Some((uid, code)) = inv_user.get(&t.invoice_id) else {
-            warn.push(format!("paymenter transaction {}: unknown invoice {}, skipped", t.id, t.invoice_id));
+            warn.push(format!(
+                "paymenter transaction {}: unknown invoice {}, skipped",
+                t.id, t.invoice_id
+            ));
             continue;
         };
-        paid_at.entry(t.invoice_id).or_insert_with(|| t.created_at.clone());
-        let g = gateways.get(&t.gateway_id).map(|g| if g.extension.is_empty() { g.name.clone() } else { g.extension.clone() });
+        paid_at
+            .entry(t.invoice_id)
+            .or_insert_with(|| t.created_at.clone());
+        let g = gateways.get(&t.gateway_id).map(|g| {
+            if g.extension.is_empty() {
+                g.name.clone()
+            } else {
+                g.extension.clone()
+            }
+        });
         w.transactions.push(Transaction {
             id: t.id,
             userid: *uid,
@@ -238,7 +347,14 @@ pub fn convert(x: &PaymenterExport) -> (WhmcsData, Vec<String>) {
             invoicenum: i.number.clone(),
             date: parse_date(&i.created_at),
             duedate: parse_date(&i.due_at),
-            datepaid: if status == "Paid" { paid_at.get(&i.id).and_then(|d| parse_date(d)).or(parse_date(&i.created_at)) } else { None },
+            datepaid: if status == "Paid" {
+                paid_at
+                    .get(&i.id)
+                    .and_then(|d| parse_date(d))
+                    .or(parse_date(&i.created_at))
+            } else {
+                None
+            },
             subtotal: total,
             total,
             status: status.into(),
@@ -253,15 +369,27 @@ pub fn convert(x: &PaymenterExport) -> (WhmcsData, Vec<String>) {
         msgs.entry(m.ticket_id).or_default().push(m);
     }
     for t in &x.tickets {
-        let dname = if t.department.trim().is_empty() { "Support".to_string() } else { t.department.trim().to_string() };
+        let dname = if t.department.trim().is_empty() {
+            "Support".to_string()
+        } else {
+            t.department.trim().to_string()
+        };
         let next = depts.len() as i64 + 1;
         let did = *depts.entry(dname.clone()).or_insert_with(|| {
-            w.ticket_departments.push(TicketDepartment { id: next, name: dname.clone(), ..Default::default() });
+            w.ticket_departments.push(TicketDepartment {
+                id: next,
+                name: dname.clone(),
+                ..Default::default()
+            });
             next
         });
         let mut ms = msgs.remove(&t.id).unwrap_or_default();
         ms.sort_by_key(|m| (m.created_at.clone(), m.id));
-        let first = if ms.is_empty() { String::new() } else { ms.remove(0).message.clone() };
+        let first = if ms.is_empty() {
+            String::new()
+        } else {
+            ms.remove(0).message.clone()
+        };
         w.tickets.push(Ticket {
             id: t.id,
             tid: format!("P{}", t.id),
@@ -283,7 +411,11 @@ pub fn convert(x: &PaymenterExport) -> (WhmcsData, Vec<String>) {
             w.ticket_replies.push(TicketReply {
                 id: m.id,
                 tid: t.id,
-                admin: if m.user_id != t.user_id || staff.contains(&m.user_id) { format!("staff #{}", m.user_id) } else { String::new() },
+                admin: if m.user_id != t.user_id || staff.contains(&m.user_id) {
+                    format!("staff #{}", m.user_id)
+                } else {
+                    String::new()
+                },
                 date: parse_date(&m.created_at),
                 message: m.message.clone(),
             });

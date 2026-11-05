@@ -172,26 +172,37 @@ pub const PROFORMA_KEY: &str = "billing.proforma";
 
 /// WHMCS "Sequential Paid Invoice Numbering": unpaid invoices are proforma.
 pub async fn proforma_enabled(tx: &mut Tx<'_>) -> AppResult<bool> {
-    let v: Option<serde_json::Value> = sqlx::query_scalar("SELECT value FROM system_settings WHERE key = $1")
-        .bind(PROFORMA_KEY)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    let v: Option<serde_json::Value> =
+        sqlx::query_scalar("SELECT value FROM system_settings WHERE key = $1")
+            .bind(PROFORMA_KEY)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(db_err)?;
     Ok(v.and_then(|v| v.as_bool()).unwrap_or(false))
 }
 
 /// Per-entity, per-year numbering when legal entities exist; else the
 /// legacy global sequence.
-async fn next_number(tx: &mut Tx<'_>, entity: Option<&crate::legal_entities::LegalEntity>, kind: &str) -> AppResult<String> {
+async fn next_number(
+    tx: &mut Tx<'_>,
+    entity: Option<&crate::legal_entities::LegalEntity>,
+    kind: &str,
+) -> AppResult<String> {
     if let Some(e) = entity {
-        let year: i32 = sqlx::query_scalar("SELECT extract(year FROM now() AT TIME ZONE 'UTC')::int").fetch_one(&mut **tx).await.map_err(db_err)?;
+        let year: i32 =
+            sqlx::query_scalar("SELECT extract(year FROM now() AT TIME ZONE 'UTC')::int")
+                .fetch_one(&mut **tx)
+                .await
+                .map_err(db_err)?;
         return crate::legal_entities::next_number(tx, e, kind, year).await;
     }
-    let seq: i64 = sqlx::query_scalar("UPDATE invoice_sequences SET next = next + 1 WHERE name = $1 RETURNING next - 1")
-        .bind(kind)
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    let seq: i64 = sqlx::query_scalar(
+        "UPDATE invoice_sequences SET next = next + 1 WHERE name = $1 RETURNING next - 1",
+    )
+    .bind(kind)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(db_err)?;
     let prefix = match kind {
         "credit_note" => "CN",
         "debit_note" => "DN",
@@ -244,15 +255,24 @@ pub async fn finalize(tx: &mut Tx<'_>, invoice_id: Uuid, due_days: i64) -> AppRe
         crate::tax::apply(tx, invoice_id).await?;
     }
     let entity = crate::legal_entities::resolve(tx, invoice_id).await?;
-    let due_days = entity.as_ref().and_then(|e| e.due_days).map_or(due_days, i64::from);
+    let due_days = entity
+        .as_ref()
+        .and_then(|e| e.due_days)
+        .map_or(due_days, i64::from);
     // Proforma mode: a payable invoice gets its legal number only once paid.
-    let total: Decimal = sqlx::query_scalar("SELECT total FROM invoices WHERE id = $1").bind(invoice_id).fetch_one(&mut **tx).await.map_err(db_err)?;
+    let total: Decimal = sqlx::query_scalar("SELECT total FROM invoices WHERE id = $1")
+        .bind(invoice_id)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_err)?;
     let number = if kind == "invoice" && total > Decimal::ZERO && proforma_enabled(tx).await? {
         None
     } else {
         Some(next_number(tx, entity.as_ref(), &kind).await?)
     };
-    let snapshot = entity.as_ref().map(|e| serde_json::to_value(e).unwrap_or_default());
+    let snapshot = entity
+        .as_ref()
+        .map(|e| serde_json::to_value(e).unwrap_or_default());
     // A zero-total invoice is paid on issue; credit notes are settled by definition.
     sqlx::query_as(&format!(
         "UPDATE invoices SET number = $2, finalized_at = now(), issued_at = now(),
@@ -487,7 +507,11 @@ pub async fn create_pending_multi(
         if inv.customer_id != first.customer_id || inv.currency != first.currency {
             return Err(AppError::Validation("error.merge_mixed"));
         }
-        if inv.status != "unpaid" || inv.amount_paid > Decimal::ZERO || inv.kind != "invoice" || inv.balance() <= Decimal::ZERO {
+        if inv.status != "unpaid"
+            || inv.amount_paid > Decimal::ZERO
+            || inv.kind != "invoice"
+            || inv.balance() <= Decimal::ZERO
+        {
             return Err(AppError::Conflict("error.invoice_not_payable"));
         }
     }
@@ -747,21 +771,31 @@ pub struct DebitLine {
 
 /// Issue a debit note against a finalized invoice: an additional,
 /// separately payable charge (late fee, under-billing, extra usage…).
-pub async fn debit_note(pool: &PgPool, invoice_id: Uuid, lines: &[DebitLine], reason: &str, due_days: i64) -> AppResult<Invoice> {
+pub async fn debit_note(
+    pool: &PgPool,
+    invoice_id: Uuid,
+    lines: &[DebitLine],
+    reason: &str,
+    due_days: i64,
+) -> AppResult<Invoice> {
     let reason = reason.trim();
     if lines.is_empty() || lines.len() > 50 || reason.len() > 2000 {
         return Err(AppError::Validation("error.validation"));
     }
-    if lines.iter().any(|l| l.quantity <= Decimal::ZERO || l.unit_price <= Decimal::ZERO) {
+    if lines
+        .iter()
+        .any(|l| l.quantity <= Decimal::ZERO || l.unit_price <= Decimal::ZERO)
+    {
         return Err(AppError::Validation("error.debit_note_amount"));
     }
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let orig: Option<(Uuid, String, String, String)> =
-        sqlx::query_as("SELECT customer_id, currency::text, status, kind FROM invoices WHERE id = $1 FOR UPDATE")
-            .bind(invoice_id)
-            .fetch_optional(&mut *tx)
-            .await
-            .map_err(db_err)?;
+    let orig: Option<(Uuid, String, String, String)> = sqlx::query_as(
+        "SELECT customer_id, currency::text, status, kind FROM invoices WHERE id = $1 FOR UPDATE",
+    )
+    .bind(invoice_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_err)?;
     let (customer, currency, status, kind) = orig.ok_or(AppError::NotFound)?;
     if kind != "invoice" || !matches!(status.as_str(), "unpaid" | "paid") {
         return Err(AppError::Conflict("error.invoice_not_debitable"));
@@ -805,7 +839,12 @@ pub async fn debit_notes_for(pool: &PgPool, invoice_id: Uuid) -> AppResult<Vec<I
 
 /// Reason text stored on a credit/debit note.
 pub async fn note_reason(pool: &PgPool, id: Uuid) -> AppResult<String> {
-    sqlx::query_scalar("SELECT note_reason FROM invoices WHERE id = $1").bind(id).fetch_optional(pool).await.map_err(db_err).map(Option::unwrap_or_default)
+    sqlx::query_scalar("SELECT note_reason FROM invoices WHERE id = $1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
+        .map(Option::unwrap_or_default)
 }
 
 pub async fn credit_notes_for(pool: &PgPool, invoice_id: Uuid) -> AppResult<Vec<Invoice>> {
@@ -819,7 +858,9 @@ pub async fn credit_notes_for(pool: &PgPool, invoice_id: Uuid) -> AppResult<Vec<
 /// Number shown to people: the real number, or `PF-XXXXXXXX` for an
 /// unnumbered proforma (same label the cron SQL builds with COALESCE).
 pub fn display_number(number: Option<String>, id: Uuid) -> String {
-    number.filter(|n| !n.is_empty()).unwrap_or_else(|| format!("PF-{}", id.to_string()[..8].to_uppercase()))
+    number
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| format!("PF-{}", id.to_string()[..8].to_uppercase()))
 }
 
 #[cfg(test)]

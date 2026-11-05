@@ -56,7 +56,9 @@ pub fn placeholders(s: &str) -> BTreeSet<String> {
             rest = &inner[j + 2..];
             continue;
         }
-        let end = after.find(|c: char| !(c.is_alphanumeric() || c == '_')).unwrap_or(after.len());
+        let end = after
+            .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+            .unwrap_or(after.len());
         if end > 0 && end <= 64 && after[end..].starts_with('}') {
             out.insert(format!("{{{}}}", &after[..end]));
             rest = &after[end + 1..];
@@ -80,9 +82,7 @@ fn normalize_code(raw: &str) -> Result<String, AppError> {
     let code = raw.trim().to_ascii_lowercase();
     if code.len() < 2
         || code.len() > 10
-        || !code
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+        || !code.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
         || code.starts_with('-')
         || code.ends_with('-')
     {
@@ -180,13 +180,25 @@ pub struct ListQ {
 }
 
 fn check_lang(s: &AppState, lang: &str) -> AppResult<()> {
-    if s.i18n.has(lang) { Ok(()) } else { Err(AppError::Validation("error.unknown_language")) }
+    if s.i18n.has(lang) {
+        Ok(())
+    } else {
+        Err(AppError::Validation("error.unknown_language"))
+    }
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/translations", params(ListQ), responses((status = 200)))]
-pub async fn list(State(s): State<AppState>, _p: RequirePermission<perms::SettingsManage>, Query(q): Query<ListQ>) -> ApiResult<Json<Value>> {
+pub async fn list(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::SettingsManage>,
+    Query(q): Query<ListQ>,
+) -> ApiResult<Json<Value>> {
     check_lang(&s, &q.lang)?;
-    let base = s.i18n.messages(pelty_core::i18n::BASE).cloned().unwrap_or_default();
+    let base = s
+        .i18n
+        .messages(pelty_core::i18n::BASE)
+        .cloned()
+        .unwrap_or_default();
     let file = s.i18n.messages(&q.lang).cloned().unwrap_or_default();
     let ov: HashMap<String, String> = db::for_lang(&s.pool, &q.lang).await?.into_iter().collect();
     let needle = q.q.trim().to_lowercase();
@@ -200,9 +212,15 @@ pub async fn list(State(s): State<AppState>, _p: RequirePermission<perms::Settin
             _ => true,
         })
         .filter(|(k, v)| {
-            needle.is_empty() || k.to_lowercase().contains(&needle) || v.to_lowercase().contains(&needle)
-                || file.get(*k).is_some_and(|f| f.to_lowercase().contains(&needle))
-                || ov.get(*k).is_some_and(|o| o.to_lowercase().contains(&needle))
+            needle.is_empty()
+                || k.to_lowercase().contains(&needle)
+                || v.to_lowercase().contains(&needle)
+                || file
+                    .get(*k)
+                    .is_some_and(|f| f.to_lowercase().contains(&needle))
+                || ov
+                    .get(*k)
+                    .is_some_and(|o| o.to_lowercase().contains(&needle))
         })
         .map(|(k, v)| json!({ "key": k, "base": v, "file": file.get(k), "override": ov.get(k) }))
         .collect();
@@ -252,7 +270,11 @@ pub async fn export_json(
     Query(q): Query<ExportQ>,
 ) -> ApiResult<Response> {
     check_lang(&s, &q.lang)?;
-    let base = s.i18n.messages(pelty_core::i18n::BASE).cloned().unwrap_or_default();
+    let base = s
+        .i18n
+        .messages(pelty_core::i18n::BASE)
+        .cloned()
+        .unwrap_or_default();
     let file = s.i18n.messages(&q.lang).cloned().unwrap_or_default();
     let ov: HashMap<String, String> = db::for_lang(&s.pool, &q.lang).await?.into_iter().collect();
     let mut out = BTreeMap::new();
@@ -284,8 +306,14 @@ pub async fn export_json(
     let name = format!("pelty-{}-{}.json", q.lang, q.mode);
     Ok((
         [
-            (header::CONTENT_TYPE, "application/json; charset=utf-8".to_string()),
-            (header::CONTENT_DISPOSITION, format!("attachment; filename=\"{name}\"")),
+            (
+                header::CONTENT_TYPE,
+                "application/json; charset=utf-8".to_string(),
+            ),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{name}\""),
+            ),
         ],
         body,
     )
@@ -313,7 +341,11 @@ pub async fn import_json(
     if b.entries.len() > 20_000 {
         return Err(AppError::Validation("error.translation_import_too_large").into());
     }
-    let base = s.i18n.messages(pelty_core::i18n::BASE).cloned().unwrap_or_default();
+    let base = s
+        .i18n
+        .messages(pelty_core::i18n::BASE)
+        .cloned()
+        .unwrap_or_default();
     let mut saved = 0u32;
     let mut skipped = 0u32;
     for (key, value) in &b.entries {
@@ -342,7 +374,9 @@ pub async fn import_json(
         json!({ "saved": saved, "skipped": skipped }),
     )
     .await?;
-    Ok(Json(json!({ "lang": b.lang, "saved": saved, "skipped": skipped })))
+    Ok(Json(
+        json!({ "lang": b.lang, "saved": saved, "skipped": skipped }),
+    ))
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -353,9 +387,18 @@ pub struct PutBody {
 }
 
 #[utoipa::path(put, path = "/api/v1/admin/translations", request_body = PutBody, responses((status = 200), (status = 422)))]
-pub async fn put(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::SettingsManage>, Json(b): Json<PutBody>) -> ApiResult<Json<Value>> {
+pub async fn put(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::SettingsManage>,
+    Json(b): Json<PutBody>,
+) -> ApiResult<Json<Value>> {
     check_lang(&s, &b.lang)?;
-    let base = s.i18n.messages(pelty_core::i18n::BASE).and_then(|m| m.get(&b.key)).cloned().ok_or(AppError::Validation("error.unknown_translation_key"))?;
+    let base = s
+        .i18n
+        .messages(pelty_core::i18n::BASE)
+        .and_then(|m| m.get(&b.key))
+        .cloned()
+        .ok_or(AppError::Validation("error.unknown_translation_key"))?;
     if b.value.trim().is_empty() || b.value.chars().count() > MAX_LEN {
         return Err(AppError::Validation("error.translation_value_invalid").into());
     }
@@ -365,8 +408,18 @@ pub async fn put(State(s): State<AppState>, RequirePermission(u, _): RequirePerm
     }
     db::set(&s.pool, &b.lang, &b.key, &b.value, u.user_id).await?;
     reload(&s).await?;
-    audit::record(&s.pool, Some(u.user_id), "translation.override_set", Some(&format!("{}:{}", b.lang, b.key)), u.ip.as_deref(), json!({ "lang": b.lang, "key": b.key })).await?;
-    Ok(Json(json!({ "key": b.key, "lang": b.lang, "override": b.value, "effective": s.i18n.t(&b.lang, &b.key) })))
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "translation.override_set",
+        Some(&format!("{}:{}", b.lang, b.key)),
+        u.ip.as_deref(),
+        json!({ "lang": b.lang, "key": b.key }),
+    )
+    .await?;
+    Ok(Json(
+        json!({ "key": b.key, "lang": b.lang, "override": b.value, "effective": s.i18n.t(&b.lang, &b.key) }),
+    ))
 }
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
@@ -376,13 +429,27 @@ pub struct DelQ {
 }
 
 #[utoipa::path(delete, path = "/api/v1/admin/translations", params(DelQ), responses((status = 200), (status = 404)))]
-pub async fn remove(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::SettingsManage>, Query(q): Query<DelQ>) -> ApiResult<Json<Value>> {
+pub async fn remove(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::SettingsManage>,
+    Query(q): Query<DelQ>,
+) -> ApiResult<Json<Value>> {
     if !db::delete(&s.pool, &q.lang, &q.key).await? {
         return Err(AppError::NotFound.into());
     }
     reload(&s).await?;
-    audit::record(&s.pool, Some(u.user_id), "translation.override_removed", Some(&format!("{}:{}", q.lang, q.key)), u.ip.as_deref(), json!({})).await?;
-    Ok(Json(json!({ "key": q.key, "lang": q.lang, "effective": s.i18n.t(&q.lang, &q.key) })))
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "translation.override_removed",
+        Some(&format!("{}:{}", q.lang, q.key)),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
+    Ok(Json(
+        json!({ "key": q.key, "lang": q.lang, "effective": s.i18n.t(&q.lang, &q.key) }),
+    ))
 }
 
 #[cfg(test)]
@@ -390,9 +457,15 @@ mod tests {
     #[test]
     fn placeholders() {
         let p = super::placeholders("Hi {{name}}, pay {{ amount }} by {{due}} {{");
-        assert_eq!(p.into_iter().collect::<Vec<_>>(), vec!["{{amount}}", "{{due}}", "{{name}}"]);
+        assert_eq!(
+            p.into_iter().collect::<Vec<_>>(),
+            vec!["{{amount}}", "{{due}}", "{{name}}"]
+        );
         let p = super::placeholders("PeltyCMS {version} for {{company}}; { css } {a-b} {x");
-        assert_eq!(p.into_iter().collect::<Vec<_>>(), vec!["{version}", "{{company}}"]);
+        assert_eq!(
+            p.into_iter().collect::<Vec<_>>(),
+            vec!["{version}", "{{company}}"]
+        );
         assert!(super::placeholders("none").is_empty());
     }
 }

@@ -27,7 +27,8 @@ static COUNTRIES: LazyLock<Vec<Country>> = LazyLock::new(|| {
 });
 
 static SUBDIVISIONS: LazyLock<Vec<Subdivision>> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../../../data/geo/subdivisions.json")).expect("subdivisions.json")
+    serde_json::from_str(include_str!("../../../data/geo/subdivisions.json"))
+        .expect("subdivisions.json")
 });
 
 pub fn router() -> Router<AppState> {
@@ -50,7 +51,10 @@ pub async fn countries(State(_s): State<AppState>) -> ApiResult<Json<Value>> {
 
 /// First-level subdivisions (states / provinces / counties) for one country.
 #[utoipa::path(get, path = "/api/v1/public/geo/states", params(StatesQuery), responses((status = 200), (status = 422)))]
-pub async fn states(State(_s): State<AppState>, Query(q): Query<StatesQuery>) -> ApiResult<Json<Value>> {
+pub async fn states(
+    State(_s): State<AppState>,
+    Query(q): Query<StatesQuery>,
+) -> ApiResult<Json<Value>> {
     let code = q.country.trim().to_uppercase();
     if code.len() != 2 || !code.chars().all(|c| c.is_ascii_alphabetic()) {
         return Err(AppError::Validation("error.invalid_country").into());
@@ -65,9 +69,19 @@ mod tests {
 
     #[test]
     fn bundles_full_iso_lists() {
-        assert!(COUNTRIES.len() >= 200, "expected full country list, got {}", COUNTRIES.len());
-        assert!(SUBDIVISIONS.len() >= 4000, "expected full subdivision list, got {}", SUBDIVISIONS.len());
-        assert!(COUNTRIES.iter().any(|c| c.code == "RO" && c.name.contains("Romania")));
+        assert!(
+            COUNTRIES.len() >= 200,
+            "expected full country list, got {}",
+            COUNTRIES.len()
+        );
+        assert!(
+            SUBDIVISIONS.len() >= 4000,
+            "expected full subdivision list, got {}",
+            SUBDIVISIONS.len()
+        );
+        assert!(COUNTRIES
+            .iter()
+            .any(|c| c.code == "RO" && c.name.contains("Romania")));
         let ro: Vec<_> = SUBDIVISIONS.iter().filter(|s| s.country == "RO").collect();
         assert!(ro.len() > 30, "Romania should have counties");
         let us: Vec<_> = SUBDIVISIONS.iter().filter(|s| s.country == "US").collect();

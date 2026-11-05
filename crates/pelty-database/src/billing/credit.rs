@@ -1,7 +1,10 @@
 //! Customer credit: an append-only ledger per currency. Staff adjust it;
 //! credit is spent by applying it to an unpaid invoice, which records a
 //! `credit` gateway payment through the normal (exactly-once) payment path.
-use crate::{db_err, invoices::{self, Applied, Tx}};
+use crate::{
+    db_err,
+    invoices::{self, Applied, Tx},
+};
 use pelty_core::{AppError, AppResult};
 use rust_decimal::Decimal;
 use serde::Serialize;
@@ -65,14 +68,24 @@ async fn locked_balance(tx: &mut Tx<'_>, customer: Uuid, currency: &str) -> AppR
 }
 
 /// Staff adjustment (+ adds credit, − removes it). Returns the new balance.
-pub async fn adjust(pool: &PgPool, customer: Uuid, currency: &str, amount: Decimal, note: &str, actor: Option<Uuid>) -> AppResult<Decimal> {
+pub async fn adjust(
+    pool: &PgPool,
+    customer: Uuid,
+    currency: &str,
+    amount: Decimal,
+    note: &str,
+    actor: Option<Uuid>,
+) -> AppResult<Decimal> {
     if note.chars().count() > 500 {
         return Err(AppError::Validation("error.field_too_long"));
     }
     let currency = currency.trim().to_ascii_uppercase();
     let mut tx = pool.begin().await.map_err(db_err)?;
     let exp = invoices::exponent(&mut tx, &currency).await?;
-    if amount.is_zero() || amount.normalize().scale() > exp || amount.abs() > Decimal::from(1_000_000_000) {
+    if amount.is_zero()
+        || amount.normalize().scale() > exp
+        || amount.abs() > Decimal::from(1_000_000_000)
+    {
         return Err(AppError::Validation("error.invalid_amount"));
     }
     let bal = locked_balance(&mut tx, customer, &currency).await?;
@@ -102,7 +115,13 @@ pub struct CreditApplied {
 
 /// Apply up to `amount` (default: as much as possible) of the customer's
 /// credit to their unpaid invoice.
-pub async fn apply_to_invoice(pool: &PgPool, customer: Uuid, invoice_id: Uuid, amount: Option<Decimal>, actor: Option<Uuid>) -> AppResult<CreditApplied> {
+pub async fn apply_to_invoice(
+    pool: &PgPool,
+    customer: Uuid,
+    invoice_id: Uuid,
+    amount: Option<Decimal>,
+    actor: Option<Uuid>,
+) -> AppResult<CreditApplied> {
     let mut tx = pool.begin().await.map_err(db_err)?;
     let inv: Option<(String, String, String, Decimal, Decimal)> = sqlx::query_as(
         "SELECT status, kind, currency::text, total, amount_paid FROM invoices WHERE id = $1 AND customer_id = $2",
@@ -117,11 +136,12 @@ pub async fn apply_to_invoice(pool: &PgPool, customer: Uuid, invoice_id: Uuid, a
         return Err(AppError::Conflict("error.invoice_not_payable"));
     }
     // A deposit can't be paid with the credit it creates.
-    let deposit: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM add_funds WHERE invoice_id = $1)")
-        .bind(invoice_id)
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(db_err)?;
+    let deposit: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM add_funds WHERE invoice_id = $1)")
+            .bind(invoice_id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(db_err)?;
     if deposit {
         return Err(AppError::Conflict("error.add_funds_no_credit"));
     }
@@ -169,11 +189,22 @@ pub async fn apply_to_invoice(pool: &PgPool, customer: Uuid, invoice_id: Uuid, a
         .await
         .map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
-    Ok(CreditApplied { applied, amount: amt, balance: bal - amt })
+    Ok(CreditApplied {
+        applied,
+        amount: amt,
+        balance: bal - amt,
+    })
 }
 
 /// Return refunded credit-balance money to the ledger (inside the refund tx).
-pub(crate) async fn return_locked(tx: &mut Tx<'_>, customer: Uuid, currency: &str, amount: Decimal, invoice: Uuid, payment: Uuid) -> AppResult<()> {
+pub(crate) async fn return_locked(
+    tx: &mut Tx<'_>,
+    customer: Uuid,
+    currency: &str,
+    amount: Decimal,
+    invoice: Uuid,
+    payment: Uuid,
+) -> AppResult<()> {
     locked_balance(tx, customer, currency).await?;
     sqlx::query("INSERT INTO credit_ledger (id, customer_id, currency, amount, kind, invoice_id, payment_id, note) VALUES ($1,$2,$3,$4,'adjustment',$5,$6,'refund')")
         .bind(Uuid::new_v4())

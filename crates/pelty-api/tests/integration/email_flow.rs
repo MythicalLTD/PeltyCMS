@@ -196,7 +196,11 @@ async fn registration_sends_verification_and_verify_marks_user() {
     .await;
     assert_eq!(r.status, StatusCode::NO_CONTENT);
     // The welcome email (client_signup) also goes out; keep verification mails only.
-    let mails: Vec<_> = mails_to(&state, &e).await.into_iter().filter(|m| m.text.contains("/verify-email?token=")).collect();
+    let mails: Vec<_> = mails_to(&state, &e)
+        .await
+        .into_iter()
+        .filter(|m| m.text.contains("/verify-email?token="))
+        .collect();
     assert_eq!(mails.len(), 2);
     assert!(mails
         .iter()
@@ -232,7 +236,14 @@ async fn registration_sends_verification_and_verify_marks_user() {
         &[("cookie", &cookie), ("x-csrf-token", &csrf)],
     )
     .await;
-    assert_eq!(mails_to(&state, &e).await.iter().filter(|m| m.text.contains("/verify-email?token=")).count(), 2);
+    assert_eq!(
+        mails_to(&state, &e)
+            .await
+            .iter()
+            .filter(|m| m.text.contains("/verify-email?token="))
+            .count(),
+        2
+    );
 }
 
 #[tokio::test]

@@ -35,7 +35,11 @@ fn build_zip() -> &'static Vec<u8> {
 }
 
 fn req(token: &str, secret: &str) -> CaptchaRequest {
-    CaptchaRequest { token: token.into(), remote_ip: Some("203.0.113.7".into()), secret: secret.into() }
+    CaptchaRequest {
+        token: token.into(),
+        remote_ip: Some("203.0.113.7".into()),
+        secret: secret.into(),
+    }
 }
 
 #[test]
@@ -59,17 +63,39 @@ fn addon_error_is_returned() {
 
 #[test]
 fn infinite_loop_is_stopped_by_fuel() {
-    let a = CaptchaAddon::from_zip(build_zip(), Sandbox { fuel: 5_000_000, timeout: Duration::from_secs(30), ..Sandbox::default() }).unwrap();
+    let a = CaptchaAddon::from_zip(
+        build_zip(),
+        Sandbox {
+            fuel: 5_000_000,
+            timeout: Duration::from_secs(30),
+            ..Sandbox::default()
+        },
+    )
+    .unwrap();
     let t = Instant::now();
-    assert!(matches!(a.verify(&req("loop", "s")), Err(WasmError::Trap(_))));
+    assert!(matches!(
+        a.verify(&req("loop", "s")),
+        Err(WasmError::Trap(_))
+    ));
     assert!(t.elapsed() < Duration::from_secs(10));
 }
 
 #[test]
 fn infinite_loop_is_stopped_by_timeout() {
-    let a = CaptchaAddon::from_zip(build_zip(), Sandbox { fuel: u64::MAX, timeout: Duration::from_millis(300), ..Sandbox::default() }).unwrap();
+    let a = CaptchaAddon::from_zip(
+        build_zip(),
+        Sandbox {
+            fuel: u64::MAX,
+            timeout: Duration::from_millis(300),
+            ..Sandbox::default()
+        },
+    )
+    .unwrap();
     let t = Instant::now();
-    assert!(matches!(a.verify(&req("loop", "s")), Err(WasmError::Trap(_))));
+    assert!(matches!(
+        a.verify(&req("loop", "s")),
+        Err(WasmError::Trap(_))
+    ));
     assert!(t.elapsed() < Duration::from_secs(5));
 }
 

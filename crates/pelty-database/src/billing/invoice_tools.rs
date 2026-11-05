@@ -18,7 +18,10 @@ pub struct DueReminderSettings {
 
 impl Default for DueReminderSettings {
     fn default() -> Self {
-        Self { enabled: false, days_before: vec![3] }
+        Self {
+            enabled: false,
+            days_before: vec![3],
+        }
     }
 }
 
@@ -26,7 +29,10 @@ impl DueReminderSettings {
     pub fn normalized(mut self) -> AppResult<Self> {
         self.days_before.sort_unstable();
         self.days_before.dedup();
-        if self.days_before.len() > 5 || self.days_before.iter().any(|d| !(1..=60).contains(d)) || (self.enabled && self.days_before.is_empty()) {
+        if self.days_before.len() > 5
+            || self.days_before.iter().any(|d| !(1..=60).contains(d))
+            || (self.enabled && self.days_before.is_empty())
+        {
             return Err(AppError::Validation("error.invalid_reminder_days"));
         }
         Ok(self)
@@ -34,12 +40,23 @@ impl DueReminderSettings {
 }
 
 pub async fn due_settings(pool: &PgPool) -> AppResult<DueReminderSettings> {
-    Ok(crate::settings::get(pool, DUE_KEY).await?.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default())
+    Ok(crate::settings::get(pool, DUE_KEY)
+        .await?
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default())
 }
 
-pub async fn set_due_settings(pool: &PgPool, s: DueReminderSettings) -> AppResult<DueReminderSettings> {
+pub async fn set_due_settings(
+    pool: &PgPool,
+    s: DueReminderSettings,
+) -> AppResult<DueReminderSettings> {
     let s = s.normalized()?;
-    crate::settings::set(pool, DUE_KEY, serde_json::to_value(&s).map_err(AppError::internal)?).await?;
+    crate::settings::set(
+        pool,
+        DUE_KEY,
+        serde_json::to_value(&s).map_err(AppError::internal)?,
+    )
+    .await?;
     Ok(s)
 }
 
@@ -95,7 +112,10 @@ pub async fn run_due_reminders(pool: &PgPool, today: Date) -> AppResult<Vec<DueS
 }
 
 /// Remaining balance and status of invoices (for bulk actions).
-pub async fn balances(pool: &PgPool, ids: &[Uuid]) -> AppResult<Vec<(Uuid, String, Decimal, Uuid)>> {
+pub async fn balances(
+    pool: &PgPool,
+    ids: &[Uuid],
+) -> AppResult<Vec<(Uuid, String, Decimal, Uuid)>> {
     sqlx::query_as("SELECT id, status, GREATEST(total - amount_paid, 0), customer_id FROM invoices WHERE id = ANY($1)")
         .bind(ids)
         .fetch_all(pool)
@@ -108,10 +128,30 @@ mod tests {
     use super::*;
     #[test]
     fn normalizes() {
-        let s = DueReminderSettings { enabled: true, days_before: vec![7, 3, 7] }.normalized().unwrap();
+        let s = DueReminderSettings {
+            enabled: true,
+            days_before: vec![7, 3, 7],
+        }
+        .normalized()
+        .unwrap();
         assert_eq!(s.days_before, vec![3, 7]);
-        assert!(DueReminderSettings { enabled: true, days_before: vec![] }.normalized().is_err());
-        assert!(DueReminderSettings { enabled: false, days_before: vec![0] }.normalized().is_err());
-        assert!(DueReminderSettings { enabled: false, days_before: vec![] }.normalized().is_ok());
+        assert!(DueReminderSettings {
+            enabled: true,
+            days_before: vec![]
+        }
+        .normalized()
+        .is_err());
+        assert!(DueReminderSettings {
+            enabled: false,
+            days_before: vec![0]
+        }
+        .normalized()
+        .is_err());
+        assert!(DueReminderSettings {
+            enabled: false,
+            days_before: vec![]
+        }
+        .normalized()
+        .is_ok());
     }
 }

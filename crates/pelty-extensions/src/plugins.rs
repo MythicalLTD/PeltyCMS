@@ -181,11 +181,7 @@ impl PluginManifest {
         {
             return err(format!("unknown capability {c}"));
         }
-        if let Some(h) = self
-            .hooks
-            .iter()
-            .find(|h| *h != "*" && !is_domain_event(h))
-        {
+        if let Some(h) = self.hooks.iter().find(|h| *h != "*" && !is_domain_event(h)) {
             return err(format!("unknown hook {h}"));
         }
         if !self.hooks.is_empty() && !self.capabilities.iter().any(|c| c == "events.read") {
@@ -247,10 +243,12 @@ impl PluginManifest {
             if !seen.insert(&p.id) {
                 return err(format!("duplicate page id {}", p.id));
             }
-            crate::ui_schema::validate_page(&rules, p).map_err(|e| ManifestError(format!("page {}: {e}", p.id)))?;
+            crate::ui_schema::validate_page(&rules, p)
+                .map_err(|e| ManifestError(format!("page {}: {e}", p.id)))?;
         }
         for sl in &self.ui.slots {
-            crate::ui_schema::validate_slot(&rules, sl).map_err(|e| ManifestError(format!("slot {}: {e}", sl.slot)))?;
+            crate::ui_schema::validate_slot(&rules, sl)
+                .map_err(|e| ManifestError(format!("slot {}: {e}", sl.slot)))?;
         }
         Ok(())
     }
@@ -561,23 +559,43 @@ mod tests {
             &std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../extensions/plugins"),
         );
         assert!(reg.exists("example-webhook"));
-        let m = reg.manifest("example-provisioning").expect("declarative UI example loads");
+        let m = reg
+            .manifest("example-provisioning")
+            .expect("declarative UI example loads");
         assert_eq!(m.ui.pages.len(), 1);
         assert_eq!(m.ui.slots[0].slot, "admin.service.detail");
     }
 
     #[test]
     fn manifest_ui_pages_are_validated() {
-        let base = |ui: serde_json::Value| serde_json::json!({"id": "demo", "name": "Demo", "version": "1", "api_version": 1, "ui": ui}).to_string();
-        let page = |body: serde_json::Value| base(serde_json::json!({"pages": [{"id": "pg", "area": "admin", "title": "plugin.demo.t", "body": body}]}));
+        let base = |ui: serde_json::Value| {
+            serde_json::json!({"id": "demo", "name": "Demo", "version": "1", "api_version": 1, "ui": ui}).to_string()
+        };
+        let page = |body: serde_json::Value| {
+            base(
+                serde_json::json!({"pages": [{"id": "pg", "area": "admin", "title": "plugin.demo.t", "body": body}]}),
+            )
+        };
         PluginManifest::parse(&page(serde_json::json!({"type": "text", "text": "hi"}))).unwrap();
         assert!(PluginManifest::parse(&page(serde_json::json!({"type": "iframe"}))).is_err());
-        assert!(PluginManifest::parse(&page(serde_json::json!({"type": "embed", "src": "https://x.example"}))).is_err(), "embed needs ui.embed");
-        let bad_title = base(serde_json::json!({"pages": [{"id": "pg", "area": "admin", "title": "other.t", "body": {"type": "text"}}]}));
+        assert!(
+            PluginManifest::parse(&page(
+                serde_json::json!({"type": "embed", "src": "https://x.example"})
+            ))
+            .is_err(),
+            "embed needs ui.embed"
+        );
+        let bad_title = base(
+            serde_json::json!({"pages": [{"id": "pg", "area": "admin", "title": "other.t", "body": {"type": "text"}}]}),
+        );
         assert!(PluginManifest::parse(&bad_title).is_err());
-        let bad_slot = base(serde_json::json!({"slots": [{"slot": "admin.nowhere", "body": {"type": "text"}}]}));
+        let bad_slot = base(
+            serde_json::json!({"slots": [{"slot": "admin.nowhere", "body": {"type": "text"}}]}),
+        );
         assert!(PluginManifest::parse(&bad_slot).is_err());
-        let bad_data = base(serde_json::json!({"slots": [{"slot": "admin.dashboard", "data": {"x": {"get": "https://evil.example/"}}, "body": {"type": "text"}}]}));
+        let bad_data = base(
+            serde_json::json!({"slots": [{"slot": "admin.dashboard", "data": {"x": {"get": "https://evil.example/"}}, "body": {"type": "text"}}]}),
+        );
         assert!(PluginManifest::parse(&bad_data).is_err());
     }
 }

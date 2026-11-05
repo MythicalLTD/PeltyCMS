@@ -50,7 +50,11 @@ impl Logo {
             return None;
         }
         let img = image::load_from_memory(bytes).ok()?;
-        let img = if img.width() > 256 || img.height() > 256 { img.thumbnail(256, 256) } else { img };
+        let img = if img.width() > 256 || img.height() > 256 {
+            img.thumbnail(256, 256)
+        } else {
+            img
+        };
         let rgba = img.to_rgba8();
         let (width, height) = rgba.dimensions();
         if width == 0 || height == 0 {
@@ -63,7 +67,12 @@ impl Logo {
             alpha.push(px.0[3]);
         }
         let opaque = alpha.iter().all(|a| *a == 255);
-        Some(Self { width, height, rgb, alpha: (!opaque).then_some(alpha) })
+        Some(Self {
+            width,
+            height,
+            rgb,
+            alpha: (!opaque).then_some(alpha),
+        })
     }
 }
 
@@ -93,17 +102,31 @@ impl Font {
     fn new(data: &'static [u8], name: &'static [u8]) -> Self {
         // The bundled fonts are fixed assets; parsing them cannot fail.
         let face = ttf_parser::Face::parse(data, 0).expect("bundled font");
-        Self { face, data, name, map: RefCell::new(GlyphRemapper::new()), used: RefCell::new(BTreeMap::new()) }
+        Self {
+            face,
+            data,
+            name,
+            map: RefCell::new(GlyphRemapper::new()),
+            used: RefCell::new(BTreeMap::new()),
+        }
     }
     fn gid(&self, c: char) -> u16 {
         let c = if c == '\t' { ' ' } else { c };
-        self.face.glyph_index(c).or_else(|| self.face.glyph_index('?')).map_or(0, |g| g.0)
+        self.face
+            .glyph_index(c)
+            .or_else(|| self.face.glyph_index('?'))
+            .map_or(0, |g| g.0)
     }
     fn upem(&self) -> f32 {
         f32::from(self.face.units_per_em())
     }
     fn advance(&self, gid: u16) -> f32 {
-        f32::from(self.face.glyph_hor_advance(ttf_parser::GlyphId(gid)).unwrap_or(0)) * 1000.0 / self.upem()
+        f32::from(
+            self.face
+                .glyph_hor_advance(ttf_parser::GlyphId(gid))
+                .unwrap_or(0),
+        ) * 1000.0
+            / self.upem()
     }
     fn width(&self, s: &str, size: f32) -> f32 {
         s.chars().map(|c| self.advance(self.gid(c))).sum::<f32>() * size / 1000.0
@@ -113,7 +136,10 @@ impl Font {
         for c in s.chars() {
             let old = self.gid(c);
             let new = self.map.borrow_mut().remap(old);
-            self.used.borrow_mut().entry(new).or_insert((old, if c == '\t' { ' ' } else { c }));
+            self.used
+                .borrow_mut()
+                .entry(new)
+                .or_insert((old, if c == '\t' { ' ' } else { c }));
             out.extend_from_slice(&new.to_be_bytes());
         }
         out
@@ -127,10 +153,17 @@ struct Fonts {
 
 impl Fonts {
     fn new() -> Self {
-        Self { reg: Font::new(DEJAVU, b"PELTYA+DejaVuSans"), bold: Font::new(DEJAVU_BOLD, b"PELTYB+DejaVuSans-Bold") }
+        Self {
+            reg: Font::new(DEJAVU, b"PELTYA+DejaVuSans"),
+            bold: Font::new(DEJAVU_BOLD, b"PELTYB+DejaVuSans-Bold"),
+        }
     }
     fn get(&self, bold: bool) -> &Font {
-        if bold { &self.bold } else { &self.reg }
+        if bold {
+            &self.bold
+        } else {
+            &self.reg
+        }
     }
     fn width(&self, s: &str, size: f32, bold: bool) -> f32 {
         self.get(bold).width(s, size)
@@ -199,7 +232,14 @@ pub fn render(d: &InvoiceDoc) -> Vec<u8> {
         y -= LOGO_H + 4.0;
     }
     for (i, l) in d.seller.iter().enumerate() {
-        p.text(&fx, M, y, if i == 0 { 14.0 } else { 9.0 }, i == 0, &fx.fit(l, 9.0, 260.0));
+        p.text(
+            &fx,
+            M,
+            y,
+            if i == 0 { 14.0 } else { 9.0 },
+            i == 0,
+            &fx.fit(l, 9.0, 260.0),
+        );
         y -= if i == 0 { 18.0 } else { 12.0 };
     }
     let mut ry = H - M - 10.0;
@@ -243,8 +283,18 @@ pub fn render(d: &InvoiceDoc) -> Vec<u8> {
             header(&mut p, y);
             y -= 20.0;
         }
-        p.text(&fx, M + 4.0, y, 9.0, false, &fx.fit(&l.description, 9.0, COLS[0] - M - 80.0));
-        for (i, v) in [&l.quantity, &l.unit_price, &l.tax, &l.amount].iter().enumerate() {
+        p.text(
+            &fx,
+            M + 4.0,
+            y,
+            9.0,
+            false,
+            &fx.fit(&l.description, 9.0, COLS[0] - M - 80.0),
+        );
+        for (i, v) in [&l.quantity, &l.unit_price, &l.tax, &l.amount]
+            .iter()
+            .enumerate()
+        {
             p.right(&fx, COLS[i] - 4.0, y, 9.0, false, v);
         }
         y -= 6.0;
@@ -284,7 +334,9 @@ pub fn render(d: &InvoiceDoc) -> Vec<u8> {
     let smask = Ref::new(next + 1);
     next += 2;
     pdf.catalog(catalog).pages(tree);
-    pdf.pages(tree).kids(page_ids.iter().copied()).count(total as i32);
+    pdf.pages(tree)
+        .kids(page_ids.iter().copied())
+        .count(total as i32);
     for (i, mut pg) in pages.into_iter().enumerate() {
         pg.rule(M + 22.0, 0.8);
         let mut fy = M + 10.0;
@@ -297,7 +349,9 @@ pub fn render(d: &InvoiceDoc) -> Vec<u8> {
         let id = page_ids[i];
         let content = Ref::new(id.get() + 1);
         let mut page = pdf.page(id);
-        page.media_box(Rect::new(0.0, 0.0, W, H)).parent(tree).contents(content);
+        page.media_box(Rect::new(0.0, 0.0, W, H))
+            .parent(tree)
+            .contents(content);
         {
             let mut res = page.resources();
             res.fonts().pair(REG, f1).pair(BOLD, f2);
@@ -310,7 +364,10 @@ pub fn render(d: &InvoiceDoc) -> Vec<u8> {
     }
     if let Some(l) = &d.logo {
         let mut x = pdf.image_xobject(img, &l.rgb);
-        x.width(l.width as i32).height(l.height as i32).color_space().device_rgb();
+        x.width(l.width as i32)
+            .height(l.height as i32)
+            .color_space()
+            .device_rgb();
         x.bits_per_component(8);
         if l.alpha.is_some() {
             x.s_mask(smask);
@@ -318,7 +375,10 @@ pub fn render(d: &InvoiceDoc) -> Vec<u8> {
         x.finish();
         if let Some(a) = &l.alpha {
             let mut m = pdf.image_xobject(smask, a);
-            m.width(l.width as i32).height(l.height as i32).color_space().device_gray();
+            m.width(l.width as i32)
+                .height(l.height as i32)
+                .color_space()
+                .device_gray();
             m.bits_per_component(8);
             m.finish();
         }
@@ -339,12 +399,26 @@ fn write_font(pdf: &mut Pdf, id: Ref, f: &Font, next: &mut i32) {
     };
     let (cid, desc, file, cmap) = (alloc(), alloc(), alloc(), alloc());
     let name = Name(f.name);
-    pdf.type0_font(id).base_font(name).encoding_predefined(Name(b"Identity-H")).descendant_font(cid).to_unicode(cmap);
+    pdf.type0_font(id)
+        .base_font(name)
+        .encoding_predefined(Name(b"Identity-H"))
+        .descendant_font(cid)
+        .to_unicode(cmap);
     let used = f.used.borrow();
-    let widths: Vec<f32> = (0..f.map.borrow().num_gids()).map(|n| used.get(&n).map_or(0.0, |(old, _)| f.advance(*old))).collect();
-    let sys = SystemInfo { registry: Str(b"Adobe"), ordering: Str(b"Identity"), supplement: 0 };
+    let widths: Vec<f32> = (0..f.map.borrow().num_gids())
+        .map(|n| used.get(&n).map_or(0.0, |(old, _)| f.advance(*old)))
+        .collect();
+    let sys = SystemInfo {
+        registry: Str(b"Adobe"),
+        ordering: Str(b"Identity"),
+        supplement: 0,
+    };
     let mut c = pdf.cid_font(cid);
-    c.subtype(CidFontType::Type2).base_font(name).system_info(sys).font_descriptor(desc).default_width(0.0);
+    c.subtype(CidFontType::Type2)
+        .base_font(name)
+        .system_info(sys)
+        .font_descriptor(desc)
+        .default_width(0.0);
     c.cid_to_gid_map_predefined(Name(b"Identity"));
     c.widths().consecutive(0, widths);
     c.finish();
@@ -354,7 +428,12 @@ fn write_font(pdf: &mut Pdf, id: Ref, f: &Font, next: &mut i32) {
     pdf.font_descriptor(desc)
         .name(name)
         .flags(FontFlags::NON_SYMBOLIC)
-        .bbox(Rect::new(s(bb.x_min), s(bb.y_min), s(bb.x_max), s(bb.y_max)))
+        .bbox(Rect::new(
+            s(bb.x_min),
+            s(bb.y_min),
+            s(bb.x_max),
+            s(bb.y_max),
+        ))
         .italic_angle(0.0)
         .ascent(s(f.face.ascender()))
         .descent(s(f.face.descender()))
@@ -385,8 +464,22 @@ mod tests {
             seller: vec!["Pelty SRL".into(), "Strada Ștefan 1".into()],
             bill_to_label: "Bill to".into(),
             bill_to: vec!["Alice".into()],
-            headers: ["Description".into(), "Qty".into(), "Unit".into(), "Tax".into(), "Amount".into()],
-            lines: (0..n).map(|i| Line { description: format!("Line {i} {}", "x".repeat(200)), quantity: "1".into(), unit_price: "10.00".into(), tax: "19%".into(), amount: "10.00 €".into() }).collect(),
+            headers: [
+                "Description".into(),
+                "Qty".into(),
+                "Unit".into(),
+                "Tax".into(),
+                "Amount".into(),
+            ],
+            lines: (0..n)
+                .map(|i| Line {
+                    description: format!("Line {i} {}", "x".repeat(200)),
+                    quantity: "1".into(),
+                    unit_price: "10.00".into(),
+                    tax: "19%".into(),
+                    amount: "10.00 €".into(),
+                })
+                .collect(),
             totals: vec![("Total".into(), "11.90 EUR".into(), true)],
             notes: vec!["Reverse charge".into()],
             footer: vec!["IBAN RO00".into()],
@@ -397,9 +490,15 @@ mod tests {
     }
 
     fn pages(b: &[u8]) -> usize {
-        b.windows(b"/Type /Page\n".len()).filter(|w| *w == b"/Type /Page\n").count()
-            + b.windows(b"/Type /Page/".len()).filter(|w| *w == b"/Type /Page/").count()
-            + b.windows(b"/Type /Page ".len()).filter(|w| *w == b"/Type /Page ").count()
+        b.windows(b"/Type /Page\n".len())
+            .filter(|w| *w == b"/Type /Page\n")
+            .count()
+            + b.windows(b"/Type /Page/".len())
+                .filter(|w| *w == b"/Type /Page/")
+                .count()
+            + b.windows(b"/Type /Page ".len())
+                .filter(|w| *w == b"/Type /Page ")
+                .count()
     }
 
     #[test]
@@ -409,7 +508,12 @@ mod tests {
         assert!(one.ends_with(b"%%EOF") || one.ends_with(b"%%EOF\n"));
         assert!(one.windows(10).any(|w| w == b"INV-000042"));
         let many = render(&doc(120));
-        assert!(pages(&many) > pages(&one), "{} vs {}", pages(&many), pages(&one));
+        assert!(
+            pages(&many) > pages(&one),
+            "{} vs {}",
+            pages(&many),
+            pages(&one)
+        );
     }
 
     #[test]
@@ -429,10 +533,18 @@ mod tests {
     #[test]
     fn embeds_logo_with_alpha() {
         let mut png = Vec::new();
-        let img = image::RgbaImage::from_fn(400, 100, |x, _| image::Rgba([89, 181, 211, if x < 200 { 255 } else { 0 }]));
-        image::DynamicImage::ImageRgba8(img).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let img = image::RgbaImage::from_fn(400, 100, |x, _| {
+            image::Rgba([89, 181, 211, if x < 200 { 255 } else { 0 }])
+        });
+        image::DynamicImage::ImageRgba8(img)
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
         let logo = Logo::decode(&png).expect("decodes");
-        assert_eq!((logo.width, logo.height), (256, 64), "downscaled, aspect kept");
+        assert_eq!(
+            (logo.width, logo.height),
+            (256, 64),
+            "downscaled, aspect kept"
+        );
         assert!(logo.alpha.is_some());
         let mut d = doc(2);
         d.logo = Some(logo);

@@ -28,11 +28,17 @@ pub fn seal(s: &AppState, spec: &[SettingSpec], v: &Value, previous: &Value) -> 
                 continue;
             }
             if val.as_str() == Some(MASK) {
-                *val = previous.get(k).cloned().unwrap_or(Value::String(String::new()));
+                *val = previous
+                    .get(k)
+                    .cloned()
+                    .unwrap_or(Value::String(String::new()));
             }
             if let (Some(b), Some(plain)) = (&s.secret_box, val.as_str()) {
                 if !plain.is_empty() && !plain.starts_with(PREFIX) {
-                    *val = Value::String(format!("{PREFIX}{}", b64().encode(b.seal(plain.as_bytes()))));
+                    *val = Value::String(format!(
+                        "{PREFIX}{}",
+                        b64().encode(b.seal(plain.as_bytes()))
+                    ));
                 }
             }
         }
@@ -46,7 +52,11 @@ pub fn open(s: &AppState, v: &Value) -> Value {
     if let Some(o) = out.as_object_mut() {
         for val in o.values_mut() {
             if let Some(rest) = val.as_str().and_then(|x| x.strip_prefix(PREFIX)) {
-                let plain = s.secret_box.as_ref().and_then(|b| b.open(&b64().decode(rest).ok()?)).and_then(|p| String::from_utf8(p).ok());
+                let plain = s
+                    .secret_box
+                    .as_ref()
+                    .and_then(|b| b.open(&b64().decode(rest).ok()?))
+                    .and_then(|p| String::from_utf8(p).ok());
                 *val = Value::String(plain.unwrap_or_default());
             }
         }
@@ -72,13 +82,26 @@ mod tests {
     use super::*;
 
     fn spec() -> Vec<SettingSpec> {
-        vec![SettingSpec { key: "secret_key".into(), label: String::new(), kind: "secret".into(), required: false, choices: vec![], default: None }]
+        vec![SettingSpec {
+            key: "secret_key".into(),
+            label: String::new(),
+            kind: "secret".into(),
+            required: false,
+            choices: vec![],
+            default: None,
+        }]
     }
 
     #[test]
     fn mask_hides_only_set_secrets() {
         let v = serde_json::json!({"secret_key": "abc", "site_key": "pub"});
-        assert_eq!(mask(&spec(), &v), serde_json::json!({"secret_key": MASK, "site_key": "pub"}));
-        assert_eq!(mask(&spec(), &serde_json::json!({"secret_key": ""}))["secret_key"], "");
+        assert_eq!(
+            mask(&spec(), &v),
+            serde_json::json!({"secret_key": MASK, "site_key": "pub"})
+        );
+        assert_eq!(
+            mask(&spec(), &serde_json::json!({"secret_key": ""}))["secret_key"],
+            ""
+        );
     }
 }

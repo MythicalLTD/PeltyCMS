@@ -24,13 +24,22 @@ fn hook(input: Value) -> Result<Value, String> {
 }
 
 fn http(input: Value) -> Result<Value, String> {
-    Ok(match (input["method"].as_str().unwrap_or(""), input["path"].as_str().unwrap_or("")) {
-        ("GET", "/log") => {
-            let get = |k: &str| host::kv_get(k).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
-            json!({ "status": 200, "body": { "before": get("greet:before"), "after": get("greet:after"), "finished": get("greet:finished") } })
-        }
-        _ => json!({ "status": 404, "body": null }),
-    })
+    Ok(
+        match (
+            input["method"].as_str().unwrap_or(""),
+            input["path"].as_str().unwrap_or(""),
+        ) {
+            ("GET", "/log") => {
+                let get = |k: &str| {
+                    host::kv_get(k)
+                        .and_then(|v| v.parse::<u64>().ok())
+                        .unwrap_or(0)
+                };
+                json!({ "status": 200, "body": { "before": get("greet:before"), "after": get("greet:after"), "finished": get("greet:finished") } })
+            }
+            _ => json!({ "status": 404, "body": null }),
+        },
+    )
 }
 
 struct PeltyAddon;

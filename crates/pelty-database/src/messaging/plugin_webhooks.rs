@@ -27,8 +27,13 @@ const COLS: &str = "id, plugin_id, event, payload, status, attempts, response_st
 
 /// (url_override, secret_sealed)
 pub async fn endpoint(pool: &PgPool, plugin: &str) -> AppResult<(Option<String>, Option<Vec<u8>>)> {
-    let r: Option<(Option<String>, Option<Vec<u8>>)> =
-        sqlx::query_as("SELECT url_override, secret_sealed FROM plugin_webhooks WHERE plugin_id = $1").bind(plugin).fetch_optional(pool).await.map_err(db_err)?;
+    let r: Option<(Option<String>, Option<Vec<u8>>)> = sqlx::query_as(
+        "SELECT url_override, secret_sealed FROM plugin_webhooks WHERE plugin_id = $1",
+    )
+    .bind(plugin)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?;
     Ok(r.unwrap_or((None, None)))
 }
 
@@ -60,30 +65,62 @@ pub async fn ensure_secret(pool: &PgPool, plugin: &str, sealed: &[u8]) -> AppRes
         .execute(pool)
         .await
         .map_err(db_err)?;
-    let s: Option<Vec<u8>> = sqlx::query_scalar("SELECT secret_sealed FROM plugin_webhooks WHERE plugin_id = $1").bind(plugin).fetch_one(pool).await.map_err(db_err)?;
+    let s: Option<Vec<u8>> =
+        sqlx::query_scalar("SELECT secret_sealed FROM plugin_webhooks WHERE plugin_id = $1")
+            .bind(plugin)
+            .fetch_one(pool)
+            .await
+            .map_err(db_err)?;
     Ok(s.unwrap_or_default())
 }
 
-pub async fn create(pool: &PgPool, plugin: &str, event: &str, payload: &serde_json::Value) -> AppResult<Uuid> {
+pub async fn create(
+    pool: &PgPool,
+    plugin: &str,
+    event: &str,
+    payload: &serde_json::Value,
+) -> AppResult<Uuid> {
     let id = Uuid::new_v4();
-    sqlx::query("INSERT INTO plugin_deliveries (id, plugin_id, event, payload) VALUES ($1,$2,$3,$4)")
-        .bind(id)
-        .bind(plugin)
-        .bind(event)
-        .bind(payload)
-        .execute(pool)
-        .await
-        .map_err(db_err)?;
+    sqlx::query(
+        "INSERT INTO plugin_deliveries (id, plugin_id, event, payload) VALUES ($1,$2,$3,$4)",
+    )
+    .bind(id)
+    .bind(plugin)
+    .bind(event)
+    .bind(payload)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
     Ok(id)
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Delivery>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM plugin_deliveries WHERE id = $1")).bind(id).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {COLS} FROM plugin_deliveries WHERE id = $1"
+    ))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Record one attempt. `ok` marks it delivered; `final_fail` marks it failed.
-pub async fn record(pool: &PgPool, id: Uuid, url: &str, status: Option<u16>, error: Option<&str>, ok: bool, final_fail: bool) -> AppResult<()> {
-    let st = if ok { "delivered" } else if final_fail { "failed" } else { "pending" };
+pub async fn record(
+    pool: &PgPool,
+    id: Uuid,
+    url: &str,
+    status: Option<u16>,
+    error: Option<&str>,
+    ok: bool,
+    final_fail: bool,
+) -> AppResult<()> {
+    let st = if ok {
+        "delivered"
+    } else if final_fail {
+        "failed"
+    } else {
+        "pending"
+    };
     sqlx::query(
         "UPDATE plugin_deliveries SET attempts = attempts + 1, url = $2, response_status = $3, last_error = $4, status = $5,
          delivered_at = CASE WHEN $5 = 'delivered' THEN now() ELSE delivered_at END WHERE id = $1",
@@ -100,11 +137,23 @@ pub async fn record(pool: &PgPool, id: Uuid, url: &str, status: Option<u16>, err
 }
 
 pub async fn reset(pool: &PgPool, id: Uuid) -> AppResult<()> {
-    sqlx::query("UPDATE plugin_deliveries SET status = 'pending', delivered_at = NULL WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?;
+    sqlx::query(
+        "UPDATE plugin_deliveries SET status = 'pending', delivered_at = NULL WHERE id = $1",
+    )
+    .bind(id)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
     Ok(())
 }
 
-pub async fn list(pool: &PgPool, plugin: &str, status: Option<&str>, limit: i64, offset: i64) -> AppResult<(Vec<Delivery>, i64)> {
+pub async fn list(
+    pool: &PgPool,
+    plugin: &str,
+    status: Option<&str>,
+    limit: i64,
+    offset: i64,
+) -> AppResult<(Vec<Delivery>, i64)> {
     let rows = sqlx::query_as(&format!(
         "SELECT {COLS} FROM plugin_deliveries WHERE plugin_id = $1 AND ($2::text IS NULL OR status = $2) ORDER BY created_at DESC, id LIMIT $3 OFFSET $4"
     ))

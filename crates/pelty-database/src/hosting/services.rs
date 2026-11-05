@@ -142,7 +142,14 @@ pub async fn bill_due(
     batch: i64,
     due_days: i64,
 ) -> AppResult<Vec<Renewal>> {
-    bill_due_ahead(pool, horizon - time::Duration::days(due_days), due_days, batch, due_days).await
+    bill_due_ahead(
+        pool,
+        horizon - time::Duration::days(due_days),
+        due_days,
+        batch,
+        due_days,
+    )
+    .await
 }
 
 /// Like [`bill_due`], but each service is invoiced `products.invoice_days_before`
@@ -188,8 +195,16 @@ pub async fn bill_due_ahead(
         if still != Some(next) {
             continue;
         }
-        if let Some(inv) = renew_locked(&mut tx, sid, cust, &cur, amount, &pname, start, end, due_days).await? {
-            out.push(Renewal { service_id: sid, invoice_id: inv, customer_id: cust });
+        if let Some(inv) = renew_locked(
+            &mut tx, sid, cust, &cur, amount, &pname, start, end, due_days,
+        )
+        .await?
+        {
+            out.push(Renewal {
+                service_id: sid,
+                invoice_id: inv,
+                customer_id: cust,
+            });
         }
         tx.commit().await.map_err(db_err)?;
     }
@@ -212,12 +227,14 @@ async fn renew_locked(
     due_days: i64,
 ) -> AppResult<Option<Uuid>> {
     let mut created = None;
-    let already: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM invoice_items WHERE service_id = $1 AND period_start = $2)")
-        .bind(sid)
-        .bind(start)
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    let already: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM invoice_items WHERE service_id = $1 AND period_start = $2)",
+    )
+    .bind(sid)
+    .bind(start)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(db_err)?;
     if !already {
         let inv = invoices::create_draft(tx, cust, cur, None).await?;
         invoices::add_items(
@@ -279,9 +296,24 @@ pub struct EarlyRenewal {
 /// the cron. Refused while an unpaid invoice for this service is open, for
 /// one-time/terminated/cancelling services, or more than `max_days_ahead`
 /// days before the due date (0 = no limit). `customer` restricts ownership.
-pub async fn renew_now(pool: &PgPool, sid: Uuid, customer: Option<Uuid>, max_days_ahead: i64, today: Date) -> AppResult<EarlyRenewal> {
+pub async fn renew_now(
+    pool: &PgPool,
+    sid: Uuid,
+    customer: Option<Uuid>,
+    max_days_ahead: i64,
+    today: Date,
+) -> AppResult<EarlyRenewal> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    type Row = (Uuid, String, String, Decimal, Option<Date>, String, String, Option<Date>);
+    type Row = (
+        Uuid,
+        String,
+        String,
+        Decimal,
+        Option<Date>,
+        String,
+        String,
+        Option<Date>,
+    );
     let row: Option<Row> = sqlx::query_as(
         "SELECT s.customer_id, s.cycle, s.currency::text, s.recurring_amount, s.next_due_date, p.name, s.status, s.cancel_at
          FROM services s JOIN products p ON p.id = s.product_id WHERE s.id = $1 FOR UPDATE OF s",
@@ -294,8 +326,13 @@ pub async fn renew_now(pool: &PgPool, sid: Uuid, customer: Option<Uuid>, max_day
     if customer.is_some_and(|c| c != cust) {
         return Err(AppError::NotFound);
     }
-    let Some(next) = next else { return Err(AppError::Conflict("error.renewal_not_allowed")) };
-    if !matches!(status.as_str(), "active" | "suspended") || cyc == "one_time" || cancel_at.is_some_and(|c| next >= c) {
+    let Some(next) = next else {
+        return Err(AppError::Conflict("error.renewal_not_allowed"));
+    };
+    if !matches!(status.as_str(), "active" | "suspended")
+        || cyc == "one_time"
+        || cancel_at.is_some_and(|c| next >= c)
+    {
         return Err(AppError::Conflict("error.renewal_not_allowed"));
     }
     let open: bool = sqlx::query_scalar(
@@ -312,10 +349,19 @@ pub async fn renew_now(pool: &PgPool, sid: Uuid, customer: Option<Uuid>, max_day
     if max_days_ahead > 0 && (next - today).whole_days() > max_days_ahead {
         return Err(AppError::Conflict("error.renewal_too_early"));
     }
-    let (start, end) = cycle::period(next, &cyc).ok_or(AppError::Conflict("error.renewal_not_allowed"))?;
+    let (start, end) =
+        cycle::period(next, &cyc).ok_or(AppError::Conflict("error.renewal_not_allowed"))?;
     // Due on the current due date (today when that has already passed).
     let due_days = (next - today).whole_days().max(0);
-    let inv = renew_locked(&mut tx, sid, cust, &cur, amount, &pname, start, end, due_days).await?.ok_or(AppError::Conflict("error.renewal_pending"))?;
+    let inv = renew_locked(
+        &mut tx, sid, cust, &cur, amount, &pname, start, end, due_days,
+    )
+    .await?
+    .ok_or(AppError::Conflict("error.renewal_pending"))?;
     tx.commit().await.map_err(db_err)?;
-    Ok(EarlyRenewal { invoice_id: inv, period_start: start.to_string(), period_end: end.to_string() })
+    Ok(EarlyRenewal {
+        invoice_id: inv,
+        period_start: start.to_string(),
+        period_end: end.to_string(),
+    })
 }

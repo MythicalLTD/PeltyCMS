@@ -208,12 +208,7 @@ pub async fn post(
 }
 
 /// Staff suggestion card for the visitor (system JSON body); bumps visitor unread.
-pub async fn post_action(
-    pool: &PgPool,
-    id: Uuid,
-    staff: Uuid,
-    body: &str,
-) -> AppResult<i64> {
+pub async fn post_action(pool: &PgPool, id: Uuid, staff: Uuid, body: &str) -> AppResult<i64> {
     let body = clean_body(body)?;
     let mut tx = pool.begin().await.map_err(db_err)?;
     let r = sqlx::query(

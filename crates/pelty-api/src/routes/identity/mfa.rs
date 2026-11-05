@@ -1,7 +1,7 @@
 //! TOTP two-factor authentication: enrolment, login challenge, backup codes.
-use crate::routes::auth::{session_response, AuthGuard};
 use crate::error::ApiResult;
 use crate::extract::CurrentUser;
+use crate::routes::auth::{session_response, AuthGuard};
 use crate::AppState;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
@@ -56,7 +56,11 @@ fn new_codes() -> (Vec<String>, Vec<[u8; 32]>) {
 
 /// Check a TOTP code (with replay protection) or a backup code.
 /// Returns Some("totp"|"backup") on success.
-pub(crate) async fn check_code(s: &AppState, user_id: Uuid, code: &str) -> ApiResult<Option<&'static str>> {
+pub(crate) async fn check_code(
+    s: &AppState,
+    user_id: Uuid,
+    code: &str,
+) -> ApiResult<Option<&'static str>> {
     let Some(m) = mfa::get(&s.pool, user_id).await?.filter(|m| m.enabled) else {
         return Ok(None);
     };
@@ -218,7 +222,10 @@ pub async fn enable(
         json!({}),
     )
     .await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("user.mfa_enabled", json!({ "user_id": u.user_id })));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "user.mfa_enabled",
+        json!({ "user_id": u.user_id }),
+    ));
     Ok(Json(BackupCodes {
         backup_codes: plain,
     }))
@@ -264,7 +271,10 @@ pub async fn disable(
         json!({}),
     )
     .await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("user.mfa_disabled", json!({ "user_id": u.user_id })));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "user.mfa_disabled",
+        json!({ "user_id": u.user_id }),
+    ));
     Ok(StatusCode::NO_CONTENT)
 }
 

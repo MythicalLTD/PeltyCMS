@@ -3,15 +3,15 @@
 //! Modules are re-exported at the crate root (`pelty_api::<module>`), so existing paths keep working.
 //! Covered by the pelty-api unit tests in these files and the integration suite in tests/integration.
 
-pub mod worker;
-pub mod cron;
-pub mod backup;
-pub mod updates;
-pub mod changes;
 pub mod approval;
+pub mod backup;
+pub mod changes;
+pub mod cron;
 pub mod csv;
-pub mod extract;
 pub mod dev_docs;
-pub mod whmcs_api;
-pub mod translations;
+pub mod extract;
 pub mod static_files;
+pub mod translations;
+pub mod updates;
+pub mod whmcs_api;
+pub mod worker;

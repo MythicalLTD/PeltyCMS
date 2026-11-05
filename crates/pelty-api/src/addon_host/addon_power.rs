@@ -25,28 +25,79 @@ pub const ENTITIES: &[(&str, &str, &[&str])] = &[
 ];
 
 /// Typed write ops (`capabilities.db.write`).
-pub const WRITE_OPS: &[&str] = &["client.note", "invoice.admin_note", "service.custom_field", "ticket.status"];
+pub const WRITE_OPS: &[&str] = &[
+    "client.note",
+    "invoice.admin_note",
+    "service.custom_field",
+    "ticket.status",
+];
 
-const TICKET_STATUSES: &[&str] = &["open", "answered", "customer_reply", "on_hold", "in_progress", "closed"];
+const TICKET_STATUSES: &[&str] = &[
+    "open",
+    "answered",
+    "customer_reply",
+    "on_hold",
+    "in_progress",
+    "closed",
+];
 
 /// SQL functions an addon statement may call.
 const SQL_FUNCS: &[&str] = &[
-    "count", "sum", "min", "max", "avg", "coalesce", "nullif", "lower", "upper", "length", "trim", "substr", "substring", "abs", "round", "floor", "ceil", "now", "greatest", "least", "concat", "jsonb_build_object", "to_jsonb", "jsonb_agg", "string_agg", "date_trunc", "extract", "gen_random_uuid",
+    "count",
+    "sum",
+    "min",
+    "max",
+    "avg",
+    "coalesce",
+    "nullif",
+    "lower",
+    "upper",
+    "length",
+    "trim",
+    "substr",
+    "substring",
+    "abs",
+    "round",
+    "floor",
+    "ceil",
+    "now",
+    "greatest",
+    "least",
+    "concat",
+    "jsonb_build_object",
+    "to_jsonb",
+    "jsonb_agg",
+    "string_agg",
+    "date_trunc",
+    "extract",
+    "gen_random_uuid",
 ];
 
 pub struct DbPower(pub PgPool);
 
 /// `addon_<id with non-alphanumerics as _>_`.
 pub fn table_prefix(addon: &str) -> String {
-    let id: String = addon.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '_' }).collect();
+    let id: String = addon
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '_'
+            }
+        })
+        .collect();
     format!("addon_{id}_")
 }
 
 /// Accept one statement that only touches `addon_<id>_*` tables and calls
 /// only allowlisted functions. Returns true for row-returning statements.
 pub fn check_sql(addon: &str, sql: &str) -> Result<bool, String> {
-    let stmts = sqlparser::parser::Parser::parse_sql(&PostgreSqlDialect {}, sql).map_err(|e| format!("sql: {e}"))?;
-    let [st] = stmts.as_slice() else { return Err("exactly one statement".into()) };
+    let stmts = sqlparser::parser::Parser::parse_sql(&PostgreSqlDialect {}, sql)
+        .map_err(|e| format!("sql: {e}"))?;
+    let [st] = stmts.as_slice() else {
+        return Err("exactly one statement".into());
+    };
     let rows = match st {
         Statement::Query(q) => {
             if q.with.is_some() {
@@ -54,11 +105,20 @@ pub fn check_sql(addon: &str, sql: &str) -> Result<bool, String> {
             }
             true
         }
-        Statement::Insert(_) | Statement::Update { .. } | Statement::Delete(_) | Statement::CreateTable(_) | Statement::CreateIndex(_) | Statement::AlterTable { .. } | Statement::Drop { .. } => false,
+        Statement::Insert(_)
+        | Statement::Update { .. }
+        | Statement::Delete(_)
+        | Statement::CreateTable(_)
+        | Statement::CreateIndex(_)
+        | Statement::AlterTable { .. }
+        | Statement::Drop { .. } => false,
         _ => return Err("statement type not allowed".into()),
     };
     if let Statement::Drop { object_type, .. } = st {
-        if !matches!(object_type, sqlparser::ast::ObjectType::Table | sqlparser::ast::ObjectType::Index) {
+        if !matches!(
+            object_type,
+            sqlparser::ast::ObjectType::Table | sqlparser::ast::ObjectType::Index
+        ) {
             return Err("only DROP TABLE / INDEX".into());
         }
     }
@@ -71,9 +131,17 @@ pub fn check_sql(addon: &str, sql: &str) -> Result<bool, String> {
         use sqlparser::ast::{AlterTableOperation as Op, RenameTableNameKind};
         for op in &at.operations {
             match op {
-                Op::AddColumn { .. } | Op::DropColumn { .. } | Op::AlterColumn { .. } | Op::RenameColumn { .. } => {}
-                Op::RenameTable { table_name: RenameTableNameKind::As(n) | RenameTableNameKind::To(n) } => {
-                    let last = n.0.last().map(|p| p.to_string().trim_matches('"').to_ascii_lowercase()).unwrap_or_default();
+                Op::AddColumn { .. }
+                | Op::DropColumn { .. }
+                | Op::AlterColumn { .. }
+                | Op::RenameColumn { .. } => {}
+                Op::RenameTable {
+                    table_name: RenameTableNameKind::As(n) | RenameTableNameKind::To(n),
+                } => {
+                    let last =
+                        n.0.last()
+                            .map(|p| p.to_string().trim_matches('"').to_ascii_lowercase())
+                            .unwrap_or_default();
                     if n.0.len() != 1 || !last.starts_with(&prefix) {
                         return Err(format!("table not owned by the addon: {n}"));
                     }
@@ -84,7 +152,11 @@ pub fn check_sql(addon: &str, sql: &str) -> Result<bool, String> {
     }
     let mut bad: Option<String> = None;
     let _ = visit_relations(st, |name| {
-        let parts: Vec<String> = name.0.iter().map(|p| p.to_string().trim_matches('"').to_ascii_lowercase()).collect();
+        let parts: Vec<String> = name
+            .0
+            .iter()
+            .map(|p| p.to_string().trim_matches('"').to_ascii_lowercase())
+            .collect();
         let ok = match parts.as_slice() {
             [t] => t.starts_with(&prefix),
             [s, t] => s == "public" && t.starts_with(&prefix),
@@ -98,13 +170,23 @@ pub fn check_sql(addon: &str, sql: &str) -> Result<bool, String> {
     });
     if bad.is_none() {
         if let Statement::Drop { names, .. } = st {
-            if let Some(n) = names.iter().find(|n| !n.to_string().trim_matches('"').to_ascii_lowercase().starts_with(&prefix)) {
+            if let Some(n) = names.iter().find(|n| {
+                !n.to_string()
+                    .trim_matches('"')
+                    .to_ascii_lowercase()
+                    .starts_with(&prefix)
+            }) {
                 bad = Some(format!("table not owned by the addon: {n}"));
             }
         }
         if let Statement::CreateIndex(ci) = st {
             if let Some(n) = &ci.name {
-                if !n.to_string().trim_matches('"').to_ascii_lowercase().starts_with(&prefix) {
+                if !n
+                    .to_string()
+                    .trim_matches('"')
+                    .to_ascii_lowercase()
+                    .starts_with(&prefix)
+                {
                     bad = Some(format!("index name must start with {prefix}"));
                 }
             }
@@ -132,7 +214,10 @@ pub fn check_sql(addon: &str, sql: &str) -> Result<bool, String> {
     }
 }
 
-fn bind_all<'q>(mut q: sqlx::query::Query<'q, sqlx::Postgres, sqlx::postgres::PgArguments>, params: &'q [Value]) -> sqlx::query::Query<'q, sqlx::Postgres, sqlx::postgres::PgArguments> {
+fn bind_all<'q>(
+    mut q: sqlx::query::Query<'q, sqlx::Postgres, sqlx::postgres::PgArguments>,
+    params: &'q [Value],
+) -> sqlx::query::Query<'q, sqlx::Postgres, sqlx::postgres::PgArguments> {
     for p in params {
         q = match p {
             Value::Null => q.bind(None::<String>),
@@ -152,9 +237,13 @@ fn bind_all<'q>(mut q: sqlx::query::Query<'q, sqlx::Postgres, sqlx::postgres::Pg
 async fn run_sql(pool: &PgPool, addon: &str, sql: &str, params: &[Value]) -> Result<Value, String> {
     let rows = check_sql(addon, sql)?;
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
-    sqlx::query("SET LOCAL statement_timeout = '5s'").execute(&mut *tx).await.map_err(|e| e.to_string())?;
+    sqlx::query("SET LOCAL statement_timeout = '5s'")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
     let out = if rows {
-        let wrapped = format!("SELECT COALESCE(jsonb_agg(to_jsonb(q)), '[]'::jsonb) FROM ({sql}) q");
+        let wrapped =
+            format!("SELECT COALESCE(jsonb_agg(to_jsonb(q)), '[]'::jsonb) FROM ({sql}) q");
         let mut q = sqlx::query_scalar::<_, Value>(&wrapped);
         for p in params {
             q = match p {
@@ -166,9 +255,14 @@ async fn run_sql(pool: &PgPool, addon: &str, sql: &str, params: &[Value]) -> Res
                 v => q.bind(sqlx::types::Json(v.clone())),
             };
         }
-        q.fetch_one(&mut *tx).await.map_err(|e| format!("sql: {e}"))?
+        q.fetch_one(&mut *tx)
+            .await
+            .map_err(|e| format!("sql: {e}"))?
     } else {
-        let r = bind_all(sqlx::query(sql), params).execute(&mut *tx).await.map_err(|e| format!("sql: {e}"))?;
+        let r = bind_all(sqlx::query(sql), params)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("sql: {e}"))?;
         json!({ "rows_affected": r.rows_affected() })
     };
     tx.commit().await.map_err(|e| e.to_string())?;
@@ -176,7 +270,10 @@ async fn run_sql(pool: &PgPool, addon: &str, sql: &str, params: &[Value]) -> Res
 }
 
 async fn read(pool: &PgPool, entity: &str, q: &Value) -> Result<Value, String> {
-    let (_, table, hidden) = ENTITIES.iter().find(|(n, ..)| *n == entity).ok_or_else(|| format!("unknown entity {entity}"))?;
+    let (_, table, hidden) = ENTITIES
+        .iter()
+        .find(|(n, ..)| *n == entity)
+        .ok_or_else(|| format!("unknown entity {entity}"))?;
     let cols: Vec<String> = sqlx::query_scalar("SELECT column_name::text FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1")
         .bind(table)
         .fetch_all(pool)
@@ -186,7 +283,12 @@ async fn read(pool: &PgPool, entity: &str, q: &Value) -> Result<Value, String> {
     if let Some(id) = q.get("id").and_then(Value::as_str) {
         filters.push(("id".into(), id.to_string()));
     }
-    for (k, v) in q.get("filter").and_then(Value::as_object).into_iter().flatten() {
+    for (k, v) in q
+        .get("filter")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flatten()
+    {
         if !cols.contains(k) || hidden.contains(&k.as_str()) {
             return Err(format!("unknown filter column {k}"));
         }
@@ -197,7 +299,11 @@ async fn read(pool: &PgPool, entity: &str, q: &Value) -> Result<Value, String> {
         };
         filters.push((k.clone(), v));
     }
-    let limit = q.get("limit").and_then(Value::as_i64).unwrap_or(50).clamp(1, 500);
+    let limit = q
+        .get("limit")
+        .and_then(Value::as_i64)
+        .unwrap_or(50)
+        .clamp(1, 500);
     let offset = q.get("offset").and_then(Value::as_i64).unwrap_or(0).max(0);
     let minus: String = hidden.iter().map(|h| format!(" - '{h}'")).collect();
     let mut sql = format!("SELECT COALESCE(jsonb_agg(r), '[]'::jsonb) FROM (SELECT to_jsonb(t){minus} AS r FROM {table} t");
@@ -206,7 +312,9 @@ async fn read(pool: &PgPool, entity: &str, q: &Value) -> Result<Value, String> {
         // `k` is a real column name of `table` (checked above).
         sql.push_str(&format!("t.\"{k}\"::text = ${}", i + 1));
     }
-    sql.push_str(&format!(" ORDER BY t.created_at DESC NULLS LAST LIMIT {limit} OFFSET {offset}) s"));
+    sql.push_str(&format!(
+        " ORDER BY t.created_at DESC NULLS LAST LIMIT {limit} OFFSET {offset}) s"
+    ));
     let mut qq = sqlx::query_scalar::<_, Value>(&sql);
     for (_, v) in &filters {
         qq = qq.bind(v.clone());
@@ -215,11 +323,17 @@ async fn read(pool: &PgPool, entity: &str, q: &Value) -> Result<Value, String> {
 }
 
 fn uuid_of(v: &Value, k: &str) -> Result<uuid::Uuid, String> {
-    v.get(k).and_then(Value::as_str).and_then(|s| s.parse().ok()).ok_or_else(|| format!("{k} must be a UUID"))
+    v.get(k)
+        .and_then(Value::as_str)
+        .and_then(|s| s.parse().ok())
+        .ok_or_else(|| format!("{k} must be a UUID"))
 }
 
 fn text_of(v: &Value, k: &str, max: usize) -> Result<String, String> {
-    let t = v.get(k).and_then(Value::as_str).ok_or_else(|| format!("{k} required"))?;
+    let t = v
+        .get(k)
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("{k} required"))?;
     if t.len() > max {
         return Err(format!("{k} too long"));
     }
@@ -237,7 +351,14 @@ async fn write(pool: &PgPool, addon: &str, op: &str, i: &Value) -> Result<Value,
         "invoice.admin_note" => {
             let id = uuid_of(i, "invoice_id")?;
             let t = text_of(i, "text", 4000)?;
-            (id, sqlx::query("UPDATE invoices SET admin_notes = $2 WHERE id = $1").bind(id).bind(&t).execute(pool).await)
+            (
+                id,
+                sqlx::query("UPDATE invoices SET admin_notes = $2 WHERE id = $1")
+                    .bind(id)
+                    .bind(&t)
+                    .execute(pool)
+                    .await,
+            )
         }
         "service.custom_field" => {
             let id = uuid_of(i, "service_id")?;
@@ -262,27 +383,71 @@ async fn write(pool: &PgPool, addon: &str, op: &str, i: &Value) -> Result<Value,
     if n == 0 {
         return Err("not found".into());
     }
-    let _ = pelty_database::audit::record(pool, None, "addon.db_write", Some(&target.to_string()), None, json!({ "addon": addon, "op": op })).await;
+    let _ = pelty_database::audit::record(
+        pool,
+        None,
+        "addon.db_write",
+        Some(&target.to_string()),
+        None,
+        json!({ "addon": addon, "op": op }),
+    )
+    .await;
     Ok(json!({ "ok": true }))
 }
 
 impl pelty_wasm::PowerHost for DbPower {
-    fn db_read<'a>(&'a self, _addon: &'a str, entity: &'a str, query: Value) -> BoxFuture<'a, Result<Value, String>> {
+    fn db_read<'a>(
+        &'a self,
+        _addon: &'a str,
+        entity: &'a str,
+        query: Value,
+    ) -> BoxFuture<'a, Result<Value, String>> {
         Box::pin(async move { read(&self.0, entity, &query).await })
     }
-    fn db_write<'a>(&'a self, addon: &'a str, op: &'a str, input: Value) -> BoxFuture<'a, Result<Value, String>> {
+    fn db_write<'a>(
+        &'a self,
+        addon: &'a str,
+        op: &'a str,
+        input: Value,
+    ) -> BoxFuture<'a, Result<Value, String>> {
         Box::pin(async move { write(&self.0, addon, op, &input).await })
     }
-    fn sql<'a>(&'a self, addon: &'a str, statement: &'a str, params: Vec<Value>) -> BoxFuture<'a, Result<Value, String>> {
+    fn sql<'a>(
+        &'a self,
+        addon: &'a str,
+        statement: &'a str,
+        params: Vec<Value>,
+    ) -> BoxFuture<'a, Result<Value, String>> {
         Box::pin(async move { run_sql(&self.0, addon, statement, &params).await })
     }
-    fn enqueue<'a>(&'a self, addon: &'a str, op: &'a str, input: Value, delay: u32) -> BoxFuture<'a, Result<(), String>> {
+    fn enqueue<'a>(
+        &'a self,
+        addon: &'a str,
+        op: &'a str,
+        input: Value,
+        delay: u32,
+    ) -> BoxFuture<'a, Result<(), String>> {
         Box::pin(async move {
             let at = time::OffsetDateTime::now_utc() + time::Duration::seconds(delay as i64);
-            pelty_database::jobs::enqueue(&self.0, JOB_KIND, json!({ "addon": addon, "op": op, "input": input }), Some(at), None, 3).await.map(|_| ()).map_err(|e| e.to_string())
+            pelty_database::jobs::enqueue(
+                &self.0,
+                JOB_KIND,
+                json!({ "addon": addon, "op": op, "input": input }),
+                Some(at),
+                None,
+                3,
+            )
+            .await
+            .map(|_| ())
+            .map_err(|e| e.to_string())
         })
     }
-    fn cron_register<'a>(&'a self, addon: &'a str, name: &'a str, job: Option<(&'a str, &'a str)>) -> BoxFuture<'a, Result<(), String>> {
+    fn cron_register<'a>(
+        &'a self,
+        addon: &'a str,
+        name: &'a str,
+        job: Option<(&'a str, &'a str)>,
+    ) -> BoxFuture<'a, Result<(), String>> {
         Box::pin(async move { crate::addon_ext::cron_register(&self.0, addon, name, job).await })
     }
 }

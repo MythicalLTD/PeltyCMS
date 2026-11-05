@@ -59,7 +59,14 @@ fn yes() -> bool {
 
 /// Format `amount` with a currency's prefix/suffix, separators and exponent
 /// (e.g. `1.234,50 lei`). Pure; used by PDFs, mails and tests.
-pub fn format_amount(amount: Decimal, exp: u32, prefix: &str, suffix: &str, dec: &str, thou: &str) -> String {
+pub fn format_amount(
+    amount: Decimal,
+    exp: u32,
+    prefix: &str,
+    suffix: &str,
+    dec: &str,
+    thou: &str,
+) -> String {
     let r = amount.round_dp_with_strategy(exp, RoundingStrategy::MidpointAwayFromZero);
     let neg = r.is_sign_negative() && !r.is_zero();
     let s = format!("{:.*}", exp as usize, r.abs());
@@ -71,7 +78,11 @@ pub fn format_amount(amount: Decimal, exp: u32, prefix: &str, suffix: &str, dec:
         }
         grouped.push(ch);
     }
-    let num = if frac.is_empty() { grouped } else { format!("{grouped}{dec}{frac}") };
+    let num = if frac.is_empty() {
+        grouped
+    } else {
+        format!("{grouped}{dec}{frac}")
+    };
     format!("{}{prefix}{num}{suffix}", if neg { "-" } else { "" })
 }
 
@@ -81,10 +92,16 @@ fn v() -> AppError {
 
 /// Pure validation (unit-tested).
 pub fn check(c: &CurrencyInput) -> AppResult<()> {
-    if !matches!(c.decimal_sep.as_str(), "." | ",") || !matches!(c.thousands_sep.as_str(), "," | "." | " " | "'" | "") || c.decimal_sep == c.thousands_sep {
+    if !matches!(c.decimal_sep.as_str(), "." | ",")
+        || !matches!(c.thousands_sep.as_str(), "," | "." | " " | "'" | "")
+        || c.decimal_sep == c.thousands_sep
+    {
         return Err(v());
     }
-    if !(0..=4).contains(&c.exponent) || c.prefix.chars().count() > 8 || c.suffix.chars().count() > 8 {
+    if !(0..=4).contains(&c.exponent)
+        || c.prefix.chars().count() > 8
+        || c.suffix.chars().count() > 8
+    {
         return Err(v());
     }
     if c.rate <= Decimal::ZERO || c.rate > Decimal::from(1_000_000_000) {
@@ -110,10 +127,12 @@ pub fn convert(amount: Decimal, from: Decimal, to: Decimal, exp: u32) -> Decimal
 const COLS: &str = "code::text AS code, exponent, enabled, rate, is_default, prefix, suffix, updated_at, decimal_sep, thousands_sep, auto_update, rate_updated_at";
 
 pub async fn list(pool: &PgPool) -> AppResult<Vec<Currency>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM currencies ORDER BY is_default DESC, code"))
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {COLS} FROM currencies ORDER BY is_default DESC, code"
+    ))
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn create(pool: &PgPool, c: &CurrencyInput) -> AppResult<String> {
@@ -145,11 +164,12 @@ pub async fn create(pool: &PgPool, c: &CurrencyInput) -> AppResult<String> {
 pub async fn update(pool: &PgPool, code: &str, c: &CurrencyInput) -> AppResult<()> {
     check(c)?;
     let code = code.to_ascii_uppercase();
-    let cur: Option<(bool, i16)> = sqlx::query_as("SELECT is_default, exponent FROM currencies WHERE code = $1")
-        .bind(&code)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?;
+    let cur: Option<(bool, i16)> =
+        sqlx::query_as("SELECT is_default, exponent FROM currencies WHERE code = $1")
+            .bind(&code)
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?;
     let (is_default, exp) = cur.ok_or(AppError::NotFound)?;
     if is_default && (!c.enabled || c.rate != Decimal::ONE) {
         return Err(AppError::Validation("error.default_currency_locked"));
@@ -186,11 +206,12 @@ pub async fn update(pool: &PgPool, code: &str, c: &CurrencyInput) -> AppResult<(
 pub async fn set_default(pool: &PgPool, code: &str) -> AppResult<()> {
     let code = code.to_ascii_uppercase();
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let r: Option<(Decimal, bool)> = sqlx::query_as("SELECT rate, enabled FROM currencies WHERE code = $1 FOR UPDATE")
-        .bind(&code)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db_err)?;
+    let r: Option<(Decimal, bool)> =
+        sqlx::query_as("SELECT rate, enabled FROM currencies WHERE code = $1 FOR UPDATE")
+            .bind(&code)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_err)?;
     let (rate, enabled) = r.ok_or(AppError::NotFound)?;
     if !enabled {
         return Err(AppError::Validation("error.currency_disabled"));
@@ -214,7 +235,11 @@ pub async fn set_default(pool: &PgPool, code: &str) -> AppResult<()> {
 /// that already exist. Returns the number of price rows written.
 pub async fn sync_prices(pool: &PgPool, only_missing: bool) -> AppResult<u64> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let conflict = if only_missing { "DO NOTHING" } else { "DO UPDATE SET amount = EXCLUDED.amount" };
+    let conflict = if only_missing {
+        "DO NOTHING"
+    } else {
+        "DO UPDATE SET amount = EXCLUDED.amount"
+    };
     let a = sqlx::query(&format!(
         "INSERT INTO product_prices (id, product_id, currency, cycle, amount, setup_fee)
          SELECT gen_random_uuid(), pp.product_id, c.code, pp.cycle,
@@ -223,7 +248,11 @@ pub async fn sync_prices(pool: &PgPool, only_missing: bool) -> AppResult<u64> {
          JOIN currencies d ON d.is_default AND pp.currency = d.code
          JOIN currencies c ON c.enabled AND NOT c.is_default
          ON CONFLICT (product_id, currency, cycle) {}",
-        if only_missing { "DO NOTHING" } else { "DO UPDATE SET amount = EXCLUDED.amount, setup_fee = EXCLUDED.setup_fee" }
+        if only_missing {
+            "DO NOTHING"
+        } else {
+            "DO UPDATE SET amount = EXCLUDED.amount, setup_fee = EXCLUDED.setup_fee"
+        }
     ))
     .execute(&mut *tx)
     .await
@@ -264,8 +293,14 @@ mod tests {
 
     #[test]
     fn formats() {
-        assert_eq!(format_amount(d("1234.5"), 2, "", " lei", ",", "."), "1.234,50 lei");
-        assert_eq!(format_amount(d("1234567.891"), 2, "$", "", ".", ","), "$1,234,567.89");
+        assert_eq!(
+            format_amount(d("1234.5"), 2, "", " lei", ",", "."),
+            "1.234,50 lei"
+        );
+        assert_eq!(
+            format_amount(d("1234567.891"), 2, "$", "", ".", ","),
+            "$1,234,567.89"
+        );
         assert_eq!(format_amount(d("1612"), 0, "¥", "", ".", ","), "¥1,612");
         assert_eq!(format_amount(d("-5"), 3, "", " KWD", ".", ""), "-5.000 KWD");
         assert_eq!(format_amount(d("999"), 2, "", "", ".", ","), "999.00");
@@ -273,14 +308,46 @@ mod tests {
 
     #[test]
     fn validates() {
-        let ok = CurrencyInput { code: Some("CHF".into()), exponent: 2, enabled: true, rate: d("0.95"), prefix: "".into(), suffix: " CHF".into(), decimal_sep: ".".into(), thousands_sep: ",".into(), auto_update: true };
+        let ok = CurrencyInput {
+            code: Some("CHF".into()),
+            exponent: 2,
+            enabled: true,
+            rate: d("0.95"),
+            prefix: "".into(),
+            suffix: " CHF".into(),
+            decimal_sep: ".".into(),
+            thousands_sep: ",".into(),
+            auto_update: true,
+        };
         assert!(check(&ok).is_ok());
-        assert!(check(&CurrencyInput { rate: d("0"), ..ok_clone(&ok) }).is_err());
-        assert!(check(&CurrencyInput { exponent: 5, ..ok_clone(&ok) }).is_err());
-        assert!(check(&CurrencyInput { code: Some("CH1".into()), ..ok_clone(&ok) }).is_err());
+        assert!(check(&CurrencyInput {
+            rate: d("0"),
+            ..ok_clone(&ok)
+        })
+        .is_err());
+        assert!(check(&CurrencyInput {
+            exponent: 5,
+            ..ok_clone(&ok)
+        })
+        .is_err());
+        assert!(check(&CurrencyInput {
+            code: Some("CH1".into()),
+            ..ok_clone(&ok)
+        })
+        .is_err());
     }
 
     fn ok_clone(c: &CurrencyInput) -> CurrencyInput {
-        CurrencyInput { code: c.code.clone(), exponent: c.exponent, enabled: c.enabled, rate: c.rate, prefix: c.prefix.clone(), suffix: c.suffix.clone(), decimal_sep: c.decimal_sep.clone(), thousands_sep: c.thousands_sep.clone(), auto_update: c.auto_update }
+        CurrencyInput {
+            code: c.code.clone(),
+            exponent: c.exponent,
+            enabled: c.enabled,
+            rate: c.rate,
+            prefix: c.prefix.clone(),
+            suffix: c.suffix.clone(),
+            decimal_sep: c.decimal_sep.clone(),
+            thousands_sep: c.thousands_sep.clone(),
+            auto_update: c.auto_update,
+        }
     }
 }

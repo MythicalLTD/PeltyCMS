@@ -1,8 +1,8 @@
 //! Refunds against payments (partial or full) through the payment gateway,
 //! and the credit notes they produce.
-use crate::routes::customers::customer_of;
 use crate::error::ApiResult;
 use crate::extract::{perms, CurrentUser, RequirePermission};
+use crate::routes::customers::customer_of;
 use crate::AppState;
 use axum::extract::{Path, State};
 use axum::routing::{get, post};
@@ -20,7 +20,10 @@ use uuid::Uuid;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/admin/payments/{id}/refunds", post(admin_refund))
-        .route("/admin/settings/reversal", get(get_reversal).put(put_reversal))
+        .route(
+            "/admin/settings/reversal",
+            get(get_reversal).put(put_reversal),
+        )
         .route("/admin/invoices/{id}/refunds", get(admin_list))
         .route("/client/invoices/{id}/refunds", get(client_list))
 }
@@ -61,18 +64,36 @@ pub struct ReversalSettings {
 }
 
 async fn reversal_settings(s: &AppState) -> ApiResult<ReversalSettings> {
-    Ok(pelty_database::settings::get(&s.pool, REVERSAL_KEY).await?.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default())
+    Ok(pelty_database::settings::get(&s.pool, REVERSAL_KEY)
+        .await?
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default())
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/settings/reversal", responses((status = 200, body = ReversalSettings)))]
-pub async fn get_reversal(State(s): State<AppState>, _p: RequirePermission<perms::SettingsManage>) -> ApiResult<Json<ReversalSettings>> {
+pub async fn get_reversal(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::SettingsManage>,
+) -> ApiResult<Json<ReversalSettings>> {
     Ok(Json(reversal_settings(&s).await?))
 }
 
 #[utoipa::path(put, path = "/api/v1/admin/settings/reversal", request_body = ReversalSettings, responses((status = 200, body = ReversalSettings)))]
-pub async fn put_reversal(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::SettingsManage>, Json(b): Json<ReversalSettings>) -> ApiResult<Json<ReversalSettings>> {
+pub async fn put_reversal(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::SettingsManage>,
+    Json(b): Json<ReversalSettings>,
+) -> ApiResult<Json<ReversalSettings>> {
     pelty_database::settings::set(&s.pool, REVERSAL_KEY, json!(b)).await?;
-    audit::record(&s.pool, Some(u.user_id), "settings.reversal", None, u.ip.as_deref(), json!(b)).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "settings.reversal",
+        None,
+        u.ip.as_deref(),
+        json!(b),
+    )
+    .await?;
     Ok(Json(b))
 }
 
@@ -89,12 +110,21 @@ pub async fn execute(s: &AppState, r: Reserved) -> ApiResult<Refund> {
         refunds::fail(&s.pool, refund.id, &msg).await?;
         Ok::<(), AppError>(())
     };
-    let Some(desc) = s.gateways.descriptor(&refund.gateway).filter(|d| d.capabilities.refunds) else {
+    let Some(desc) = s
+        .gateways
+        .descriptor(&refund.gateway)
+        .filter(|d| d.capabilities.refunds)
+    else {
         fail("gateway does not support refunds".into()).await?;
         return Err(AppError::Conflict("error.refund_unsupported").into());
     };
-    let row = pelty_database::extensions::gateway(&s.pool, desc.id).await?.ok_or(AppError::Conflict("error.refund_unsupported"))?;
-    let gw = match s.gateways.build(desc.id, &crate::routes::webhooks::resolve_config(&row)) {
+    let row = pelty_database::extensions::gateway(&s.pool, desc.id)
+        .await?
+        .ok_or(AppError::Conflict("error.refund_unsupported"))?;
+    let gw = match s
+        .gateways
+        .build(desc.id, &crate::routes::webhooks::resolve_config(&row))
+    {
         Ok(g) => g,
         Err(e) => {
             tracing::error!(gateway = %refund.gateway, error = %e, "gateway misconfigured");
@@ -102,19 +132,29 @@ pub async fn execute(s: &AppState, r: Reserved) -> ApiResult<Refund> {
             return Err(AppError::BadRequest("error.gateway").into());
         }
     };
-    let currency = Currency::parse(&refund.currency).ok_or(AppError::Validation("error.invalid_currency"))?;
-    let target = r.payment_ref.unwrap_or_else(|| refund.payment_id.to_string());
+    let currency =
+        Currency::parse(&refund.currency).ok_or(AppError::Validation("error.invalid_currency"))?;
+    let target = r
+        .payment_ref
+        .unwrap_or_else(|| refund.payment_id.to_string());
     let key = format!("pelty-refund-{}", refund.id);
-    match gw.refund(&target, Money::new(refund.amount, currency), &key).await {
+    match gw
+        .refund(&target, Money::new(refund.amount, currency), &key)
+        .await
+    {
         Ok(res) => match res.status.as_str() {
-            "succeeded" | "manual_pending" => Ok(refunds::complete(&s.pool, refund.id, res.provider_ref.as_deref()).await?),
+            "succeeded" | "manual_pending" => {
+                Ok(refunds::complete(&s.pool, refund.id, res.provider_ref.as_deref()).await?)
+            }
             "failed" | "canceled" => {
                 fail(format!("gateway status {}", res.status)).await?;
                 Err(AppError::BadRequest("error.refund_failed").into())
             }
             _ => {
                 refunds::mark_pending_ref(&s.pool, refund.id, res.provider_ref.as_deref()).await?;
-                Ok(refunds::get(&s.pool, refund.id).await?.ok_or(AppError::NotFound)?)
+                Ok(refunds::get(&s.pool, refund.id)
+                    .await?
+                    .ok_or(AppError::NotFound)?)
             }
         },
         Err(e) => {
@@ -133,22 +173,41 @@ pub async fn admin_refund(
     Json(b): Json<RefundBody>,
 ) -> ApiResult<Json<Refund>> {
     if b.reversal {
-        let gw: Option<String> = sqlx::query_scalar("SELECT gateway FROM payments WHERE id = $1").bind(id).fetch_optional(&s.pool).await.map_err(pelty_database::db_err)?;
+        let gw: Option<String> = sqlx::query_scalar("SELECT gateway FROM payments WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&s.pool)
+            .await
+            .map_err(pelty_database::db_err)?;
         if b.to_credit || gw.as_deref() == Some("credit") {
             return Err(AppError::Validation("error.reversal_invalid").into());
         }
     }
-    let reserved = refunds::reserve(&s.pool, id, b.amount, &b.reason, &b.idempotency_key, Some(u.user_id), b.to_credit).await?;
+    let reserved = refunds::reserve(
+        &s.pool,
+        id,
+        b.amount,
+        &b.reason,
+        &b.idempotency_key,
+        Some(u.user_id),
+        b.to_credit,
+    )
+    .await?;
     let replay = reserved.replay;
     let r = if b.reversal && !replay && reserved.refund.status == "pending" {
         refunds::mark_reversal(&s.pool, reserved.refund.id).await?;
         let cfg = reversal_settings(&s).await?;
         if b.reopen_invoice.unwrap_or(cfg.reopen_invoice) {
-            let opts = refunds::Reopen { suspend: b.suspend_services.unwrap_or(cfg.suspend_services) };
-            let (r, suspended) = refunds::complete_reopen(&s.pool, reserved.refund.id, opts).await?;
+            let opts = refunds::Reopen {
+                suspend: b.suspend_services.unwrap_or(cfg.suspend_services),
+            };
+            let (r, suspended) =
+                refunds::complete_reopen(&s.pool, reserved.refund.id, opts).await?;
             for sid in suspended {
                 crate::provision::on_transition(&s, sid, "active", "suspended").await;
-                s.emit(DomainEvent::new("service.suspended", json!({ "service_id": sid, "from": "active", "reason": "payment_reversed" })));
+                s.emit(DomainEvent::new(
+                    "service.suspended",
+                    json!({ "service_id": sid, "from": "active", "reason": "payment_reversed" }),
+                ));
             }
             r
         } else {
@@ -158,8 +217,19 @@ pub async fn admin_refund(
         execute(&s, reserved).await?
     };
     if !replay {
-        audit::record(&s.pool, Some(u.user_id), if r.reversal { "payment.reversed" } else { "payment.refunded" }, Some(&id.to_string()), u.ip.as_deref(),
-            json!({ "refund_id": r.id, "amount": r.amount, "status": r.status })).await?;
+        audit::record(
+            &s.pool,
+            Some(u.user_id),
+            if r.reversal {
+                "payment.reversed"
+            } else {
+                "payment.refunded"
+            },
+            Some(&id.to_string()),
+            u.ip.as_deref(),
+            json!({ "refund_id": r.id, "amount": r.amount, "status": r.status }),
+        )
+        .await?;
         if r.status == "succeeded" {
             s.emit(DomainEvent::new("invoice.refunded", json!({ "invoice_id": r.invoice_id, "refund_id": r.id, "credit_note_id": r.credit_note_id, "amount": r.amount })));
         }
@@ -172,21 +242,36 @@ async fn listing(s: &AppState, inv: &invoices::Invoice) -> ApiResult<Value> {
     let notes = s.invoices().credit_notes_for(inv.id).await?;
     let mut refundable = serde_json::Map::new();
     for p in s.invoices().payments(inv.id).await? {
-        refundable.insert(p.id.to_string(), json!(refunds::refundable(&s.pool, p.id).await?));
+        refundable.insert(
+            p.id.to_string(),
+            json!(refunds::refundable(&s.pool, p.id).await?),
+        );
     }
     Ok(json!({ "refunds": list, "credit_notes": notes, "refundable": refundable }))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/invoices/{id}/refunds", responses((status = 200), (status = 404)))]
-pub async fn admin_list(State(s): State<AppState>, _p: RequirePermission<perms::InvoicesManage>, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
+pub async fn admin_list(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::InvoicesManage>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
     let inv = s.invoices().get(id).await?.ok_or(AppError::NotFound)?;
     Ok(Json(listing(&s, &inv).await?))
 }
 
 #[utoipa::path(get, path = "/api/v1/client/invoices/{id}/refunds", responses((status = 200), (status = 404)))]
-pub async fn client_list(State(s): State<AppState>, u: CurrentUser, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
+pub async fn client_list(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
     let cid = customer_of(&s, &u).await?;
-    let inv = s.invoices().get_owned(id, cid).await?.ok_or(AppError::NotFound)?;
+    let inv = s
+        .invoices()
+        .get_owned(id, cid)
+        .await?
+        .ok_or(AppError::NotFound)?;
     let mut v = listing(&s, &inv).await?;
     // Clients don't need internal gateway errors or per-payment capacity.
     if let Some(list) = v["refunds"].as_array_mut() {

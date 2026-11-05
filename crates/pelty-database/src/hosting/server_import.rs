@@ -40,11 +40,25 @@ pub struct ImportResult {
     pub error: Option<&'static str>,
 }
 
-const CYCLES: &[&str] = &["one_time", "monthly", "quarterly", "semiannual", "annual", "biennial", "triennial"];
+const CYCLES: &[&str] = &[
+    "one_time",
+    "monthly",
+    "quarterly",
+    "semiannual",
+    "annual",
+    "biennial",
+    "triennial",
+];
 
 /// Import each item in its own transaction; failures are reported per item.
 /// `known` = remote ids the module reported (anything else is refused).
-pub async fn import(pool: &PgPool, server: Uuid, server_module: &str, known: &[String], items: &[ImportItem]) -> AppResult<Vec<ImportResult>> {
+pub async fn import(
+    pool: &PgPool,
+    server: Uuid,
+    server_module: &str,
+    known: &[String],
+    items: &[ImportItem],
+) -> AppResult<Vec<ImportResult>> {
     if items.is_empty() || items.len() > 200 {
         return Err(AppError::Validation("error.validation"));
     }
@@ -52,32 +66,68 @@ pub async fn import(pool: &PgPool, server: Uuid, server_module: &str, known: &[S
     for it in items {
         let res = one(pool, server, server_module, known, it).await;
         out.push(match res {
-            Ok(id) => ImportResult { remote_id: it.remote_id.clone(), service_id: Some(id), error: None },
-            Err(AppError::Validation(k)) | Err(AppError::Conflict(k)) => ImportResult { remote_id: it.remote_id.clone(), service_id: None, error: Some(k) },
-            Err(AppError::NotFound) => ImportResult { remote_id: it.remote_id.clone(), service_id: None, error: Some("error.not_found") },
+            Ok(id) => ImportResult {
+                remote_id: it.remote_id.clone(),
+                service_id: Some(id),
+                error: None,
+            },
+            Err(AppError::Validation(k)) | Err(AppError::Conflict(k)) => ImportResult {
+                remote_id: it.remote_id.clone(),
+                service_id: None,
+                error: Some(k),
+            },
+            Err(AppError::NotFound) => ImportResult {
+                remote_id: it.remote_id.clone(),
+                service_id: None,
+                error: Some("error.not_found"),
+            },
             Err(e) => return Err(e),
         });
     }
     Ok(out)
 }
 
-async fn one(pool: &PgPool, server: Uuid, server_module: &str, known: &[String], it: &ImportItem) -> AppResult<Uuid> {
+async fn one(
+    pool: &PgPool,
+    server: Uuid,
+    server_module: &str,
+    known: &[String],
+    it: &ImportItem,
+) -> AppResult<Uuid> {
     let rid = it.remote_id.trim();
     if rid.is_empty() || rid.len() > 200 || !known.iter().any(|k| k == rid) {
         return Err(AppError::Validation("error.import_unknown_account"));
     }
     let status = it.status.as_deref().unwrap_or("active");
-    if !CYCLES.contains(&it.cycle.as_str()) || !["active", "suspended"].contains(&status) || it.recurring_amount.is_sign_negative() {
+    if !CYCLES.contains(&it.cycle.as_str())
+        || !["active", "suspended"].contains(&status)
+        || it.recurring_amount.is_sign_negative()
+    {
         return Err(AppError::Validation("error.validation"));
     }
     let mut tx = pool.begin().await.map_err(db_err)?;
     // Serialize imports per server so two admins can't link one account twice.
-    sqlx::query("SELECT id FROM servers WHERE id = $1 FOR UPDATE").bind(server).fetch_optional(&mut *tx).await.map_err(db_err)?.ok_or(AppError::NotFound)?;
-    let module: Option<Option<String>> = sqlx::query_scalar("SELECT module FROM products WHERE id = $1").bind(it.product_id).fetch_optional(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("SELECT id FROM servers WHERE id = $1 FOR UPDATE")
+        .bind(server)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(db_err)?
+        .ok_or(AppError::NotFound)?;
+    let module: Option<Option<String>> =
+        sqlx::query_scalar("SELECT module FROM products WHERE id = $1")
+            .bind(it.product_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_err)?;
     if module.ok_or(AppError::NotFound)?.as_deref() != Some(server_module) {
         return Err(AppError::Validation("error.import_product_module"));
     }
-    let currency: String = sqlx::query_scalar("SELECT currency::text FROM customers WHERE id = $1").bind(it.customer_id).fetch_optional(&mut *tx).await.map_err(db_err)?.ok_or(AppError::NotFound)?;
+    let currency: String = sqlx::query_scalar("SELECT currency::text FROM customers WHERE id = $1")
+        .bind(it.customer_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(db_err)?
+        .ok_or(AppError::NotFound)?;
     let taken: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM services WHERE server_id = $1 AND remote_id = $2 AND status NOT IN ('terminated','cancelled'))")
         .bind(server).bind(rid).fetch_one(&mut *tx).await.map_err(db_err)?;
     if taken {

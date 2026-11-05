@@ -27,7 +27,8 @@ pub fn spawn(c: &mut Command) -> R<Child> {
         use std::os::unix::process::CommandExt;
         c.process_group(0);
     }
-    c.spawn().map_err(|e| format!("cannot start `{}`: {e}", describe(c)))
+    c.spawn()
+        .map_err(|e| format!("cannot start `{}`: {e}", describe(c)))
 }
 
 /// Runs the named children until one exits or Ctrl+C, then stops them all.
@@ -73,11 +74,17 @@ fn record(root: &Path, children: &[(&'static str, Child)]) {
 /// still going or was killed without cleaning up). Returns the stopped PIDs.
 pub fn stop_recorded(root: &Path) -> Vec<u32> {
     let f = pid_file(root);
-    let Ok(text) = std::fs::read_to_string(&f) else { return vec![] };
+    let Ok(text) = std::fs::read_to_string(&f) else {
+        return vec![];
+    };
     let mut stopped = vec![];
     for line in text.lines() {
-        let Some((name, pid)) = line.split_once(' ') else { continue };
-        let Ok(pid) = pid.trim().parse::<u32>() else { continue };
+        let Some((name, pid)) = line.split_once(' ') else {
+            continue;
+        };
+        let Ok(pid) = pid.trim().parse::<u32>() else {
+            continue;
+        };
         if pid == std::process::id() || !looks_like_ours(pid) {
             continue;
         }
@@ -96,14 +103,22 @@ pub fn stop_recorded(root: &Path) -> Vec<u32> {
 /// Guards against PID reuse: only touch processes that look like dev tooling.
 fn looks_like_ours(pid: u32) -> bool {
     let desc = process_desc(pid).to_ascii_lowercase();
-    ["cargo", "node", "pnpm", "corepack", "pelty", "vite", "xtask", "rustc"].iter().any(|n| desc.contains(n))
+    [
+        "cargo", "node", "pnpm", "corepack", "pelty", "vite", "xtask", "rustc",
+    ]
+    .iter()
+    .any(|n| desc.contains(n))
 }
 
 fn process_desc(pid: u32) -> String {
     #[cfg(windows)]
-    let out = Command::new("tasklist").args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"]).output();
+    let out = Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"])
+        .output();
     #[cfg(not(windows))]
-    let out = Command::new("ps").args(["-o", "args=", "-p", &pid.to_string()]).output();
+    let out = Command::new("ps")
+        .args(["-o", "args=", "-p", &pid.to_string()])
+        .output();
     match out {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
         _ => String::new(),
@@ -202,7 +217,12 @@ fn signal(pid: i32, sig: Option<nix::sys::signal::Signal>) -> bool {
 
 #[cfg(windows)]
 fn quiet(c: &mut Command) -> bool {
-    c.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false)
+    c.stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
 #[cfg(all(test, unix))]
@@ -212,14 +232,25 @@ mod tests {
     #[test]
     fn stop_children_stops_whole_groups_fast() {
         // Each `sh` starts a grandchild `sleep`; all are in the child's group.
-        let mut a = super::spawn(std::process::Command::new("sh").args(["-c", "sleep 30 & sleep 30"])).unwrap();
-        let mut b = super::spawn(std::process::Command::new("sh").args(["-c", "sleep 30 & sleep 30"])).unwrap();
+        let mut a =
+            super::spawn(std::process::Command::new("sh").args(["-c", "sleep 30 & sleep 30"]))
+                .unwrap();
+        let mut b =
+            super::spawn(std::process::Command::new("sh").args(["-c", "sleep 30 & sleep 30"]))
+                .unwrap();
         std::thread::sleep(Duration::from_millis(200));
         let groups = [-(a.id() as i32), -(b.id() as i32)];
         assert!(groups.iter().all(|g| super::signal(*g, None)));
         let t = Instant::now();
         super::stop_children([&mut a, &mut b]);
-        assert!(t.elapsed() < Duration::from_secs(2), "stop took {:?}", t.elapsed());
-        assert!(groups.iter().all(|g| !super::signal(*g, None)), "a group is still alive");
+        assert!(
+            t.elapsed() < Duration::from_secs(2),
+            "stop took {:?}",
+            t.elapsed()
+        );
+        assert!(
+            groups.iter().all(|g| !super::signal(*g, None)),
+            "a group is still alive"
+        );
     }
 }

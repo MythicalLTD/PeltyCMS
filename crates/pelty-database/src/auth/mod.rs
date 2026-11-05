@@ -2,15 +2,15 @@
 //!
 //! Re-exported at the crate root. Covered by the auth_* integration tests.
 
-pub mod users;
-pub mod staff;
-pub mod sessions;
-pub mod mfa;
-pub mod passkeys;
 pub mod api_keys;
-pub mod user_tokens;
+pub mod mfa;
 pub mod oauth_provider;
+pub mod passkeys;
 pub mod saml;
-pub mod sso;
 pub mod security;
 pub mod security_questions;
+pub mod sessions;
+pub mod sso;
+pub mod staff;
+pub mod user_tokens;
+pub mod users;

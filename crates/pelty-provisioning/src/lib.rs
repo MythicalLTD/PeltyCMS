@@ -5,14 +5,14 @@
 //! persistence live in the job queue (`pelty-api::worker`).
 //! Every module describes its server and product settings with a declarative
 //! field schema, so the admin UI renders them natively without module code.
-pub mod template;
 pub mod http;
+pub mod licensing;
 pub mod registrar;
 pub mod registrars;
 pub mod sso;
+pub mod template;
 pub mod util;
 pub mod wire;
-pub mod licensing;
 
 use serde::Serialize;
 use serde_json::Value;
@@ -123,17 +123,42 @@ pub trait ProvisioningModule: Send + Sync {
         Vec::new()
     }
     fn test_connection<'a>(&'a self, server: &'a ServerConn) -> BoxFuture<'a, ProvisionResult<()>>;
-    fn create<'a>(&'a self, server: &'a ServerConn, svc: &'a ServiceCtx) -> BoxFuture<'a, ProvisionResult<Created>>;
-    fn suspend<'a>(&'a self, server: &'a ServerConn, svc: &'a ServiceCtx) -> BoxFuture<'a, ProvisionResult<()>>;
-    fn unsuspend<'a>(&'a self, server: &'a ServerConn, svc: &'a ServiceCtx) -> BoxFuture<'a, ProvisionResult<()>>;
-    fn terminate<'a>(&'a self, server: &'a ServerConn, svc: &'a ServiceCtx) -> BoxFuture<'a, ProvisionResult<()>>;
+    fn create<'a>(
+        &'a self,
+        server: &'a ServerConn,
+        svc: &'a ServiceCtx,
+    ) -> BoxFuture<'a, ProvisionResult<Created>>;
+    fn suspend<'a>(
+        &'a self,
+        server: &'a ServerConn,
+        svc: &'a ServiceCtx,
+    ) -> BoxFuture<'a, ProvisionResult<()>>;
+    fn unsuspend<'a>(
+        &'a self,
+        server: &'a ServerConn,
+        svc: &'a ServiceCtx,
+    ) -> BoxFuture<'a, ProvisionResult<()>>;
+    fn terminate<'a>(
+        &'a self,
+        server: &'a ServerConn,
+        svc: &'a ServiceCtx,
+    ) -> BoxFuture<'a, ProvisionResult<()>>;
     /// Apply the (new) product config in `svc.product_config` to the remote.
-    fn change_package<'a>(&'a self, server: &'a ServerConn, svc: &'a ServiceCtx) -> BoxFuture<'a, ProvisionResult<()>>;
+    fn change_package<'a>(
+        &'a self,
+        server: &'a ServerConn,
+        svc: &'a ServiceCtx,
+    ) -> BoxFuture<'a, ProvisionResult<()>>;
     /// Client single sign-on: the URL to send the client to, carrying the
     /// signed one-time `token` (see [`sso`]). `None` means unsupported. The
     /// default uses the server's `sso_url` template; modules may override it
     /// (e.g. to exchange the token for a panel-native login link).
-    fn sso_url<'a>(&'a self, server: &'a ServerConn, svc: &'a ServiceCtx, token: &'a str) -> BoxFuture<'a, ProvisionResult<Option<String>>> {
+    fn sso_url<'a>(
+        &'a self,
+        server: &'a ServerConn,
+        svc: &'a ServiceCtx,
+        token: &'a str,
+    ) -> BoxFuture<'a, ProvisionResult<Option<String>>> {
         Box::pin(async move { Ok(sso::template_url(server, svc, token)) })
     }
     /// Names of extra actions this module supports (custom buttons).
@@ -143,20 +168,40 @@ pub trait ProvisioningModule: Send + Sync {
     /// Run one extra action. `params` carries user input (e.g. a new
     /// password or an image id). Returns module-specific output (a console
     /// URL, a new password…) to show once.
-    fn custom<'a>(&'a self, _server: &'a ServerConn, _svc: &'a ServiceCtx, action: &'a str, _params: &'a Value) -> BoxFuture<'a, ProvisionResult<Value>> {
-        Box::pin(async move { Err(ProvisionError::Config(format!("action {action} is not supported by this module"))) })
+    fn custom<'a>(
+        &'a self,
+        _server: &'a ServerConn,
+        _svc: &'a ServiceCtx,
+        action: &'a str,
+        _params: &'a Value,
+    ) -> BoxFuture<'a, ProvisionResult<Value>> {
+        Box::pin(async move {
+            Err(ProvisionError::Config(format!(
+                "action {action} is not supported by this module"
+            )))
+        })
     }
     /// Live resource usage / status for the client area (`None` = unsupported).
-    fn usage<'a>(&'a self, _server: &'a ServerConn, _svc: &'a ServiceCtx) -> BoxFuture<'a, ProvisionResult<Option<Value>>> {
+    fn usage<'a>(
+        &'a self,
+        _server: &'a ServerConn,
+        _svc: &'a ServiceCtx,
+    ) -> BoxFuture<'a, ProvisionResult<Option<Value>>> {
         Box::pin(async move { Ok(None) })
     }
     /// Accounts that exist on the server, for import/sync (`None` = unsupported).
-    fn list_accounts<'a>(&'a self, _server: &'a ServerConn) -> BoxFuture<'a, ProvisionResult<Option<Vec<RemoteAccount>>>> {
+    fn list_accounts<'a>(
+        &'a self,
+        _server: &'a ServerConn,
+    ) -> BoxFuture<'a, ProvisionResult<Option<Vec<RemoteAccount>>>> {
         Box::pin(async move { Ok(None) })
     }
     /// Vendor resale (MarketConnect-style): products this vendor sells,
     /// with the reseller's cost. `None` = not a vendor module.
-    fn catalog<'a>(&'a self, _server: &'a ServerConn) -> BoxFuture<'a, ProvisionResult<Option<Vec<VendorProduct>>>> {
+    fn catalog<'a>(
+        &'a self,
+        _server: &'a ServerConn,
+    ) -> BoxFuture<'a, ProvisionResult<Option<Vec<VendorProduct>>>> {
         Box::pin(async move { Ok(None) })
     }
 }
@@ -195,17 +240,36 @@ pub struct RemoteAccount {
 }
 
 /// Run a custom action after checking the module declares it.
-pub async fn run_custom(m: &dyn ProvisioningModule, action: &str, server: &ServerConn, svc: &ServiceCtx, params: &Value) -> ProvisionResult<Value> {
+pub async fn run_custom(
+    m: &dyn ProvisioningModule,
+    action: &str,
+    server: &ServerConn,
+    svc: &ServiceCtx,
+    params: &Value,
+) -> ProvisionResult<Value> {
     if !m.custom_actions().contains(&action) {
-        return Err(ProvisionError::Config(format!("action {action} is not supported by this module")));
+        return Err(ProvisionError::Config(format!(
+            "action {action} is not supported by this module"
+        )));
     }
     m.custom(server, svc, action, params).await
 }
 
-pub const ACTIONS: &[&str] = &["create", "suspend", "unsuspend", "terminate", "change_package"];
+pub const ACTIONS: &[&str] = &[
+    "create",
+    "suspend",
+    "unsuspend",
+    "terminate",
+    "change_package",
+];
 
 /// Run one named action. `create` returns `Some(Created)`.
-pub async fn run(m: &dyn ProvisioningModule, action: &str, server: &ServerConn, svc: &ServiceCtx) -> ProvisionResult<Option<Created>> {
+pub async fn run(
+    m: &dyn ProvisioningModule,
+    action: &str,
+    server: &ServerConn,
+    svc: &ServiceCtx,
+) -> ProvisionResult<Option<Created>> {
     match action {
         "create" => m.create(server, svc).await.map(Some),
         "suspend" => m.suspend(server, svc).await.map(|_| None),
@@ -230,13 +294,24 @@ impl Registry {
     /// Registers (or replaces) a module through a shared reference.
     pub fn register_dyn(&self, m: Arc<dyn ProvisioningModule>) {
         let id = m.info().id.to_string();
-        self.modules.write().unwrap_or_else(|e| e.into_inner()).insert(id, m);
+        self.modules
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(id, m);
     }
     pub fn unregister(&self, id: &str) -> bool {
-        self.modules.write().unwrap_or_else(|e| e.into_inner()).remove(id).is_some()
+        self.modules
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(id)
+            .is_some()
     }
     pub fn get(&self, id: &str) -> Option<Arc<dyn ProvisioningModule>> {
-        self.modules.read().unwrap_or_else(|e| e.into_inner()).get(id).cloned()
+        self.modules
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(id)
+            .cloned()
     }
     pub fn list(&self) -> Vec<ModuleInfo> {
         self.modules
@@ -248,7 +323,13 @@ impl Registry {
                 i.actions = m.custom_actions().to_vec();
                 // Every module can use the generic SSO redirect template.
                 if !i.server_fields.iter().any(|f| f.key == "sso_url") {
-                    i.server_fields.push(FieldSpec { key: "sso_url", label: "provisioning.field.sso_url", kind: "text", required: false, default: None });
+                    i.server_fields.push(FieldSpec {
+                        key: "sso_url",
+                        label: "provisioning.field.sso_url",
+                        kind: "text",
+                        required: false,
+                        default: None,
+                    });
                 }
                 i
             })
@@ -258,14 +339,21 @@ impl Registry {
 
 #[doc(hidden)]
 pub fn remote_id(svc: &ServiceCtx) -> ProvisionResult<&str> {
-    svc.remote_id.as_deref().ok_or_else(|| ProvisionError::Config("service has no remote id; create it first".into()))
+    svc.remote_id
+        .as_deref()
+        .ok_or_else(|| ProvisionError::Config("service has no remote id; create it first".into()))
 }
 
 #[doc(hidden)]
 pub fn cfg_u64(v: &Value, key: &str) -> ProvisionResult<u64> {
     match v.get(key) {
-        Some(Value::Number(n)) => n.as_u64().ok_or_else(|| ProvisionError::Config(format!("{key} must be a non-negative integer"))),
-        Some(Value::String(s)) => s.trim().parse().map_err(|_| ProvisionError::Config(format!("{key} must be a non-negative integer"))),
+        Some(Value::Number(n)) => n
+            .as_u64()
+            .ok_or_else(|| ProvisionError::Config(format!("{key} must be a non-negative integer"))),
+        Some(Value::String(s)) => s
+            .trim()
+            .parse()
+            .map_err(|_| ProvisionError::Config(format!("{key} must be a non-negative integer"))),
         _ => Err(ProvisionError::Config(format!("missing {key}"))),
     }
 }
@@ -281,16 +369,35 @@ pub fn cfg_u64_or(v: &Value, key: &str, default: u64) -> ProvisionResult<u64> {
 
 #[doc(hidden)]
 pub fn cfg_str<'a>(v: &'a Value, key: &str) -> ProvisionResult<&'a str> {
-    v.get(key).and_then(Value::as_str).filter(|s| !s.trim().is_empty()).ok_or_else(|| ProvisionError::Config(format!("missing {key}")))
+    v.get(key)
+        .and_then(Value::as_str)
+        .filter(|s| !s.trim().is_empty())
+        .ok_or_else(|| ProvisionError::Config(format!("missing {key}")))
 }
 
 /// Panel usernames: lowercase alnum/underscore derived from the email, plus a
 /// short service suffix for uniqueness.
 #[doc(hidden)]
 pub fn username(email: &str, service_id: &str) -> String {
-    let local: String = email.split('@').next().unwrap_or("user").chars().filter(|c| c.is_ascii_alphanumeric()).take(20).collect::<String>().to_ascii_lowercase();
-    let local = if local.len() < 3 { "user".to_string() } else { local };
-    let suffix: String = service_id.chars().filter(|c| c.is_ascii_alphanumeric()).take(6).collect();
+    let local: String = email
+        .split('@')
+        .next()
+        .unwrap_or("user")
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(20)
+        .collect::<String>()
+        .to_ascii_lowercase();
+    let local = if local.len() < 3 {
+        "user".to_string()
+    } else {
+        local
+    };
+    let suffix: String = service_id
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(6)
+        .collect();
     format!("{local}_{suffix}")
 }
 
@@ -300,7 +407,10 @@ mod tests {
 
     #[test]
     fn usernames_are_safe() {
-        assert_eq!(username("John.Doe+x@example.com", "ab12-cd34-ef"), "johndoex_ab12cd");
+        assert_eq!(
+            username("John.Doe+x@example.com", "ab12-cd34-ef"),
+            "johndoex_ab12cd"
+        );
         assert_eq!(username("a@b.c", "123456789"), "user_123456");
     }
 

@@ -75,7 +75,14 @@ impl DomainService {
     }
 
     /// Same as [`domains::list`].
-    pub async fn list(&self, customer: Option<Uuid>, status: Option<&str>, q: Option<&str>, limit: i64, offset: i64) -> AppResult<(Vec<Domain>, i64)> {
+    pub async fn list(
+        &self,
+        customer: Option<Uuid>,
+        status: Option<&str>,
+        q: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> AppResult<(Vec<Domain>, i64)> {
         domains::list(&self.pool, customer, status, q, limit, offset).await
     }
 
@@ -95,7 +102,13 @@ impl DomainService {
     }
 
     /// Same as [`domains::admin_update`].
-    pub async fn admin_update(&self, id: Uuid, status: Option<&str>, expires_on: Option<Date>, auto_renew: Option<bool>) -> AppResult<Domain> {
+    pub async fn admin_update(
+        &self,
+        id: Uuid,
+        status: Option<&str>,
+        expires_on: Option<Date>,
+        auto_renew: Option<bool>,
+    ) -> AppResult<Domain> {
         domains::admin_update(&self.pool, id, status, expires_on, auto_renew).await
     }
 
@@ -105,7 +118,12 @@ impl DomainService {
     }
 
     /// Same as [`domains::mark_active`].
-    pub async fn mark_active(&self, id: Uuid, registered_on: Date, expires_on: Date) -> AppResult<()> {
+    pub async fn mark_active(
+        &self,
+        id: Uuid,
+        registered_on: Date,
+        expires_on: Date,
+    ) -> AppResult<()> {
         domains::mark_active(&self.pool, id, registered_on, expires_on).await
     }
 
@@ -115,7 +133,12 @@ impl DomainService {
     }
 
     /// Same as [`domains::create_renewal`].
-    pub async fn create_renewal(&self, d: &Domain, t: &Tld, years: i32) -> AppResult<Option<invoices::Invoice>> {
+    pub async fn create_renewal(
+        &self,
+        d: &Domain,
+        t: &Tld,
+        years: i32,
+    ) -> AppResult<Option<invoices::Invoice>> {
         domains::create_renewal(&self.pool, d, t, years).await
     }
 
@@ -150,12 +173,22 @@ impl DomainService {
     }
 
     /// Same as [`domains::replace_dns`].
-    pub async fn replace_dns(&self, domain_id: Uuid, records: &[DnsRecord]) -> AppResult<Vec<DnsRecord>> {
+    pub async fn replace_dns(
+        &self,
+        domain_id: Uuid,
+        records: &[DnsRecord],
+    ) -> AppResult<Vec<DnsRecord>> {
         domains::replace_dns(&self.pool, domain_id, records).await
     }
 
     /// Same as [`domains::set_flags`].
-    pub async fn set_flags(&self, id: Uuid, dns_management: Option<bool>, registrar_lock: Option<bool>, privacy: Option<bool>) -> AppResult<()> {
+    pub async fn set_flags(
+        &self,
+        id: Uuid,
+        dns_management: Option<bool>,
+        registrar_lock: Option<bool>,
+        privacy: Option<bool>,
+    ) -> AppResult<()> {
         domains::set_flags(&self.pool, id, dns_management, registrar_lock, privacy).await
     }
 
@@ -165,7 +198,13 @@ impl DomainService {
     }
 
     /// Same as [`domains::mark_synced`].
-    pub async fn mark_synced(&self, id: Uuid, expires_on: Date, status: Option<&str>, err: Option<&str>) -> AppResult<()> {
+    pub async fn mark_synced(
+        &self,
+        id: Uuid,
+        expires_on: Date,
+        status: Option<&str>,
+        err: Option<&str>,
+    ) -> AppResult<()> {
         domains::mark_synced(&self.pool, id, expires_on, status, err).await
     }
 
@@ -175,12 +214,23 @@ impl DomainService {
     }
 
     /// Same as [`domains::bulk_adjust_prices`].
-    pub async fn bulk_adjust_prices(&self, tlds: &[String], currency: Option<&str>, percent: Decimal) -> AppResult<u64> {
+    pub async fn bulk_adjust_prices(
+        &self,
+        tlds: &[String],
+        currency: Option<&str>,
+        percent: Decimal,
+    ) -> AppResult<u64> {
         domains::bulk_adjust_prices(&self.pool, tlds, currency, percent).await
     }
 
     /// Same as [`domains::copy_currency`].
-    pub async fn copy_currency(&self, from: &str, to: &str, rate: Decimal, overwrite: bool) -> AppResult<u64> {
+    pub async fn copy_currency(
+        &self,
+        from: &str,
+        to: &str,
+        rate: Decimal,
+        overwrite: bool,
+    ) -> AppResult<u64> {
         domains::copy_currency(&self.pool, from, to, rate, overwrite).await
     }
 

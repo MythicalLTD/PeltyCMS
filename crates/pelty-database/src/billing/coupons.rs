@@ -225,7 +225,12 @@ pub async fn save(pool: &PgPool, id: Option<Uuid>, i: &CouponInput) -> AppResult
             id
         }
     };
-    let tlds: Vec<String> = i.tlds.iter().map(|t| t.trim().trim_start_matches('.').to_ascii_lowercase()).filter(|t| !t.is_empty()).collect();
+    let tlds: Vec<String> = i
+        .tlds
+        .iter()
+        .map(|t| t.trim().trim_start_matches('.').to_ascii_lowercase())
+        .filter(|t| !t.is_empty())
+        .collect();
     sqlx::query("UPDATE coupons SET recurring_cycles=$2, applies_addons=$3, applies_domains=$4, tlds=$5, customer_ids=$6, client_group_ids=$7 WHERE id = $1")
         .bind(id).bind(i.recurring_cycles).bind(i.applies_addons).bind(i.applies_domains).bind(&tlds).bind(&i.customer_ids).bind(&i.client_group_ids)
         .execute(&mut *tx).await.map_err(db_err)?;
@@ -283,16 +288,21 @@ async fn customer_uses(
 }
 
 /// Per-customer / client-group restriction.
-async fn check_eligible(ex: impl sqlx::PgExecutor<'_>, c: &Coupon, customer: Uuid) -> AppResult<()> {
+async fn check_eligible(
+    ex: impl sqlx::PgExecutor<'_>,
+    c: &Coupon,
+    customer: Uuid,
+) -> AppResult<()> {
     if c.customer_ids.is_empty() && c.client_group_ids.is_empty() {
         return Ok(());
     }
-    let group: Option<Uuid> = sqlx::query_scalar("SELECT client_group_id FROM customers WHERE id = $1")
-        .bind(customer)
-        .fetch_optional(ex)
-        .await
-        .map_err(db_err)?
-        .flatten();
+    let group: Option<Uuid> =
+        sqlx::query_scalar("SELECT client_group_id FROM customers WHERE id = $1")
+            .bind(customer)
+            .fetch_optional(ex)
+            .await
+            .map_err(db_err)?
+            .flatten();
     let by_customer = c.customer_ids.contains(&customer);
     let by_group = group.is_some_and(|g| c.client_group_ids.contains(&g));
     if by_customer || by_group {
@@ -384,8 +394,18 @@ pub async fn redeem(
 }
 
 /// Record a domain-order redemption (same transaction as the domain row).
-pub async fn redeem_domain(tx: &mut Transaction<'_, Postgres>, c: &Coupon, customer: Uuid, domain: Uuid, amount: Decimal) -> AppResult<()> {
-    sqlx::query("UPDATE coupons SET uses = uses + 1 WHERE id = $1").bind(c.id).execute(&mut **tx).await.map_err(db_err)?;
+pub async fn redeem_domain(
+    tx: &mut Transaction<'_, Postgres>,
+    c: &Coupon,
+    customer: Uuid,
+    domain: Uuid,
+    amount: Decimal,
+) -> AppResult<()> {
+    sqlx::query("UPDATE coupons SET uses = uses + 1 WHERE id = $1")
+        .bind(c.id)
+        .execute(&mut **tx)
+        .await
+        .map_err(db_err)?;
     sqlx::query("INSERT INTO coupon_redemptions (id, coupon_id, customer_id, domain_id, amount) VALUES ($1,$2,$3,$4,$5)")
         .bind(Uuid::new_v4())
         .bind(c.id)

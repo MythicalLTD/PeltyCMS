@@ -60,7 +60,9 @@ fn split(q: &str) -> (&str, &str) {
 }
 
 fn unescape(s: &str) -> Result<String, Error> {
-    quick_xml::escape::unescape(s).map(|c| c.into_owned()).map_err(|_| Error::Xml("entity"))
+    quick_xml::escape::unescape(s)
+        .map(|c| c.into_owned())
+        .map_err(|_| Error::Xml("entity"))
 }
 
 impl Doc {
@@ -127,8 +129,12 @@ impl Doc {
                 Event::PI(pi) => {
                     if let Some(&p) = stack.last() {
                         let raw = utf8(&pi)?;
-                        let (t, d) = raw.split_once(|c: char| c.is_whitespace()).unwrap_or((raw, ""));
-                        elems[p].children.push(Child::Pi(t.to_string(), d.trim_start().to_string()));
+                        let (t, d) = raw
+                            .split_once(|c: char| c.is_whitespace())
+                            .unwrap_or((raw, ""));
+                        elems[p]
+                            .children
+                            .push(Child::Pi(t.to_string(), d.trim_start().to_string()));
                     }
                 }
                 Event::Comment(_) | Event::Decl(_) => {}
@@ -142,7 +148,10 @@ impl Doc {
         if !stack.is_empty() {
             return Err(Error::Xml("unclosed"));
         }
-        Ok(Doc { elems, root: root.ok_or(Error::Xml("empty"))? })
+        Ok(Doc {
+            elems,
+            root: root.ok_or(Error::Xml("empty"))?,
+        })
     }
 
     fn open(elems: &mut Vec<Elem>, stack: &[usize], e: &BytesStart) -> Result<usize, Error> {
@@ -177,18 +186,39 @@ impl Doc {
         };
         let name = utf8(e.name().as_ref())?.to_string();
         let (prefix, local) = split(&name);
-        let ns = if prefix.is_empty() { scope.get("").cloned().unwrap_or_default() } else { resolve(prefix)? };
+        let ns = if prefix.is_empty() {
+            scope.get("").cloned().unwrap_or_default()
+        } else {
+            resolve(prefix)?
+        };
         let mut attrs = vec![];
         for (k, v) in raw_attrs {
             let (ap, al) = split(&k);
-            let ans = if ap.is_empty() { String::new() } else { resolve(ap)? };
+            let ans = if ap.is_empty() {
+                String::new()
+            } else {
+                resolve(ap)?
+            };
             if attrs.iter().any(|x: &Attr| x.local == al && x.ns == ans) {
                 return Err(Error::Xml("duplicate_attribute"));
             }
-            attrs.push(Attr { prefix: ap.into(), local: al.into(), ns: ans, value: v });
+            attrs.push(Attr {
+                prefix: ap.into(),
+                local: al.into(),
+                ns: ans,
+                value: v,
+            });
         }
         let idx = elems.len();
-        elems.push(Elem { prefix: prefix.into(), local: local.into(), ns, attrs, scope, children: vec![], parent });
+        elems.push(Elem {
+            prefix: prefix.into(),
+            local: local.into(),
+            ns,
+            attrs,
+            scope,
+            children: vec![],
+            parent,
+        });
         if let Some(p) = parent {
             elems[p].children.push(Child::Elem(idx));
         }
@@ -206,14 +236,29 @@ impl Doc {
 
     /// Un-namespaced attribute value.
     pub fn attr(&self, i: usize, local: &str) -> Option<&str> {
-        self.elems[i].attrs.iter().find(|a| a.ns.is_empty() && a.local == local).map(|a| a.value.as_str())
+        self.elems[i]
+            .attrs
+            .iter()
+            .find(|a| a.ns.is_empty() && a.local == local)
+            .map(|a| a.value.as_str())
     }
 
     pub fn kids(&self, i: usize) -> impl Iterator<Item = usize> + '_ {
-        self.elems[i].children.iter().filter_map(|c| if let Child::Elem(x) = c { Some(*x) } else { None })
+        self.elems[i].children.iter().filter_map(|c| {
+            if let Child::Elem(x) = c {
+                Some(*x)
+            } else {
+                None
+            }
+        })
     }
 
-    pub fn kids_named<'a>(&'a self, i: usize, ns: &'a str, local: &'a str) -> impl Iterator<Item = usize> + 'a {
+    pub fn kids_named<'a>(
+        &'a self,
+        i: usize,
+        ns: &'a str,
+        local: &'a str,
+    ) -> impl Iterator<Item = usize> + 'a {
         self.kids(i).filter(move |&k| self.is(k, ns, local))
     }
 

@@ -42,10 +42,18 @@ fn note_body(b: &NoteInput) -> AppResult<&str> {
     Ok(t)
 }
 
-pub async fn add_note(pool: &PgPool, customer: Uuid, author: Uuid, b: &NoteInput) -> AppResult<Uuid> {
+pub async fn add_note(
+    pool: &PgPool,
+    customer: Uuid,
+    author: Uuid,
+    b: &NoteInput,
+) -> AppResult<Uuid> {
     let body = note_body(b)?;
     let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM customers WHERE id = $1)")
-        .bind(customer).fetch_one(pool).await.map_err(db_err)?;
+        .bind(customer)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
     if !exists {
         return Err(AppError::NotFound);
     }
@@ -54,7 +62,12 @@ pub async fn add_note(pool: &PgPool, customer: Uuid, author: Uuid, b: &NoteInput
         .fetch_one(pool).await.map_err(db_err)
 }
 
-pub async fn update_note(pool: &PgPool, customer: Uuid, note: Uuid, b: &NoteInput) -> AppResult<()> {
+pub async fn update_note(
+    pool: &PgPool,
+    customer: Uuid,
+    note: Uuid,
+    b: &NoteInput,
+) -> AppResult<()> {
     let body = note_body(b)?;
     let r = sqlx::query("UPDATE customer_notes SET body=$3, sticky=$4, updated_at=now() WHERE id=$1 AND customer_id=$2")
         .bind(note).bind(customer).bind(body).bind(b.sticky)
@@ -67,7 +80,11 @@ pub async fn update_note(pool: &PgPool, customer: Uuid, note: Uuid, b: &NoteInpu
 
 pub async fn delete_note(pool: &PgPool, customer: Uuid, note: Uuid) -> AppResult<()> {
     let r = sqlx::query("DELETE FROM customer_notes WHERE id=$1 AND customer_id=$2")
-        .bind(note).bind(customer).execute(pool).await.map_err(db_err)?;
+        .bind(note)
+        .bind(customer)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
@@ -107,14 +124,29 @@ pub struct FieldInput {
 
 fn check_field(f: &FieldInput) -> AppResult<Vec<String>> {
     let n = f.name.trim().chars().count();
-    if n == 0 || n > 120 || f.description.chars().count() > 500 || !FIELD_TYPES.contains(&f.field_type.as_str()) {
+    if n == 0
+        || n > 120
+        || f.description.chars().count() > 500
+        || !FIELD_TYPES.contains(&f.field_type.as_str())
+    {
         return Err(v());
     }
-    let opts: Vec<String> = f.options.iter().map(|o| o.trim().to_string()).filter(|o| !o.is_empty()).collect();
-    if f.field_type == "dropdown" && (opts.is_empty() || opts.len() > 100 || opts.iter().any(|o| o.chars().count() > 120)) {
+    let opts: Vec<String> = f
+        .options
+        .iter()
+        .map(|o| o.trim().to_string())
+        .filter(|o| !o.is_empty())
+        .collect();
+    if f.field_type == "dropdown"
+        && (opts.is_empty() || opts.len() > 100 || opts.iter().any(|o| o.chars().count() > 120))
+    {
         return Err(v());
     }
-    Ok(if f.field_type == "dropdown" { opts } else { Vec::new() })
+    Ok(if f.field_type == "dropdown" {
+        opts
+    } else {
+        Vec::new()
+    })
 }
 
 /// Validate and normalise one value (pure; unit-tested). Empty = unset.
@@ -124,13 +156,22 @@ pub fn check_value(f: &ClientField, raw: &str) -> AppResult<String> {
         return Err(v());
     }
     if val.is_empty() {
-        return if f.required { Err(AppError::Validation("error.field_required")) } else { Ok(String::new()) };
+        return if f.required {
+            Err(AppError::Validation("error.field_required"))
+        } else {
+            Ok(String::new())
+        };
     }
     match f.field_type.as_str() {
         "dropdown" if !f.options.iter().any(|o| o == val) => Err(v()),
         "checkbox" if val != "1" && val != "0" => Err(v()),
         "checkbox" if f.required && val == "0" => Err(AppError::Validation("error.field_required")),
-        "link" if !(val.starts_with("https://") || val.starts_with("http://")) || val.contains(char::is_whitespace) => Err(v()),
+        "link"
+            if !(val.starts_with("https://") || val.starts_with("http://"))
+                || val.contains(char::is_whitespace) =>
+        {
+            Err(v())
+        }
         "text" | "link" | "dropdown" if val.contains('\n') => Err(v()),
         _ => Ok(val.to_string()),
     }
@@ -139,8 +180,13 @@ pub fn check_value(f: &ClientField, raw: &str) -> AppResult<String> {
 const FCOLS: &str = "id, name, description, field_type, options, required, admin_only, sort_order";
 
 pub async fn fields(pool: &PgPool, include_admin_only: bool) -> AppResult<Vec<ClientField>> {
-    sqlx::query_as(&format!("SELECT {FCOLS} FROM client_fields WHERE ($1 OR NOT admin_only) ORDER BY sort_order, name"))
-        .bind(include_admin_only).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {FCOLS} FROM client_fields WHERE ($1 OR NOT admin_only) ORDER BY sort_order, name"
+    ))
+    .bind(include_admin_only)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn create_field(pool: &PgPool, f: &FieldInput) -> AppResult<Uuid> {
@@ -162,7 +208,11 @@ pub async fn update_field(pool: &PgPool, id: Uuid, f: &FieldInput) -> AppResult<
 }
 
 pub async fn delete_field(pool: &PgPool, id: Uuid) -> AppResult<()> {
-    let r = sqlx::query("DELETE FROM client_fields WHERE id=$1").bind(id).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("DELETE FROM client_fields WHERE id=$1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
@@ -170,15 +220,24 @@ pub async fn delete_field(pool: &PgPool, id: Uuid) -> AppResult<()> {
 }
 
 pub async fn values(pool: &PgPool, customer: Uuid) -> AppResult<HashMap<Uuid, String>> {
-    let rows: Vec<(Uuid, String)> = sqlx::query_as("SELECT field_id, value FROM customer_field_values WHERE customer_id=$1")
-        .bind(customer).fetch_all(pool).await.map_err(db_err)?;
+    let rows: Vec<(Uuid, String)> =
+        sqlx::query_as("SELECT field_id, value FROM customer_field_values WHERE customer_id=$1")
+            .bind(customer)
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?;
     Ok(rows.into_iter().collect())
 }
 
 /// Save values for the fields visible to the caller (`staff` = all fields).
 /// Fields not in `input` keep their value, but required visible fields must
 /// end up non-empty. Unknown / hidden field ids are rejected.
-pub async fn set_values(pool: &PgPool, customer: Uuid, staff: bool, input: &HashMap<Uuid, String>) -> AppResult<()> {
+pub async fn set_values(
+    pool: &PgPool,
+    customer: Uuid,
+    staff: bool,
+    input: &HashMap<Uuid, String>,
+) -> AppResult<()> {
     let fs = fields(pool, staff).await?;
     if input.keys().any(|k| !fs.iter().any(|f| f.id == *k)) {
         return Err(v());
@@ -196,11 +255,22 @@ pub async fn set_values(pool: &PgPool, customer: Uuid, staff: bool, input: &Hash
         }
         if val.is_empty() {
             sqlx::query("DELETE FROM customer_field_values WHERE customer_id=$1 AND field_id=$2")
-                .bind(customer).bind(f.id).execute(&mut *tx).await.map_err(db_err)?;
+                .bind(customer)
+                .bind(f.id)
+                .execute(&mut *tx)
+                .await
+                .map_err(db_err)?;
         } else {
-            sqlx::query("INSERT INTO customer_field_values (customer_id, field_id, value) VALUES ($1,$2,$3)
-                         ON CONFLICT (customer_id, field_id) DO UPDATE SET value = EXCLUDED.value")
-                .bind(customer).bind(f.id).bind(&val).execute(&mut *tx).await.map_err(db_err)?;
+            sqlx::query(
+                "INSERT INTO customer_field_values (customer_id, field_id, value) VALUES ($1,$2,$3)
+                         ON CONFLICT (customer_id, field_id) DO UPDATE SET value = EXCLUDED.value",
+            )
+            .bind(customer)
+            .bind(f.id)
+            .bind(&val)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
         }
     }
     tx.commit().await.map_err(db_err)
@@ -245,7 +315,11 @@ fn pending() -> String {
 
 fn check_todo(t: &TodoInput) -> AppResult<()> {
     let n = t.title.trim().chars().count();
-    if n == 0 || n > 200 || t.description.chars().count() > 5000 || !TODO_STATUSES.contains(&t.status.as_str()) {
+    if n == 0
+        || n > 200
+        || t.description.chars().count() > 5000
+        || !TODO_STATUSES.contains(&t.status.as_str())
+    {
         return Err(v());
     }
     Ok(())
@@ -297,7 +371,11 @@ pub async fn update_todo(pool: &PgPool, id: Uuid, t: &TodoInput) -> AppResult<()
 }
 
 pub async fn delete_todo(pool: &PgPool, id: Uuid) -> AppResult<()> {
-    let r = sqlx::query("DELETE FROM admin_todos WHERE id=$1").bind(id).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("DELETE FROM admin_todos WHERE id=$1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
@@ -308,7 +386,16 @@ pub async fn delete_todo(pool: &PgPool, id: Uuid) -> AppResult<()> {
 mod tests {
     use super::*;
     fn f(t: &str, required: bool) -> ClientField {
-        ClientField { id: Uuid::new_v4(), name: "F".into(), description: String::new(), field_type: t.into(), options: vec!["A".into(), "B".into()], required, admin_only: false, sort_order: 0 }
+        ClientField {
+            id: Uuid::new_v4(),
+            name: "F".into(),
+            description: String::new(),
+            field_type: t.into(),
+            options: vec!["A".into(), "B".into()],
+            required,
+            admin_only: false,
+            sort_order: 0,
+        }
     }
     #[test]
     fn values_are_validated_per_type() {
@@ -327,8 +414,23 @@ mod tests {
     }
     #[test]
     fn field_definitions() {
-        let base = FieldInput { name: "VAT".into(), description: String::new(), field_type: "dropdown".into(), options: vec![" ".into()], required: false, admin_only: false, sort_order: 0 };
+        let base = FieldInput {
+            name: "VAT".into(),
+            description: String::new(),
+            field_type: "dropdown".into(),
+            options: vec![" ".into()],
+            required: false,
+            admin_only: false,
+            sort_order: 0,
+        };
         assert!(check_field(&base).is_err());
-        assert_eq!(check_field(&FieldInput { options: vec![" a ".into(), "".into()], ..base }).unwrap(), vec!["a".to_string()]);
+        assert_eq!(
+            check_field(&FieldInput {
+                options: vec![" a ".into(), "".into()],
+                ..base
+            })
+            .unwrap(),
+            vec!["a".to_string()]
+        );
     }
 }

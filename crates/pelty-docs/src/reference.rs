@@ -30,7 +30,12 @@ fn example_value(ty: &str, name: &str) -> Value {
 }
 
 pub fn example_payload(e: &EventSpec) -> Value {
-    Value::Object(e.payload.iter().map(|f| (f.name.to_string(), example_value(f.ty, f.name))).collect())
+    Value::Object(
+        e.payload
+            .iter()
+            .map(|f| (f.name.to_string(), example_value(f.ty, f.name)))
+            .collect(),
+    )
 }
 
 /// Listener code for one event (Rust SDK).
@@ -66,7 +71,11 @@ fn listener(e: &EventSpec) -> (String, String) {
 }
 
 fn yes(b: bool) -> &'static str {
-    if b { "yes" } else { "no" }
+    if b {
+        "yes"
+    } else {
+        "no"
+    }
 }
 
 fn cat_title(c: &str) -> String {
@@ -115,7 +124,9 @@ pub fn events(sites: &BTreeMap<String, Vec<String>>) -> Page {
     p.h(2, "All events");
     // Filterable index table.
     let mut html = String::from("<div class=\"filters\"><input id=\"evq\" type=\"search\" placeholder=\"Filter events, e.g. invoice or customer_id\" aria-label=\"Filter events\"><label><input type=\"checkbox\" id=\"evcancel\"> Cancellable only</label><span id=\"evcount\" class=\"src\"></span></div><div class=\"tw\"><table id=\"evtable\"><thead><tr><th>Event</th><th>Category</th><th>Phases</th><th>Cancel</th><th>Modify</th><th>Payload</th></tr></thead><tbody>");
-    let mut md = String::from("| Event | Category | Phases | Cancel | Modify | Payload |\n|---|---|---|---|---|---|\n");
+    let mut md = String::from(
+        "| Event | Category | Phases | Cancel | Modify | Payload |\n|---|---|---|---|---|---|\n",
+    );
     for e in REGISTRY {
         let keys: Vec<String> = e.payload.iter().map(|f| f.name.to_string()).collect();
         html.push_str(&format!(
@@ -129,29 +140,86 @@ pub fn events(sites: &BTreeMap<String, Vec<String>>) -> Page {
             if e.modifiable { "<span class=\"pill ok\">yes</span>" } else { "<span class=\"pill\">no</span>" },
             keys.iter().map(|k| format!("<code>{k}</code>")).collect::<Vec<_>>().join(" ")
         ));
-        md.push_str(&format!("| [`{}`](#{}) | {} | {} | {} | {} | {} |\n", e.name, slugify(e.name), cat_title(e.category()), e.phases().join(", "), yes(e.cancellable), yes(e.modifiable), keys.join(", ")));
+        md.push_str(&format!(
+            "| [`{}`](#{}) | {} | {} | {} | {} | {} |\n",
+            e.name,
+            slugify(e.name),
+            cat_title(e.category()),
+            e.phases().join(", "),
+            yes(e.cancellable),
+            yes(e.modifiable),
+            keys.join(", ")
+        ));
     }
     html.push_str("</tbody></table></div>");
     p.blocks.push(Block::Raw(html, md));
     for (k, v) in &cats {
-        p.blocks.push(Block::Raw(format!("<h2 id=\"cat-{k}\"><a class=\"anchor\" href=\"#cat-{k}\">#</a>{}</h2>\n", esc(&cat_title(k))), format!("## {}\n", cat_title(k))));
+        p.blocks.push(Block::Raw(
+            format!(
+                "<h2 id=\"cat-{k}\"><a class=\"anchor\" href=\"#cat-{k}\">#</a>{}</h2>\n",
+                esc(&cat_title(k))
+            ),
+            format!("## {}\n", cat_title(k)),
+        ));
         for e in v {
             p.h(3, e.name);
             p.p(e.description);
-            p.table(&["Kind", "Phases", "Cancellable", "Modifiable", "Since"], vec![vec![if e.kind == EventKind::Pre { "pre-event".into() } else { "domain event".into() }, e.phases().iter().map(|x| c(x)).collect::<Vec<_>>().join(", "), yes(e.cancellable).into(), yes(e.modifiable).into(), e.since.into()]]);
+            p.table(
+                &["Kind", "Phases", "Cancellable", "Modifiable", "Since"],
+                vec![vec![
+                    if e.kind == EventKind::Pre {
+                        "pre-event".into()
+                    } else {
+                        "domain event".into()
+                    },
+                    e.phases()
+                        .iter()
+                        .map(|x| c(x))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    yes(e.cancellable).into(),
+                    yes(e.modifiable).into(),
+                    e.since.into(),
+                ]],
+            );
             p.p("**Payload**");
-            p.table(&["Key", "Type", "Always present", "Description"], e.payload.iter().map(|f| vec![c(f.name), c(f.ty), yes(f.always).into(), f.description.into()]).collect());
+            p.table(
+                &["Key", "Type", "Always present", "Description"],
+                e.payload
+                    .iter()
+                    .map(|f| {
+                        vec![
+                            c(f.name),
+                            c(f.ty),
+                            yes(f.always).into(),
+                            f.description.into(),
+                        ]
+                    })
+                    .collect(),
+            );
             if e.modifiable {
                 p.p("**Modifiable keys** (everything else in a `modify` is ignored)");
-                p.table(&["Key", "Rule"], e.modify.iter().map(|(k, r)| vec![c(k), (*r).into()]).collect());
+                p.table(
+                    &["Key", "Rule"],
+                    e.modify
+                        .iter()
+                        .map(|(k, r)| vec![c(k), (*r).into()])
+                        .collect(),
+                );
             } else if e.kind == EventKind::Pre {
                 p.p("**Modifiable keys:** none. A `modify` reply is accepted but the host does not read anything back.");
             }
             match sites.get(e.name) {
-                Some(s) => p.p(format!("**Emitted from:** {}.", s.iter().map(|x| c(x)).collect::<Vec<_>>().join(", "))),
+                Some(s) => p.p(format!(
+                    "**Emitted from:** {}.",
+                    s.iter().map(|x| c(x)).collect::<Vec<_>>().join(", ")
+                )),
                 None => p.p("**Emitted from:** not found by the source scanner."),
             };
-            p.code("json", serde_json::to_string_pretty(&example_payload(e)).unwrap());
+            p.code(
+                "json",
+                serde_json::to_string_pretty(&example_payload(e)).unwrap(),
+            );
             let (manifest, code) = listener(e);
             p.code("json", manifest);
             p.code("rust", code);
@@ -163,7 +231,11 @@ pub fn events(sites: &BTreeMap<String, Vec<String>>) -> Page {
     p.blocks.extend(crate::pages::phases_blocks());
     p.h(2, "Webhook plugins");
     p.p("A webhook plugin lists domain events in its manifest `hooks`. Each one is POSTed to `webhook_url`, signed, with the payload above. Delivery attempts are listed under Admin, Plugins, Deliveries.");
-    crate::pages::fields_table(&mut p, "crates/pelty-extensions/src/plugins.rs", "PluginManifest");
+    crate::pages::fields_table(
+        &mut p,
+        "crates/pelty-extensions/src/plugins.rs",
+        "PluginManifest",
+    );
     p.code("json", serde_json::to_string_pretty(&json!({ "id": "my-plugin", "name": "My plugin", "version": "1.0.0", "api_version": 1, "hooks": ["invoice.paid", "order.created"], "webhook_url": "https://example.com/pelty" })).unwrap());
     p
 }
@@ -188,7 +260,33 @@ pub fn cancellable(spec: &Value) -> Page {
     p.code("json", "{\"action\":\"continue\"}\n{\"action\":\"modify\",\"payload\":{ \"coupon\": \"SUMMER\" }}\n{\"action\":\"cancel\",\"reason\":\"not allowed\"}\n{\"action\":\"uncancel\"}");
     p.p("The Rust SDK builds these with `reply::proceed()`, `reply::modify(p)`, `reply::cancel(reason)` and `reply::uncancel()`.");
     p.h(2, "Typed pre-events");
-    p.table(&["Event", "Cancel", "Modifiable keys and rules", "Payload"], REGISTRY.iter().filter(|e| e.kind == EventKind::Pre).map(|e| vec![format!("[`{}`](events.md#{})", e.name, slugify(e.name)), yes(e.cancellable).into(), if e.modify.is_empty() { "none (read-only)".into() } else { e.modify.iter().map(|(k, r)| format!("`{k}`: {r}")).collect::<Vec<_>>().join("; ") }, e.payload.iter().map(|f| c(f.name)).collect::<Vec<_>>().join(", ")]).collect());
+    p.table(
+        &["Event", "Cancel", "Modifiable keys and rules", "Payload"],
+        REGISTRY
+            .iter()
+            .filter(|e| e.kind == EventKind::Pre)
+            .map(|e| {
+                vec![
+                    format!("[`{}`](events.md#{})", e.name, slugify(e.name)),
+                    yes(e.cancellable).into(),
+                    if e.modify.is_empty() {
+                        "none (read-only)".into()
+                    } else {
+                        e.modify
+                            .iter()
+                            .map(|(k, r)| format!("`{k}`: {r}"))
+                            .collect::<Vec<_>>()
+                            .join("; ")
+                    },
+                    e.payload
+                        .iter()
+                        .map(|f| c(f.name))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                ]
+            })
+            .collect(),
+    );
     p.h(3, "Example: cancel, modify and uncancel");
     p.blocks.extend(crate::pages::snippet_blocks("hooks"));
     p.blocks.extend(crate::pages::snippet_blocks("uncancel"));
@@ -204,8 +302,18 @@ pub fn cancellable(spec: &Value) -> Page {
             if !["post", "put", "patch", "delete"].contains(&m.as_str()) || !op.is_object() {
                 continue;
             }
-            let summary = op["summary"].as_str().or(op["description"].as_str()).unwrap_or("").lines().next().unwrap_or("").to_string();
-            rows.push(vec![format!("`before:{} {path}`", m.to_uppercase()), summary]);
+            let summary = op["summary"]
+                .as_str()
+                .or(op["description"].as_str())
+                .unwrap_or("")
+                .lines()
+                .next()
+                .unwrap_or("")
+                .to_string();
+            rows.push(vec![
+                format!("`before:{} {path}`", m.to_uppercase()),
+                summary,
+            ]);
         }
     }
     p.p(format!("{} cancellable request events:", rows.len()));
@@ -222,7 +330,12 @@ pub fn widgets() -> Page {
     let mut p = Page::new("widgets", "Widgets and slots", "Reference");
     let pages = slots::pages();
     let named = slots::named();
-    let n_slots: usize = pages.iter().map(|x| u::PAGE_POSITIONS.len() - usize::from(!x.detail)).sum::<usize>() + 2 * u::LAYOUT_POSITIONS.len() + named.len();
+    let n_slots: usize = pages
+        .iter()
+        .map(|x| u::PAGE_POSITIONS.len() - usize::from(!x.detail))
+        .sum::<usize>()
+        + 2 * u::LAYOUT_POSITIONS.len()
+        + named.len();
     p.p(format!(
         "Every place where an addon can inject UI: {} admin pages and {} client pages, each with its own page slots, {} layout slots and {} hand-placed named slots ({} slot names in total, wildcards not counted). Generated from `frontend/src/App.tsx`, `frontend/src/layouts/Shell.tsx` and the `<PluginSlot>` / `<PluginWidgets>` calls; a test fails when the frontend renders a position the docs do not list.",
         pages.iter().filter(|x| x.area == "admin").count(),
@@ -238,13 +351,36 @@ pub fn widgets() -> Page {
     ]);
     p.h(2, "Frontend event bus");
     p.p("The panel publishes host events on an in-page bus; frames subscribe with wildcards (`record.*`, `*`). An event a frame emits is published as `<addon-id>:<name>`, so addons can talk to each other and to their own slots on the same page.");
-    p.table(&["Event", "Payload", "When"], vec![
-        vec![c("route.changed"), c("{area, path, key}"), "Every navigation".into()],
-        vec![c("record.viewed"), c("{area, kind, id}"), "A detail page opens (`kind` = route key)".into()],
-        vec![c("ui.theme_changed"), c("{dark}"), "Light/dark switch".into()],
-        vec![c("ui.locale_changed"), c("{locale}"), "Language switch".into()],
-        vec![c("data.changed"), c("{key}"), "A panel mutation succeeded (`key` = first query key)".into()],
-    ]);
+    p.table(
+        &["Event", "Payload", "When"],
+        vec![
+            vec![
+                c("route.changed"),
+                c("{area, path, key}"),
+                "Every navigation".into(),
+            ],
+            vec![
+                c("record.viewed"),
+                c("{area, kind, id}"),
+                "A detail page opens (`kind` = route key)".into(),
+            ],
+            vec![
+                c("ui.theme_changed"),
+                c("{dark}"),
+                "Light/dark switch".into(),
+            ],
+            vec![
+                c("ui.locale_changed"),
+                c("{locale}"),
+                "Language switch".into(),
+            ],
+            vec![
+                c("data.changed"),
+                c("{key}"),
+                "A panel mutation succeeded (`key` = first query key)".into(),
+            ],
+        ],
+    );
     p.p("Frontend filters (`nav.items`, `page.title`) let in-page code rewrite the sidebar's addon entries and the document title; a throwing or wrongly typed filter is skipped. Server-side value filters (`ui.contributions`, `client.dashboard`, …) are on [Hooks](hooks.md#filters).");
     p.h(2, "Overriding core pages and the menu");
     p.p("With `\"override\"` in `capabilities.ui` (shown to the admin as a dangerous permission at install), `ui.overrides` replaces whole core pages with one of the addon's own pages and hides core sidebar entries. The replaced page receives the route context (`ctx.id` on detail pages). When two addons override the same route, the first by addon id wins; the API lists the others under `overrides.conflicts`. Opening a page with `?core=1` always shows the core page, so a broken override can't lock anyone out. Without the capability, `ui.overrides` is ignored.");
@@ -284,17 +420,46 @@ pub fn widgets() -> Page {
             sections.push(format!("`{}` ({rel})", &c[1]));
         }
     }
-    p.p(if sections.is_empty() { "Replaceable sections: none are wrapped yet, so section slots currently render nothing.".to_string() } else { format!("Replaceable sections (`replace:`, `before:`, `after:`): {}.", sections.join(", ")) });
+    p.p(if sections.is_empty() {
+        "Replaceable sections: none are wrapped yet, so section slots currently render nothing."
+            .to_string()
+    } else {
+        format!(
+            "Replaceable sections (`replace:`, `before:`, `after:`): {}.",
+            sections.join(", ")
+        )
+    });
     p.h(2, "Named slots");
     p.p("Fixed slots placed on specific pages. `render` slots take a node tree or frame (`ui.slots`). `widget` and `nav` slots take stat cards and menu links from webhook plugins (`ui.widgets`, `ui.menu`).");
-    p.table(&["Slot", "Kind", "Context", "Rendered in"], named.iter().map(|n| vec![c(&n.slot), n.kind.into(), n.ctx.iter().map(|k| c(&format!("ctx.{k}"))).collect::<Vec<_>>().join(", "), n.files.iter().map(|f| c(f)).collect::<Vec<_>>().join(", ")]).collect());
+    p.table(
+        &["Slot", "Kind", "Context", "Rendered in"],
+        named
+            .iter()
+            .map(|n| {
+                vec![
+                    c(&n.slot),
+                    n.kind.into(),
+                    n.ctx
+                        .iter()
+                        .map(|k| c(&format!("ctx.{k}")))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    n.files.iter().map(|f| c(f)).collect::<Vec<_>>().join(", "),
+                ]
+            })
+            .collect(),
+    );
     for (area, title) in [("admin", "Admin pages"), ("client", "Client area pages")] {
         p.h(2, title);
         let rows = pages
             .iter()
             .filter(|x| x.area == area)
             .map(|x| {
-                let pos: Vec<String> = u::PAGE_POSITIONS.iter().filter(|q| x.detail || **q != "detail-panel").map(|q| format!("`{}.{}.{q}`", x.area, x.key)).collect();
+                let pos: Vec<String> = u::PAGE_POSITIONS
+                    .iter()
+                    .filter(|q| x.detail || **q != "detail-panel")
+                    .map(|q| format!("`{}.{}.{q}`", x.area, x.key))
+                    .collect();
                 vec![c(&x.path), c(&x.key), x.component.clone(), pos.join(" ")]
             })
             .collect();
@@ -315,21 +480,84 @@ pub fn hook_points(spec: &Value) -> Page {
     for item in spec["paths"].as_object().unwrap().values() {
         for (m, op) in item.as_object().unwrap() {
             if op.is_object() {
-                if ["post", "put", "patch", "delete"].contains(&m.as_str()) { writes += 1 } else { reads += 1 }
+                if ["post", "put", "patch", "delete"].contains(&m.as_str()) {
+                    writes += 1
+                } else {
+                    reads += 1
+                }
             }
         }
     }
     let pre = REGISTRY.iter().filter(|e| e.kind == EventKind::Pre).count();
-    p.table(&["Target", "Where", "Count", "Cancel", "Modify", "Docs"], vec![
-        vec!["`<pre-event>`, e.g. `order.before_place`".into(), "`hooks`".into(), pre.to_string(), "yes".into(), "listed keys".into(), "[Cancel and modify](cancellable.md)".into()],
-        vec!["`<domain-event>`".into(), "`events` (on-event)".into(), (REGISTRY.len() - pre).to_string(), "no".into(), "no".into(), "[Events index](events.md)".into()],
-        vec!["`after:<domain-event>`, `finished:<domain-event>`".into(), "`hooks`".into(), (2 * (REGISTRY.len() - pre)).to_string(), "no".into(), "no".into(), "[Events index](events.md)".into()],
-        vec!["`before:<METHOD> <route>`, `before:*`".into(), "`hooks`".into(), writes.to_string(), "yes".into(), "request body".into(), "[Cancel and modify](cancellable.md)".into()],
-        vec!["`during:` / `after:` / `finished:<METHOD> <route>`".into(), "`hooks`".into(), (3 * writes).to_string(), "no".into(), "no".into(), "[Hooks and mixins](hooks.md)".into()],
-        vec!["`before:<addon>:<event>`".into(), "`hooks`".into(), "addon-defined".into(), "yes".into(), "whole payload".into(), "[Events and hooks](events-guide.md)".into()],
-        vec!["`<METHOD> <route>` mixin (`before`, `after`, `around`, `return`)".into(), "`mixins`".into(), (reads + writes).to_string(), "`return` replaces".into(), "body / response".into(), "[Hooks and mixins](hooks.md)".into()],
-        vec!["UI slot".into(), "`ui.slots`".into(), "see page".into(), "-".into(), "-".into(), "[Widgets and slots](widgets.md)".into()],
-    ]);
+    p.table(
+        &["Target", "Where", "Count", "Cancel", "Modify", "Docs"],
+        vec![
+            vec![
+                "`<pre-event>`, e.g. `order.before_place`".into(),
+                "`hooks`".into(),
+                pre.to_string(),
+                "yes".into(),
+                "listed keys".into(),
+                "[Cancel and modify](cancellable.md)".into(),
+            ],
+            vec![
+                "`<domain-event>`".into(),
+                "`events` (on-event)".into(),
+                (REGISTRY.len() - pre).to_string(),
+                "no".into(),
+                "no".into(),
+                "[Events index](events.md)".into(),
+            ],
+            vec![
+                "`after:<domain-event>`, `finished:<domain-event>`".into(),
+                "`hooks`".into(),
+                (2 * (REGISTRY.len() - pre)).to_string(),
+                "no".into(),
+                "no".into(),
+                "[Events index](events.md)".into(),
+            ],
+            vec![
+                "`before:<METHOD> <route>`, `before:*`".into(),
+                "`hooks`".into(),
+                writes.to_string(),
+                "yes".into(),
+                "request body".into(),
+                "[Cancel and modify](cancellable.md)".into(),
+            ],
+            vec![
+                "`during:` / `after:` / `finished:<METHOD> <route>`".into(),
+                "`hooks`".into(),
+                (3 * writes).to_string(),
+                "no".into(),
+                "no".into(),
+                "[Hooks and mixins](hooks.md)".into(),
+            ],
+            vec![
+                "`before:<addon>:<event>`".into(),
+                "`hooks`".into(),
+                "addon-defined".into(),
+                "yes".into(),
+                "whole payload".into(),
+                "[Events and hooks](events-guide.md)".into(),
+            ],
+            vec![
+                "`<METHOD> <route>` mixin (`before`, `after`, `around`, `return`)".into(),
+                "`mixins`".into(),
+                (reads + writes).to_string(),
+                "`return` replaces".into(),
+                "body / response".into(),
+                "[Hooks and mixins](hooks.md)".into(),
+            ],
+            vec![
+                "UI slot".into(),
+                "`ui.slots`".into(),
+                "see page".into(),
+                "-".into(),
+                "-".into(),
+                "[Widgets and slots](widgets.md)".into(),
+            ],
+        ],
+    );
     p.h(2, "Phases");
     p.table(&["Phase", "When", "Can change it", "Payload"], vec![
         vec![c("before"), "Before the action, synchronously, in priority order".into(), "yes: modify, cancel, uncancel".into(), "event payload (requests: `{method, path, route, query, body}`)".into()],
@@ -338,14 +566,21 @@ pub fn hook_points(spec: &Value) -> Page {
         vec![c("finished"), "Always last".into(), "no".into(), "`{status: ok|failed|cancelled, …}`".into()],
     ]);
     p.h(2, "Priorities");
-    p.table(&["Name", "Value", "Note"], vec![
-        vec![c("lowest"), "0".into(), "runs first".into()],
-        vec![c("low"), "50".into(), "".into()],
-        vec![c("normal"), "100".into(), "default".into()],
-        vec![c("high"), "150".into(), "".into()],
-        vec![c("highest"), "200".into(), "".into()],
-        vec![c("monitor"), pelty_wasm::PRIORITY_MONITOR.to_string(), "runs last, observe only".into()],
-    ]);
+    p.table(
+        &["Name", "Value", "Note"],
+        vec![
+            vec![c("lowest"), "0".into(), "runs first".into()],
+            vec![c("low"), "50".into(), "".into()],
+            vec![c("normal"), "100".into(), "default".into()],
+            vec![c("high"), "150".into(), "".into()],
+            vec![c("highest"), "200".into(), "".into()],
+            vec![
+                c("monitor"),
+                pelty_wasm::PRIORITY_MONITOR.to_string(),
+                "runs last, observe only".into(),
+            ],
+        ],
+    );
     p.p("Integers from -1000 to 1000 are accepted too.");
     p
 }

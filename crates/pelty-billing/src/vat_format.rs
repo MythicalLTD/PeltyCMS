@@ -19,16 +19,27 @@ pub fn is_valid_format(cc: &str, num: &str) -> bool {
         "GB" | "XI" => gb(num),
         "IT" => it(num),
         "BE" => be(num),
-        "NL" => num.len() == 12 && num.as_bytes()[9] == b'B' && all_digits(&num[..9], &[9]) && all_digits(&num[10..], &[2]),
+        "NL" => {
+            num.len() == 12
+                && num.as_bytes()[9] == b'B'
+                && all_digits(&num[..9], &[9])
+                && all_digits(&num[10..], &[2])
+        }
         "PL" => pl(num),
         "AT" => num.len() == 9 && num.starts_with('U') && all_digits(&num[1..], &[8]),
         "BG" => all_digits(num, &[9, 10]),
-        "CY" => num.len() == 9 && all_digits(&num[..8], &[8]) && num.as_bytes()[8].is_ascii_uppercase(),
+        "CY" => {
+            num.len() == 9 && all_digits(&num[..8], &[8]) && num.as_bytes()[8].is_ascii_uppercase()
+        }
         "CZ" => all_digits(num, &[8, 9, 10]),
         "DK" | "FI" | "HU" | "LU" | "MT" | "SI" => all_digits(num, &[8]),
         "EE" | "EL" | "GR" | "PT" => all_digits(num, &[9]),
         "ES" => num.len() == 9 && num.chars().all(|c| c.is_ascii_alphanumeric()),
-        "FR" => num.len() == 11 && num.chars().all(|c| c.is_ascii_alphanumeric()) && all_digits(&num[2..], &[9]),
+        "FR" => {
+            num.len() == 11
+                && num.chars().all(|c| c.is_ascii_alphanumeric())
+                && all_digits(&num[2..], &[9])
+        }
         "HR" => all_digits(num, &[11]),
         "IE" => (8..=9).contains(&num.len()) && num.chars().all(|c| c.is_ascii_alphanumeric()),
         "LT" => all_digits(num, &[9, 12]),
@@ -77,7 +88,12 @@ fn gb(num: &str) -> bool {
         return false;
     }
     let d = digits(&num[..9]).unwrap_or_default();
-    let s: i32 = d[..7].iter().enumerate().map(|(i, x)| *x as i32 * (8 - i as i32)).sum::<i32>() + (d[7] * 10 + d[8]) as i32;
+    let s: i32 = d[..7]
+        .iter()
+        .enumerate()
+        .map(|(i, x)| *x as i32 * (8 - i as i32))
+        .sum::<i32>()
+        + (d[7] * 10 + d[8]) as i32;
     s % 97 == 0 || (s + 55) % 97 == 0
 }
 
@@ -99,7 +115,11 @@ fn it(num: &str) -> bool {
 }
 
 fn be(num: &str) -> bool {
-    let n = if num.len() == 9 { format!("0{num}") } else { num.to_string() };
+    let n = if num.len() == 9 {
+        format!("0{num}")
+    } else {
+        num.to_string()
+    };
     if !all_digits(&n, &[10]) {
         return false;
     }

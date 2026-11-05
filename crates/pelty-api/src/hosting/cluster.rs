@@ -21,8 +21,16 @@ pub const CHANNEL: &str = "pelty:bus";
 /// Pub/sub ignores the database index, so the channel carries it: two
 /// deployments on one Redis (different `/<db>`) do not reload each other.
 pub fn channel(s: &AppState) -> String {
-    let db = s.shared.url().and_then(|u| redis::Client::open(u).ok()).map_or(0, |c| c.get_connection_info().redis.db);
-    if db == 0 { CHANNEL.to_string() } else { format!("{CHANNEL}:{db}") }
+    let db = s
+        .shared
+        .url()
+        .and_then(|u| redis::Client::open(u).ok())
+        .map_or(0, |c| c.get_connection_info().redis.db);
+    if db == 0 {
+        CHANNEL.to_string()
+    } else {
+        format!("{CHANNEL}:{db}")
+    }
 }
 const INSTANCE_PREFIX: &str = "pelty:instance:";
 const HEARTBEAT: Duration = Duration::from_secs(10);
@@ -54,7 +62,21 @@ impl Topic {
     /// Topic for an admin write to `path` (`/api/v1/admin/...`).
     pub fn for_path(path: &str) -> Topic {
         let p = path.to_ascii_lowercase();
-        if ["addon", "gateway", "plugin", "extension", "theme", "mixin", "provisioning", "registrar", "captcha", "sso"].iter().any(|k| p.contains(k)) {
+        if [
+            "addon",
+            "gateway",
+            "plugin",
+            "extension",
+            "theme",
+            "mixin",
+            "provisioning",
+            "registrar",
+            "captcha",
+            "sso",
+        ]
+        .iter()
+        .any(|k| p.contains(k))
+        {
             Topic::Addons
         } else {
             Topic::Settings
@@ -64,9 +86,16 @@ impl Topic {
 
 /// Tell the other instances that `topic` changed. Best effort.
 pub async fn publish(s: &AppState, topic: Topic) {
-    let Some(mut c) = s.shared.conn().await else { return };
+    let Some(mut c) = s.shared.conn().await else {
+        return;
+    };
     let msg = json!({ "from": s.shared.instance, "topic": topic.as_str() }).to_string();
-    if let Err(e) = redis::cmd("PUBLISH").arg(channel(s)).arg(msg).query_async::<i64>(&mut c).await {
+    if let Err(e) = redis::cmd("PUBLISH")
+        .arg(channel(s))
+        .arg(msg)
+        .query_async::<i64>(&mut c)
+        .await
+    {
         tracing::warn!(error = %e, "cluster publish failed");
     }
 }
@@ -74,10 +103,17 @@ pub async fn publish(s: &AppState, topic: Topic) {
 /// Middleware: after a successful POST/PUT/PATCH/DELETE under
 /// `/api/v1/admin/`, publish the matching topic.
 pub async fn publish_admin_writes(State(s): State<AppState>, req: Request, next: Next) -> Response {
-    let write = !matches!(*req.method(), axum::http::Method::GET | axum::http::Method::HEAD | axum::http::Method::OPTIONS);
+    let write = !matches!(
+        *req.method(),
+        axum::http::Method::GET | axum::http::Method::HEAD | axum::http::Method::OPTIONS
+    );
     let path = req.uri().path().to_string();
     let res = next.run(req).await;
-    if write && s.shared.enabled() && res.status().is_success() && path.starts_with("/api/v1/admin/") {
+    if write
+        && s.shared.enabled()
+        && res.status().is_success()
+        && path.starts_with("/api/v1/admin/")
+    {
         let s = s.clone();
         tokio::spawn(async move { publish(&s, Topic::for_path(&path)).await });
     }
@@ -92,7 +128,12 @@ pub async fn apply(s: &AppState, topic: Topic) {
                 pelty_auth::policy::invalidate();
                 crate::security::invalidate_caches();
                 crate::trusted_proxy::invalidate();
-                s.auth_limiter.set_limit(pelty_auth::policy::load(&s.pool).await?.login_rate_per_minute.unwrap_or(s.cfg.auth_rate_per_minute));
+                s.auth_limiter.set_limit(
+                    pelty_auth::policy::load(&s.pool)
+                        .await?
+                        .login_rate_per_minute
+                        .unwrap_or(s.cfg.auth_rate_per_minute),
+                );
                 crate::routes::smtp::reload(s).await?;
                 if let Err(e) = crate::translations::reload(s).await {
                     tracing::warn!(error = %e, "translation overrides not reloaded");
@@ -113,7 +154,10 @@ pub async fn apply(s: &AppState, topic: Topic) {
     }
     .await;
     match r {
-        Ok(()) => tracing::info!(topic = topic.as_str(), "reloaded after a change on another instance"),
+        Ok(()) => tracing::info!(
+            topic = topic.as_str(),
+            "reloaded after a change on another instance"
+        ),
         Err(e) => tracing::error!(topic = topic.as_str(), error = %e, "cluster reload failed"),
     }
 }
@@ -144,22 +188,38 @@ pub fn spawn(s: AppState) {
 
 async fn listen(s: &AppState) -> Result<(), String> {
     use futures_util::StreamExt;
-    let client = redis::Client::open(s.shared.url().unwrap_or_default()).map_err(|e| e.to_string())?;
-    let mut ps = tokio::time::timeout(Duration::from_secs(5), client.get_async_pubsub()).await.map_err(|_| "connect timeout".to_string())?.map_err(|e| e.to_string())?;
+    let client =
+        redis::Client::open(s.shared.url().unwrap_or_default()).map_err(|e| e.to_string())?;
+    let mut ps = tokio::time::timeout(Duration::from_secs(5), client.get_async_pubsub())
+        .await
+        .map_err(|_| "connect timeout".to_string())?
+        .map_err(|e| e.to_string())?;
     ps.subscribe(channel(s)).await.map_err(|e| e.to_string())?;
     BUS.store(2, Ordering::Relaxed);
     let mut stream = ps.into_on_message();
     while let Some(msg) = stream.next().await {
-        let Ok(body) = msg.get_payload::<String>() else { continue };
-        let Ok(v) = serde_json::from_str::<Value>(&body) else { continue };
+        let Ok(body) = msg.get_payload::<String>() else {
+            continue;
+        };
+        let Ok(v) = serde_json::from_str::<Value>(&body) else {
+            continue;
+        };
         if v["from"].as_str() == Some(s.shared.instance.as_str()) {
             continue;
         }
-        let Some(mut topics) = v["topic"].as_str().and_then(Topic::parse).map(|t| vec![t]) else { continue };
+        let Some(mut topics) = v["topic"].as_str().and_then(Topic::parse).map(|t| vec![t]) else {
+            continue;
+        };
         // Coalesce a burst (one admin save can be several writes).
         tokio::time::sleep(Duration::from_millis(200)).await;
         while let Some(Some(m)) = futures_util::FutureExt::now_or_never(stream.next()) {
-            if let Some(t) = m.get_payload::<String>().ok().and_then(|b| serde_json::from_str::<Value>(&b).ok()).filter(|v| v["from"].as_str() != Some(s.shared.instance.as_str())).and_then(|v| v["topic"].as_str().and_then(Topic::parse)) {
+            if let Some(t) = m
+                .get_payload::<String>()
+                .ok()
+                .and_then(|b| serde_json::from_str::<Value>(&b).ok())
+                .filter(|v| v["from"].as_str() != Some(s.shared.instance.as_str()))
+                .and_then(|v| v["topic"].as_str().and_then(Topic::parse))
+            {
                 if !topics.contains(&t) {
                     topics.push(t);
                 }
@@ -173,7 +233,9 @@ async fn listen(s: &AppState) -> Result<(), String> {
 }
 
 async fn heartbeat(s: &AppState) {
-    let Some(mut c) = s.shared.conn().await else { return };
+    let Some(mut c) = s.shared.conn().await else {
+        return;
+    };
     let v = json!({
         "id": s.shared.instance,
         "version": env!("CARGO_PKG_VERSION"),
@@ -181,7 +243,13 @@ async fn heartbeat(s: &AppState) {
         "bind": s.cfg.bind.to_string(),
         "seen": time::OffsetDateTime::now_utc().unix_timestamp(),
     });
-    let _: Result<(), _> = redis::cmd("SET").arg(format!("{INSTANCE_PREFIX}{}", s.shared.instance)).arg(v.to_string()).arg("PX").arg((HEARTBEAT * 3).as_millis() as u64).query_async(&mut c).await;
+    let _: Result<(), _> = redis::cmd("SET")
+        .arg(format!("{INSTANCE_PREFIX}{}", s.shared.instance))
+        .arg(v.to_string())
+        .arg("PX")
+        .arg((HEARTBEAT * 3).as_millis() as u64)
+        .query_async(&mut c)
+        .await;
 }
 
 /// Live instances (heartbeat within 30 s), plus the scheduler lease holder.
@@ -190,7 +258,15 @@ pub async fn instances(s: &AppState) -> Option<(Vec<Value>, Option<String>)> {
     let mut keys: Vec<String> = vec![];
     let mut cursor: u64 = 0;
     loop {
-        let (next, batch): (u64, Vec<String>) = redis::cmd("SCAN").arg(cursor).arg("MATCH").arg(format!("{INSTANCE_PREFIX}*")).arg("COUNT").arg(200).query_async(&mut c).await.ok()?;
+        let (next, batch): (u64, Vec<String>) = redis::cmd("SCAN")
+            .arg(cursor)
+            .arg("MATCH")
+            .arg(format!("{INSTANCE_PREFIX}*"))
+            .arg("COUNT")
+            .arg(200)
+            .query_async(&mut c)
+            .await
+            .ok()?;
         keys.extend(batch);
         cursor = next;
         if cursor == 0 {
@@ -199,12 +275,20 @@ pub async fn instances(s: &AppState) -> Option<(Vec<Value>, Option<String>)> {
     }
     let mut out = vec![];
     for k in keys {
-        if let Ok(Some(v)) = redis::cmd("GET").arg(&k).query_async::<Option<String>>(&mut c).await {
+        if let Ok(Some(v)) = redis::cmd("GET")
+            .arg(&k)
+            .query_async::<Option<String>>(&mut c)
+            .await
+        {
             out.extend(serde_json::from_str::<Value>(&v).ok());
         }
     }
     out.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
-    let leader: Option<String> = redis::cmd("GET").arg(crate::shared::LEADER_KEY).query_async(&mut c).await.ok()?;
+    let leader: Option<String> = redis::cmd("GET")
+        .arg(crate::shared::LEADER_KEY)
+        .query_async(&mut c)
+        .await
+        .ok()?;
     Some((out, leader))
 }
 
@@ -223,9 +307,18 @@ mod tests {
 
     #[test]
     fn topics_by_admin_path() {
-        assert_eq!(Topic::for_path("/api/v1/admin/addons/x/enable"), Topic::Addons);
-        assert_eq!(Topic::for_path("/api/v1/admin/gateways/stripe"), Topic::Addons);
-        assert_eq!(Topic::for_path("/api/v1/admin/security/policy"), Topic::Settings);
+        assert_eq!(
+            Topic::for_path("/api/v1/admin/addons/x/enable"),
+            Topic::Addons
+        );
+        assert_eq!(
+            Topic::for_path("/api/v1/admin/gateways/stripe"),
+            Topic::Addons
+        );
+        assert_eq!(
+            Topic::for_path("/api/v1/admin/security/policy"),
+            Topic::Settings
+        );
         assert_eq!(Topic::parse(Topic::Addons.as_str()), Some(Topic::Addons));
         assert_eq!(Topic::parse("nope"), None);
     }

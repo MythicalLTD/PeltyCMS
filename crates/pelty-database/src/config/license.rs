@@ -63,11 +63,19 @@ fn summary() -> LicenseSummary {
 }
 
 pub async fn load(pool: &PgPool) -> AppResult<Acceptance> {
-    Ok(settings::get(pool, KEY).await?.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default())
+    Ok(settings::get(pool, KEY)
+        .await?
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default())
 }
 
 async fn save(pool: &PgPool, a: &Acceptance) -> AppResult<()> {
-    settings::set(pool, KEY, serde_json::to_value(a).map_err(|e| AppError::Internal(e.to_string()))?).await
+    settings::set(
+        pool,
+        KEY,
+        serde_json::to_value(a).map_err(|e| AppError::Internal(e.to_string()))?,
+    )
+    .await
 }
 
 /// Customers that count toward the Free Tier (active, not merged).
@@ -105,7 +113,9 @@ pub async fn status(pool: &PgPool) -> AppResult<Status> {
 
 pub async fn accept(pool: &PgPool, user_id: Option<Uuid>, source: &str) -> AppResult<Status> {
     let now = OffsetDateTime::now_utc();
-    let stamp = now.format(&time::format_description::well_known::Rfc3339).unwrap_or_else(|_| now.to_string());
+    let stamp = now
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_else(|_| now.to_string());
     let prev = load(pool).await?;
     save(
         pool,

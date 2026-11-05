@@ -25,10 +25,15 @@ fn emissions(src: &str, marker: &str, skip_arg: bool) -> Vec<(String, Vec<String
             let Some(c) = t.find(',') else { continue };
             t = t[c + 1..].trim_start();
         }
-        let Some(t) = t.strip_prefix('"') else { continue };
+        let Some(t) = t.strip_prefix('"') else {
+            continue;
+        };
         let Some(end) = t.find('"') else { continue };
         let name = t[..end].to_string();
-        let after = t[end + 1..].trim_start().trim_start_matches(',').trim_start();
+        let after = t[end + 1..]
+            .trim_start()
+            .trim_start_matches(',')
+            .trim_start();
         let mut keys = vec![];
         if let Some(body) = after.strip_prefix("json!({") {
             let (mut depth, mut j) = (1i32, 0usize);
@@ -41,7 +46,9 @@ fn emissions(src: &str, marker: &str, skip_arg: bool) -> Vec<(String, Vec<String
                         let s = &body[j + 1..];
                         let e = s.find('"').unwrap();
                         let prev = body[..j].trim_end();
-                        if (prev.is_empty() || prev.ends_with(',')) && s[e + 1..].trim_start().starts_with(':') {
+                        if (prev.is_empty() || prev.ends_with(','))
+                            && s[e + 1..].trim_start().starts_with(':')
+                        {
                             keys.push(s[..e].to_string());
                         }
                         j += e + 1;
@@ -71,16 +78,23 @@ fn every_emitted_event_is_registered() {
         let s = std::fs::read_to_string(f).unwrap();
         // Unit-test modules may emit fixtures.
         let s = s.split("#[cfg(test)]").next().unwrap();
-        for (marker, kind, skip) in [("DomainEvent::new(", EventKind::Domain, false), ("addon_ext::pre_event(", EventKind::Pre, true)] {
+        for (marker, kind, skip) in [
+            ("DomainEvent::new(", EventKind::Domain, false),
+            ("addon_ext::pre_event(", EventKind::Pre, true),
+        ] {
             for (name, keys) in emissions(s, marker, skip) {
                 let at = f.strip_prefix(&root).unwrap().display().to_string();
                 match spec(&name) {
                     None => problems.push(format!("{at}: `{name}` is not in events::REGISTRY")),
-                    Some(e) if e.kind != kind => problems.push(format!("{at}: `{name}` registered as {:?}", e.kind)),
+                    Some(e) if e.kind != kind => {
+                        problems.push(format!("{at}: `{name}` registered as {:?}", e.kind))
+                    }
                     Some(e) => {
                         for k in keys {
                             if !e.payload.iter().any(|p| p.name == k) {
-                                problems.push(format!("{at}: `{name}` payload key `{k}` is not documented"));
+                                problems.push(format!(
+                                    "{at}: `{name}` payload key `{k}` is not documented"
+                                ));
                             }
                         }
                     }
@@ -91,7 +105,11 @@ fn every_emitted_event_is_registered() {
     }
     assert!(problems.is_empty(), "{}", problems.join("\n"));
     // Registered events nobody emits are stale docs.
-    let stale: Vec<_> = REGISTRY.iter().filter(|e| !seen.contains(e.name)).map(|e| e.name).collect();
+    let stale: Vec<_> = REGISTRY
+        .iter()
+        .filter(|e| !seen.contains(e.name))
+        .map(|e| e.name)
+        .collect();
     assert!(stale.is_empty(), "registered but never emitted: {stale:?}");
     assert!(seen.len() >= 30, "scanner found only {} events", seen.len());
 }

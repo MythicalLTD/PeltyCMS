@@ -36,7 +36,12 @@ pub struct Probe {
 const SEL: &str = "SELECT c.domain_id, d.name AS domain, d.customer_id, c.status, c.issuer, c.valid_from, c.expires_at, c.error, c.checked_at \
     FROM ssl_checks c JOIN domains d ON d.id = c.domain_id";
 
-pub async fn list(pool: &PgPool, status: Option<&str>, limit: i64, offset: i64) -> AppResult<(Vec<SslCheck>, i64)> {
+pub async fn list(
+    pool: &PgPool,
+    status: Option<&str>,
+    limit: i64,
+    offset: i64,
+) -> AppResult<(Vec<SslCheck>, i64)> {
     let rows = sqlx::query_as(&format!("{SEL} WHERE ($1::text IS NULL OR c.status = $1) ORDER BY c.expires_at NULLS FIRST, d.name LIMIT $2 OFFSET $3"))
         .bind(status)
         .bind(limit)
@@ -44,11 +49,13 @@ pub async fn list(pool: &PgPool, status: Option<&str>, limit: i64, offset: i64) 
         .fetch_all(pool)
         .await
         .map_err(db_err)?;
-    let total = sqlx::query_scalar("SELECT count(*) FROM ssl_checks WHERE ($1::text IS NULL OR status = $1)")
-        .bind(status)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+    let total = sqlx::query_scalar(
+        "SELECT count(*) FROM ssl_checks WHERE ($1::text IS NULL OR status = $1)",
+    )
+    .bind(status)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
     Ok((rows, total))
 }
 
@@ -61,7 +68,11 @@ pub async fn for_customer(pool: &PgPool, customer: Uuid) -> AppResult<Vec<SslChe
 }
 
 pub async fn get(pool: &PgPool, domain: Uuid) -> AppResult<Option<SslCheck>> {
-    sqlx::query_as(&format!("{SEL} WHERE c.domain_id = $1")).bind(domain).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as(&format!("{SEL} WHERE c.domain_id = $1"))
+        .bind(domain)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 /// Active domains never checked or last checked more than `hours` ago.
@@ -79,7 +90,11 @@ pub async fn due(pool: &PgPool, hours: i32, limit: i64) -> AppResult<Vec<(Uuid, 
 }
 
 pub async fn domain_name(pool: &PgPool, domain: Uuid) -> AppResult<Option<String>> {
-    sqlx::query_scalar("SELECT name FROM domains WHERE id = $1").bind(domain).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_scalar("SELECT name FROM domains WHERE id = $1")
+        .bind(domain)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn save(pool: &PgPool, domain: Uuid, p: &Probe) -> AppResult<()> {

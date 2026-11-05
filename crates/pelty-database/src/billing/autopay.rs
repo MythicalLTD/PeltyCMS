@@ -21,7 +21,10 @@ pub struct AutopaySettings {
 
 impl Default for AutopaySettings {
     fn default() -> Self {
-        Self { enabled: true, retry_days: vec![0, 3, 7] }
+        Self {
+            enabled: true,
+            retry_days: vec![0, 3, 7],
+        }
     }
 }
 
@@ -29,7 +32,10 @@ impl AutopaySettings {
     pub fn normalized(mut self) -> Result<Self, &'static str> {
         self.retry_days.sort_unstable();
         self.retry_days.dedup();
-        if self.retry_days.is_empty() || self.retry_days.len() > 10 || !self.retry_days.iter().all(|d| (0..=90).contains(d)) {
+        if self.retry_days.is_empty()
+            || self.retry_days.len() > 10
+            || !self.retry_days.iter().all(|d| (0..=90).contains(d))
+        {
             return Err("error.invalid_days");
         }
         Ok(self)
@@ -37,11 +43,19 @@ impl AutopaySettings {
 }
 
 pub async fn get_settings(pool: &PgPool) -> AppResult<AutopaySettings> {
-    Ok(settings::get(pool, KEY).await?.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default())
+    Ok(settings::get(pool, KEY)
+        .await?
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default())
 }
 
 pub async fn put_settings(pool: &PgPool, s: &AutopaySettings) -> AppResult<()> {
-    settings::set(pool, KEY, serde_json::to_value(s).map_err(|e| AppError::Internal(e.to_string()))?).await
+    settings::set(
+        pool,
+        KEY,
+        serde_json::to_value(s).map_err(|e| AppError::Internal(e.to_string()))?,
+    )
+    .await
 }
 
 /// Index of the attempt due `today`, given how many were already made.
@@ -52,7 +66,9 @@ pub fn due_attempt(due: Date, retry_days: &[i32], made: usize, today: Date) -> O
 
 /// Date of the attempt after `attempt`, if any.
 pub fn next_retry(due: Date, retry_days: &[i32], attempt: usize) -> Option<Date> {
-    retry_days.get(attempt + 1).map(|d| due + Duration::days((*d).into()))
+    retry_days
+        .get(attempt + 1)
+        .map(|d| due + Duration::days((*d).into()))
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
@@ -72,7 +88,8 @@ pub struct PaymentMethod {
     pub created_at: OffsetDateTime,
 }
 
-const PM: &str = "id, customer_id, gateway, token, brand, last4, exp_month, exp_year, is_default, created_at";
+const PM: &str =
+    "id, customer_id, gateway, token, brand, last4, exp_month, exp_year, is_default, created_at";
 
 pub async fn methods(pool: &PgPool, customer: Uuid) -> AppResult<Vec<PaymentMethod>> {
     sqlx::query_as(&format!("SELECT {PM} FROM payment_methods WHERE customer_id = $1 AND deleted_at IS NULL ORDER BY is_default DESC, created_at"))
@@ -92,14 +109,24 @@ pub struct NewMethod<'a> {
 }
 
 /// Store a method; the first one becomes the default.
-pub async fn add_method(pool: &PgPool, customer: Uuid, m: &NewMethod<'_>) -> AppResult<PaymentMethod> {
+pub async fn add_method(
+    pool: &PgPool,
+    customer: Uuid,
+    m: &NewMethod<'_>,
+) -> AppResult<PaymentMethod> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    sqlx::query("SELECT id FROM customers WHERE id = $1 FOR UPDATE").bind(customer).fetch_one(&mut *tx).await.map_err(db_err)?;
-    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM payment_methods WHERE customer_id = $1 AND deleted_at IS NULL")
+    sqlx::query("SELECT id FROM customers WHERE id = $1 FOR UPDATE")
         .bind(customer)
         .fetch_one(&mut *tx)
         .await
         .map_err(db_err)?;
+    let n: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM payment_methods WHERE customer_id = $1 AND deleted_at IS NULL",
+    )
+    .bind(customer)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(db_err)?;
     if n >= 10 {
         return Err(AppError::Conflict("error.too_many_payment_methods"));
     }
@@ -125,23 +152,43 @@ pub async fn add_method(pool: &PgPool, customer: Uuid, m: &NewMethod<'_>) -> App
 
 pub async fn set_default(pool: &PgPool, customer: Uuid, id: Uuid) -> AppResult<()> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    sqlx::query("SELECT id FROM customers WHERE id = $1 FOR UPDATE").bind(customer).fetch_one(&mut *tx).await.map_err(db_err)?;
-    let ok: Option<Uuid> = sqlx::query_scalar("SELECT id FROM payment_methods WHERE id = $1 AND customer_id = $2 AND deleted_at IS NULL")
-        .bind(id)
+    sqlx::query("SELECT id FROM customers WHERE id = $1 FOR UPDATE")
         .bind(customer)
-        .fetch_optional(&mut *tx)
+        .fetch_one(&mut *tx)
         .await
         .map_err(db_err)?;
+    let ok: Option<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM payment_methods WHERE id = $1 AND customer_id = $2 AND deleted_at IS NULL",
+    )
+    .bind(id)
+    .bind(customer)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_err)?;
     ok.ok_or(AppError::NotFound)?;
-    sqlx::query("UPDATE payment_methods SET is_default = false WHERE customer_id = $1 AND is_default").bind(customer).execute(&mut *tx).await.map_err(db_err)?;
-    sqlx::query("UPDATE payment_methods SET is_default = true WHERE id = $1").bind(id).execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query(
+        "UPDATE payment_methods SET is_default = false WHERE customer_id = $1 AND is_default",
+    )
+    .bind(customer)
+    .execute(&mut *tx)
+    .await
+    .map_err(db_err)?;
+    sqlx::query("UPDATE payment_methods SET is_default = true WHERE id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     tx.commit().await.map_err(db_err)
 }
 
 /// Soft-delete; promotes the oldest remaining method to default.
 pub async fn remove(pool: &PgPool, customer: Uuid, id: Uuid) -> AppResult<()> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    sqlx::query("SELECT id FROM customers WHERE id = $1 FOR UPDATE").bind(customer).fetch_one(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("SELECT id FROM customers WHERE id = $1 FOR UPDATE")
+        .bind(customer)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_err)?;
     let n = sqlx::query("UPDATE payment_methods SET deleted_at = now(), is_default = false WHERE id = $1 AND customer_id = $2 AND deleted_at IS NULL")
         .bind(id)
         .bind(customer)
@@ -164,7 +211,12 @@ pub async fn remove(pool: &PgPool, customer: Uuid, id: Uuid) -> AppResult<()> {
 }
 
 pub async fn auto_pay(pool: &PgPool, customer: Uuid) -> AppResult<bool> {
-    sqlx::query_scalar("SELECT auto_pay FROM customers WHERE id = $1").bind(customer).fetch_optional(pool).await.map_err(db_err)?.ok_or(AppError::NotFound)
+    sqlx::query_scalar("SELECT auto_pay FROM customers WHERE id = $1")
+        .bind(customer)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?
+        .ok_or(AppError::NotFound)
 }
 
 /// Enabling requires a saved default method.
@@ -251,7 +303,9 @@ pub async fn claim_due(pool: &PgPool, cfg: &AutopaySettings, today: Date) -> App
     let mut out = vec![];
     for (invoice_id, customer_id, number, balance, currency, due, made) in rows {
         let made = usize::try_from(made).unwrap_or(usize::MAX);
-        let Some(attempt) = due_attempt(due, &cfg.retry_days, made, today) else { continue };
+        let Some(attempt) = due_attempt(due, &cfg.retry_days, made, today) else {
+            continue;
+        };
         let Some(method) = sqlx::query_as::<_, PaymentMethod>(&format!(
             "SELECT {PM} FROM payment_methods WHERE customer_id = $1 AND is_default AND deleted_at IS NULL"
         ))
@@ -277,13 +331,30 @@ pub async fn claim_due(pool: &PgPool, cfg: &AutopaySettings, today: Date) -> App
         .await
         .map_err(db_err)?;
         if let Some(attempt_id) = id {
-            out.push(Claim { attempt_id, attempt, invoice_id, customer_id, number, balance, currency, due, method, next_retry: next });
+            out.push(Claim {
+                attempt_id,
+                attempt,
+                invoice_id,
+                customer_id,
+                number,
+                balance,
+                currency,
+                due,
+                method,
+                next_retry: next,
+            });
         }
     }
     Ok(out)
 }
 
-pub async fn finish(pool: &PgPool, attempt_id: Uuid, status: &str, payment_id: Option<Uuid>, error: Option<&str>) -> AppResult<()> {
+pub async fn finish(
+    pool: &PgPool,
+    attempt_id: Uuid,
+    status: &str,
+    payment_id: Option<Uuid>,
+    error: Option<&str>,
+) -> AppResult<()> {
     sqlx::query("UPDATE autopay_attempts SET status = $2, payment_id = COALESCE($3, payment_id), error = $4, updated_at = now() WHERE id = $1")
         .bind(attempt_id)
         .bind(status)
@@ -320,7 +391,21 @@ mod tests {
         assert_eq!(due_attempt(due, &r, 3, date!(2026 - 12 - 01)), None);
         assert_eq!(next_retry(due, &r, 0), Some(date!(2026 - 10 - 04)));
         assert_eq!(next_retry(due, &r, 2), None);
-        assert!(AutopaySettings { enabled: true, retry_days: vec![] }.normalized().is_err());
-        assert_eq!(AutopaySettings { enabled: true, retry_days: vec![5, 0, 5] }.normalized().unwrap().retry_days, vec![0, 5]);
+        assert!(AutopaySettings {
+            enabled: true,
+            retry_days: vec![]
+        }
+        .normalized()
+        .is_err());
+        assert_eq!(
+            AutopaySettings {
+                enabled: true,
+                retry_days: vec![5, 0, 5]
+            }
+            .normalized()
+            .unwrap()
+            .retry_days,
+            vec![0, 5]
+        );
     }
 }

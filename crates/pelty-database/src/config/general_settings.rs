@@ -53,7 +53,14 @@ pub struct Localisation {
 
 impl Default for Localisation {
     fn default() -> Self {
-        Self { default_language: "en".into(), allow_language_choice: true, date_format: "DD/MM/YYYY".into(), client_date_format: "DD/MM/YYYY".into(), timezone: "UTC".into(), default_country: "US".into() }
+        Self {
+            default_language: "en".into(),
+            allow_language_choice: true,
+            date_format: "DD/MM/YYYY".into(),
+            client_date_format: "DD/MM/YYYY".into(),
+            timezone: "UTC".into(),
+            default_country: "US".into(),
+        }
     }
 }
 
@@ -70,7 +77,14 @@ pub struct Ordering {
 
 impl Default for Ordering {
     fn default() -> Self {
-        Self { default_order_form: "standard".into(), tos_required: true, allow_domain_only: true, show_cart_after_add: true, grace_days: 0, enable_promo_field: true }
+        Self {
+            default_order_form: "standard".into(),
+            tos_required: true,
+            allow_domain_only: true,
+            show_cart_after_add: true,
+            grace_days: 0,
+            enable_promo_field: true,
+        }
     }
 }
 
@@ -90,7 +104,11 @@ pub struct Support {
 
 impl Default for Support {
     fn default() -> Self {
-        Self { attachment_max_mb: 5, attachments_per_message: 5, live_chat: false }
+        Self {
+            attachment_max_mb: 5,
+            attachments_per_message: 5,
+            live_chat: false,
+        }
     }
 }
 
@@ -120,53 +138,96 @@ pub struct CustomCode {
 }
 
 fn url_ok(u: &str) -> bool {
-    u.is_empty() || (u.starts_with("https://") && u.len() <= 300 && !u.contains(char::is_whitespace))
+    u.is_empty()
+        || (u.starts_with("https://") && u.len() <= 300 && !u.contains(char::is_whitespace))
 }
 
 fn email_ok(e: &str) -> bool {
-    e.is_empty() || (e.len() <= 254 && e.split_once('@').is_some_and(|(a, b)| !a.is_empty() && b.contains('.')))
+    e.is_empty()
+        || (e.len() <= 254
+            && e.split_once('@')
+                .is_some_and(|(a, b)| !a.is_empty() && b.contains('.')))
 }
 
 pub fn validate(s: &GeneralSettings) -> AppResult<()> {
     let g = &s.general;
     let u = &s.system_urls;
     let l = &s.localisation;
-    let ok = g.company_name.len() <= 200 && g.pay_to_text.len() <= 2000 && email_ok(&g.email) && url_ok(&g.domain) && url_ok(&g.logo_url)
+    let ok = g.company_name.len() <= 200
+        && g.pay_to_text.len() <= 2000
+        && email_ok(&g.email)
+        && url_ok(&g.domain)
+        && url_ok(&g.logo_url)
         && (g.records_per_page == 0 || (10..=500).contains(&g.records_per_page))
-        && [&u.system_url, &u.terms_url, &u.privacy_url, &u.support_url].iter().all(|x| url_ok(x))
-        && s.maintenance.message.len() <= 2000 && url_ok(&s.maintenance.redirect_url)
+        && [&u.system_url, &u.terms_url, &u.privacy_url, &u.support_url]
+            .iter()
+            .all(|x| url_ok(x))
+        && s.maintenance.message.len() <= 2000
+        && url_ok(&s.maintenance.redirect_url)
         && ["en", "ro"].contains(&l.default_language.as_str())
-        && DATE_FORMATS.contains(&l.date_format.as_str()) && DATE_FORMATS.contains(&l.client_date_format.as_str())
-        && !l.timezone.is_empty() && l.timezone.len() <= 64 && l.timezone.chars().all(|c| c.is_ascii_alphanumeric() || "/_+-".contains(c))
-        && l.default_country.len() == 2 && l.default_country.chars().all(|c| c.is_ascii_uppercase())
-        && ORDER_FORMS.contains(&s.ordering.default_order_form.as_str()) && s.ordering.grace_days <= 365
-        && (1..=ATTACHMENT_HARD_MAX_MB).contains(&s.support.attachment_max_mb) && (1..=20).contains(&s.support.attachments_per_message);
-    if ok { Ok(()) } else { Err(AppError::Validation("error.validation")) }
+        && DATE_FORMATS.contains(&l.date_format.as_str())
+        && DATE_FORMATS.contains(&l.client_date_format.as_str())
+        && !l.timezone.is_empty()
+        && l.timezone.len() <= 64
+        && l.timezone
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "/_+-".contains(c))
+        && l.default_country.len() == 2
+        && l.default_country.chars().all(|c| c.is_ascii_uppercase())
+        && ORDER_FORMS.contains(&s.ordering.default_order_form.as_str())
+        && s.ordering.grace_days <= 365
+        && (1..=ATTACHMENT_HARD_MAX_MB).contains(&s.support.attachment_max_mb)
+        && (1..=20).contains(&s.support.attachments_per_message);
+    if ok {
+        Ok(())
+    } else {
+        Err(AppError::Validation("error.validation"))
+    }
 }
 
 pub fn validate_code(c: &CustomCode) -> AppResult<()> {
-    if c.css.len() > 100_000 || c.head_js.len() > 100_000 || c.footer_js.len() > 100_000 || c.css.to_ascii_lowercase().contains("</style") {
+    if c.css.len() > 100_000
+        || c.head_js.len() > 100_000
+        || c.footer_js.len() > 100_000
+        || c.css.to_ascii_lowercase().contains("</style")
+    {
         return Err(AppError::Validation("error.validation"));
     }
     Ok(())
 }
 
 pub async fn load(pool: &PgPool) -> AppResult<GeneralSettings> {
-    Ok(crate::settings::get(pool, KEY).await?.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default())
+    Ok(crate::settings::get(pool, KEY)
+        .await?
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default())
 }
 
 pub async fn save(pool: &PgPool, s: &GeneralSettings) -> AppResult<()> {
     validate(s)?;
-    crate::settings::set(pool, KEY, serde_json::to_value(s).map_err(|e| AppError::Internal(e.to_string()))?).await
+    crate::settings::set(
+        pool,
+        KEY,
+        serde_json::to_value(s).map_err(|e| AppError::Internal(e.to_string()))?,
+    )
+    .await
 }
 
 pub async fn load_code(pool: &PgPool) -> AppResult<CustomCode> {
-    Ok(crate::settings::get(pool, CODE_KEY).await?.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default())
+    Ok(crate::settings::get(pool, CODE_KEY)
+        .await?
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default())
 }
 
 pub async fn save_code(pool: &PgPool, c: &CustomCode) -> AppResult<()> {
     validate_code(c)?;
-    crate::settings::set(pool, CODE_KEY, serde_json::to_value(c).map_err(|e| AppError::Internal(e.to_string()))?).await
+    crate::settings::set(
+        pool,
+        CODE_KEY,
+        serde_json::to_value(c).map_err(|e| AppError::Internal(e.to_string()))?,
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -186,12 +247,18 @@ mod tests {
         let mut s = d;
         s.maintenance.redirect_url = "javascript:alert(1)".into();
         assert!(validate(&s).is_err());
-        assert!(validate_code(&CustomCode { css: "a{}</style><script>".into(), ..Default::default() }).is_err());
+        assert!(validate_code(&CustomCode {
+            css: "a{}</style><script>".into(),
+            ..Default::default()
+        })
+        .is_err());
     }
 
     #[test]
     fn old_rows_load_with_defaults() {
-        let s: GeneralSettings = serde_json::from_value(serde_json::json!({ "maintenance": { "enabled": true } })).unwrap();
+        let s: GeneralSettings =
+            serde_json::from_value(serde_json::json!({ "maintenance": { "enabled": true } }))
+                .unwrap();
         assert!(s.maintenance.enabled);
         assert_eq!(s.localisation.date_format, "DD/MM/YYYY");
         assert_eq!(s.support.max_bytes(), 5 * 1024 * 1024);

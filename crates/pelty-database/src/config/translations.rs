@@ -5,11 +5,18 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 pub async fn all(pool: &PgPool) -> AppResult<Vec<(String, String, String)>> {
-    sqlx::query_as("SELECT lang, key, value FROM translation_overrides").fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as("SELECT lang, key, value FROM translation_overrides")
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn for_lang(pool: &PgPool, lang: &str) -> AppResult<Vec<(String, String)>> {
-    sqlx::query_as("SELECT key, value FROM translation_overrides WHERE lang = $1").bind(lang).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as("SELECT key, value FROM translation_overrides WHERE lang = $1")
+        .bind(lang)
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn set(pool: &PgPool, lang: &str, key: &str, value: &str, by: Uuid) -> AppResult<()> {
@@ -22,5 +29,14 @@ pub async fn set(pool: &PgPool, lang: &str, key: &str, value: &str, by: Uuid) ->
 }
 
 pub async fn delete(pool: &PgPool, lang: &str, key: &str) -> AppResult<bool> {
-    Ok(sqlx::query("DELETE FROM translation_overrides WHERE lang = $1 AND key = $2").bind(lang).bind(key).execute(pool).await.map_err(db_err)?.rows_affected() > 0)
+    Ok(
+        sqlx::query("DELETE FROM translation_overrides WHERE lang = $1 AND key = $2")
+            .bind(lang)
+            .bind(key)
+            .execute(pool)
+            .await
+            .map_err(db_err)?
+            .rows_affected()
+            > 0,
+    )
 }

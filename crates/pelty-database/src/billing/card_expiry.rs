@@ -30,6 +30,15 @@ pub async fn claim(pool: &PgPool, today: Date) -> AppResult<Vec<Expiring>> {
     .map_err(db_err)?;
     Ok(rows
         .into_iter()
-        .map(|(payment_method_id, customer_id, brand, last4, exp_month, exp_year)| Expiring { payment_method_id, customer_id, brand, last4, exp_month, exp_year })
+        .map(
+            |(payment_method_id, customer_id, brand, last4, exp_month, exp_year)| Expiring {
+                payment_method_id,
+                customer_id,
+                brand,
+                last4,
+                exp_month,
+                exp_year,
+            },
+        )
         .collect())
 }

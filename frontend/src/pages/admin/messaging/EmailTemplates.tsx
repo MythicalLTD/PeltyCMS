@@ -56,7 +56,8 @@ export function AdminEmailTemplatesPage() {
   useEffect(() => {
     if (!tpl?.locales.length) return;
     if (!tpl.locales.some((l) => l.locale === locale)) {
-      setLocale(tpl.locales[0].locale);
+      const fallback = tpl.locales[0]?.locale;
+      if (fallback) setLocale(fallback);
     }
   }, [tpl, locale]);
   const [subject, setSubject] = useState("");

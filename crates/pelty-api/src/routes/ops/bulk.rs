@@ -1,8 +1,8 @@
 //! Bulk invoice actions, client mass-pay (from account credit), pre-due
 //! reminder settings, and the order approval queue + rules.
-use crate::routes::customers::customer_of;
 use crate::error::ApiResult;
 use crate::extract::{perms, CurrentUser, RequirePermission};
+use crate::routes::customers::customer_of;
 use crate::AppState;
 use axum::extract::State;
 use axum::routing::{get, post};
@@ -25,7 +25,10 @@ pub fn router() -> Router<AppState> {
         .route("/admin/settings/due-reminders", get(due_get).put(due_put))
         .route("/admin/orders/approval-queue", get(queue))
         .route("/admin/orders/bulk", post(orders_bulk))
-        .route("/admin/settings/order-approval", get(rules_get).put(rules_put))
+        .route(
+            "/admin/settings/order-approval",
+            get(rules_get).put(rules_put),
+        )
 }
 
 fn ids_ok(ids: &[Uuid]) -> Result<Vec<Uuid>, AppError> {
@@ -58,21 +61,42 @@ pub struct InvoicesBulk {
 }
 
 async fn paid_events(s: &AppState, id: Uuid, a: &invoices::Applied, gateway: &str) {
-    s.emit(DomainEvent::new("payment.succeeded", json!({ "payment_id": a.payment_id, "invoice_id": id, "gateway": gateway })));
+    s.emit(DomainEvent::new(
+        "payment.succeeded",
+        json!({ "payment_id": a.payment_id, "invoice_id": id, "gateway": gateway }),
+    ));
     if a.invoice_paid {
-        s.emit(DomainEvent::new("invoice.paid", json!({ "invoice_id": id })));
+        s.emit(DomainEvent::new(
+            "invoice.paid",
+            json!({ "invoice_id": id }),
+        ));
         crate::changes::after_payment(s, id).await;
     }
 }
 
 /// Apply one action to many invoices; returns a per-invoice result.
 #[utoipa::path(post, path = "/api/v1/admin/invoices/bulk", request_body = InvoicesBulk, responses((status = 200), (status = 403), (status = 422)))]
-pub async fn invoices_bulk(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::InvoicesManage>, Json(b): Json<InvoicesBulk>) -> ApiResult<Json<Value>> {
+pub async fn invoices_bulk(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::InvoicesManage>,
+    Json(b): Json<InvoicesBulk>,
+) -> ApiResult<Json<Value>> {
     let ids = ids_ok(&b.ids)?;
     let key = b.idempotency_key.as_deref().map(str::trim).unwrap_or("");
-    let gateway = b.gateway.as_deref().map(str::trim).filter(|g| !g.is_empty()).unwrap_or("manual").to_string();
+    let gateway = b
+        .gateway
+        .as_deref()
+        .map(str::trim)
+        .filter(|g| !g.is_empty())
+        .unwrap_or("manual")
+        .to_string();
     match b.action.as_str() {
-        "mark_paid" if key.is_empty() || key.len() > 120 || gateway.len() > 40 || b.reference.as_ref().is_some_and(|r| r.len() > 200) => {
+        "mark_paid"
+            if key.is_empty()
+                || key.len() > 120
+                || gateway.len() > 40
+                || b.reference.as_ref().is_some_and(|r| r.len() > 200) =>
+        {
             return Err(AppError::Validation("error.validation").into())
         }
         "mark_paid" | "void" | "remind" => {}
@@ -91,7 +115,18 @@ pub async fn invoices_bulk(State(s): State<AppState>, RequirePermission(u, _): R
                 if status != "unpaid" || balance <= rust_decimal::Decimal::ZERO {
                     Err(AppError::Conflict("error.invoice_not_unpaid"))
                 } else {
-                    match s.invoices().record_payment(id, &gateway, b.reference.as_deref(), balance, &format!("bulk:{id}:{key}"), Some(u.user_id)).await {
+                    match s
+                        .invoices()
+                        .record_payment(
+                            id,
+                            &gateway,
+                            b.reference.as_deref(),
+                            balance,
+                            &format!("bulk:{id}:{key}"),
+                            Some(u.user_id),
+                        )
+                        .await
+                    {
                         Ok(a) => {
                             if !a.duplicate {
                                 audit::record(&s.pool, Some(u.user_id), "payment.recorded", Some(&id.to_string()), u.ip.as_deref(), json!({ "amount": balance, "payment_id": a.payment_id, "bulk": true })).await?;
@@ -105,8 +140,19 @@ pub async fn invoices_bulk(State(s): State<AppState>, RequirePermission(u, _): R
             }
             "void" => match s.invoices().void(id).await {
                 Ok(_) => {
-                    audit::record(&s.pool, Some(u.user_id), "invoice.voided", Some(&id.to_string()), u.ip.as_deref(), json!({ "bulk": true })).await?;
-                    s.emit(DomainEvent::new("invoice.voided", json!({ "invoice_id": id })));
+                    audit::record(
+                        &s.pool,
+                        Some(u.user_id),
+                        "invoice.voided",
+                        Some(&id.to_string()),
+                        u.ip.as_deref(),
+                        json!({ "bulk": true }),
+                    )
+                    .await?;
+                    s.emit(DomainEvent::new(
+                        "invoice.voided",
+                        json!({ "invoice_id": id }),
+                    ));
                     Ok(json!({}))
                 }
                 Err(e) => Err(e),
@@ -116,11 +162,27 @@ pub async fn invoices_bulk(State(s): State<AppState>, RequirePermission(u, _): R
         ok += usize::from(r.is_ok());
         out.push(res(id, r));
     }
-    audit::record(&s.pool, Some(u.user_id), "invoice.bulk", None, u.ip.as_deref(), json!({ "action": b.action, "count": out.len(), "ok": ok })).await?;
-    Ok(Json(json!({ "ok": ok, "failed": out.len() - ok, "results": out })))
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "invoice.bulk",
+        None,
+        u.ip.as_deref(),
+        json!({ "action": b.action, "count": out.len(), "ok": ok }),
+    )
+    .await?;
+    Ok(Json(
+        json!({ "ok": ok, "failed": out.len() - ok, "results": out }),
+    ))
 }
 
-async fn remind(s: &AppState, id: Uuid, status: &str, balance: rust_decimal::Decimal, customer: Uuid) -> Result<Value, AppError> {
+async fn remind(
+    s: &AppState,
+    id: Uuid,
+    status: &str,
+    balance: rust_decimal::Decimal,
+    customer: Uuid,
+) -> Result<Value, AppError> {
     if status != "unpaid" || balance <= rust_decimal::Decimal::ZERO {
         return Err(AppError::Conflict("error.invoice_not_unpaid"));
     }
@@ -129,7 +191,15 @@ async fn remind(s: &AppState, id: Uuid, status: &str, balance: rust_decimal::Dec
         return Err(AppError::Conflict("error.invoice_not_finalized"));
     };
     let today = time::OffsetDateTime::now_utc().date();
-    let m = invoice_tools::DueSoon { invoice_id: id, customer_id: customer, number, balance, currency: inv.currency.clone(), due_date: due.date(), days_left: (due.date() - today).whole_days() as i32 };
+    let m = invoice_tools::DueSoon {
+        invoice_id: id,
+        customer_id: customer,
+        number,
+        balance,
+        currency: inv.currency.clone(),
+        due_date: due.date(),
+        days_left: (due.date() - today).whole_days() as i32,
+    };
     crate::approval::mail_due(s, &m).await?;
     Ok(json!({ "days_left": m.days_left }))
 }
@@ -142,12 +212,21 @@ pub struct MassPay {
 
 /// Pay several of my unpaid invoices from account credit, oldest due first.
 #[utoipa::path(post, path = "/api/v1/client/invoices/mass-pay", request_body = MassPay, responses((status = 200), (status = 401), (status = 422)))]
-pub async fn mass_pay(State(s): State<AppState>, u: CurrentUser, Json(b): Json<MassPay>) -> ApiResult<Json<Value>> {
+pub async fn mass_pay(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Json(b): Json<MassPay>,
+) -> ApiResult<Json<Value>> {
     let cid = customer_of(&s, &u).await?;
     let ids = ids_ok(&b.ids)?;
     let mut mine: Vec<(Uuid, Option<time::OffsetDateTime>)> = vec![];
     for id in &ids {
-        if let Some(inv) = s.invoices().get(*id).await?.filter(|i| i.customer_id == cid) {
+        if let Some(inv) = s
+            .invoices()
+            .get(*id)
+            .await?
+            .filter(|i| i.customer_id == cid)
+        {
             mine.push((inv.id, inv.due_at));
         }
     }
@@ -173,21 +252,41 @@ pub async fn mass_pay(State(s): State<AppState>, u: CurrentUser, Json(b): Json<M
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/settings/due-reminders", responses((status = 200), (status = 403)))]
-pub async fn due_get(State(s): State<AppState>, _p: RequirePermission<perms::SettingsManage>) -> ApiResult<Json<DueReminderSettings>> {
+pub async fn due_get(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::SettingsManage>,
+) -> ApiResult<Json<DueReminderSettings>> {
     Ok(Json(invoice_tools::due_settings(&s.pool).await?))
 }
 
 #[utoipa::path(put, path = "/api/v1/admin/settings/due-reminders", request_body = DueReminderSettings, responses((status = 200), (status = 422)))]
-pub async fn due_put(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::SettingsManage>, Json(b): Json<DueReminderSettings>) -> ApiResult<Json<DueReminderSettings>> {
+pub async fn due_put(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::SettingsManage>,
+    Json(b): Json<DueReminderSettings>,
+) -> ApiResult<Json<DueReminderSettings>> {
     let v = invoice_tools::set_due_settings(&s.pool, b).await?;
-    audit::record(&s.pool, Some(u.user_id), "settings.due_reminders", None, u.ip.as_deref(), json!(v)).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "settings.due_reminders",
+        None,
+        u.ip.as_deref(),
+        json!(v),
+    )
+    .await?;
     Ok(Json(v))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/orders/approval-queue", responses((status = 200), (status = 403)))]
-pub async fn queue(State(s): State<AppState>, _p: RequirePermission<perms::OrdersManage>) -> ApiResult<Json<Value>> {
+pub async fn queue(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::OrdersManage>,
+) -> ApiResult<Json<Value>> {
     let items = order_approval::queue(&s.pool).await?;
-    Ok(Json(json!({ "items": items, "rules": order_approval::rules(&s.pool).await? })))
+    Ok(Json(
+        json!({ "items": items, "rules": order_approval::rules(&s.pool).await? }),
+    ))
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -199,7 +298,11 @@ pub struct OrdersBulk {
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/orders/bulk", request_body = OrdersBulk, responses((status = 200), (status = 403), (status = 422)))]
-pub async fn orders_bulk(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::OrdersManage>, Json(b): Json<OrdersBulk>) -> ApiResult<Json<Value>> {
+pub async fn orders_bulk(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::OrdersManage>,
+    Json(b): Json<OrdersBulk>,
+) -> ApiResult<Json<Value>> {
     let ids = ids_ok(&b.ids)?;
     if !matches!(b.action.as_str(), "approve" | "cancel") {
         return Err(AppError::Validation("error.invalid_action").into());
@@ -208,12 +311,25 @@ pub async fn orders_bulk(State(s): State<AppState>, RequirePermission(u, _): Req
     let mut ok = 0usize;
     for id in ids {
         let r = if b.action == "approve" {
-            crate::approval::activate(&s, id, Some(u.user_id), u.ip.as_deref(), false).await.map(|ids| json!({ "services": ids }))
+            crate::approval::activate(&s, id, Some(u.user_id), u.ip.as_deref(), false)
+                .await
+                .map(|ids| json!({ "services": ids }))
         } else {
             match s.orders().cancel(id, false).await {
                 Ok(_) => {
-                    audit::record(&s.pool, Some(u.user_id), "order.cancelled", Some(&id.to_string()), u.ip.as_deref(), json!({ "bulk": true })).await?;
-                    s.emit(DomainEvent::new("order.cancelled", json!({ "order_id": id })));
+                    audit::record(
+                        &s.pool,
+                        Some(u.user_id),
+                        "order.cancelled",
+                        Some(&id.to_string()),
+                        u.ip.as_deref(),
+                        json!({ "bulk": true }),
+                    )
+                    .await?;
+                    s.emit(DomainEvent::new(
+                        "order.cancelled",
+                        json!({ "order_id": id }),
+                    ));
                     Ok(json!({}))
                 }
                 Err(e) => Err(e),
@@ -222,17 +338,34 @@ pub async fn orders_bulk(State(s): State<AppState>, RequirePermission(u, _): Req
         ok += usize::from(r.is_ok());
         out.push(res(id, r));
     }
-    Ok(Json(json!({ "ok": ok, "failed": out.len() - ok, "results": out })))
+    Ok(Json(
+        json!({ "ok": ok, "failed": out.len() - ok, "results": out }),
+    ))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/settings/order-approval", responses((status = 200), (status = 403)))]
-pub async fn rules_get(State(s): State<AppState>, _p: RequirePermission<perms::OrdersManage>) -> ApiResult<Json<ApprovalRules>> {
+pub async fn rules_get(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::OrdersManage>,
+) -> ApiResult<Json<ApprovalRules>> {
     Ok(Json(order_approval::rules(&s.pool).await?))
 }
 
 #[utoipa::path(put, path = "/api/v1/admin/settings/order-approval", request_body = ApprovalRules, responses((status = 200), (status = 422)))]
-pub async fn rules_put(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::SettingsManage>, Json(b): Json<ApprovalRules>) -> ApiResult<Json<ApprovalRules>> {
+pub async fn rules_put(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::SettingsManage>,
+    Json(b): Json<ApprovalRules>,
+) -> ApiResult<Json<ApprovalRules>> {
     let v = order_approval::set_rules(&s.pool, b).await?;
-    audit::record(&s.pool, Some(u.user_id), "settings.order_approval", None, u.ip.as_deref(), json!(v)).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "settings.order_approval",
+        None,
+        u.ip.as_deref(),
+        json!(v),
+    )
+    .await?;
     Ok(Json(v))
 }

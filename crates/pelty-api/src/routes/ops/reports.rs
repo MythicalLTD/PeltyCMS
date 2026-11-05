@@ -105,19 +105,38 @@ pub async fn run_report(
     Query(q): Query<LibraryQuery>,
 ) -> ApiResult<axum::response::Response> {
     use axum::response::IntoResponse;
-    let (from, to) = range(&ReportQuery { from: q.from.clone(), to: q.to.clone() }, OffsetDateTime::now_utc().date())?;
+    let (from, to) = range(
+        &ReportQuery {
+            from: q.from.clone(),
+            to: q.to.clone(),
+        },
+        OffsetDateTime::now_utc().date(),
+    )?;
     let end = from_index(index(to) + 1).ok_or(AppError::Validation("error.invalid_range"))?;
-    let t = pelty_database::report_library::run(&s.pool, &key, from.midnight().assume_utc(), end.midnight().assume_utc()).await?;
+    let t = pelty_database::report_library::run(
+        &s.pool,
+        &key,
+        from.midnight().assume_utc(),
+        end.midnight().assume_utc(),
+    )
+    .await?;
     match q.format.as_deref() {
         None | Some("json") => Ok(Json(t).into_response()),
         Some("csv") => Ok((
             [
-                (axum::http::header::CONTENT_TYPE, "text/csv; charset=utf-8".to_string()),
-                (axum::http::header::CONTENT_DISPOSITION, format!("attachment; filename=\"{key}-{from}-{to}.csv\"")),
+                (
+                    axum::http::header::CONTENT_TYPE,
+                    "text/csv; charset=utf-8".to_string(),
+                ),
+                (
+                    axum::http::header::CONTENT_DISPOSITION,
+                    format!("attachment; filename=\"{key}-{from}-{to}.csv\""),
+                ),
                 (axum::http::header::CACHE_CONTROL, "no-store".to_string()),
             ],
             format!("\u{feff}{}", pelty_database::report_library::to_csv(&t)),
-        ).into_response()),
+        )
+            .into_response()),
         Some(_) => Err(AppError::Validation("error.validation").into()),
     }
 }
@@ -127,13 +146,24 @@ mod tests {
     use super::*;
     use time::macros::date;
     fn q(f: Option<&str>, t: Option<&str>) -> ReportQuery {
-        ReportQuery { from: f.map(Into::into), to: t.map(Into::into) }
+        ReportQuery {
+            from: f.map(Into::into),
+            to: t.map(Into::into),
+        }
     }
     #[test]
     fn ranges() {
         let today = date!(2026 - 10 - 29);
-        assert_eq!(range(&q(None, None), today).unwrap(), (date!(2025 - 11 - 01), date!(2026 - 10 - 01)));
-        assert_eq!(range(&q(Some("2026-01"), Some("2026-01")), today).unwrap().0, date!(2026 - 01 - 01));
+        assert_eq!(
+            range(&q(None, None), today).unwrap(),
+            (date!(2025 - 11 - 01), date!(2026 - 10 - 01))
+        );
+        assert_eq!(
+            range(&q(Some("2026-01"), Some("2026-01")), today)
+                .unwrap()
+                .0,
+            date!(2026 - 01 - 01)
+        );
         assert!(range(&q(Some("2026-02"), Some("2026-01")), today).is_err());
         assert!(range(&q(Some("2020-01"), Some("2026-01")), today).is_err());
         assert!(range(&q(Some("2026-13"), None), today).is_err());

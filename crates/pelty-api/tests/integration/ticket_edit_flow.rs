@@ -15,31 +15,119 @@ async fn staff_edit_and_delete_ticket_replies() {
     assert_eq!(r.status, StatusCode::OK, "{:?}", r.body);
     let id = r.body["ticket"]["id"].as_str().unwrap().to_string();
     let first = r.body["messages"][0]["id"].as_str().unwrap().to_string();
-    let r = call(&app, "POST", &format!("/api/v1/admin/tickets/{id}/reply"), Some(json!({"body": "Staff typo"})), &admin.h()).await;
+    let r = call(
+        &app,
+        "POST",
+        &format!("/api/v1/admin/tickets/{id}/reply"),
+        Some(json!({"body": "Staff typo"})),
+        &admin.h(),
+    )
+    .await;
     assert_eq!(r.status, StatusCode::OK, "{:?}", r.body);
-    let d = call(&app, "GET", &format!("/api/v1/admin/tickets/{id}"), None, &admin.h()).await;
+    let d = call(
+        &app,
+        "GET",
+        &format!("/api/v1/admin/tickets/{id}"),
+        None,
+        &admin.h(),
+    )
+    .await;
     let reply = d.body["messages"][1]["id"].as_str().unwrap().to_string();
     let url = |m: &str| format!("/api/v1/admin/tickets/{id}/messages/{m}");
 
     // Customers cannot use the staff endpoints.
-    assert_eq!(call(&app, "PUT", &url(&reply), Some(json!({"body": "x"})), &cust.h()).await.status, StatusCode::FORBIDDEN);
-    assert_eq!(call(&app, "DELETE", &url(&reply), None, &cust.h()).await.status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        call(
+            &app,
+            "PUT",
+            &url(&reply),
+            Some(json!({"body": "x"})),
+            &cust.h()
+        )
+        .await
+        .status,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        call(&app, "DELETE", &url(&reply), None, &cust.h())
+            .await
+            .status,
+        StatusCode::FORBIDDEN
+    );
     // Validation and scoping.
-    assert_eq!(call(&app, "PUT", &url(&reply), Some(json!({"body": "  "})), &admin.h()).await.status, StatusCode::UNPROCESSABLE_ENTITY);
-    assert_eq!(call(&app, "PUT", &url(&Uuid::new_v4().to_string()), Some(json!({"body": "x"})), &admin.h()).await.status, StatusCode::NOT_FOUND);
+    assert_eq!(
+        call(
+            &app,
+            "PUT",
+            &url(&reply),
+            Some(json!({"body": "  "})),
+            &admin.h()
+        )
+        .await
+        .status,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    assert_eq!(
+        call(
+            &app,
+            "PUT",
+            &url(&Uuid::new_v4().to_string()),
+            Some(json!({"body": "x"})),
+            &admin.h()
+        )
+        .await
+        .status,
+        StatusCode::NOT_FOUND
+    );
 
-    let r = call(&app, "PUT", &url(&reply), Some(json!({"body": "Staff fixed"})), &admin.h()).await;
+    let r = call(
+        &app,
+        "PUT",
+        &url(&reply),
+        Some(json!({"body": "Staff fixed"})),
+        &admin.h(),
+    )
+    .await;
     assert_eq!(r.status, StatusCode::OK, "{:?}", r.body);
-    let c = call(&app, "GET", &format!("/api/v1/client/tickets/{id}"), None, &cust.h()).await;
+    let c = call(
+        &app,
+        "GET",
+        &format!("/api/v1/client/tickets/{id}"),
+        None,
+        &cust.h(),
+    )
+    .await;
     assert_eq!(c.body["messages"][1]["body"], "Staff fixed");
     assert!(c.body["messages"][1]["edited_at"].is_string());
     assert!(c.body["messages"][0]["edited_at"].is_null());
 
     // The opening message can be edited but not deleted.
-    assert_eq!(call(&app, "DELETE", &url(&first), None, &admin.h()).await.status, StatusCode::CONFLICT);
-    assert_eq!(call(&app, "DELETE", &url(&reply), None, &admin.h()).await.status, StatusCode::OK);
-    assert_eq!(call(&app, "DELETE", &url(&reply), None, &admin.h()).await.status, StatusCode::NOT_FOUND);
-    let c = call(&app, "GET", &format!("/api/v1/client/tickets/{id}"), None, &cust.h()).await;
+    assert_eq!(
+        call(&app, "DELETE", &url(&first), None, &admin.h())
+            .await
+            .status,
+        StatusCode::CONFLICT
+    );
+    assert_eq!(
+        call(&app, "DELETE", &url(&reply), None, &admin.h())
+            .await
+            .status,
+        StatusCode::OK
+    );
+    assert_eq!(
+        call(&app, "DELETE", &url(&reply), None, &admin.h())
+            .await
+            .status,
+        StatusCode::NOT_FOUND
+    );
+    let c = call(
+        &app,
+        "GET",
+        &format!("/api/v1/client/tickets/{id}"),
+        None,
+        &cust.h(),
+    )
+    .await;
     assert_eq!(c.body["messages"].as_array().unwrap().len(), 1);
     let n: i64 = sqlx::query_scalar("SELECT count(*) FROM audit_logs WHERE action IN ('ticket.message_edited', 'ticket.message_deleted') AND target = $1")
         .bind(&id).fetch_one(&st.pool).await.unwrap();

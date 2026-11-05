@@ -24,7 +24,12 @@ pub struct Page {
 
 impl Page {
     pub fn new(slug: &str, title: &str, section: &'static str) -> Self {
-        Page { slug: slug.into(), title: title.into(), section, blocks: vec![] }
+        Page {
+            slug: slug.into(),
+            title: title.into(),
+            section,
+            blocks: vec![],
+        }
     }
     pub fn h(&mut self, l: u8, t: impl Into<String>) -> &mut Self {
         self.blocks.push(Block::H(l, t.into()));
@@ -43,7 +48,10 @@ impl Page {
         self
     }
     pub fn table(&mut self, head: &[&str], rows: Vec<Vec<String>>) -> &mut Self {
-        self.blocks.push(Block::Table(head.iter().map(|s| s.to_string()).collect(), rows));
+        self.blocks.push(Block::Table(
+            head.iter().map(|s| s.to_string()).collect(),
+            rows,
+        ));
         self
     }
 }
@@ -57,7 +65,10 @@ pub fn code_spec(spec: &str) -> (&str, Option<&str>) {
 }
 
 pub fn esc(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 pub fn slugify(s: &str) -> String {
@@ -96,7 +107,10 @@ pub fn inline(s: &str) -> String {
             if let Some(e) = r.find("](") {
                 if let Some(c) = r[e + 2..].find(')') {
                     let href = &r[e + 2..e + 2 + c];
-                    let href = href.strip_suffix(".md").map(|h| format!("{h}.html")).unwrap_or_else(|| href.to_string());
+                    let href = href
+                        .strip_suffix(".md")
+                        .map(|h| format!("{h}.html"))
+                        .unwrap_or_else(|| href.to_string());
                     let _ = write!(out, "<a href=\"{}\">{}</a>", esc(&href), inline(&r[..e]));
                     rest = &r[e + 3 + c..];
                     continue;
@@ -112,7 +126,11 @@ pub fn inline(s: &str) -> String {
 
 /// Inline markup without links (for the table of contents).
 pub fn inline_text(s: &str) -> String {
-    inline(&regex::Regex::new(r"\[([^\]]*)\]\([^)]*\)").unwrap().replace_all(s, "$1"))
+    inline(
+        &regex::Regex::new(r"\[([^\]]*)\]\([^)]*\)")
+            .unwrap()
+            .replace_all(s, "$1"),
+    )
 }
 
 pub fn to_html(p: &Page) -> (String, Vec<(u8, String, String)>) {
@@ -125,7 +143,11 @@ pub fn to_html(p: &Page) -> (String, Vec<(u8, String, String)>) {
                 if *l <= 3 {
                     toc.push((*l, t.clone(), id.clone()));
                 }
-                let _ = writeln!(o, "<h{l} id=\"{id}\"><a class=\"anchor\" href=\"#{id}\">#</a>{}</h{l}>", inline(t));
+                let _ = writeln!(
+                    o,
+                    "<h{l} id=\"{id}\"><a class=\"anchor\" href=\"#{id}\">#</a>{}</h{l}>",
+                    inline(t)
+                );
             }
             Block::P(t) => {
                 let _ = writeln!(o, "<p>{}</p>", inline(t));
@@ -197,10 +219,18 @@ pub fn to_md(p: &Page) -> String {
                 let _ = write!(o, "```{lang}\n{}\n```\n\n", t.trim_end());
             }
             Block::Table(h, rows) => {
-                let _ = writeln!(o, "| {} |", h.iter().map(|c| cell(c)).collect::<Vec<_>>().join(" | "));
+                let _ = writeln!(
+                    o,
+                    "| {} |",
+                    h.iter().map(|c| cell(c)).collect::<Vec<_>>().join(" | ")
+                );
                 let _ = writeln!(o, "|{}", "---|".repeat(h.len()));
                 for r in rows {
-                    let _ = writeln!(o, "| {} |", r.iter().map(|c| cell(c)).collect::<Vec<_>>().join(" | "));
+                    let _ = writeln!(
+                        o,
+                        "| {} |",
+                        r.iter().map(|c| cell(c)).collect::<Vec<_>>().join(" | ")
+                    );
                 }
                 o.push('\n');
             }
@@ -214,7 +244,10 @@ pub fn to_md(p: &Page) -> String {
 }
 
 /// Parse a template. `expand(directive)` resolves `{{name:arg}}` lines into blocks.
-pub fn parse_template(src: &str, expand: &mut dyn FnMut(&str) -> Vec<Block>) -> (String, Vec<Block>) {
+pub fn parse_template(
+    src: &str,
+    expand: &mut dyn FnMut(&str) -> Vec<Block>,
+) -> (String, Vec<Block>) {
     let mut title = String::new();
     let mut blocks = vec![];
     let mut para: Vec<String> = vec![];
@@ -277,11 +310,17 @@ mod tests {
     use super::*;
     #[test]
     fn inline_markup() {
-        assert_eq!(inline("a `<b>` [x](events.md) **y**"), "a <code>&lt;b&gt;</code> <a href=\"events.html\">x</a> <strong>y</strong>");
+        assert_eq!(
+            inline("a `<b>` [x](events.md) **y**"),
+            "a <code>&lt;b&gt;</code> <a href=\"events.html\">x</a> <strong>y</strong>"
+        );
     }
     #[test]
     fn template_blocks() {
-        let (t, b) = parse_template("# T\n\nhello\nworld\n\n- a\n- b\n\n```rust\nfn x() {}\n```\n{{x:y}}\n", &mut |d| vec![Block::P(d.into())]);
+        let (t, b) = parse_template(
+            "# T\n\nhello\nworld\n\n- a\n- b\n\n```rust\nfn x() {}\n```\n{{x:y}}\n",
+            &mut |d| vec![Block::P(d.into())],
+        );
         assert_eq!(t, "T");
         assert!(matches!(&b[0], Block::P(p) if p == "hello world"));
         assert!(matches!(&b[1], Block::List(l) if l.len() == 2));

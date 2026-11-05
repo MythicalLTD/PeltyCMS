@@ -38,7 +38,12 @@ impl GeoHit {
         }
     }
 
-    fn compose(city: Option<String>, region: Option<String>, country: Option<String>, country_name: Option<String>) -> Self {
+    fn compose(
+        city: Option<String>,
+        region: Option<String>,
+        country: Option<String>,
+        country_name: Option<String>,
+    ) -> Self {
         let mut parts = Vec::new();
         if let Some(c) = city.as_ref().filter(|s| !s.is_empty()) {
             parts.push(c.clone());
@@ -54,8 +59,18 @@ impl GeoHit {
         if let Some(t) = tail {
             parts.push(t);
         }
-        let location = if parts.is_empty() { "-".into() } else { parts.join(", ") };
-        Self { city, region, country, country_name, location }
+        let location = if parts.is_empty() {
+            "-".into()
+        } else {
+            parts.join(", ")
+        };
+        Self {
+            city,
+            region,
+            country,
+            country_name,
+            location,
+        }
     }
 }
 
@@ -77,16 +92,25 @@ impl GeoIp {
             });
         let Some(path) = path else {
             tracing::info!("GeoIP DB unset (set PELTY_GEOIP_DB or place {DEFAULT_PATH})");
-            return Arc::new(Self { reader: None, path: None });
+            return Arc::new(Self {
+                reader: None,
+                path: None,
+            });
         };
         match maxminddb::Reader::open_readfile(&path) {
             Ok(reader) => {
                 tracing::info!(path = %path.display(), "GeoIP MMDB loaded");
-                Arc::new(Self { reader: Some(reader), path: Some(path) })
+                Arc::new(Self {
+                    reader: Some(reader),
+                    path: Some(path),
+                })
             }
             Err(e) => {
                 tracing::warn!(path = %path.display(), error = %e, "GeoIP MMDB not loaded");
-                Arc::new(Self { reader: None, path: Some(path) })
+                Arc::new(Self {
+                    reader: None,
+                    path: Some(path),
+                })
             }
         }
     }
@@ -125,17 +149,28 @@ impl GeoIp {
         };
         match reader.lookup::<maxminddb::geoip2::City>(addr) {
             Ok(Some(city)) => {
-                let country = city.country.as_ref().and_then(|c| c.iso_code.map(str::to_string));
+                let country = city
+                    .country
+                    .as_ref()
+                    .and_then(|c| c.iso_code.map(str::to_string));
                 let country_name = city
                     .country
                     .as_ref()
                     .and_then(|c| c.names.as_ref())
-                    .and_then(|n| n.get("en").or_else(|| n.values().next()).map(|s| (*s).to_string()));
+                    .and_then(|n| {
+                        n.get("en")
+                            .or_else(|| n.values().next())
+                            .map(|s| (*s).to_string())
+                    });
                 let city_name = city
                     .city
                     .as_ref()
                     .and_then(|c| c.names.as_ref())
-                    .and_then(|n| n.get("en").or_else(|| n.values().next()).map(|s| (*s).to_string()));
+                    .and_then(|n| {
+                        n.get("en")
+                            .or_else(|| n.values().next())
+                            .map(|s| (*s).to_string())
+                    });
                 let region = city
                     .subdivisions
                     .as_ref()
@@ -143,7 +178,11 @@ impl GeoIp {
                     .and_then(|s| {
                         s.names
                             .as_ref()
-                            .and_then(|n| n.get("en").or_else(|| n.values().next()).map(|x| (*x).to_string()))
+                            .and_then(|n| {
+                                n.get("en")
+                                    .or_else(|| n.values().next())
+                                    .map(|x| (*x).to_string())
+                            })
                             .or_else(|| s.iso_code.map(str::to_string))
                     });
                 GeoHit::compose(city_name, region, country, country_name)
@@ -155,8 +194,15 @@ impl GeoIp {
 
 fn is_private(ip: IpAddr) -> bool {
     match ip {
-        IpAddr::V4(v) => v.is_private() || v.is_loopback() || v.is_link_local() || v.is_unspecified(),
-        IpAddr::V6(v) => v.is_loopback() || v.is_unique_local() || v.is_unicast_link_local() || v.is_unspecified(),
+        IpAddr::V4(v) => {
+            v.is_private() || v.is_loopback() || v.is_link_local() || v.is_unspecified()
+        }
+        IpAddr::V6(v) => {
+            v.is_loopback()
+                || v.is_unique_local()
+                || v.is_unicast_link_local()
+                || v.is_unspecified()
+        }
     }
 }
 
@@ -166,7 +212,10 @@ mod tests {
 
     #[test]
     fn private_ips_skip_db() {
-        let g = GeoIp { reader: None, path: None };
+        let g = GeoIp {
+            reader: None,
+            path: None,
+        };
         assert_eq!(g.lookup("127.0.0.1").location, "private network");
         assert_eq!(g.lookup("10.0.0.1").location, "private network");
         assert_eq!(g.lookup("192.168.1.1").location, "private network");
@@ -175,7 +224,10 @@ mod tests {
 
     #[test]
     fn missing_db_is_dash() {
-        let g = GeoIp { reader: None, path: None };
+        let g = GeoIp {
+            reader: None,
+            path: None,
+        };
         assert_eq!(g.lookup("8.8.8.8").location, "-");
     }
 

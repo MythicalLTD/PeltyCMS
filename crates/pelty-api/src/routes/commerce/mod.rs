@@ -4,8 +4,8 @@
 //! `crate::routes::<module>` keep working through re-exports in `routes/mod.rs`.
 //! Covered by the pelty-api integration tests for these domains and by pelty-docs route inventory tests.
 
-pub mod catalog;
 pub mod bundles;
+pub mod catalog;
+pub mod data_feeds;
 pub mod order_forms;
 pub mod store;
-pub mod data_feeds;

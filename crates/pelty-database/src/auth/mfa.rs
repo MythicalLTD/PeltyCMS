@@ -198,7 +198,11 @@ pub async fn set_passkey_2fa(pool: &PgPool, user_id: Uuid, on: bool) -> AppResul
     } else {
         "DELETE FROM user_passkey_2fa WHERE user_id = $1"
     };
-    sqlx::query(q).bind(user_id).execute(pool).await.map_err(db_err)?;
+    sqlx::query(q)
+        .bind(user_id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(())
 }
 

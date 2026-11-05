@@ -26,7 +26,9 @@ pub fn accepted_in(text: &str) -> bool {
         .map(str::trim)
         .filter(|l| !l.starts_with('#'))
         .filter_map(|l| l.split_once('='))
-        .any(|(k, v)| k.trim().eq_ignore_ascii_case("eula") && v.trim().eq_ignore_ascii_case("true"))
+        .any(|(k, v)| {
+            k.trim().eq_ignore_ascii_case("eula") && v.trim().eq_ignore_ascii_case("true")
+        })
 }
 
 pub fn env_accepts(v: Option<&str>) -> bool {
@@ -36,18 +38,27 @@ pub fn env_accepts(v: Option<&str>) -> bool {
 pub enum Gate {
     Accepted,
     /// Not accepted; `created` when `eula.txt` was written just now.
-    Refused { created: bool },
+    Refused {
+        created: bool,
+    },
 }
 
 /// Write `eula.txt` when missing, then check acceptance.
 pub fn check(root: &Path, env: Option<&str>) -> Gate {
     let path = root.join(FILE);
-    let now = time::OffsetDateTime::now_utc().replace_nanosecond(0).unwrap_or_else(|_| time::OffsetDateTime::now_utc()).format(&time::format_description::well_known::Rfc3339).unwrap_or_default();
+    let now = time::OffsetDateTime::now_utc()
+        .replace_nanosecond(0)
+        .unwrap_or_else(|_| time::OffsetDateTime::now_utc())
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_default();
     let created = match crate::bootstrap::write_new(&path, &template(&now)) {
         Ok(c) => c,
         Err(e) => {
             if !env_accepts(env) {
-                println!("[PeltyCMS] warning: could not write {}: {e}", path.display());
+                println!(
+                    "[PeltyCMS] warning: could not write {}: {e}",
+                    path.display()
+                );
             }
             false
         }
@@ -78,11 +89,18 @@ mod tests {
     #[test]
     fn parses_acceptance() {
         assert!(!accepted_in(&template("t")));
-        assert!(accepted_in(&template("t").replace("eula=false", "eula=true")));
+        assert!(accepted_in(
+            &template("t").replace("eula=false", "eula=true")
+        ));
         assert!(accepted_in("eula = TRUE\n"));
         assert!(!accepted_in("#eula=true\neula=false\n"));
         assert!(!accepted_in("eula=yes\n"));
-        assert!(env_accepts(Some("true")) && env_accepts(Some("1")) && !env_accepts(Some("false")) && !env_accepts(None));
+        assert!(
+            env_accepts(Some("true"))
+                && env_accepts(Some("1"))
+                && !env_accepts(Some("false"))
+                && !env_accepts(None)
+        );
     }
 
     #[test]

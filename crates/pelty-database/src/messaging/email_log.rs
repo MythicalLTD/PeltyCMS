@@ -60,11 +60,25 @@ pub async fn record(pool: &PgPool, e: &NewEntry<'_>) -> AppResult<Uuid> {
     Ok(id)
 }
 
-const COLS: &str = "id, user_id, recipient, template, locale, subject, status, error, mailer, created_at";
+const COLS: &str =
+    "id, user_id, recipient, template, locale, subject, status, error, mailer, created_at";
 
 /// Newest first; optional user filter and free-text search on recipient/subject.
-pub async fn list(pool: &PgPool, user_id: Option<Uuid>, q: Option<&str>, limit: i64, offset: i64) -> AppResult<(Vec<EmailLogEntry>, i64)> {
-    let q = q.map(|s| format!("%{}%", s.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")));
+pub async fn list(
+    pool: &PgPool,
+    user_id: Option<Uuid>,
+    q: Option<&str>,
+    limit: i64,
+    offset: i64,
+) -> AppResult<(Vec<EmailLogEntry>, i64)> {
+    let q = q.map(|s| {
+        format!(
+            "%{}%",
+            s.replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_")
+        )
+    });
     let filter = "($1::uuid IS NULL OR user_id = $1) AND ($2::text IS NULL OR recipient ILIKE $2 OR subject ILIKE $2)";
     let rows = sqlx::query_as::<_, EmailLogEntry>(&format!("SELECT {COLS} FROM email_log WHERE {filter} ORDER BY created_at DESC, id LIMIT $3 OFFSET $4"))
         .bind(user_id)
@@ -79,24 +93,28 @@ pub async fn list(pool: &PgPool, user_id: Option<Uuid>, q: Option<&str>, limit: 
         .bind(q.as_deref())
         .fetch_one(pool)
         .await
-    .map_err(db_err)?;
+        .map_err(db_err)?;
     Ok((rows, total))
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<EmailLogDetail>> {
-    sqlx::query_as::<_, EmailLogDetail>(&format!("SELECT {COLS}, body_text FROM email_log WHERE id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as::<_, EmailLogDetail>(&format!(
+        "SELECT {COLS}, body_text FROM email_log WHERE id = $1"
+    ))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Remove entries older than `days` (retention).
 pub async fn prune(pool: &PgPool, days: i32) -> AppResult<u64> {
-    Ok(sqlx::query("DELETE FROM email_log WHERE created_at < now() - make_interval(days => $1)")
-        .bind(days)
-        .execute(pool)
-        .await
-        .map_err(db_err)?
-        .rows_affected())
+    Ok(
+        sqlx::query("DELETE FROM email_log WHERE created_at < now() - make_interval(days => $1)")
+            .bind(days)
+            .execute(pool)
+            .await
+            .map_err(db_err)?
+            .rows_affected(),
+    )
 }

@@ -26,7 +26,11 @@ pub fn api_src() -> PathBuf {
 }
 
 fn rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
-    let mut v: Vec<_> = std::fs::read_dir(dir).unwrap().flatten().map(|e| e.path()).collect();
+    let mut v: Vec<_> = std::fs::read_dir(dir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .collect();
     v.sort();
     for p in v {
         if p.is_dir() {
@@ -46,7 +50,14 @@ pub fn non_test(src: &str) -> &str {
 pub fn route_call_sites() -> usize {
     let mut files = vec![];
     rs_files(&api_src(), &mut files);
-    files.iter().map(|f| non_test(&std::fs::read_to_string(f).unwrap()).matches(".route(").count()).sum()
+    files
+        .iter()
+        .map(|f| {
+            non_test(&std::fs::read_to_string(f).unwrap())
+                .matches(".route(")
+                .count()
+        })
+        .sum()
 }
 
 /// Built-in plugin modules: `("id", fn_name())` pairs from `routes/plugins.rs::modules`.
@@ -54,7 +65,9 @@ fn plugin_modules(src: &str) -> Vec<(String, String)> {
     let re = Regex::new(r#"\("([a-z0-9-]+)",\s*([a-z_0-9]+)\(\)\)"#).unwrap();
     let body = src.split("pub fn modules()").nth(1).unwrap_or("");
     let body = body.split("\n}").next().unwrap_or("");
-    re.captures_iter(body).map(|c| (c[1].to_string(), c[2].to_string())).collect()
+    re.captures_iter(body)
+        .map(|c| (c[1].to_string(), c[2].to_string()))
+        .collect()
 }
 
 /// Returns `(entries, call_sites_parsed)`.
@@ -62,7 +75,8 @@ pub fn inventory() -> (Vec<RouteEntry>, usize) {
     let root = api_src();
     let mut files = vec![];
     rs_files(&root, &mut files);
-    let fn_re = Regex::new(r"(?m)^\s*(?:pub(?:\([a-z]+\))?\s+)?(?:async\s+)?fn\s+([a-z_0-9]+)").unwrap();
+    let fn_re =
+        Regex::new(r"(?m)^\s*(?:pub(?:\([a-z]+\))?\s+)?(?:async\s+)?fn\s+([a-z_0-9]+)").unwrap();
     let m_re = Regex::new(r"(?:^|[^A-Za-z0-9_])(get|post|put|patch|delete|head|options|any)\(\s*([A-Za-z0-9_:]+|\||async\s+move\s+\||move\s+\|)").unwrap();
     let mut out = vec![];
     let mut sites = 0;
@@ -70,8 +84,15 @@ pub fn inventory() -> (Vec<RouteEntry>, usize) {
         let rel = f.strip_prefix(&root).unwrap().display().to_string();
         let full = std::fs::read_to_string(&f).unwrap();
         let src = non_test(&full);
-        let modules = if rel.ends_with("plugins.rs") { plugin_modules(src) } else { vec![] };
-        let fns: Vec<(usize, String)> = fn_re.captures_iter(src).map(|c| (c.get(0).unwrap().start(), c[1].to_string())).collect();
+        let modules = if rel.ends_with("plugins.rs") {
+            plugin_modules(src)
+        } else {
+            vec![]
+        };
+        let fns: Vec<(usize, String)> = fn_re
+            .captures_iter(src)
+            .map(|c| (c.get(0).unwrap().start(), c[1].to_string()))
+            .collect();
         let mut at = 0;
         while let Some(i) = src[at..].find(".route(") {
             let start = at + i + ".route(".len();
@@ -93,12 +114,19 @@ pub fn inventory() -> (Vec<RouteEntry>, usize) {
             }
             let args = &src[start..end];
             let t = args.trim_start();
-            let Some(t) = t.strip_prefix('"') else { continue };
+            let Some(t) = t.strip_prefix('"') else {
+                continue;
+            };
             let Some(q) = t.find('"') else { continue };
             let path = &t[..q];
             let rest = &t[q + 1..];
             sites += 1;
-            let in_fn = fns.iter().rev().find(|(p, _)| *p < start).map(|(_, n)| n.as_str()).unwrap_or("");
+            let in_fn = fns
+                .iter()
+                .rev()
+                .find(|(p, _)| *p < start)
+                .map(|(_, n)| n.as_str())
+                .unwrap_or("");
             let prefix = if rel == "lib.rs" || in_fn == "root_router" || rel == "routes/health.rs" {
                 String::new()
             } else if let Some((id, _)) = modules.iter().find(|(_, f)| f == in_fn) {
@@ -110,10 +138,23 @@ pub fn inventory() -> (Vec<RouteEntry>, usize) {
                 panic!("{rel}: cannot read the methods of route {path}");
             }
             for c in m_re.captures_iter(rest) {
-                let method = if &c[1] == "any" { "get".to_string() } else { c[1].to_string() };
+                let method = if &c[1] == "any" {
+                    "get".to_string()
+                } else {
+                    c[1].to_string()
+                };
                 let h = c[2].trim_start_matches("axum::routing::");
-                let handler = if h.ends_with('|') { format!("{in_fn}::{{closure}}") } else { h.to_string() };
-                out.push(RouteEntry { path: format!("{prefix}{path}"), method, handler, source: rel.clone() });
+                let handler = if h.ends_with('|') {
+                    format!("{in_fn}::{{closure}}")
+                } else {
+                    h.to_string()
+                };
+                out.push(RouteEntry {
+                    path: format!("{prefix}{path}"),
+                    method,
+                    handler,
+                    source: rel.clone(),
+                });
             }
         }
     }
@@ -123,10 +164,15 @@ pub fn inventory() -> (Vec<RouteEntry>, usize) {
 }
 
 fn tag_for(path: &str) -> &str {
-    let p = path.strip_prefix(API_PREFIX).unwrap_or(path).trim_start_matches('/');
+    let p = path
+        .strip_prefix(API_PREFIX)
+        .unwrap_or(path)
+        .trim_start_matches('/');
     let mut it = p.split('/');
     match it.next().unwrap_or("") {
-        s @ ("admin" | "client" | "public") => it.next().map(|x| x.trim_start_matches('{')).unwrap_or(s),
+        s @ ("admin" | "client" | "public") => {
+            it.next().map(|x| x.trim_start_matches('{')).unwrap_or(s)
+        }
         s => s,
     }
 }
@@ -145,13 +191,23 @@ fn access_for(path: &str) -> &'static str {
 /// utoipa document with absolute paths, plus a stub operation (`x-undocumented: true`)
 /// for every registered route utoipa does not describe.
 pub fn full_spec() -> Value {
-    let mut spec = serde_json::to_value(<pelty_api::routes::openapi::ApiDoc as utoipa::OpenApi>::openapi()).unwrap();
+    let mut spec =
+        serde_json::to_value(<pelty_api::routes::openapi::ApiDoc as utoipa::OpenApi>::openapi())
+            .unwrap();
     let (inv, _) = inventory();
-    let roots: std::collections::HashSet<&str> = inv.iter().filter(|r| !r.path.starts_with(API_PREFIX)).map(|r| r.path.as_str()).collect();
+    let roots: std::collections::HashSet<&str> = inv
+        .iter()
+        .filter(|r| !r.path.starts_with(API_PREFIX))
+        .map(|r| r.path.as_str())
+        .collect();
     let old = spec["paths"].as_object().cloned().unwrap_or_default();
     let mut paths = Map::new();
     for (p, v) in old {
-        let abs = if roots.contains(p.as_str()) || p.starts_with("/api/") { p } else { format!("{API_PREFIX}{p}") };
+        let abs = if roots.contains(p.as_str()) || p.starts_with("/api/") {
+            p
+        } else {
+            format!("{API_PREFIX}{p}")
+        };
         paths.insert(abs, v);
     }
     for r in &inv {
@@ -189,18 +245,32 @@ mod tests {
     fn parser_sees_every_route_call() {
         let (inv, sites) = inventory();
         // `.route(` with a non-literal path would be missed: make that loud.
-        assert_eq!(sites, route_call_sites(), "a `.route(` call has a non-literal path the inventory cannot read");
+        assert_eq!(
+            sites,
+            route_call_sites(),
+            "a `.route(` call has a non-literal path the inventory cannot read"
+        );
         assert!(inv.len() > 500, "only {} routes parsed", inv.len());
-        assert!(inv.iter().any(|r| r.path == "/healthz" && r.method == "get"));
-        assert!(inv.iter().any(|r| r.path == "/includes/api.php" && r.method == "post"));
-        assert!(inv.iter().any(|r| r.path.starts_with("/api/v1/plugins/event-logger/")));
+        assert!(inv
+            .iter()
+            .any(|r| r.path == "/healthz" && r.method == "get"));
+        assert!(inv
+            .iter()
+            .any(|r| r.path == "/includes/api.php" && r.method == "post"));
+        assert!(inv
+            .iter()
+            .any(|r| r.path.starts_with("/api/v1/plugins/event-logger/")));
     }
 
     #[test]
     fn full_spec_covers_every_registered_route() {
         let spec = full_spec();
         let (inv, _) = inventory();
-        let missing: Vec<_> = inv.iter().filter(|r| spec["paths"][&r.path][&r.method].is_null()).map(|r| format!("{} {}", r.method, r.path)).collect();
+        let missing: Vec<_> = inv
+            .iter()
+            .filter(|r| spec["paths"][&r.path][&r.method].is_null())
+            .map(|r| format!("{} {}", r.method, r.path))
+            .collect();
         assert!(missing.is_empty(), "{missing:?}");
     }
 

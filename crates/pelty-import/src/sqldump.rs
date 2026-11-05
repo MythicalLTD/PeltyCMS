@@ -132,7 +132,13 @@ fn word(t: Option<&Tok>, w: &str) -> bool {
 
 fn name(t: Option<&Tok>) -> Option<String> {
     match t? {
-        Tok::Ident(s) | Tok::Word(s) => Some(s.rsplit('.').next().unwrap_or(s).trim_matches('`').to_string()),
+        Tok::Ident(s) | Tok::Word(s) => Some(
+            s.rsplit('.')
+                .next()
+                .unwrap_or(s)
+                .trim_matches('`')
+                .to_string(),
+        ),
         _ => None,
     }
 }
@@ -142,8 +148,15 @@ fn value(t: &Tok) -> Option<String> {
         Tok::Str(s) => Some(s.clone()),
         Tok::Word(w) if w.eq_ignore_ascii_case("NULL") => None,
         Tok::Word(w) if w.len() > 2 && (w.starts_with("0x") || w.starts_with("0X")) => {
-            let bytes: Option<Vec<u8>> = (2..w.len()).step_by(2).map(|i| w.get(i..i + 2).and_then(|h| u8::from_str_radix(h, 16).ok())).collect();
-            Some(bytes.map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_else(|| w.clone()))
+            let bytes: Option<Vec<u8>> = (2..w.len())
+                .step_by(2)
+                .map(|i| w.get(i..i + 2).and_then(|h| u8::from_str_radix(h, 16).ok()))
+                .collect();
+            Some(
+                bytes
+                    .map(|b| String::from_utf8_lossy(&b).into_owned())
+                    .unwrap_or_else(|| w.clone()),
+            )
         }
         Tok::Word(w) | Tok::Ident(w) => Some(w.clone()),
         Tok::Punct(c) => Some(c.to_string()),
@@ -173,7 +186,11 @@ pub fn parse(sql: &str) -> Result<Tables, String> {
                 match &st[k] {
                     Tok::Punct('(') => depth += 1,
                     Tok::Punct(')') => depth -= 1,
-                    Tok::Ident(c) if depth == 1 && matches!(st.get(k - 1), Some(Tok::Punct('(' | ','))) => list.push(c.clone()),
+                    Tok::Ident(c)
+                        if depth == 1 && matches!(st.get(k - 1), Some(Tok::Punct('(' | ','))) =>
+                    {
+                        list.push(c.clone())
+                    }
                     _ => {}
                 }
             }
@@ -184,7 +201,11 @@ pub fn parse(sql: &str) -> Result<Tables, String> {
             continue;
         }
         i = 1;
-        while word(st.get(i), "IGNORE") || word(st.get(i), "INTO") || word(st.get(i), "LOW_PRIORITY") || word(st.get(i), "DELAYED") {
+        while word(st.get(i), "IGNORE")
+            || word(st.get(i), "INTO")
+            || word(st.get(i), "LOW_PRIORITY")
+            || word(st.get(i), "DELAYED")
+        {
             i += 1;
         }
         let Some(tbl) = name(st.get(i)) else { continue };
@@ -228,10 +249,16 @@ pub fn parse(sql: &str) -> Result<Tables, String> {
             }
             i += 1;
             if names.is_empty() {
-                return Err(format!("{tbl}: INSERT without a column list and no CREATE TABLE before it"));
+                return Err(format!(
+                    "{tbl}: INSERT without a column list and no CREATE TABLE before it"
+                ));
             }
             if vals.len() != names.len() {
-                return Err(format!("{tbl}: a row has {} values for {} columns", vals.len(), names.len()));
+                return Err(format!(
+                    "{tbl}: a row has {} values for {} columns",
+                    vals.len(),
+                    names.len()
+                ));
             }
             rows.push(names.iter().cloned().zip(vals).collect());
         }
@@ -248,7 +275,11 @@ fn s(r: &Row, c: &str) -> String {
 }
 fn i(r: &Row, c: &str) -> i64 {
     let v = s(r, c);
-    v.trim().parse().ok().or_else(|| v.trim().parse::<f64>().ok().map(|f| f as i64)).unwrap_or_default()
+    v.trim()
+        .parse()
+        .ok()
+        .or_else(|| v.trim().parse::<f64>().ok().map(|f| f as i64))
+        .unwrap_or_default()
 }
 fn d(r: &Row, c: &str) -> Decimal {
     Decimal::from_str(s(r, c).trim()).unwrap_or_default()
@@ -262,13 +293,26 @@ fn on(r: &Row, c: &str) -> bool {
 }
 
 fn pricing(t: &Tables, kind: &str) -> Vec<Pricing> {
-    t.rows("tblpricing").iter().filter(|r| s(r, "type") == kind).map(|r| Pricing {
-        relid: i(r, "relid"), currency: i(r, "currency"),
-        msetupfee: d(r, "msetupfee"), qsetupfee: d(r, "qsetupfee"), ssetupfee: d(r, "ssetupfee"),
-        asetupfee: d(r, "asetupfee"), bsetupfee: d(r, "bsetupfee"), tsetupfee: d(r, "tsetupfee"),
-        monthly: d(r, "monthly"), quarterly: d(r, "quarterly"), semiannually: d(r, "semiannually"),
-        annually: d(r, "annually"), biennially: d(r, "biennially"), triennially: d(r, "triennially"),
-    }).collect()
+    t.rows("tblpricing")
+        .iter()
+        .filter(|r| s(r, "type") == kind)
+        .map(|r| Pricing {
+            relid: i(r, "relid"),
+            currency: i(r, "currency"),
+            msetupfee: d(r, "msetupfee"),
+            qsetupfee: d(r, "qsetupfee"),
+            ssetupfee: d(r, "ssetupfee"),
+            asetupfee: d(r, "asetupfee"),
+            bsetupfee: d(r, "bsetupfee"),
+            tsetupfee: d(r, "tsetupfee"),
+            monthly: d(r, "monthly"),
+            quarterly: d(r, "quarterly"),
+            semiannually: d(r, "semiannually"),
+            annually: d(r, "annually"),
+            biennially: d(r, "biennially"),
+            triennially: d(r, "triennially"),
+        })
+        .collect()
 }
 
 impl WhmcsData {
@@ -276,108 +320,413 @@ impl WhmcsData {
     /// MySQL loader selects). Missing tables are simply empty.
     pub fn from_tables(t: &Tables) -> WhmcsData {
         let mut o = WhmcsData {
-            currencies: t.rows("tblcurrencies").iter().map(|r| Currency { id: i(r, "id"), code: s(r, "code"), default: i(r, "default") == 1 }).collect(),
+            currencies: t
+                .rows("tblcurrencies")
+                .iter()
+                .map(|r| Currency {
+                    id: i(r, "id"),
+                    code: s(r, "code"),
+                    default: i(r, "default") == 1,
+                })
+                .collect(),
             ..WhmcsData::default()
         };
-        o.clients = t.rows("tblclients").iter().map(|r| Client {
-            id: i(r, "id"), firstname: s(r, "firstname"), lastname: s(r, "lastname"), companyname: s(r, "companyname"),
-            email: s(r, "email"), address1: s(r, "address1"), address2: s(r, "address2"), city: s(r, "city"), state: s(r, "state"),
-            postcode: s(r, "postcode"), country: s(r, "country"), phonenumber: s(r, "phonenumber"), tax_id: s(r, "tax_id"),
-            currency: i(r, "currency"), status: s(r, "status"), groupid: i(r, "groupid"), credit: d(r, "credit"), password: s(r, "password"),
-        }).collect();
+        o.clients = t
+            .rows("tblclients")
+            .iter()
+            .map(|r| Client {
+                id: i(r, "id"),
+                firstname: s(r, "firstname"),
+                lastname: s(r, "lastname"),
+                companyname: s(r, "companyname"),
+                email: s(r, "email"),
+                address1: s(r, "address1"),
+                address2: s(r, "address2"),
+                city: s(r, "city"),
+                state: s(r, "state"),
+                postcode: s(r, "postcode"),
+                country: s(r, "country"),
+                phonenumber: s(r, "phonenumber"),
+                tax_id: s(r, "tax_id"),
+                currency: i(r, "currency"),
+                status: s(r, "status"),
+                groupid: i(r, "groupid"),
+                credit: d(r, "credit"),
+                password: s(r, "password"),
+            })
+            .collect();
         // WHMCS 8+: logins live in tblusers, matched to clients by email.
-        let users: HashMap<String, String> = t.rows("tblusers").iter().map(|r| (s(r, "email").trim().to_lowercase(), s(r, "password"))).collect();
+        let users: HashMap<String, String> = t
+            .rows("tblusers")
+            .iter()
+            .map(|r| (s(r, "email").trim().to_lowercase(), s(r, "password")))
+            .collect();
         for c in &mut o.clients {
-            if let Some(h) = users.get(&c.email.trim().to_lowercase()).filter(|h| !h.is_empty()) {
+            if let Some(h) = users
+                .get(&c.email.trim().to_lowercase())
+                .filter(|h| !h.is_empty())
+            {
                 c.password = h.clone();
             }
         }
-        o.contacts = t.rows("tblcontacts").iter().map(|r| Contact {
-            id: i(r, "id"), userid: i(r, "userid"), firstname: s(r, "firstname"), lastname: s(r, "lastname"),
-            email: s(r, "email"), phonenumber: s(r, "phonenumber"), billing: i(r, "invoiceemails") == 1,
-        }).collect();
-        o.client_groups = t.rows("tblclientgroups").iter().map(|r| ClientGroup { id: i(r, "id"), groupname: s(r, "groupname"), discountpercent: d(r, "discountpercent"), susptermexempt: on(r, "susptermexempt") }).collect();
-        o.product_groups = t.rows("tblproductgroups").iter().map(|r| ProductGroup { id: i(r, "id"), name: s(r, "name"), hidden: on(r, "hidden"), order: i(r, "order") as i32 }).collect();
-        o.products = t.rows("tblproducts").iter().map(|r| Product {
-            id: i(r, "id"), gid: i(r, "gid"), name: s(r, "name"), description: s(r, "description"), hidden: on(r, "hidden"),
-            retired: on(r, "retired"), servertype: s(r, "servertype"), order: i(r, "order") as i32,
-        }).collect();
+        o.contacts = t
+            .rows("tblcontacts")
+            .iter()
+            .map(|r| Contact {
+                id: i(r, "id"),
+                userid: i(r, "userid"),
+                firstname: s(r, "firstname"),
+                lastname: s(r, "lastname"),
+                email: s(r, "email"),
+                phonenumber: s(r, "phonenumber"),
+                billing: i(r, "invoiceemails") == 1,
+            })
+            .collect();
+        o.client_groups = t
+            .rows("tblclientgroups")
+            .iter()
+            .map(|r| ClientGroup {
+                id: i(r, "id"),
+                groupname: s(r, "groupname"),
+                discountpercent: d(r, "discountpercent"),
+                susptermexempt: on(r, "susptermexempt"),
+            })
+            .collect();
+        o.product_groups = t
+            .rows("tblproductgroups")
+            .iter()
+            .map(|r| ProductGroup {
+                id: i(r, "id"),
+                name: s(r, "name"),
+                hidden: on(r, "hidden"),
+                order: i(r, "order") as i32,
+            })
+            .collect();
+        o.products = t
+            .rows("tblproducts")
+            .iter()
+            .map(|r| Product {
+                id: i(r, "id"),
+                gid: i(r, "gid"),
+                name: s(r, "name"),
+                description: s(r, "description"),
+                hidden: on(r, "hidden"),
+                retired: on(r, "retired"),
+                servertype: s(r, "servertype"),
+                order: i(r, "order") as i32,
+            })
+            .collect();
         o.pricing = pricing(t, "product");
         o.addon_pricing = pricing(t, "addon");
         o.config_pricing = pricing(t, "configoptions");
-        o.servers = t.rows("tblservers").iter().map(|r| Server {
-            id: i(r, "id"), name: s(r, "name"), ipaddress: s(r, "ipaddress"), hostname: s(r, "hostname"), type_: s(r, "type"),
-            username: s(r, "username"), password: s(r, "password"), password_plain: false, accesshash: s(r, "accesshash"),
-            secure: on(r, "secure"), port: i(r, "port"), disabled: on(r, "disabled"), maxaccounts: i(r, "maxaccounts"),
-        }).collect();
-        o.hosting = t.rows("tblhosting").iter().map(|r| Hosting {
-            id: i(r, "id"), userid: i(r, "userid"), packageid: i(r, "packageid"), regdate: dt(r, "regdate"), domain: s(r, "domain"),
-            billingcycle: s(r, "billingcycle"), nextduedate: dt(r, "nextduedate"), amount: d(r, "amount"), domainstatus: s(r, "domainstatus"),
-            server: i(r, "server"), username: s(r, "username"),
-        }).collect();
-        o.invoices = t.rows("tblinvoices").iter().map(|r| Invoice {
-            id: i(r, "id"), userid: i(r, "userid"), invoicenum: s(r, "invoicenum"), date: dt(r, "date"), duedate: dt(r, "duedate"),
-            datepaid: dt(r, "datepaid"), subtotal: d(r, "subtotal"), credit: d(r, "credit"), tax: d(r, "tax"), tax2: d(r, "tax2"),
-            total: d(r, "total"), taxrate: d(r, "taxrate"), status: s(r, "status"),
-        }).collect();
-        o.invoice_items = t.rows("tblinvoiceitems").iter().map(|r| InvoiceItem {
-            id: i(r, "id"), invoiceid: i(r, "invoiceid"), type_: s(r, "type"), relid: i(r, "relid"), description: s(r, "description"),
-            amount: d(r, "amount"), taxed: on(r, "taxed"),
-        }).collect();
-        o.transactions = t.rows("tblaccounts").iter().map(|r| Transaction {
-            id: i(r, "id"), userid: i(r, "userid"), currency: i(r, "currency"), gateway: s(r, "gateway"), date: dt(r, "date"),
-            amountin: d(r, "amountin"), amountout: d(r, "amountout"), transid: s(r, "transid"), invoiceid: i(r, "invoiceid"),
-        }).collect();
-        o.addons = t.rows("tbladdons").iter().map(|r| Addon {
-            id: i(r, "id"), packages: s(r, "packages"), name: s(r, "name"), description: s(r, "description"),
-            billingcycle: s(r, "billingcycle"), hidden: on(r, "hidden"), retired: on(r, "retired"), weight: i(r, "weight") as i32,
-        }).collect();
-        o.hosting_addons = t.rows("tblhostingaddons").iter().map(|r| HostingAddon {
-            id: i(r, "id"), hostingid: i(r, "hostingid"), addonid: i(r, "addonid"), name: s(r, "name"), recurring: d(r, "recurring"),
-            billingcycle: s(r, "billingcycle"), status: s(r, "status"), regdate: dt(r, "regdate"),
-        }).collect();
-        o.custom_fields = t.rows("tblcustomfields").iter().map(|r| CustomField {
-            id: i(r, "id"), type_: s(r, "type"), relid: i(r, "relid"), fieldname: s(r, "fieldname"), fieldtype: s(r, "fieldtype"),
-            description: s(r, "description"), fieldoptions: s(r, "fieldoptions"), regexpr: s(r, "regexpr"), required: on(r, "required"),
-            adminonly: on(r, "adminonly"), sortorder: i(r, "sortorder") as i32,
-        }).collect();
-        o.custom_field_values = t.rows("tblcustomfieldsvalues").iter().map(|r| CustomFieldValue { fieldid: i(r, "fieldid"), relid: i(r, "relid"), value: s(r, "value") }).collect();
-        o.ticket_departments = t.rows("tblticketdepartments").iter().map(|r| TicketDepartment { id: i(r, "id"), name: s(r, "name"), description: s(r, "description"), hidden: on(r, "hidden"), order: i(r, "order") as i32 }).collect();
-        o.tickets = t.rows("tbltickets").iter().map(|r| Ticket {
-            id: i(r, "id"), tid: s(r, "tid"), did: i(r, "did"), userid: i(r, "userid"), title: s(r, "title"), message: s(r, "message"),
-            status: s(r, "status"), urgency: s(r, "urgency"), date: dt(r, "date"), lastreply: dt(r, "lastreply"),
-        }).collect();
+        o.servers = t
+            .rows("tblservers")
+            .iter()
+            .map(|r| Server {
+                id: i(r, "id"),
+                name: s(r, "name"),
+                ipaddress: s(r, "ipaddress"),
+                hostname: s(r, "hostname"),
+                type_: s(r, "type"),
+                username: s(r, "username"),
+                password: s(r, "password"),
+                password_plain: false,
+                accesshash: s(r, "accesshash"),
+                secure: on(r, "secure"),
+                port: i(r, "port"),
+                disabled: on(r, "disabled"),
+                maxaccounts: i(r, "maxaccounts"),
+            })
+            .collect();
+        o.hosting = t
+            .rows("tblhosting")
+            .iter()
+            .map(|r| Hosting {
+                id: i(r, "id"),
+                userid: i(r, "userid"),
+                packageid: i(r, "packageid"),
+                regdate: dt(r, "regdate"),
+                domain: s(r, "domain"),
+                billingcycle: s(r, "billingcycle"),
+                nextduedate: dt(r, "nextduedate"),
+                amount: d(r, "amount"),
+                domainstatus: s(r, "domainstatus"),
+                server: i(r, "server"),
+                username: s(r, "username"),
+            })
+            .collect();
+        o.invoices = t
+            .rows("tblinvoices")
+            .iter()
+            .map(|r| Invoice {
+                id: i(r, "id"),
+                userid: i(r, "userid"),
+                invoicenum: s(r, "invoicenum"),
+                date: dt(r, "date"),
+                duedate: dt(r, "duedate"),
+                datepaid: dt(r, "datepaid"),
+                subtotal: d(r, "subtotal"),
+                credit: d(r, "credit"),
+                tax: d(r, "tax"),
+                tax2: d(r, "tax2"),
+                total: d(r, "total"),
+                taxrate: d(r, "taxrate"),
+                status: s(r, "status"),
+            })
+            .collect();
+        o.invoice_items = t
+            .rows("tblinvoiceitems")
+            .iter()
+            .map(|r| InvoiceItem {
+                id: i(r, "id"),
+                invoiceid: i(r, "invoiceid"),
+                type_: s(r, "type"),
+                relid: i(r, "relid"),
+                description: s(r, "description"),
+                amount: d(r, "amount"),
+                taxed: on(r, "taxed"),
+            })
+            .collect();
+        o.transactions = t
+            .rows("tblaccounts")
+            .iter()
+            .map(|r| Transaction {
+                id: i(r, "id"),
+                userid: i(r, "userid"),
+                currency: i(r, "currency"),
+                gateway: s(r, "gateway"),
+                date: dt(r, "date"),
+                amountin: d(r, "amountin"),
+                amountout: d(r, "amountout"),
+                transid: s(r, "transid"),
+                invoiceid: i(r, "invoiceid"),
+            })
+            .collect();
+        o.addons = t
+            .rows("tbladdons")
+            .iter()
+            .map(|r| Addon {
+                id: i(r, "id"),
+                packages: s(r, "packages"),
+                name: s(r, "name"),
+                description: s(r, "description"),
+                billingcycle: s(r, "billingcycle"),
+                hidden: on(r, "hidden"),
+                retired: on(r, "retired"),
+                weight: i(r, "weight") as i32,
+            })
+            .collect();
+        o.hosting_addons = t
+            .rows("tblhostingaddons")
+            .iter()
+            .map(|r| HostingAddon {
+                id: i(r, "id"),
+                hostingid: i(r, "hostingid"),
+                addonid: i(r, "addonid"),
+                name: s(r, "name"),
+                recurring: d(r, "recurring"),
+                billingcycle: s(r, "billingcycle"),
+                status: s(r, "status"),
+                regdate: dt(r, "regdate"),
+            })
+            .collect();
+        o.custom_fields = t
+            .rows("tblcustomfields")
+            .iter()
+            .map(|r| CustomField {
+                id: i(r, "id"),
+                type_: s(r, "type"),
+                relid: i(r, "relid"),
+                fieldname: s(r, "fieldname"),
+                fieldtype: s(r, "fieldtype"),
+                description: s(r, "description"),
+                fieldoptions: s(r, "fieldoptions"),
+                regexpr: s(r, "regexpr"),
+                required: on(r, "required"),
+                adminonly: on(r, "adminonly"),
+                sortorder: i(r, "sortorder") as i32,
+            })
+            .collect();
+        o.custom_field_values = t
+            .rows("tblcustomfieldsvalues")
+            .iter()
+            .map(|r| CustomFieldValue {
+                fieldid: i(r, "fieldid"),
+                relid: i(r, "relid"),
+                value: s(r, "value"),
+            })
+            .collect();
+        o.ticket_departments = t
+            .rows("tblticketdepartments")
+            .iter()
+            .map(|r| TicketDepartment {
+                id: i(r, "id"),
+                name: s(r, "name"),
+                description: s(r, "description"),
+                hidden: on(r, "hidden"),
+                order: i(r, "order") as i32,
+            })
+            .collect();
+        o.tickets = t
+            .rows("tbltickets")
+            .iter()
+            .map(|r| Ticket {
+                id: i(r, "id"),
+                tid: s(r, "tid"),
+                did: i(r, "did"),
+                userid: i(r, "userid"),
+                title: s(r, "title"),
+                message: s(r, "message"),
+                status: s(r, "status"),
+                urgency: s(r, "urgency"),
+                date: dt(r, "date"),
+                lastreply: dt(r, "lastreply"),
+            })
+            .collect();
         let mut replies: Vec<&Row> = t.rows("tblticketreplies").iter().collect();
         replies.sort_by_key(|r| i(r, "id"));
-        o.ticket_replies = replies.into_iter().map(|r| TicketReply { id: i(r, "id"), tid: i(r, "tid"), admin: s(r, "admin"), date: dt(r, "date"), message: s(r, "message") }).collect();
-        o.announcements = t.rows("tblannouncements").iter().filter(|r| i(r, "parentid") == 0).map(|r| Announcement {
-            id: i(r, "id"), date: dt(r, "date"), title: s(r, "title"), announcement: s(r, "announcement"), published: on(r, "published"),
-        }).collect();
-        o.kb_categories = t.rows("tblknowledgebasecats").iter().filter(|r| i(r, "catid") == 0).map(|r| KbCategory { id: i(r, "id"), name: s(r, "name"), description: s(r, "description") }).collect();
-        let first_cat = |a: i64| t.rows("tblknowledgebaselinks").iter().filter(|l| i(l, "articleid") == a).map(|l| i(l, "categoryid")).min().unwrap_or_default();
-        o.kb_articles = t.rows("tblknowledgebase").iter().filter(|r| i(r, "parentid") == 0).map(|r| KbArticle {
-            id: i(r, "id"), categoryid: first_cat(i(r, "id")), title: s(r, "title"), article: s(r, "article"), views: i(r, "views"), private: on(r, "private"),
-        }).collect();
-        o.domains = t.rows("tbldomains").iter().map(|r| Domain {
-            id: i(r, "id"), userid: i(r, "userid"), type_: s(r, "type"), domain: s(r, "domain"), registrar: s(r, "registrar"),
-            registrationperiod: i(r, "registrationperiod") as i32, registrationdate: dt(r, "registrationdate"), expirydate: dt(r, "expirydate"),
-            status: s(r, "status"), donotrenew: on(r, "donotrenew"), dnsmanagement: on(r, "dnsmanagement"), idprotection: on(r, "idprotection"),
-        }).collect();
-        o.config_groups = t.rows("tblproductconfiggroups").iter().map(|r| {
-            let id = i(r, "id");
-            ConfigGroup { id, name: s(r, "name"), product_ids: t.rows("tblproductconfiglinks").iter().filter(|l| i(l, "gid") == id).map(|l| i(l, "pid")).collect() }
-        }).collect();
-        o.config_options = t.rows("tblproductconfigoptions").iter().map(|r| ConfigOption {
-            id: i(r, "id"), gid: i(r, "gid"), optionname: s(r, "optionname"), optiontype: i(r, "optiontype") as i32,
-            qtyminimum: i(r, "qtyminimum") as i32, qtymaximum: i(r, "qtymaximum") as i32, order: i(r, "order") as i32, hidden: on(r, "hidden"),
-        }).collect();
-        o.config_subs = t.rows("tblproductconfigoptionssub").iter().map(|r| ConfigSub { id: i(r, "id"), configid: i(r, "configid"), optionname: s(r, "optionname"), sortorder: i(r, "sortorder") as i32, hidden: on(r, "hidden") }).collect();
-        o.promotions = t.rows("tblpromotions").iter().map(|r| Promotion {
-            id: i(r, "id"), code: s(r, "code"), type_: s(r, "type"), recurring: on(r, "recurring"), value: d(r, "value"),
-            appliesto: s(r, "appliesto"), maxuses: i(r, "maxuses"), uses: i(r, "uses"), startdate: dt(r, "startdate"),
-            expirationdate: dt(r, "expirationdate"), notes: s(r, "notes"),
-        }).collect();
-        o.tax_rules = t.rows("tbltax").iter().map(|r| TaxRule { id: i(r, "id"), level: i(r, "level") as i32, name: s(r, "name"), state: s(r, "state"), country: s(r, "country"), taxrate: d(r, "taxrate") }).collect();
+        o.ticket_replies = replies
+            .into_iter()
+            .map(|r| TicketReply {
+                id: i(r, "id"),
+                tid: i(r, "tid"),
+                admin: s(r, "admin"),
+                date: dt(r, "date"),
+                message: s(r, "message"),
+            })
+            .collect();
+        o.announcements = t
+            .rows("tblannouncements")
+            .iter()
+            .filter(|r| i(r, "parentid") == 0)
+            .map(|r| Announcement {
+                id: i(r, "id"),
+                date: dt(r, "date"),
+                title: s(r, "title"),
+                announcement: s(r, "announcement"),
+                published: on(r, "published"),
+            })
+            .collect();
+        o.kb_categories = t
+            .rows("tblknowledgebasecats")
+            .iter()
+            .filter(|r| i(r, "catid") == 0)
+            .map(|r| KbCategory {
+                id: i(r, "id"),
+                name: s(r, "name"),
+                description: s(r, "description"),
+            })
+            .collect();
+        let first_cat = |a: i64| {
+            t.rows("tblknowledgebaselinks")
+                .iter()
+                .filter(|l| i(l, "articleid") == a)
+                .map(|l| i(l, "categoryid"))
+                .min()
+                .unwrap_or_default()
+        };
+        o.kb_articles = t
+            .rows("tblknowledgebase")
+            .iter()
+            .filter(|r| i(r, "parentid") == 0)
+            .map(|r| KbArticle {
+                id: i(r, "id"),
+                categoryid: first_cat(i(r, "id")),
+                title: s(r, "title"),
+                article: s(r, "article"),
+                views: i(r, "views"),
+                private: on(r, "private"),
+            })
+            .collect();
+        o.domains = t
+            .rows("tbldomains")
+            .iter()
+            .map(|r| Domain {
+                id: i(r, "id"),
+                userid: i(r, "userid"),
+                type_: s(r, "type"),
+                domain: s(r, "domain"),
+                registrar: s(r, "registrar"),
+                registrationperiod: i(r, "registrationperiod") as i32,
+                registrationdate: dt(r, "registrationdate"),
+                expirydate: dt(r, "expirydate"),
+                status: s(r, "status"),
+                donotrenew: on(r, "donotrenew"),
+                dnsmanagement: on(r, "dnsmanagement"),
+                idprotection: on(r, "idprotection"),
+            })
+            .collect();
+        o.config_groups = t
+            .rows("tblproductconfiggroups")
+            .iter()
+            .map(|r| {
+                let id = i(r, "id");
+                ConfigGroup {
+                    id,
+                    name: s(r, "name"),
+                    product_ids: t
+                        .rows("tblproductconfiglinks")
+                        .iter()
+                        .filter(|l| i(l, "gid") == id)
+                        .map(|l| i(l, "pid"))
+                        .collect(),
+                }
+            })
+            .collect();
+        o.config_options = t
+            .rows("tblproductconfigoptions")
+            .iter()
+            .map(|r| ConfigOption {
+                id: i(r, "id"),
+                gid: i(r, "gid"),
+                optionname: s(r, "optionname"),
+                optiontype: i(r, "optiontype") as i32,
+                qtyminimum: i(r, "qtyminimum") as i32,
+                qtymaximum: i(r, "qtymaximum") as i32,
+                order: i(r, "order") as i32,
+                hidden: on(r, "hidden"),
+            })
+            .collect();
+        o.config_subs = t
+            .rows("tblproductconfigoptionssub")
+            .iter()
+            .map(|r| ConfigSub {
+                id: i(r, "id"),
+                configid: i(r, "configid"),
+                optionname: s(r, "optionname"),
+                sortorder: i(r, "sortorder") as i32,
+                hidden: on(r, "hidden"),
+            })
+            .collect();
+        o.promotions = t
+            .rows("tblpromotions")
+            .iter()
+            .map(|r| Promotion {
+                id: i(r, "id"),
+                code: s(r, "code"),
+                type_: s(r, "type"),
+                recurring: on(r, "recurring"),
+                value: d(r, "value"),
+                appliesto: s(r, "appliesto"),
+                maxuses: i(r, "maxuses"),
+                uses: i(r, "uses"),
+                startdate: dt(r, "startdate"),
+                expirationdate: dt(r, "expirationdate"),
+                notes: s(r, "notes"),
+            })
+            .collect();
+        o.tax_rules = t
+            .rows("tbltax")
+            .iter()
+            .map(|r| TaxRule {
+                id: i(r, "id"),
+                level: i(r, "level") as i32,
+                name: s(r, "name"),
+                state: s(r, "state"),
+                country: s(r, "country"),
+                taxrate: d(r, "taxrate"),
+            })
+            .collect();
         o
     }
 }

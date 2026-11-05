@@ -1,8 +1,8 @@
 //! Support desk extras (`tickets.manage`): canned replies, tags, merge/split,
 //! escalation rules, SLA metrics, staff list; client ratings.
-use crate::routes::customers::customer_of;
 use crate::error::ApiResult;
 use crate::extract::{perms, CurrentUser, RequirePermission};
+use crate::routes::customers::customer_of;
 use crate::AppState;
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post, put};
@@ -23,15 +23,27 @@ pub fn router() -> Router<AppState> {
         .route("/client/tickets/{id}/rate", post(client_rate))
         .route("/admin/ticket-canned", get(canned_list).post(canned_create))
         .route("/admin/ticket-satisfaction", get(satisfaction))
-        .route("/admin/ticket-canned/{id}", put(canned_update).delete(canned_delete))
+        .route(
+            "/admin/ticket-canned/{id}",
+            put(canned_update).delete(canned_delete),
+        )
         .route("/admin/ticket-staff", get(staff))
         .route("/admin/ticket-sla", get(sla))
         .route("/admin/ticket-departments-sla", get(department_slas))
-        .route("/admin/ticket-departments/{id}/sla", put(set_department_sla))
+        .route(
+            "/admin/ticket-departments/{id}/sla",
+            put(set_department_sla),
+        )
         .route("/admin/ticket-escalations", get(rules).post(rule_create))
         .route("/admin/ticket-escalations/run", post(rules_run))
-        .route("/admin/settings/ticket-auto-close", get(auto_close_get).put(auto_close_put))
-        .route("/admin/ticket-escalations/{id}", put(rule_update).delete(rule_delete))
+        .route(
+            "/admin/settings/ticket-auto-close",
+            get(auto_close_get).put(auto_close_put),
+        )
+        .route(
+            "/admin/ticket-escalations/{id}",
+            put(rule_update).delete(rule_delete),
+        )
         .route("/admin/tickets/{id}/tags", put(set_tags))
         .route("/admin/tickets/{id}/merge", post(merge))
         .route("/admin/tickets/{id}/split", post(split))
@@ -78,7 +90,9 @@ pub async fn canned_list(
     _p: RequirePermission<perms::TicketsManage>,
     Query(q): Query<DepQuery>,
 ) -> ApiResult<Json<Value>> {
-    Ok(Json(json!({ "items": support::canned(&s.pool, q.department_id).await? })))
+    Ok(Json(
+        json!({ "items": support::canned(&s.pool, q.department_id).await? }),
+    ))
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -98,7 +112,8 @@ async fn save_canned(s: &AppState, id: Option<Uuid>, b: CannedBody) -> ApiResult
     if b.category.chars().count() > 100 {
         return Err(AppError::Validation("error.invalid_category").into());
     }
-    let r = support::upsert_canned(&s.pool, id, &title, &body, b.department_id, &b.category).await?;
+    let r =
+        support::upsert_canned(&s.pool, id, &title, &body, b.department_id, &b.category).await?;
     Ok(Json(json!(r)))
 }
 
@@ -109,7 +124,15 @@ pub async fn canned_create(
     Json(b): Json<CannedBody>,
 ) -> ApiResult<Json<Value>> {
     let out = save_canned(&s, None, b).await?;
-    audit::record(&s.pool, Some(u.user_id), "ticket.canned_created", None, u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "ticket.canned_created",
+        None,
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(out)
 }
 
@@ -121,7 +144,15 @@ pub async fn canned_update(
     Json(b): Json<CannedBody>,
 ) -> ApiResult<Json<Value>> {
     let out = save_canned(&s, Some(id), b).await?;
-    audit::record(&s.pool, Some(u.user_id), "ticket.canned_updated", Some(&id.to_string()), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "ticket.canned_updated",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(out)
 }
 
@@ -132,12 +163,23 @@ pub async fn canned_delete(
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<Value>> {
     support::delete_canned(&s.pool, id).await?;
-    audit::record(&s.pool, Some(u.user_id), "ticket.canned_deleted", Some(&id.to_string()), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "ticket.canned_deleted",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(Json(json!({ "ok": true })))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/ticket-staff", responses((status = 200)))]
-pub async fn staff(State(s): State<AppState>, _p: RequirePermission<perms::TicketsManage>) -> ApiResult<Json<Value>> {
+pub async fn staff(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::TicketsManage>,
+) -> ApiResult<Json<Value>> {
     Ok(Json(json!({ "items": support::staff(&s.pool).await? })))
 }
 
@@ -154,7 +196,9 @@ pub async fn sla(
 ) -> ApiResult<Json<Value>> {
     let days = q.days.unwrap_or(30).clamp(1, 3650);
     let since = OffsetDateTime::now_utc() - time::Duration::days(days);
-    Ok(Json(json!({ "days": days, "items": support::sla(&s.pool, since).await? })))
+    Ok(Json(
+        json!({ "days": days, "items": support::sla(&s.pool, since).await? }),
+    ))
 }
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
@@ -179,8 +223,13 @@ pub async fn satisfaction(
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/ticket-departments-sla", responses((status = 200)))]
-pub async fn department_slas(State(s): State<AppState>, _p: RequirePermission<perms::TicketsManage>) -> ApiResult<Json<Value>> {
-    Ok(Json(json!({ "items": support::department_slas(&s.pool).await? })))
+pub async fn department_slas(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::TicketsManage>,
+) -> ApiResult<Json<Value>> {
+    Ok(Json(
+        json!({ "items": support::department_slas(&s.pool).await? }),
+    ))
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -205,8 +254,21 @@ pub async fn set_department_sla(
         return Err(AppError::Validation("error.invalid_sla").into());
     }
     support::set_department_sla(&s.pool, id, email, b.sla_first_response_minutes).await?;
-    pelty_database::ticket_sla::sync_department_first_response(&s.pool, id, b.sla_first_response_minutes).await?;
-    audit::record(&s.pool, Some(u.user_id), "ticket.department_sla_set", Some(&id.to_string()), u.ip.as_deref(), json!({})).await?;
+    pelty_database::ticket_sla::sync_department_first_response(
+        &s.pool,
+        id,
+        b.sla_first_response_minutes,
+    )
+    .await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "ticket.department_sla_set",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -232,14 +294,20 @@ fn yes() -> bool {
 
 fn prio_ok(p: &Option<String>) -> ApiResult<()> {
     match p {
-        Some(p) if !PRIORITIES.contains(&p.as_str()) => Err(AppError::Validation("error.invalid_priority").into()),
+        Some(p) if !PRIORITIES.contains(&p.as_str()) => {
+            Err(AppError::Validation("error.invalid_priority").into())
+        }
         _ => Ok(()),
     }
 }
 
 async fn save_rule(s: &AppState, id: Option<Uuid>, b: RuleBody) -> ApiResult<Json<Value>> {
     let name = text(&b.name, 100, "error.invalid_name")?;
-    let statuses = if b.statuses.is_empty() { vec!["open".to_string(), "customer_reply".to_string()] } else { b.statuses };
+    let statuses = if b.statuses.is_empty() {
+        vec!["open".to_string(), "customer_reply".to_string()]
+    } else {
+        b.statuses
+    };
     for x in &statuses {
         if x == "closed" || !pelty_database::ticket_statuses::exists(&s.pool, x).await? {
             return Err(AppError::Validation("error.invalid_status").into());
@@ -250,8 +318,15 @@ async fn save_rule(s: &AppState, id: Option<Uuid>, b: RuleBody) -> ApiResult<Jso
     if !(1..=525_600).contains(&b.after_minutes) {
         return Err(AppError::Validation("error.invalid_minutes").into());
     }
-    let add_tag = match b.add_tag.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
-        Some(t) => Some(support::normalize_tag(t).ok_or(AppError::Validation("error.invalid_tag"))?),
+    let add_tag = match b
+        .add_tag
+        .as_deref()
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+    {
+        Some(t) => {
+            Some(support::normalize_tag(t).ok_or(AppError::Validation("error.invalid_tag"))?)
+        }
         None => None,
     };
     if let Some(a) = b.assign_to {
@@ -276,7 +351,10 @@ async fn save_rule(s: &AppState, id: Option<Uuid>, b: RuleBody) -> ApiResult<Jso
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/ticket-escalations", responses((status = 200)))]
-pub async fn rules(State(s): State<AppState>, _p: RequirePermission<perms::TicketsManage>) -> ApiResult<Json<Value>> {
+pub async fn rules(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::TicketsManage>,
+) -> ApiResult<Json<Value>> {
     Ok(Json(json!({ "items": support::rules(&s.pool).await? })))
 }
 
@@ -287,7 +365,15 @@ pub async fn rule_create(
     Json(b): Json<RuleBody>,
 ) -> ApiResult<Json<Value>> {
     let out = save_rule(&s, None, b).await?;
-    audit::record(&s.pool, Some(u.user_id), "ticket.escalation_rule_created", None, u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "ticket.escalation_rule_created",
+        None,
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(out)
 }
 
@@ -299,7 +385,15 @@ pub async fn rule_update(
     Json(b): Json<RuleBody>,
 ) -> ApiResult<Json<Value>> {
     let out = save_rule(&s, Some(id), b).await?;
-    audit::record(&s.pool, Some(u.user_id), "ticket.escalation_rule_updated", Some(&id.to_string()), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "ticket.escalation_rule_updated",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(out)
 }
 
@@ -310,15 +404,34 @@ pub async fn rule_delete(
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<Value>> {
     support::delete_rule(&s.pool, id).await?;
-    audit::record(&s.pool, Some(u.user_id), "ticket.escalation_rule_deleted", Some(&id.to_string()), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "ticket.escalation_rule_deleted",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(Json(json!({ "ok": true })))
 }
 
 /// Enqueue an escalation pass now (durable job; the worker also schedules one
 /// every few minutes).
 #[utoipa::path(post, path = "/api/v1/admin/ticket-escalations/run", responses((status = 200)))]
-pub async fn rules_run(State(s): State<AppState>, _p: RequirePermission<perms::TicketsManage>) -> ApiResult<Json<Value>> {
-    let id = jobs::enqueue(&s.pool, ESCALATE_JOB, json!({ "manual": true }), None, None, 3).await?;
+pub async fn rules_run(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::TicketsManage>,
+) -> ApiResult<Json<Value>> {
+    let id = jobs::enqueue(
+        &s.pool,
+        ESCALATE_JOB,
+        json!({ "manual": true }),
+        None,
+        None,
+        3,
+    )
+    .await?;
     Ok(Json(json!({ "job_id": id })))
 }
 
@@ -346,7 +459,15 @@ pub async fn set_tags(
     tags.sort();
     tags.dedup();
     support::set_tags(&s.pool, id, &tags).await?;
-    audit::record(&s.pool, Some(u.user_id), "ticket.tags_set", Some(&id.to_string()), u.ip.as_deref(), json!({ "tags": tags })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "ticket.tags_set",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "tags": tags }),
+    )
+    .await?;
     Ok(Json(json!({ "tags": tags })))
 }
 
@@ -364,7 +485,15 @@ pub async fn merge(
     Json(b): Json<MergeBody>,
 ) -> ApiResult<Json<Value>> {
     support::merge(&s.pool, id, b.target_id).await?;
-    audit::record(&s.pool, Some(u.user_id), "ticket.merged", Some(&id.to_string()), u.ip.as_deref(), json!({ "into": b.target_id })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "ticket.merged",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "into": b.target_id }),
+    )
+    .await?;
     Ok(Json(json!({ "ticket_id": b.target_id })))
 }
 
@@ -386,13 +515,26 @@ pub async fn split(
     ids.sort();
     ids.dedup();
     let new = support::split(&s.pool, id, &ids, &subject).await?;
-    audit::record(&s.pool, Some(u.user_id), "ticket.split", Some(&id.to_string()), u.ip.as_deref(), json!({ "new_ticket": new })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "ticket.split",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "new_ticket": new }),
+    )
+    .await?;
     Ok(Json(json!({ "ticket_id": new })))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/settings/ticket-auto-close", responses((status = 200), (status = 403)))]
-pub async fn auto_close_get(State(s): State<AppState>, _p: RequirePermission<perms::TicketsManage>) -> ApiResult<Json<Value>> {
-    Ok(Json(json!(pelty_database::support::get_auto_close(&s.pool).await?)))
+pub async fn auto_close_get(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::TicketsManage>,
+) -> ApiResult<Json<Value>> {
+    Ok(Json(json!(
+        pelty_database::support::get_auto_close(&s.pool).await?
+    )))
 }
 
 #[utoipa::path(put, path = "/api/v1/admin/settings/ticket-auto-close", request_body = pelty_database::support::AutoCloseSettings, responses((status = 200), (status = 422)))]
@@ -403,7 +545,15 @@ pub async fn auto_close_put(
 ) -> ApiResult<Json<Value>> {
     b.validate().map_err(AppError::Validation)?;
     pelty_database::support::put_auto_close(&s.pool, &b).await?;
-    pelty_database::audit::record(&s.pool, Some(u.user_id), "settings.ticket_auto_close", None, u.ip.as_deref(), json!({ "hours": b.hours })).await?;
+    pelty_database::audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "settings.ticket_auto_close",
+        None,
+        u.ip.as_deref(),
+        json!({ "hours": b.hours }),
+    )
+    .await?;
     Ok(Json(json!(b)))
 }
 
@@ -413,10 +563,15 @@ pub async fn run_auto_close(s: &AppState) -> pelty_core::AppResult<usize> {
     let ids = pelty_database::support::close_inactive(&s.pool, cfg.hours, &cfg.statuses).await?;
     for id in &ids {
         if let Some(t) = s.tickets().get(*id, None).await? {
-            if let Err(e) = crate::routes::tickets::notify_customer_with(s, &t, "ticket_auto_closed").await {
+            if let Err(e) =
+                crate::routes::tickets::notify_customer_with(s, &t, "ticket_auto_closed").await
+            {
                 tracing::warn!(error = ?e.0, ticket = %id, "auto-close mail failed");
             }
-            s.emit(pelty_extensions::events::DomainEvent::new("ticket.closed", json!({ "ticket_id": id, "reason": "inactive" })));
+            s.emit(pelty_extensions::events::DomainEvent::new(
+                "ticket.closed",
+                json!({ "ticket_id": id, "reason": "inactive" }),
+            ));
         }
     }
     Ok(ids.len())

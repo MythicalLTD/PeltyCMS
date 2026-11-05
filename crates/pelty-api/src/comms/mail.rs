@@ -98,13 +98,31 @@ pub async fn enqueue(s: &AppState, name: &str, locale: &str, to: &str, v: Vars) 
         locale: String,
         vars: Vars,
     }
-    let i = crate::addon_functions::rewrite_input(s, "mail.enqueue", serde_json::json!({ "template": name, "to": to }), MailInput { locale: locale.to_string(), vars: v }).await;
-    let locale = if i.locale.len() <= 16 { i.locale } else { locale.to_string() };
+    let i = crate::addon_functions::rewrite_input(
+        s,
+        "mail.enqueue",
+        serde_json::json!({ "template": name, "to": to }),
+        MailInput {
+            locale: locale.to_string(),
+            vars: v,
+        },
+    )
+    .await;
+    let locale = if i.locale.len() <= 16 {
+        i.locale
+    } else {
+        locale.to_string()
+    };
     enqueue_always(s, name, &locale, to, i.vars).await
 }
 
 /// Templates an operator may never switch off (account security).
-pub const ALWAYS_ON: &[&str] = &["password_reset", "email_verify", "admin_account_locked", "admin_password_reset"];
+pub const ALWAYS_ON: &[&str] = &[
+    "password_reset",
+    "email_verify",
+    "admin_account_locked",
+    "admin_password_reset",
+];
 const DISABLED_KEY: &str = "email_templates_disabled";
 
 /// Template names the operator switched off (WHMCS "Disable" checkbox).
@@ -128,7 +146,13 @@ pub async fn set_enabled(s: &AppState, name: &str, enabled: bool) -> AppResult<(
 }
 
 /// Queue regardless of the disabled list (test sends).
-pub async fn enqueue_always(s: &AppState, name: &str, locale: &str, to: &str, v: Vars) -> AppResult<()> {
+pub async fn enqueue_always(
+    s: &AppState,
+    name: &str,
+    locale: &str,
+    to: &str,
+    v: Vars,
+) -> AppResult<()> {
     pelty_database::jobs::enqueue(
         &s.pool,
         JOB_KIND,
@@ -156,7 +180,8 @@ pub async fn deliver(s: &AppState, payload: &Value) -> Result<Value, String> {
         let pre = crate::addon_ext::pre_event(s, "email.before_send", json!({ "template": name, "locale": locale, "to": to, "subject": email.subject, "text": email.text })).await;
         match pre {
             Ok(p) => {
-                let subject = crate::addon_ext::pre_str(&p, "subject", 500, &email.subject).replace(['\r', '\n'], " ");
+                let subject = crate::addon_ext::pre_str(&p, "subject", 500, &email.subject)
+                    .replace(['\r', '\n'], " ");
                 let text = crate::addon_ext::pre_str(&p, "text", 200_000, &email.text);
                 if text != email.text {
                     email.html = text_to_html(&text);
@@ -164,13 +189,32 @@ pub async fn deliver(s: &AppState, payload: &Value) -> Result<Value, String> {
                 }
                 email.subject = subject;
             }
-            Err(AppError::Conflict(_)) => return Ok(json!({ "template": name, "cancelled": true })),
+            Err(AppError::Conflict(_)) => {
+                return Ok(json!({ "template": name, "cancelled": true }))
+            }
             Err(e) => return Err(e.to_string()),
         }
         if crate::addon_filters::has(s, "email.content") {
-            let v = crate::addon_filters::apply(s, "email.content", json!({ "subject": email.subject, "text": email.text }), json!({ "template": name, "locale": locale, "to": to })).await;
-            let subject = v["subject"].as_str().map(|x| x.chars().take(500).collect::<String>().replace(['\r', '\n'], " ")).unwrap_or_else(|| email.subject.clone());
-            let text: String = v["text"].as_str().map(|x| x.chars().take(200_000).collect()).unwrap_or_else(|| email.text.clone());
+            let v = crate::addon_filters::apply(
+                s,
+                "email.content",
+                json!({ "subject": email.subject, "text": email.text }),
+                json!({ "template": name, "locale": locale, "to": to }),
+            )
+            .await;
+            let subject = v["subject"]
+                .as_str()
+                .map(|x| {
+                    x.chars()
+                        .take(500)
+                        .collect::<String>()
+                        .replace(['\r', '\n'], " ")
+                })
+                .unwrap_or_else(|| email.subject.clone());
+            let text: String = v["text"]
+                .as_str()
+                .map(|x| x.chars().take(200_000).collect())
+                .unwrap_or_else(|| email.text.clone());
             if text != email.text {
                 email.html = text_to_html(&text);
                 email.text = text;
@@ -179,24 +223,41 @@ pub async fn deliver(s: &AppState, payload: &Value) -> Result<Value, String> {
         }
     }
     let m = s.active_mailer();
-    let number = payload["vars"]["ticket_number"].as_str().and_then(|v| v.parse::<i64>().ok());
+    let number = payload["vars"]["ticket_number"]
+        .as_str()
+        .and_then(|v| v.parse::<i64>().ok());
     let ticket_headers = if name.starts_with("ticket_") {
         if let Some(number) = number {
             let row: Option<(uuid::Uuid, String)> = sqlx::query_as("SELECT t.id,d.email FROM tickets t JOIN ticket_departments d ON d.id=t.department_id WHERE t.number=$1 AND d.email <> ''")
                 .bind(number).fetch_optional(&s.pool).await.map_err(|e| e.to_string())?;
-            row.map(|(id, reply_to)| pelty_notifications::mailer::TicketHeaders {
-                reply_to, message_id: format!("<ticket.{id}.{}@pelty.invalid>", uuid::Uuid::new_v4()),
-            })
-        } else { None }
-    } else { None };
-    let res = if let Some(headers) = ticket_headers { m.send_ticket(&email, &headers).await } else { m.send(&email).await };
+            row.map(
+                |(id, reply_to)| pelty_notifications::mailer::TicketHeaders {
+                    reply_to,
+                    message_id: format!("<ticket.{id}.{}@pelty.invalid>", uuid::Uuid::new_v4()),
+                },
+            )
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    let res = if let Some(headers) = ticket_headers {
+        m.send_ticket(&email, &headers).await
+    } else {
+        m.send(&email).await
+    };
     let entry = pelty_database::email_log::NewEntry {
         recipient: to,
         template: name,
         locale,
         subject: &email.subject,
         // Security mails carry one-time links: never keep their body.
-        body_text: if SENSITIVE.contains(&name) { REDACTED } else { &email.text },
+        body_text: if SENSITIVE.contains(&name) {
+            REDACTED
+        } else {
+            &email.text
+        },
         status: if res.is_ok() { "sent" } else { "failed" },
         error: res.as_ref().err().map(String::as_str),
         mailer: m.name(),
@@ -206,7 +267,10 @@ pub async fn deliver(s: &AppState, payload: &Value) -> Result<Value, String> {
         tracing::warn!(error = %e, "email log insert failed");
     }
     if res.is_ok() {
-        s.emit(pelty_extensions::events::DomainEvent::new("email.sent", json!({ "template": name, "to": to, "subject": email.subject, "mailer": m.name() })));
+        s.emit(pelty_extensions::events::DomainEvent::new(
+            "email.sent",
+            json!({ "template": name, "to": to, "subject": email.subject, "mailer": m.name() }),
+        ));
     } else {
         s.emit(pelty_extensions::events::DomainEvent::new("email.failed", json!({ "template": name, "to": to, "subject": email.subject, "error": res.as_ref().err() })));
     }
@@ -223,7 +287,10 @@ pub fn user_locale(s: &AppState, u: &pelty_database::users::User) -> String {
 }
 
 /// Re-send a logged mail exactly as it was rendered (WHMCS "Resend").
-pub async fn resend_logged(s: &AppState, d: &pelty_database::email_log::EmailLogDetail) -> AppResult<()> {
+pub async fn resend_logged(
+    s: &AppState,
+    d: &pelty_database::email_log::EmailLogDetail,
+) -> AppResult<()> {
     pelty_database::jobs::enqueue(
         &s.pool,
         RAW_JOB_KIND,
@@ -241,7 +308,18 @@ pub const REDACTED: &str = "[redacted]";
 
 /// Templates carrying live tokens or credentials: bodies are never logged
 /// and staff can never resend them (a resend would replay the secret).
-pub const SENSITIVE: &[&str] = &["password_reset", "email_verify", "registrant_verify", "admin_account_locked", "admin_password_reset", "contact_invite", "new_service_info", "client_invite", "client_welcome", "staff_invite"];
+pub const SENSITIVE: &[&str] = &[
+    "password_reset",
+    "email_verify",
+    "registrant_verify",
+    "admin_account_locked",
+    "admin_password_reset",
+    "contact_invite",
+    "new_service_info",
+    "client_invite",
+    "client_welcome",
+    "staff_invite",
+];
 
 pub const RAW_JOB_KIND: &str = "email.send_raw";
 
@@ -251,7 +329,10 @@ pub async fn deliver_raw(s: &AppState, p: &Value) -> Result<Value, String> {
     let text = p["text"].as_str().unwrap_or_default().to_string();
     let email = Email {
         to: to.to_string(),
-        subject: p["subject"].as_str().unwrap_or_default().replace(['\r', '\n'], " "),
+        subject: p["subject"]
+            .as_str()
+            .unwrap_or_default()
+            .replace(['\r', '\n'], " "),
         html: text_to_html(&text),
         text,
         list_unsubscribe: None,

@@ -14,7 +14,10 @@ struct PeltyAddon;
 #[cfg(all(target_family = "wasm", feature = "export"))]
 impl pelty_addon_sdk::Guest for PeltyAddon {
     fn describe() -> String {
-        pelty_addon_sdk::provisioning::describe_registrar(&MockRegistrar::default(), pelty_addon_sdk::serde_json::json!([]))
+        pelty_addon_sdk::provisioning::describe_registrar(
+            &MockRegistrar::default(),
+            pelty_addon_sdk::serde_json::json!([]),
+        )
     }
     fn call(op: String, input: String) -> Result<String, String> {
         let m = MockRegistrar::from_snapshot(&host::kv_get(KEY).unwrap_or_default());

@@ -36,14 +36,25 @@ pub async fn create(pool: &PgPool, author: Uuid, body: &str, pinned: bool) -> Ap
     }
     let id = Uuid::new_v4();
     sqlx::query("INSERT INTO staff_notices (id, author_id, body, pinned) VALUES ($1,$2,$3,$4)")
-        .bind(id).bind(author).bind(body).bind(pinned).execute(pool).await.map_err(db_err)?;
+        .bind(id)
+        .bind(author)
+        .bind(body)
+        .bind(pinned)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(id)
 }
 
 /// Delete a notice; staff without `any` may only remove their own.
 pub async fn delete(pool: &PgPool, id: Uuid, user: Uuid, any: bool) -> AppResult<()> {
     let r = sqlx::query("DELETE FROM staff_notices WHERE id = $1 AND ($3 OR author_id = $2)")
-        .bind(id).bind(user).bind(any).execute(pool).await.map_err(db_err)?;
+        .bind(id)
+        .bind(user)
+        .bind(any)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }

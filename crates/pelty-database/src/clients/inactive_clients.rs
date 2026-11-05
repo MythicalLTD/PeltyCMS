@@ -26,18 +26,36 @@ pub struct Settings {
 
 impl Settings {
     pub fn validate(&self) -> AppResult<()> {
-        let days_ok = if self.enabled { (365..=3650).contains(&self.inactive_days) } else { self.inactive_days == 0 || (365..=3650).contains(&self.inactive_days) };
-        if days_ok && (self.max_per_run == 0 && !self.enabled || (1..=500).contains(&self.max_per_run)) { Ok(()) } else { Err(AppError::Validation("error.validation")) }
+        let days_ok = if self.enabled {
+            (365..=3650).contains(&self.inactive_days)
+        } else {
+            self.inactive_days == 0 || (365..=3650).contains(&self.inactive_days)
+        };
+        if days_ok
+            && (self.max_per_run == 0 && !self.enabled || (1..=500).contains(&self.max_per_run))
+        {
+            Ok(())
+        } else {
+            Err(AppError::Validation("error.validation"))
+        }
     }
 }
 
 pub async fn get(pool: &PgPool) -> AppResult<Settings> {
-    Ok(crate::settings::get(pool, KEY).await?.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default())
+    Ok(crate::settings::get(pool, KEY)
+        .await?
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default())
 }
 
 pub async fn put(pool: &PgPool, s: &Settings) -> AppResult<()> {
     s.validate()?;
-    crate::settings::set(pool, KEY, serde_json::to_value(s).map_err(|e| AppError::Internal(e.to_string()))?).await
+    crate::settings::set(
+        pool,
+        KEY,
+        serde_json::to_value(s).map_err(|e| AppError::Internal(e.to_string()))?,
+    )
+    .await
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow, utoipa::ToSchema)]
@@ -76,7 +94,12 @@ pub async fn candidates(pool: &PgPool, days: i32, limit: i64) -> AppResult<Vec<C
     if !(365..=3650).contains(&days) {
         return Err(AppError::Validation("error.validation"));
     }
-    sqlx::query_as(CANDIDATES).bind(days).bind(limit.clamp(1, 500)).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(CANDIDATES)
+        .bind(days)
+        .bind(limit.clamp(1, 500))
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 /// Erase up to `max_per_run` candidates when enabled; returns how many.
@@ -112,9 +135,33 @@ mod tests {
     #[test]
     fn validation() {
         assert!(Settings::default().validate().is_ok());
-        assert!(Settings { enabled: true, inactive_days: 364, max_per_run: 10 }.validate().is_err());
-        assert!(Settings { enabled: true, inactive_days: 730, max_per_run: 0 }.validate().is_err());
-        assert!(Settings { enabled: true, inactive_days: 730, max_per_run: 50 }.validate().is_ok());
-        assert!(Settings { enabled: false, inactive_days: 730, max_per_run: 50 }.validate().is_ok());
+        assert!(Settings {
+            enabled: true,
+            inactive_days: 364,
+            max_per_run: 10
+        }
+        .validate()
+        .is_err());
+        assert!(Settings {
+            enabled: true,
+            inactive_days: 730,
+            max_per_run: 0
+        }
+        .validate()
+        .is_err());
+        assert!(Settings {
+            enabled: true,
+            inactive_days: 730,
+            max_per_run: 50
+        }
+        .validate()
+        .is_ok());
+        assert!(Settings {
+            enabled: false,
+            inactive_days: 730,
+            max_per_run: 50
+        }
+        .validate()
+        .is_ok());
     }
 }

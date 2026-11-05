@@ -6,11 +6,14 @@
 use std::path::{Path, PathBuf};
 
 #[cfg(pelty_embed_frontend)]
-static FRONTEND: include_dir::Dir<'static> = include_dir::include_dir!("$CARGO_MANIFEST_DIR/../../frontend/dist");
+static FRONTEND: include_dir::Dir<'static> =
+    include_dir::include_dir!("$CARGO_MANIFEST_DIR/../../frontend/dist");
 #[cfg(pelty_embed_addons)]
-static ADDONS: include_dir::Dir<'static> = include_dir::include_dir!("$CARGO_MANIFEST_DIR/../../extensions/addons/dist");
+static ADDONS: include_dir::Dir<'static> =
+    include_dir::include_dir!("$CARGO_MANIFEST_DIR/../../extensions/addons/dist");
 #[cfg(feature = "embed-frontend")]
-static THEMES: include_dir::Dir<'static> = include_dir::include_dir!("$CARGO_MANIFEST_DIR/../../extensions/themes");
+static THEMES: include_dir::Dir<'static> =
+    include_dir::include_dir!("$CARGO_MANIFEST_DIR/../../extensions/themes");
 
 /// File of the compiled-in web UI (path relative to the build root).
 #[allow(unused_variables)]
@@ -58,7 +61,9 @@ fn write_dir(d: &include_dir::Dir<'_>, to: &Path, overwrite: bool) -> std::io::R
 pub fn seed_themes(dir: &Path) -> std::io::Result<Vec<String>> {
     #[cfg(feature = "embed-frontend")]
     {
-        let has_any = std::fs::read_dir(dir)?.flatten().any(|e| e.path().join("theme.json").is_file());
+        let has_any = std::fs::read_dir(dir)?
+            .flatten()
+            .any(|e| e.path().join("theme.json").is_file());
         if has_any {
             return Ok(vec![]);
         }
@@ -109,21 +114,26 @@ mod tests {
     #[cfg(feature = "embed-frontend")]
     #[test]
     fn default_themes_seed_only_an_empty_folder() {
-        let d = std::env::temp_dir().join(format!("pelty-themes-{}", uuid::Uuid::new_v4().simple()));
+        let d =
+            std::env::temp_dir().join(format!("pelty-themes-{}", uuid::Uuid::new_v4().simple()));
         std::fs::create_dir_all(&d).unwrap();
         let made = seed_themes(&d).unwrap();
         assert!(made.contains(&"default".to_string()), "{made:?}");
         assert!(d.join("default/theme.json").is_file());
         std::fs::write(d.join("default/theme.json"), "{}").unwrap();
         assert!(seed_themes(&d).unwrap().is_empty());
-        assert_eq!(std::fs::read_to_string(d.join("default/theme.json")).unwrap(), "{}");
+        assert_eq!(
+            std::fs::read_to_string(d.join("default/theme.json")).unwrap(),
+            "{}"
+        );
         let _ = std::fs::remove_dir_all(&d);
     }
 
     #[cfg(not(feature = "embed-addons"))]
     #[test]
     fn no_addons_in_the_binary_by_default() {
-        let d = std::env::temp_dir().join(format!("pelty-noaddons-{}", uuid::Uuid::new_v4().simple()));
+        let d =
+            std::env::temp_dir().join(format!("pelty-noaddons-{}", uuid::Uuid::new_v4().simple()));
         assert!(unpack_addons(&d).unwrap().is_none());
         assert!(!d.join(ADDONS_DIST).exists());
     }
@@ -133,7 +143,11 @@ mod tests {
     fn ui_build_is_compiled_in() {
         assert!(has_frontend());
         let html = std::str::from_utf8(frontend_file("index.html").unwrap()).unwrap();
-        let asset = html.split("/assets/").nth(1).and_then(|s| s.split('"').next()).expect("index.html links an asset");
+        let asset = html
+            .split("/assets/")
+            .nth(1)
+            .and_then(|s| s.split('"').next())
+            .expect("index.html links an asset");
         assert!(frontend_file(&format!("assets/{asset}")).is_some());
     }
 }

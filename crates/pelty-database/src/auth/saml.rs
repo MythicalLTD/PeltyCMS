@@ -74,11 +74,18 @@ pub struct IdpInput {
 }
 
 pub async fn list(pool: &PgPool) -> AppResult<Vec<SamlIdp>> {
-    sqlx::query_as("SELECT * FROM saml_idps ORDER BY name").fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as("SELECT * FROM saml_idps ORDER BY name")
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<SamlIdp>> {
-    sqlx::query_as("SELECT * FROM saml_idps WHERE id = $1").bind(id).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as("SELECT * FROM saml_idps WHERE id = $1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn save(pool: &PgPool, id: Option<Uuid>, i: &IdpInput) -> AppResult<Option<Uuid>> {
@@ -126,24 +133,45 @@ pub async fn save(pool: &PgPool, id: Option<Uuid>, i: &IdpInput) -> AppResult<Op
 }
 
 pub async fn set_sp_key(pool: &PgPool, id: Uuid, sealed: &[u8], cert_pem: &str) -> AppResult<()> {
-    sqlx::query("UPDATE saml_idps SET sp_key_sealed=$2, sp_cert_pem=$3, updated_at=now() WHERE id=$1")
-        .bind(id)
-        .bind(sealed)
-        .bind(cert_pem)
-        .execute(pool)
-        .await
-        .map_err(db_err)?;
+    sqlx::query(
+        "UPDATE saml_idps SET sp_key_sealed=$2, sp_cert_pem=$3, updated_at=now() WHERE id=$1",
+    )
+    .bind(id)
+    .bind(sealed)
+    .bind(cert_pem)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
     Ok(())
 }
 
 pub async fn delete(pool: &PgPool, id: Uuid) -> AppResult<bool> {
     // Linked identities use provider "saml:{id}".
-    sqlx::query("DELETE FROM user_identities WHERE provider = $1").bind(format!("saml:{id}")).execute(pool).await.map_err(db_err)?;
-    Ok(sqlx::query("DELETE FROM saml_idps WHERE id=$1").bind(id).execute(pool).await.map_err(db_err)?.rows_affected() == 1)
+    sqlx::query("DELETE FROM user_identities WHERE provider = $1")
+        .bind(format!("saml:{id}"))
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
+    Ok(sqlx::query("DELETE FROM saml_idps WHERE id=$1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?
+        .rows_affected()
+        == 1)
 }
 
-pub async fn put_request(pool: &PgPool, id: &str, idp: Uuid, mode: &str, user_id: Option<Uuid>) -> AppResult<()> {
-    sqlx::query("DELETE FROM saml_requests WHERE expires_at < now()").execute(pool).await.map_err(db_err)?;
+pub async fn put_request(
+    pool: &PgPool,
+    id: &str,
+    idp: Uuid,
+    mode: &str,
+    user_id: Option<Uuid>,
+) -> AppResult<()> {
+    sqlx::query("DELETE FROM saml_requests WHERE expires_at < now()")
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     sqlx::query("INSERT INTO saml_requests (id, idp_id, mode, user_id, expires_at) VALUES ($1,$2,$3,$4, now() + interval '10 minutes')")
         .bind(id)
         .bind(idp)
@@ -156,7 +184,11 @@ pub async fn put_request(pool: &PgPool, id: &str, idp: Uuid, mode: &str, user_id
 }
 
 /// One-time: (mode, user_id) of a live pending request for this IdP.
-pub async fn take_request(pool: &PgPool, id: &str, idp: Uuid) -> AppResult<Option<(String, Option<Uuid>)>> {
+pub async fn take_request(
+    pool: &PgPool,
+    id: &str,
+    idp: Uuid,
+) -> AppResult<Option<(String, Option<Uuid>)>> {
     sqlx::query_as("DELETE FROM saml_requests WHERE id=$1 AND idp_id=$2 AND expires_at > now() RETURNING mode, user_id")
         .bind(id)
         .bind(idp)
@@ -166,8 +198,16 @@ pub async fn take_request(pool: &PgPool, id: &str, idp: Uuid) -> AppResult<Optio
 }
 
 /// Record an assertion ID; false when it was already seen (replay).
-pub async fn remember_assertion(pool: &PgPool, idp: Uuid, assertion_id: &str, until: OffsetDateTime) -> AppResult<bool> {
-    sqlx::query("DELETE FROM saml_replay WHERE expires_at < now() - interval '1 hour'").execute(pool).await.map_err(db_err)?;
+pub async fn remember_assertion(
+    pool: &PgPool,
+    idp: Uuid,
+    assertion_id: &str,
+    until: OffsetDateTime,
+) -> AppResult<bool> {
+    sqlx::query("DELETE FROM saml_replay WHERE expires_at < now() - interval '1 hour'")
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     let r = sqlx::query("INSERT INTO saml_replay (idp_id, assertion_id, expires_at) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING")
         .bind(idp)
         .bind(assertion_id)
@@ -178,7 +218,14 @@ pub async fn remember_assertion(pool: &PgPool, idp: Uuid, assertion_id: &str, un
     Ok(r.rows_affected() == 1)
 }
 
-pub async fn link_session(pool: &PgPool, session: Uuid, idp: Uuid, user: Uuid, name_id: &str, session_index: Option<&str>) -> AppResult<()> {
+pub async fn link_session(
+    pool: &PgPool,
+    session: Uuid,
+    idp: Uuid,
+    user: Uuid,
+    name_id: &str,
+    session_index: Option<&str>,
+) -> AppResult<()> {
     sqlx::query("INSERT INTO saml_sessions (session_id, idp_id, user_id, name_id, session_index) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (session_id) DO NOTHING")
         .bind(session)
         .bind(idp)
@@ -199,7 +246,11 @@ pub struct SamlSession {
 }
 
 pub async fn session(pool: &PgPool, session: Uuid) -> AppResult<Option<SamlSession>> {
-    sqlx::query_as("SELECT idp_id, name_id, session_index FROM saml_sessions WHERE session_id=$1").bind(session).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as("SELECT idp_id, name_id, session_index FROM saml_sessions WHERE session_id=$1")
+        .bind(session)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 /// IdP-initiated logout: revoke every session that came from this NameID.
@@ -212,7 +263,12 @@ pub async fn revoke_by_name_id(pool: &PgPool, idp: Uuid, name_id: &str) -> AppRe
     .execute(pool)
     .await
     .map_err(db_err)?;
-    sqlx::query("DELETE FROM saml_sessions WHERE idp_id=$1 AND name_id=$2").bind(idp).bind(name_id).execute(pool).await.map_err(db_err)?;
+    sqlx::query("DELETE FROM saml_sessions WHERE idp_id=$1 AND name_id=$2")
+        .bind(idp)
+        .bind(name_id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(r.rows_affected())
 }
 
@@ -228,6 +284,11 @@ pub async fn grant_role(pool: &PgPool, user: Uuid, role: &str) -> AppResult<bool
 }
 
 pub async fn set_last_test(pool: &PgPool, id: Uuid, result: &Value) -> AppResult<()> {
-    sqlx::query("UPDATE saml_idps SET last_test=$2, last_test_at=now() WHERE id=$1").bind(id).bind(result).execute(pool).await.map_err(db_err)?;
+    sqlx::query("UPDATE saml_idps SET last_test=$2, last_test_at=now() WHERE id=$1")
+        .bind(id)
+        .bind(result)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(())
 }

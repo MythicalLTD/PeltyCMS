@@ -24,7 +24,10 @@ fn req() -> PaymentRequest {
     PaymentRequest {
         payment_id: "p-1".into(),
         reference: "INV-1".into(),
-        amount: Money::new(rust_decimal::Decimal::from_str("19.99").unwrap(), Currency::parse("EUR").unwrap()),
+        amount: Money::new(
+            rust_decimal::Decimal::from_str("19.99").unwrap(),
+            Currency::parse("EUR").unwrap(),
+        ),
         description: "Hosting".into(),
         customer_email: None,
         success_url: "https://panel.example/ok".into(),
@@ -36,7 +39,10 @@ fn req() -> PaymentRequest {
 
 fn reg() -> GatewayRegistry {
     let mut r = GatewayRegistry::with_transport(Arc::new(ReqwestTransport::new().unwrap()));
-    r.register(pelty_addon_gateway_mollie::mollie::descriptor(), pelty_addon_gateway_mollie::mollie::factory);
+    r.register(
+        pelty_addon_gateway_mollie::mollie::descriptor(),
+        pelty_addon_gateway_mollie::mollie::factory,
+    );
     r
 }
 

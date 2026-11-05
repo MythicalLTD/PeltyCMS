@@ -27,7 +27,9 @@ pub async fn availability(State(s): State<AppState>) -> ApiResult<Json<Value>> {
         .await?
         .support
         .live_chat;
-    let departments = s.tickets().departments(true)
+    let departments = s
+        .tickets()
+        .departments(true)
         .await?
         .into_iter()
         .filter(|d| settings.departments.is_empty() || settings.departments.contains(&d.id))

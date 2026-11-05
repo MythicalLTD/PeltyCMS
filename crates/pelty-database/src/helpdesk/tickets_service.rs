@@ -61,12 +61,26 @@ impl TicketService {
     }
 
     /// Same as [`tickets::upsert_department`].
-    pub async fn upsert_department(&self, id: Option<Uuid>, name: &str, description: &str, is_active: bool, sort_order: i32) -> AppResult<Department> {
+    pub async fn upsert_department(
+        &self,
+        id: Option<Uuid>,
+        name: &str,
+        description: &str,
+        is_active: bool,
+        sort_order: i32,
+    ) -> AppResult<Department> {
         tickets::upsert_department(&self.pool, id, name, description, is_active, sort_order).await
     }
 
     /// Same as [`tickets::list`].
-    pub async fn list(&self, customer: Option<Uuid>, status: Option<&str>, q: Option<&str>, limit: i64, offset: i64) -> AppResult<(Vec<Ticket>, i64)> {
+    pub async fn list(
+        &self,
+        customer: Option<Uuid>,
+        status: Option<&str>,
+        q: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> AppResult<(Vec<Ticket>, i64)> {
         tickets::list(&self.pool, customer, status, q, limit, offset).await
     }
 
@@ -76,12 +90,36 @@ impl TicketService {
     }
 
     /// Same as [`tickets::reply`].
-    pub async fn reply(&self, ticket: Uuid, author: Uuid, is_staff: bool, internal: bool, body: &str, attachments: &[Uuid]) -> AppResult<()> {
-        tickets::reply(&self.pool, ticket, author, is_staff, internal, body, attachments).await
+    pub async fn reply(
+        &self,
+        ticket: Uuid,
+        author: Uuid,
+        is_staff: bool,
+        internal: bool,
+        body: &str,
+        attachments: &[Uuid],
+    ) -> AppResult<()> {
+        tickets::reply(
+            &self.pool,
+            ticket,
+            author,
+            is_staff,
+            internal,
+            body,
+            attachments,
+        )
+        .await
     }
 
     /// Same as [`tickets::update`].
-    pub async fn update(&self, id: Uuid, status: Option<&str>, priority: Option<&str>, department: Option<Uuid>, assigned_to: Option<Option<Uuid>>) -> AppResult<()> {
+    pub async fn update(
+        &self,
+        id: Uuid,
+        status: Option<&str>,
+        priority: Option<&str>,
+        department: Option<Uuid>,
+        assigned_to: Option<Option<Uuid>>,
+    ) -> AppResult<()> {
         tickets::update(&self.pool, id, status, priority, department, assigned_to).await
     }
 }

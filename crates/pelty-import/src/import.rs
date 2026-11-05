@@ -83,7 +83,11 @@ impl From<sqlx::Error> for ImportError {
 
 pub(crate) type Tx<'a> = Transaction<'a, Postgres>;
 
-pub(crate) async fn lookup(tx: &mut Tx<'_>, entity: &str, sid: &str) -> Result<Option<Uuid>, sqlx::Error> {
+pub(crate) async fn lookup(
+    tx: &mut Tx<'_>,
+    entity: &str,
+    sid: &str,
+) -> Result<Option<Uuid>, sqlx::Error> {
     sqlx::query_scalar(
         "SELECT target_id FROM import_map WHERE source=current_setting('pelty.import_source') AND entity=$1 AND source_id=$2",
     )
@@ -93,7 +97,12 @@ pub(crate) async fn lookup(tx: &mut Tx<'_>, entity: &str, sid: &str) -> Result<O
     .await
 }
 
-pub(crate) async fn remember(tx: &mut Tx<'_>, entity: &str, sid: &str, id: Uuid) -> Result<(), sqlx::Error> {
+pub(crate) async fn remember(
+    tx: &mut Tx<'_>,
+    entity: &str,
+    sid: &str,
+    id: Uuid,
+) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO import_map (source, entity, source_id, target_id) VALUES (current_setting('pelty.import_source'),$1,$2,$3)",
     )
@@ -1006,22 +1015,35 @@ async fn import_domains_options_credit(
             continue;
         }
         let Some((cid, _)) = customers.get(&d.userid) else {
-            rep.warnings.push(format!("domain {} belongs to unknown client {}, skipped", d.id, d.userid));
+            rep.warnings.push(format!(
+                "domain {} belongs to unknown client {}, skipped",
+                d.id, d.userid
+            ));
             continue;
         };
         let name = d.domain.trim().trim_end_matches('.').to_ascii_lowercase();
         let Some(tld) = map::domain_tld(&name) else {
-            rep.warnings.push(format!("domain {} has invalid name {:?}, skipped", d.id, d.domain));
+            rep.warnings.push(format!(
+                "domain {} has invalid name {:?}, skipped",
+                d.id, d.domain
+            ));
             continue;
         };
         let status = map::domain_status(&d.status);
         let taken: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domains WHERE lower(name) = $1 AND status NOT IN ('cancelled','failed'))")
             .bind(&name).fetch_one(&mut **tx).await?;
         if taken && !matches!(status, "cancelled" | "failed") {
-            rep.warnings.push(format!("domain {} ({name}) already exists in PeltyCMS, skipped", d.id));
+            rep.warnings.push(format!(
+                "domain {} ({name}) already exists in PeltyCMS, skipped",
+                d.id
+            ));
             continue;
         }
-        let kind = if d.type_.eq_ignore_ascii_case("transfer") { "transfer" } else { "register" };
+        let kind = if d.type_.eq_ignore_ascii_case("transfer") {
+            "transfer"
+        } else {
+            "register"
+        };
         let registrar = map::clip(&d.registrar.trim().to_ascii_lowercase(), 60);
         let id = Uuid::new_v4();
         sqlx::query(
@@ -1044,21 +1066,34 @@ async fn import_domains_options_credit(
     for g in &data.config_groups {
         for pid in &g.product_ids {
             let Some(product) = products.get(pid) else {
-                rep.warnings.push(format!("config group {} links unknown product {pid}", g.id));
+                rep.warnings
+                    .push(format!("config group {} links unknown product {pid}", g.id));
                 continue;
             };
-            for o in data.config_options.iter().filter(|o| o.gid == g.id && !o.hidden) {
+            for o in data
+                .config_options
+                .iter()
+                .filter(|o| o.gid == g.id && !o.hidden)
+            {
                 let sid = format!("{}:{pid}", o.id);
                 if lookup(tx, "config_option", &sid).await?.is_some() {
                     rep.skipped("config_options");
                     continue;
                 }
                 let name = o.optionname.split('|').next_back().unwrap_or("").trim();
-                let name = if name.is_empty() { format!("Option {}", o.id) } else { map::clip(name, 120) };
+                let name = if name.is_empty() {
+                    format!("Option {}", o.id)
+                } else {
+                    map::clip(name, 120)
+                };
                 let otype = map::config_option_type(o.optiontype);
                 let (qmin, qmax) = if otype == "quantity" {
                     let lo = o.qtyminimum.clamp(0, 100_000);
-                    let hi = if o.qtymaximum <= 0 { 100 } else { o.qtymaximum.clamp(lo, 100_000) };
+                    let hi = if o.qtymaximum <= 0 {
+                        100
+                    } else {
+                        o.qtymaximum.clamp(lo, 100_000)
+                    };
                     (lo, hi.max(lo))
                 } else {
                     (0, 100)
@@ -1073,14 +1108,20 @@ async fn import_domains_options_credit(
                 subs.sort_by_key(|s| (s.sortorder, s.id));
                 for sub in subs.into_iter().filter(|s| !s.hidden) {
                     let label = sub.optionname.split('|').next_back().unwrap_or("").trim();
-                    let label = if label.is_empty() { format!("Choice {}", sub.id) } else { map::clip(label, 120) };
+                    let label = if label.is_empty() {
+                        format!("Choice {}", sub.id)
+                    } else {
+                        map::clip(label, 120)
+                    };
                     let chid = Uuid::new_v4();
                     sqlx::query("INSERT INTO product_config_choices (id, option_id, label, sort_order) VALUES ($1,$2,$3,$4)")
                         .bind(chid).bind(oid).bind(&label).bind(sub.sortorder)
                         .execute(&mut **tx).await?;
                     rep.created("config_choices");
                     for pr in data.config_pricing.iter().filter(|p| p.relid == sub.id) {
-                        let Some(code) = cur.get(&pr.currency) else { continue };
+                        let Some(code) = cur.get(&pr.currency) else {
+                            continue;
+                        };
                         for (cycle, amount, _setup) in pricing_rows(pr) {
                             if !map::price_enabled(amount) {
                                 continue;
@@ -1105,7 +1146,9 @@ async fn import_domains_options_credit(
             rep.skipped("credit");
             continue;
         }
-        let Some((cid, currency)) = customers.get(&c.id) else { continue };
+        let Some((cid, currency)) = customers.get(&c.id) else {
+            continue;
+        };
         let id = Uuid::new_v4();
         sqlx::query("INSERT INTO credit_ledger (id, customer_id, currency, amount, kind, note) VALUES ($1,$2,$3,$4,'adjustment',$5)")
             .bind(id).bind(cid).bind(currency).bind(c.credit.round_dp(2)).bind("Opening credit balance imported from WHMCS")

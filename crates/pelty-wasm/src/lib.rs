@@ -16,7 +16,12 @@ use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 pub mod gateway;
 pub mod provisioning;
 pub mod runtime;
-pub use runtime::{data_dir, in_container, is_private_ip, CallCtx, Capabilities as AddonCapabilities, CronJob, DbCaps, Filter, GuardedHttp, Hook, Mixin, EventBus, NoBus, split_phase, is_request_pattern, is_custom_event, abi_supported, PRIORITY_MONITOR, PHASES, HostServices, Job, KvStore, MemoryKv, MoneyCaps, NoPower, PowerHost, Route, WasmAddon};
+pub use runtime::{
+    abi_supported, data_dir, in_container, is_custom_event, is_private_ip, is_request_pattern,
+    split_phase, CallCtx, Capabilities as AddonCapabilities, CronJob, DbCaps, EventBus, Filter,
+    GuardedHttp, Hook, HostServices, Job, KvStore, MemoryKv, Mixin, MoneyCaps, NoBus, NoPower,
+    PowerHost, Route, WasmAddon, PHASES, PRIORITY_MONITOR,
+};
 
 pub mod captcha_bindings {
     wasmtime::component::bindgen!({ path: "wit/captcha.wit", world: "captcha-addon" });
@@ -53,8 +58,16 @@ impl Sandbox {
     /// more fuel (JSON parsing of provider responses), compute stays capped.
     pub fn for_kind(kind: &str) -> Self {
         match kind {
-            "captcha" | "sso" => Sandbox { fuel: 2_000_000_000, max_memory_bytes: 64 * 1024 * 1024, timeout: Duration::from_secs(20) },
-            _ => Sandbox { fuel: 10_000_000_000, max_memory_bytes: 64 * 1024 * 1024, timeout: Duration::from_secs(90) },
+            "captcha" | "sso" => Sandbox {
+                fuel: 2_000_000_000,
+                max_memory_bytes: 64 * 1024 * 1024,
+                timeout: Duration::from_secs(20),
+            },
+            _ => Sandbox {
+                fuel: 10_000_000_000,
+                max_memory_bytes: 64 * 1024 * 1024,
+                timeout: Duration::from_secs(90),
+            },
         }
     }
 }
@@ -67,13 +80,21 @@ pub const LIMIT_TIMEOUT_SECS: u64 = 120;
 pub const LIMIT_FUEL: u64 = 200_000_000_000;
 
 fn env_max(key: &str, hard: u64) -> u64 {
-    std::env::var(key).ok().and_then(|v| v.parse::<u64>().ok()).map(|v| v.min(hard)).unwrap_or(hard)
+    std::env::var(key)
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .map(|v| v.min(hard))
+        .unwrap_or(hard)
 }
 
 /// Admin maxima currently in force: (memory MiB, timeout s, fuel).
 pub fn limit_maxima() -> (u64, u64, u64) {
     // Admin caps for addon limits: memory MiB, timeout seconds, fuel (defaults: the built-in maxima).
-    (env_max("PELTY_ADDON_MAX_MEMORY_MIB", LIMIT_MEMORY_MIB), env_max("PELTY_ADDON_MAX_TIMEOUT_SECS", LIMIT_TIMEOUT_SECS), env_max("PELTY_ADDON_MAX_FUEL", LIMIT_FUEL))
+    (
+        env_max("PELTY_ADDON_MAX_MEMORY_MIB", LIMIT_MEMORY_MIB),
+        env_max("PELTY_ADDON_MAX_TIMEOUT_SECS", LIMIT_TIMEOUT_SECS),
+        env_max("PELTY_ADDON_MAX_FUEL", LIMIT_FUEL),
+    )
 }
 
 impl Sandbox {
@@ -87,15 +108,22 @@ impl Sandbox {
         sb.max_memory_bytes = sb.max_memory_bytes.min((mm * 1024 * 1024) as usize);
         sb.timeout = sb.timeout.min(Duration::from_secs(mt));
         sb.fuel = sb.fuel.min(mf);
-        let Some(l) = limits.filter(|l| !l.is_null()) else { return Ok(sb) };
+        let Some(l) = limits.filter(|l| !l.is_null()) else {
+            return Ok(sb);
+        };
         let o = l.as_object().ok_or("limits must be an object")?;
         for (k, v) in o {
-            let n = v.as_u64().filter(|n| *n > 0).ok_or_else(|| format!("limits.{k} must be a positive integer"))?;
+            let n = v
+                .as_u64()
+                .filter(|n| *n > 0)
+                .ok_or_else(|| format!("limits.{k} must be a positive integer"))?;
             match k.as_str() {
                 "memory_mib" if n <= mm => sb.max_memory_bytes = (n * 1024 * 1024) as usize,
                 "timeout_secs" if n <= mt => sb.timeout = Duration::from_secs(n),
                 "fuel" if n <= mf => sb.fuel = n,
-                "memory_mib" | "timeout_secs" | "fuel" => return Err(format!("limits.{k} = {n} is above the admin maximum")),
+                "memory_mib" | "timeout_secs" | "fuel" => {
+                    return Err(format!("limits.{k} = {n} is above the admin maximum"))
+                }
                 _ => return Err(format!("unknown limit {k}")),
             }
         }
@@ -105,7 +133,11 @@ impl Sandbox {
 
 impl Default for Sandbox {
     fn default() -> Self {
-        Sandbox { fuel: 50_000_000, max_memory_bytes: 32 * 1024 * 1024, timeout: Duration::from_secs(2) }
+        Sandbox {
+            fuel: 50_000_000,
+            max_memory_bytes: 32 * 1024 * 1024,
+            timeout: Duration::from_secs(2),
+        }
     }
 }
 
@@ -130,7 +162,10 @@ struct State {
 
 impl WasiView for State {
     fn ctx(&mut self) -> WasiCtxView<'_> {
-        WasiCtxView { ctx: &mut self.wasi, table: &mut self.table }
+        WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.table,
+        }
     }
 }
 
@@ -156,19 +191,33 @@ pub struct CaptchaAddon {
 
 pub(crate) fn engine() -> Result<Engine, WasmError> {
     let mut c = Config::new();
-    c.consume_fuel(true).epoch_interruption(true).wasm_component_model(true);
+    c.consume_fuel(true)
+        .epoch_interruption(true)
+        .wasm_component_model(true);
     Engine::new(&c).map_err(|e| WasmError::Load(e.to_string()))
 }
 
 impl CaptchaAddon {
-    pub fn from_component_bytes(id: &str, wasm: &[u8], sandbox: Sandbox) -> Result<Self, WasmError> {
+    pub fn from_component_bytes(
+        id: &str,
+        wasm: &[u8],
+        sandbox: Sandbox,
+    ) -> Result<Self, WasmError> {
         let engine = engine()?;
-        let component = Component::new(&engine, wasm).map_err(|e| WasmError::Load(e.to_string()))?;
+        let component =
+            Component::new(&engine, wasm).map_err(|e| WasmError::Load(e.to_string()))?;
         let mut linker: Linker<State> = Linker::new(&engine);
-        wasmtime_wasi::p2::add_to_linker_sync(&mut linker).map_err(|e| WasmError::Load(e.to_string()))?;
+        wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
+            .map_err(|e| WasmError::Load(e.to_string()))?;
         captcha_bindings::CaptchaAddon::add_to_linker::<State, HasSelf<State>>(&mut linker, |s| s)
             .map_err(|e| WasmError::Load(e.to_string()))?;
-        Ok(CaptchaAddon { engine, component, linker, sandbox, id: id.to_string() })
+        Ok(CaptchaAddon {
+            engine,
+            component,
+            linker,
+            sandbox,
+            id: id.to_string(),
+        })
     }
 
     /// Load from an addon zip: manifest must say `engine: "wasm"`, `kind: "captcha"`,
@@ -181,7 +230,10 @@ impl CaptchaAddon {
     }
 
     /// Run `verify` in a fresh store. Returns the result plus the addon's log lines.
-    pub fn verify(&self, req: &VerifyRequest) -> Result<(VerifyResult, Vec<(String, String)>), WasmError> {
+    pub fn verify(
+        &self,
+        req: &VerifyRequest,
+    ) -> Result<(VerifyResult, Vec<(String, String)>), WasmError> {
         let state = State {
             wasi: WasiCtx::builder().build(),
             table: ResourceTable::new(),
@@ -191,7 +243,9 @@ impl CaptchaAddon {
         };
         let mut store = Store::new(&self.engine, state);
         store.limiter(|s| &mut s.limits);
-        store.set_fuel(self.sandbox.fuel).map_err(|e| WasmError::Load(e.to_string()))?;
+        store
+            .set_fuel(self.sandbox.fuel)
+            .map_err(|e| WasmError::Load(e.to_string()))?;
         let timeout = self.sandbox.timeout;
         let deadline = std::time::Instant::now() + timeout;
         store.set_epoch_deadline(1);
@@ -211,9 +265,15 @@ impl CaptchaAddon {
             }
         });
         let out = (|| {
-            let inst = captcha_bindings::CaptchaAddon::instantiate(&mut store, &self.component, &self.linker)
-                .map_err(|e| WasmError::Trap(format!("{e:#}")))?;
-            inst.pelty_addon_captcha().call_verify(&mut store, req).map_err(|e| WasmError::Trap(format!("{e:#}")))
+            let inst = captcha_bindings::CaptchaAddon::instantiate(
+                &mut store,
+                &self.component,
+                &self.linker,
+            )
+            .map_err(|e| WasmError::Trap(format!("{e:#}")))?;
+            inst.pelty_addon_captcha()
+                .call_verify(&mut store, req)
+                .map_err(|e| WasmError::Trap(format!("{e:#}")))
         })();
         let _ = tx.send(());
         let _ = watchdog.join();
@@ -233,13 +293,22 @@ pub fn wasm_entry<'a>(pkg: &'a Package, kind: &str) -> Result<&'a [u8], WasmErro
     }
     let abi = m["abi"].as_str().unwrap_or_default();
     if abi.split('.').take(2).ne(ABI_VERSION.split('.').take(2)) {
-        return Err(WasmError::Manifest(format!("unsupported abi {abi:?}, host implements {ABI_VERSION}")));
+        return Err(WasmError::Manifest(format!(
+            "unsupported abi {abi:?}, host implements {ABI_VERSION}"
+        )));
     }
-    let path = m["wasm"].as_str().ok_or_else(|| WasmError::Manifest("missing \"wasm\"".into()))?;
-    pkg.files.get(path).map(Vec::as_slice).ok_or_else(|| WasmError::Manifest(format!("wasm file {path} not in package")))
+    let path = m["wasm"]
+        .as_str()
+        .ok_or_else(|| WasmError::Manifest("missing \"wasm\"".into()))?;
+    pkg.files
+        .get(path)
+        .map(Vec::as_slice)
+        .ok_or_else(|| WasmError::Manifest(format!("wasm file {path} not in package")))
 }
 
-pub use captcha_bindings::exports::pelty::addon::captcha::{VerifyRequest as CaptchaRequest, VerifyResult as CaptchaResult};
+pub use captcha_bindings::exports::pelty::addon::captcha::{
+    VerifyRequest as CaptchaRequest, VerifyResult as CaptchaResult,
+};
 
 #[cfg(test)]
 mod resource_tests {
@@ -248,15 +317,26 @@ mod resource_tests {
     #[test]
     fn memory_and_table_growth_are_bounded_per_store() {
         let engine = engine().unwrap();
-        let sandbox = Sandbox { max_memory_bytes: 65_536, ..Sandbox::default() };
+        let sandbox = Sandbox {
+            max_memory_bytes: 65_536,
+            ..Sandbox::default()
+        };
         for _ in 0..2 {
             let mut store = Store::new(&engine, store_limits(sandbox, 4));
             store.limiter(|limits| limits);
-            let memory = wasmtime::Memory::new(&mut store, wasmtime::MemoryType::new(1, None)).unwrap();
+            let memory =
+                wasmtime::Memory::new(&mut store, wasmtime::MemoryType::new(1, None)).unwrap();
             assert!(memory.grow(&mut store, 1).is_err());
             assert_eq!(memory.size(&store), 1);
-            let table = wasmtime::Table::new(&mut store, wasmtime::TableType::new(wasmtime::RefType::FUNCREF, 0, None), wasmtime::Ref::Func(None)).unwrap();
-            assert!(table.grow(&mut store, 65_537, wasmtime::Ref::Func(None)).is_err());
+            let table = wasmtime::Table::new(
+                &mut store,
+                wasmtime::TableType::new(wasmtime::RefType::FUNCREF, 0, None),
+                wasmtime::Ref::Func(None),
+            )
+            .unwrap();
+            assert!(table
+                .grow(&mut store, 65_537, wasmtime::Ref::Func(None))
+                .is_err());
             assert_eq!(table.size(&store), 0);
         }
     }

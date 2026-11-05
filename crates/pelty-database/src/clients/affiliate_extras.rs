@@ -78,15 +78,24 @@ fn pct_ok(v: Decimal) -> bool {
 }
 
 pub async fn rates(pool: &PgPool) -> AppResult<Vec<ProductRate>> {
-    sqlx::query_as("SELECT r.product_id, p.name AS product_name, r.kind, r.value, r.currency::text AS currency
-         FROM affiliate_product_rates r JOIN products p ON p.id = r.product_id ORDER BY p.name")
-        .fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(
+        "SELECT r.product_id, p.name AS product_name, r.kind, r.value, r.currency::text AS currency
+         FROM affiliate_product_rates r JOIN products p ON p.id = r.product_id ORDER BY p.name",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn set_rate(pool: &PgPool, r: &ProductRate) -> AppResult<()> {
     let currency = match r.kind.as_str() {
         "percent" if pct_ok(r.value) => None,
-        "fixed" if r.value >= Decimal::ZERO => Some(r.currency.clone().filter(|c| c.len() == 3).ok_or(AppError::Validation("error.invalid_currency"))?),
+        "fixed" if r.value >= Decimal::ZERO => Some(
+            r.currency
+                .clone()
+                .filter(|c| c.len() == 3)
+                .ok_or(AppError::Validation("error.invalid_currency"))?,
+        ),
         "percent" | "fixed" => return Err(AppError::Validation("error.invalid_amount")),
         _ => return Err(AppError::Validation("error.validation")),
     };
@@ -106,7 +115,11 @@ pub async fn set_rate(pool: &PgPool, r: &ProductRate) -> AppResult<()> {
 }
 
 pub async fn delete_rate(pool: &PgPool, product_id: Uuid) -> AppResult<bool> {
-    let r = sqlx::query("DELETE FROM affiliate_product_rates WHERE product_id = $1").bind(product_id).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("DELETE FROM affiliate_product_rates WHERE product_id = $1")
+        .bind(product_id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(r.rows_affected() > 0)
 }
 
@@ -117,7 +130,12 @@ pub async fn tiers(pool: &PgPool) -> AppResult<Vec<Tier>> {
 
 pub async fn create_tier(pool: &PgPool, t: &TierInput) -> AppResult<Tier> {
     let name = t.name.trim();
-    if name.is_empty() || name.chars().count() > 100 || t.min_referrals < 1 || !pct_ok(t.commission_percent) || t.commission_percent.scale() > 4 {
+    if name.is_empty()
+        || name.chars().count() > 100
+        || t.min_referrals < 1
+        || !pct_ok(t.commission_percent)
+        || t.commission_percent.scale() > 4
+    {
         return Err(AppError::Validation("error.validation"));
     }
     sqlx::query_as("INSERT INTO affiliate_tiers (id, name, min_referrals, commission_percent) VALUES ($1, $2, $3, $4)
@@ -130,13 +148,21 @@ pub async fn create_tier(pool: &PgPool, t: &TierInput) -> AppResult<Tier> {
 }
 
 pub async fn delete_tier(pool: &PgPool, id: Uuid) -> AppResult<bool> {
-    let r = sqlx::query("DELETE FROM affiliate_tiers WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("DELETE FROM affiliate_tiers WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(r.rows_affected() > 0)
 }
 
 /// Effective base percent for an affiliate (own rate or best tier reached).
 pub async fn effective_percent(pool: &PgPool, affiliate_id: Uuid) -> AppResult<Decimal> {
-    let v: Option<Decimal> = sqlx::query_scalar("SELECT affiliate_percent($1)").bind(affiliate_id).fetch_one(pool).await.map_err(db_err)?;
+    let v: Option<Decimal> = sqlx::query_scalar("SELECT affiliate_percent($1)")
+        .bind(affiliate_id)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
     Ok(v.unwrap_or_default())
 }
 
@@ -148,9 +174,16 @@ pub async fn materials(pool: &PgPool, only_active: bool) -> AppResult<Vec<Materi
 }
 
 fn check_material(m: &MaterialInput) -> AppResult<()> {
-    let url_ok = m.image_url.is_empty() || ((m.image_url.starts_with("https://") || m.image_url.starts_with("http://")) && m.image_url.len() <= 1000);
+    let url_ok = m.image_url.is_empty()
+        || ((m.image_url.starts_with("https://") || m.image_url.starts_with("http://"))
+            && m.image_url.len() <= 1000);
     let title = m.title.trim();
-    if !matches!(m.kind.as_str(), "banner" | "text") || title.is_empty() || title.chars().count() > 200 || m.body.chars().count() > 5000 || !url_ok {
+    if !matches!(m.kind.as_str(), "banner" | "text")
+        || title.is_empty()
+        || title.chars().count() > 200
+        || m.body.chars().count() > 5000
+        || !url_ok
+    {
         return Err(AppError::Validation("error.validation"));
     }
     if m.kind == "banner" && m.image_url.is_empty() {
@@ -159,18 +192,35 @@ fn check_material(m: &MaterialInput) -> AppResult<()> {
     Ok(())
 }
 
-pub async fn save_material(pool: &PgPool, id: Option<Uuid>, m: &MaterialInput) -> AppResult<Material> {
+pub async fn save_material(
+    pool: &PgPool,
+    id: Option<Uuid>,
+    m: &MaterialInput,
+) -> AppResult<Material> {
     check_material(m)?;
     let q = match id {
         None => format!("INSERT INTO affiliate_materials (id, kind, title, body, image_url, sort_order, active) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING {MCOLS}"),
         Some(_) => format!("UPDATE affiliate_materials SET kind=$2, title=$3, body=$4, image_url=$5, sort_order=$6, active=$7 WHERE id=$1 RETURNING {MCOLS}"),
     };
     sqlx::query_as(&q)
-        .bind(id.unwrap_or_else(Uuid::new_v4)).bind(&m.kind).bind(m.title.trim()).bind(&m.body).bind(&m.image_url).bind(m.sort_order).bind(m.active)
-        .fetch_optional(pool).await.map_err(db_err)?.ok_or(AppError::NotFound)
+        .bind(id.unwrap_or_else(Uuid::new_v4))
+        .bind(&m.kind)
+        .bind(m.title.trim())
+        .bind(&m.body)
+        .bind(&m.image_url)
+        .bind(m.sort_order)
+        .bind(m.active)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?
+        .ok_or(AppError::NotFound)
 }
 
 pub async fn delete_material(pool: &PgPool, id: Uuid) -> AppResult<bool> {
-    let r = sqlx::query("DELETE FROM affiliate_materials WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("DELETE FROM affiliate_materials WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(r.rows_affected() > 0)
 }

@@ -2,9 +2,9 @@
 //! storefront checkout for a signed-in customer, the client order status
 //! page, the client home widgets, contacts / sub-accounts, email
 //! preferences, login history and the cart-recovery email job.
-use crate::routes::customers::{customer_for, customer_of};
 use crate::error::ApiResult;
 use crate::extract::CurrentUser;
+use crate::routes::customers::{customer_for, customer_of};
 use crate::AppState;
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post, put};
@@ -31,7 +31,10 @@ pub fn router() -> Router<AppState> {
         .route("/client/subaccounts", get(list_contacts).post(add_contact))
         .route("/client/subaccounts/invite", post(invite_contact))
         .route("/admin/customers/{id}/subaccounts", get(admin_contacts))
-        .route("/client/subaccounts/{id}", put(update_contact).delete(remove_contact))
+        .route(
+            "/client/subaccounts/{id}",
+            put(update_contact).delete(remove_contact),
+        )
         .route("/client/email-preferences", get(get_prefs).put(put_prefs))
         .route("/client/login-history", get(login_history))
         .route("/client/access", get(client_access))
@@ -41,10 +44,19 @@ pub fn router() -> Router<AppState> {
 /// customer gets their own tax country and client-group discount.
 async fn maybe_customer(s: &AppState, parts: &axum::http::HeaderMap) -> Option<Uuid> {
     let tok = crate::extract::cookie(parts, crate::extract::SESSION_COOKIE)?;
-    let ctx = pelty_database::sessions::resolve(&s.pool, &pelty_auth::token::hash(&tok), s.auth.idle, time::Duration::seconds(60))
+    let ctx = pelty_database::sessions::resolve(
+        &s.pool,
+        &pelty_auth::token::hash(&tok),
+        s.auth.idle,
+        time::Duration::seconds(60),
+    )
+    .await
+    .ok()??;
+    if sf::contact_for_user(&s.pool, ctx.user_id)
         .await
-        .ok()??;
-    if sf::contact_for_user(&s.pool, ctx.user_id).await.ok()?.is_some() {
+        .ok()?
+        .is_some()
+    {
         return None;
     }
     s.clients().id_for_user(ctx.user_id).await.ok()
@@ -61,15 +73,32 @@ pub async fn store_gateways(State(s): State<AppState>) -> ApiResult<Json<Value>>
     Ok(Json(json!({ "items": ids })))
 }
 
-pub(crate) async fn cart_view(s: &AppState, cart: sf::Cart, viewer: Option<Uuid>) -> ApiResult<Value> {
+pub(crate) async fn cart_view(
+    s: &AppState,
+    cart: sf::Cart,
+    viewer: Option<Uuid>,
+) -> ApiResult<Value> {
     let ctx = json!({ "cart_id": cart.id, "customer_id": viewer.or(cart.customer_id) });
-    Ok(crate::addon_functions::run(s, "cart.view", ctx, (), |()| async move { cart_view_core(s, cart, viewer).await.map_err(|e| e.0) }).await?)
+    Ok(
+        crate::addon_functions::run(s, "cart.view", ctx, (), |()| async move {
+            cart_view_core(s, cart, viewer).await.map_err(|e| e.0)
+        })
+        .await?,
+    )
 }
 
 async fn cart_view_core(s: &AppState, cart: sf::Cart, viewer: Option<Uuid>) -> ApiResult<Value> {
     let items = sf::parse_items(&cart.items);
     let who = viewer.or(cart.customer_id);
-    let preview = sf::preview(&s.pool, who, &cart.country, &cart.currency, &items, cart.coupon.as_deref()).await;
+    let preview = sf::preview(
+        &s.pool,
+        who,
+        &cart.country,
+        &cart.currency,
+        &items,
+        cart.coupon.as_deref(),
+    )
+    .await;
     let (preview, error) = match preview {
         Ok(p) => (json!(p), Value::Null),
         Err(AppError::Validation(k)) | Err(AppError::Conflict(k)) => (Value::Null, json!(k)),
@@ -84,7 +113,11 @@ async fn cart_view_core(s: &AppState, cart: sf::Cart, viewer: Option<Uuid>) -> A
 }
 
 #[utoipa::path(get, path = "/api/v1/store/carts/{id}", responses((status = 200), (status = 404)))]
-pub async fn get_cart(State(s): State<AppState>, headers: axum::http::HeaderMap, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
+pub async fn get_cart(
+    State(s): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
     let cart = sf::get_cart(&s.pool, id).await?.ok_or(AppError::NotFound)?;
     let viewer = maybe_customer(&s, &headers).await;
     Ok(Json(cart_view(&s, cart, viewer).await?))
@@ -124,7 +157,14 @@ pub async fn put_cart(
         &s.pool,
         id,
         viewer,
-        &CartInput { currency: b.currency, country: b.country, items: b.items, coupon: b.coupon, email: b.email, locale: b.locale },
+        &CartInput {
+            currency: b.currency,
+            country: b.country,
+            items: b.items,
+            coupon: b.coupon,
+            email: b.email,
+            locale: b.locale,
+        },
     )
     .await?;
     Ok(Json(cart_view(&s, cart, viewer).await?))
@@ -146,10 +186,17 @@ pub struct CheckoutBody {
 /// Turn a cart into an order + invoice for the signed-in customer. The
 /// client then pays the invoice with the chosen gateway.
 #[utoipa::path(post, path = "/api/v1/client/checkout", request_body = CheckoutBody, responses((status = 200), (status = 404), (status = 409), (status = 422)))]
-pub async fn checkout(State(s): State<AppState>, u: CurrentUser, headers: axum::http::HeaderMap, Json(b): Json<CheckoutBody>) -> ApiResult<Json<Value>> {
+pub async fn checkout(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    headers: axum::http::HeaderMap,
+    Json(b): Json<CheckoutBody>,
+) -> ApiResult<Json<Value>> {
     crate::captcha::require(&s, &headers, "checkout", u.ip.as_deref()).await?;
     let cid = customer_for(&s, &u, "orders").await?;
-    let cart = sf::get_cart(&s.pool, b.cart_id).await?.ok_or(AppError::NotFound)?;
+    let cart = sf::get_cart(&s.pool, b.cart_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
     if cart.order_id.is_some() {
         return Err(AppError::Conflict("error.cart_closed").into());
     }
@@ -160,22 +207,46 @@ pub async fn checkout(State(s): State<AppState>, u: CurrentUser, headers: axum::
     if items.is_empty() {
         return Err(AppError::Validation("error.cart_invalid").into());
     }
-    let input = CheckoutInput { fields: b.fields, country: b.country };
+    let input = CheckoutInput {
+        fields: b.fields,
+        country: b.country,
+    };
     let ctx = json!({ "customer_id": cid, "cart_id": cart.id });
     let (s, u) = (&s, &u);
-    let out = crate::addon_functions::run(s, "checkout.place", ctx, input, |b: CheckoutInput| async move {
-        for (i, it) in items.iter_mut().enumerate() {
-            if let Some(f) = b.fields.get(&i) {
-                it.fields = f.clone();
+    let out = crate::addon_functions::run(
+        s,
+        "checkout.place",
+        ctx,
+        input,
+        |b: CheckoutInput| async move {
+            for (i, it) in items.iter_mut().enumerate() {
+                if let Some(f) = b.fields.get(&i) {
+                    it.fields = f.clone();
+                }
             }
-        }
-        if let Some(c) = b.country.as_deref().map(|c| c.trim().to_ascii_uppercase()).filter(|c| c.len() == 2 && c.bytes().all(|b| b.is_ascii_uppercase())) {
-            sf::set_country_if_empty(&s.pool, cid, &c).await?;
-        }
-        let (order, invoice) = crate::routes::billing::place_order(s, u, cid, &cart.currency, &items, cart.coupon.as_deref(), None).await.map_err(|e| e.0)?;
-        sf::mark_converted(&s.pool, cart.id, cid, order.id).await?;
-        Ok(json!({ "order": order, "invoice": invoice }))
-    })
+            if let Some(c) = b
+                .country
+                .as_deref()
+                .map(|c| c.trim().to_ascii_uppercase())
+                .filter(|c| c.len() == 2 && c.bytes().all(|b| b.is_ascii_uppercase()))
+            {
+                sf::set_country_if_empty(&s.pool, cid, &c).await?;
+            }
+            let (order, invoice) = crate::routes::billing::place_order(
+                s,
+                u,
+                cid,
+                &cart.currency,
+                &items,
+                cart.coupon.as_deref(),
+                None,
+            )
+            .await
+            .map_err(|e| e.0)?;
+            sf::mark_converted(&s.pool, cart.id, cid, order.id).await?;
+            Ok(json!({ "order": order, "invoice": invoice }))
+        },
+    )
     .await?;
     Ok(Json(out))
 }
@@ -189,9 +260,18 @@ struct CheckoutInput {
 
 /// Order status page for the customer.
 #[utoipa::path(get, path = "/api/v1/client/orders/{id}", responses((status = 200), (status = 404)))]
-pub async fn client_order(State(s): State<AppState>, u: CurrentUser, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
+pub async fn client_order(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
     let cid = customer_for(&s, &u, "orders").await?;
-    let o = s.orders().get(id).await?.filter(|o| o.customer_id == cid).ok_or(AppError::NotFound)?;
+    let o = s
+        .orders()
+        .get(id)
+        .await?
+        .filter(|o| o.customer_id == cid)
+        .ok_or(AppError::NotFound)?;
     let invoice = match o.invoice_id {
         Some(i) => s.invoices().get_owned(i, cid).await?,
         None => None,
@@ -201,7 +281,16 @@ pub async fn client_order(State(s): State<AppState>, u: CurrentUser, Path(id): P
     if !crate::addon_filters::has(&s, "order.view") {
         return Ok(Json(v));
     }
-    Ok(Json(crate::addon_filters::apply_with(&s, "order.view", v, json!({ "customer_id": cid, "order_id": id }), false).await))
+    Ok(Json(
+        crate::addon_filters::apply_with(
+            &s,
+            "order.view",
+            v,
+            json!({ "customer_id": cid, "order_id": id }),
+            false,
+        )
+        .await,
+    ))
 }
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
@@ -215,9 +304,25 @@ async fn access(s: &AppState, u: &CurrentUser) -> ApiResult<(Uuid, sf::HomeScope
     Ok(match sf::contact_for_user(&s.pool, u.user_id).await? {
         Some(c) => {
             let has = |p: &str| c.permissions.iter().any(|x| x == p);
-            (c.customer_id, sf::HomeScope { services: has("services"), invoices: has("invoices"), tickets: has("tickets") }, false)
+            (
+                c.customer_id,
+                sf::HomeScope {
+                    services: has("services"),
+                    invoices: has("invoices"),
+                    tickets: has("tickets"),
+                },
+                false,
+            )
         }
-        None => (customer_of(s, u).await?, sf::HomeScope { services: true, invoices: true, tickets: true }, true),
+        None => (
+            customer_of(s, u).await?,
+            sf::HomeScope {
+                services: true,
+                invoices: true,
+                tickets: true,
+            },
+            true,
+        ),
     })
 }
 
@@ -225,16 +330,28 @@ async fn access(s: &AppState, u: &CurrentUser) -> ApiResult<(Uuid, sf::HomeScope
 pub async fn client_access(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Json<Value>> {
     let (_, sc, owner) = access(&s, &u).await?;
     let extra = match sf::contact_for_user(&s.pool, u.user_id).await? {
-        Some(c) => (c.permissions.iter().any(|p| p == "orders"), c.permissions.iter().any(|p| p == "domains")),
+        Some(c) => (
+            c.permissions.iter().any(|p| p == "orders"),
+            c.permissions.iter().any(|p| p == "domains"),
+        ),
         None => (true, true),
     };
-    Ok(Json(json!({ "owner": owner, "services": sc.services, "invoices": sc.invoices, "tickets": sc.tickets, "orders": extra.0, "domains": extra.1 })))
+    Ok(Json(
+        json!({ "owner": owner, "services": sc.services, "invoices": sc.invoices, "tickets": sc.tickets, "orders": extra.0, "domains": extra.1 }),
+    ))
 }
 
 #[utoipa::path(get, path = "/api/v1/client/home", params(LangQuery), responses((status = 200), (status = 401)))]
-pub async fn client_home(State(s): State<AppState>, u: CurrentUser, Query(q): Query<LangQuery>) -> ApiResult<Json<Value>> {
+pub async fn client_home(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Query(q): Query<LangQuery>,
+) -> ApiResult<Json<Value>> {
     let (cid, scope, owner) = access(&s, &u).await?;
-    let locale = q.locale.filter(|l| s.i18n.has(l)).unwrap_or_else(|| s.cfg.default_locale.clone());
+    let locale = q
+        .locale
+        .filter(|l| s.i18n.has(l))
+        .unwrap_or_else(|| s.cfg.default_locale.clone());
     let mut v = sf::home(&s.pool, cid, scope, &locale).await?;
     v["owner"] = json!(owner);
     Ok(Json(v))
@@ -261,7 +378,11 @@ pub struct NewContact {
 /// Create a sub-account that signs in with its own email and password and
 /// sees only the granted areas of this account.
 #[utoipa::path(post, path = "/api/v1/client/subaccounts", request_body = NewContact, responses((status = 200), (status = 409), (status = 422)))]
-pub async fn add_contact(State(s): State<AppState>, u: CurrentUser, Json(b): Json<NewContact>) -> ApiResult<Json<Value>> {
+pub async fn add_contact(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Json(b): Json<NewContact>,
+) -> ApiResult<Json<Value>> {
     let cid = customer_of(&s, &u).await?;
     let perms = sf::check_perms(&b.permissions)?;
     if b.name.trim().is_empty() {
@@ -274,14 +395,29 @@ pub async fn add_contact(State(s): State<AppState>, u: CurrentUser, Json(b): Jso
     let user = s
         .auth
         .register(
-            pelty_auth::RegisterInput { email: &b.email, password: &b.password, display_name: b.name.trim() },
+            pelty_auth::RegisterInput {
+                email: &b.email,
+                password: &b.password,
+                display_name: b.name.trim(),
+            },
             "customer",
             u.ip.as_deref(),
         )
         .await?;
     let c = sf::add_contact(&s.pool, cid, user.id, &b.name, &perms).await?;
-    audit::record(&s.pool, Some(u.user_id), "customer.contact_added", Some(&c.id.to_string()), u.ip.as_deref(), json!({ "permissions": perms })).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("customer.contact_added", json!({ "customer_id": cid, "contact_id": c.id, "user_id": user.id, "permissions": perms })));
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "customer.contact_added",
+        Some(&c.id.to_string()),
+        u.ip.as_deref(),
+        json!({ "permissions": perms }),
+    )
+    .await?;
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "customer.contact_added",
+        json!({ "customer_id": cid, "contact_id": c.id, "user_id": user.id, "permissions": perms }),
+    ));
     Ok(Json(json!(c)))
 }
 
@@ -302,7 +438,11 @@ pub const INVITE_TTL_DAYS: i64 = 7;
 /// Invite a contact by email: the account is created with an unusable random
 /// password and the invitee picks their own through a one-time link.
 #[utoipa::path(post, path = "/api/v1/client/subaccounts/invite", request_body = InviteContact, responses((status = 200), (status = 409), (status = 422)))]
-pub async fn invite_contact(State(s): State<AppState>, u: CurrentUser, Json(b): Json<InviteContact>) -> ApiResult<Json<Value>> {
+pub async fn invite_contact(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Json(b): Json<InviteContact>,
+) -> ApiResult<Json<Value>> {
     use pelty_auth::token;
     let cid = customer_of(&s, &u).await?;
     let perms = sf::check_perms(&b.permissions)?;
@@ -316,26 +456,82 @@ pub async fn invite_contact(State(s): State<AppState>, u: CurrentUser, Json(b): 
     let throwaway = format!("Aa1!{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
     let user = s
         .auth
-        .register(pelty_auth::RegisterInput { email: &b.email, password: &throwaway, display_name: b.name.trim() }, "customer", u.ip.as_deref())
+        .register(
+            pelty_auth::RegisterInput {
+                email: &b.email,
+                password: &throwaway,
+                display_name: b.name.trim(),
+            },
+            "customer",
+            u.ip.as_deref(),
+        )
         .await?;
     let c = sf::add_contact(&s.pool, cid, user.id, &b.name, &perms).await?;
     sf::mark_invited(&s.pool, c.id).await?;
     let tok = token::generate();
-    pelty_database::user_tokens::issue(&s.pool, user.id, pelty_database::user_tokens::PASSWORD_RESET, &token::hash(&tok), time::Duration::days(INVITE_TTL_DAYS)).await?;
+    pelty_database::user_tokens::issue(
+        &s.pool,
+        user.id,
+        pelty_database::user_tokens::PASSWORD_RESET,
+        &token::hash(&tok),
+        time::Duration::days(INVITE_TTL_DAYS),
+    )
+    .await?;
     let link = format!("{}/reset-password?token={tok}", s.cfg.public_url);
-    let locale = b.locale.filter(|l| s.i18n.has(l)).unwrap_or_else(|| s.cfg.default_locale.clone());
-    let owner = s.clients().get(cid).await?.map(|c| format!("{} {}", c.first_name, c.last_name).trim().to_string()).unwrap_or_default();
+    let locale = b
+        .locale
+        .filter(|l| s.i18n.has(l))
+        .unwrap_or_else(|| s.cfg.default_locale.clone());
+    let owner = s
+        .clients()
+        .get(cid)
+        .await?
+        .map(|c| {
+            format!("{} {}", c.first_name, c.last_name)
+                .trim()
+                .to_string()
+        })
+        .unwrap_or_default();
     let days = INVITE_TTL_DAYS.to_string();
-    crate::mail::enqueue(&s, "contact_invite", &locale, &user.email, crate::mail::vars(&[("name", b.name.trim()), ("inviter", &owner), ("link", &link), ("expires_days", &days)])).await?;
-    audit::record(&s.pool, Some(u.user_id), "customer.contact_invited", Some(&c.id.to_string()), u.ip.as_deref(), json!({ "permissions": perms })).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("customer.contact_invited", json!({ "customer_id": cid, "contact_id": c.id, "permissions": perms })));
+    crate::mail::enqueue(
+        &s,
+        "contact_invite",
+        &locale,
+        &user.email,
+        crate::mail::vars(&[
+            ("name", b.name.trim()),
+            ("inviter", &owner),
+            ("link", &link),
+            ("expires_days", &days),
+        ]),
+    )
+    .await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "customer.contact_invited",
+        Some(&c.id.to_string()),
+        u.ip.as_deref(),
+        json!({ "permissions": perms }),
+    )
+    .await?;
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "customer.contact_invited",
+        json!({ "customer_id": cid, "contact_id": c.id, "permissions": perms }),
+    ));
     Ok(Json(json!(c)))
 }
 
 /// Staff view of an account's sub-accounts (WHMCS "Users" tab).
 #[utoipa::path(get, path = "/api/v1/admin/customers/{id}/subaccounts", responses((status = 200), (status = 403)))]
-pub async fn admin_contacts(State(s): State<AppState>, _p: crate::extract::RequirePermission<crate::extract::perms::CustomersManage>, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
-    Ok(Json(json!({ "items": sf::contacts(&s.pool, id).await?, "permissions": sf::CONTACT_PERMS })))
+pub async fn admin_contacts(
+    State(s): State<AppState>,
+    _p: crate::extract::RequirePermission<crate::extract::perms::CustomersManage>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
+    Ok(Json(
+        json!({ "items": sf::contacts(&s.pool, id).await?, "permissions": sf::CONTACT_PERMS }),
+    ))
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -346,27 +542,60 @@ pub struct ContactPatch {
 }
 
 #[utoipa::path(put, path = "/api/v1/client/subaccounts/{id}", request_body = ContactPatch, responses((status = 200), (status = 404)))]
-pub async fn update_contact(State(s): State<AppState>, u: CurrentUser, Path(id): Path<Uuid>, Json(b): Json<ContactPatch>) -> ApiResult<Json<Value>> {
+pub async fn update_contact(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Path(id): Path<Uuid>,
+    Json(b): Json<ContactPatch>,
+) -> ApiResult<Json<Value>> {
     let cid = customer_of(&s, &u).await?;
     let perms = sf::check_perms(&b.permissions)?;
     if !sf::update_contact(&s.pool, cid, id, &b.name, &perms).await? {
         return Err(AppError::NotFound.into());
     }
-    audit::record(&s.pool, Some(u.user_id), "customer.contact_updated", Some(&id.to_string()), u.ip.as_deref(), json!({ "permissions": perms })).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("customer.contact_updated", json!({ "customer_id": cid, "contact_id": id, "permissions": perms })));
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "customer.contact_updated",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "permissions": perms }),
+    )
+    .await?;
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "customer.contact_updated",
+        json!({ "customer_id": cid, "contact_id": id, "permissions": perms }),
+    ));
     Ok(Json(json!({ "ok": true })))
 }
 
 /// Remove a contact: its access ends immediately (sessions revoked) and
 /// the login is disabled.
 #[utoipa::path(delete, path = "/api/v1/client/subaccounts/{id}", responses((status = 200), (status = 404)))]
-pub async fn remove_contact(State(s): State<AppState>, u: CurrentUser, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
+pub async fn remove_contact(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
     let cid = customer_of(&s, &u).await?;
-    let user = sf::remove_contact(&s.pool, cid, id).await?.ok_or(AppError::NotFound)?;
+    let user = sf::remove_contact(&s.pool, cid, id)
+        .await?
+        .ok_or(AppError::NotFound)?;
     sessions::revoke_all(&s.pool, user).await?;
     sf::disable_user(&s.pool, user).await?;
-    audit::record(&s.pool, Some(u.user_id), "customer.contact_removed", Some(&id.to_string()), u.ip.as_deref(), json!({})).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("customer.contact_removed", json!({ "customer_id": cid, "contact_id": id })));
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "customer.contact_removed",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "customer.contact_removed",
+        json!({ "customer_id": cid, "contact_id": id }),
+    ));
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -379,7 +608,11 @@ pub async fn get_prefs(State(s): State<AppState>, u: CurrentUser) -> ApiResult<J
 }
 
 #[utoipa::path(put, path = "/api/v1/client/email-preferences", request_body = EmailPrefs, responses((status = 200)))]
-pub async fn put_prefs(State(s): State<AppState>, u: CurrentUser, Json(b): Json<EmailPrefs>) -> ApiResult<Json<EmailPrefs>> {
+pub async fn put_prefs(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Json(b): Json<EmailPrefs>,
+) -> ApiResult<Json<EmailPrefs>> {
     let cid = customer_of(&s, &u).await?;
     sf::put_email_prefs(&s.pool, cid, &b).await?;
     Ok(Json(b))
@@ -388,14 +621,19 @@ pub async fn put_prefs(State(s): State<AppState>, u: CurrentUser, Json(b): Json<
 /// The caller's own recent sign-ins, failures and lockouts.
 #[utoipa::path(get, path = "/api/v1/client/login-history", responses((status = 200)))]
 pub async fn login_history(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Json<Value>> {
-    Ok(Json(json!({ "items": sf::login_history(&s.pool, u.user_id, 50).await? })))
+    Ok(Json(
+        json!({ "items": sf::login_history(&s.pool, u.user_id, 50).await? }),
+    ))
 }
 
 // cart recovery job
 
 /// Enqueue one recovery pass per hour (deduplicated).
 pub async fn schedule_recovery(s: &AppState) -> pelty_core::AppResult<Option<i64>> {
-    let key = format!("{RECOVERY_JOB}:{}", time::OffsetDateTime::now_utc().unix_timestamp() / 3600);
+    let key = format!(
+        "{RECOVERY_JOB}:{}",
+        time::OffsetDateTime::now_utc().unix_timestamp() / 3600
+    );
     pelty_database::jobs::enqueue(&s.pool, RECOVERY_JOB, json!({}), None, Some(&key), 3).await
 }
 
@@ -407,9 +645,18 @@ pub async fn run_recovery(s: &AppState, idle_minutes: i64) -> pelty_core::AppRes
         if !sf::mark_reminded(&s.pool, c.id).await? {
             continue;
         }
-        let locale = Some(c.locale.clone()).filter(|l| s.i18n.has(l)).unwrap_or_else(|| s.cfg.default_locale.clone());
+        let locale = Some(c.locale.clone())
+            .filter(|l| s.i18n.has(l))
+            .unwrap_or_else(|| s.cfg.default_locale.clone());
         let link = format!("{}/cart?c={}", s.cfg.public_url, c.id);
-        crate::mail::enqueue(s, "cart_abandoned", &locale, &c.email, crate::mail::vars(&[("items", &c.items.to_string()), ("link", &link)])).await?;
+        crate::mail::enqueue(
+            s,
+            "cart_abandoned",
+            &locale,
+            &c.email,
+            crate::mail::vars(&[("items", &c.items.to_string()), ("link", &link)]),
+        )
+        .await?;
         sent += 1;
     }
     Ok(sent)
@@ -421,7 +668,12 @@ pub async fn run_recovery(s: &AppState, idle_minutes: i64) -> pelty_core::AppRes
 /// latest fraud screening, notes and created services.
 pub async fn admin_order_detail(s: &AppState, o: orders::Order) -> ApiResult<Value> {
     let ctx = json!({ "order_id": o.id, "customer_id": o.customer_id });
-    Ok(crate::addon_functions::run(s, "order.admin_detail", ctx, (), |()| async move { admin_order_detail_core(s, o).await.map_err(|e| e.0) }).await?)
+    Ok(
+        crate::addon_functions::run(s, "order.admin_detail", ctx, (), |()| async move {
+            admin_order_detail_core(s, o).await.map_err(|e| e.0)
+        })
+        .await?,
+    )
 }
 
 async fn admin_order_detail_core(s: &AppState, o: orders::Order) -> ApiResult<Value> {
@@ -459,23 +711,54 @@ pub struct AdminOrderBody {
 #[utoipa::path(post, path = "/api/v1/admin/orders", request_body = AdminOrderBody, responses((status = 200), (status = 403), (status = 422)))]
 pub async fn admin_create_order(
     State(s): State<AppState>,
-    crate::extract::RequirePermission(u, _): crate::extract::RequirePermission<crate::extract::perms::OrdersManage>,
+    crate::extract::RequirePermission(u, _): crate::extract::RequirePermission<
+        crate::extract::perms::OrdersManage,
+    >,
     Json(b): Json<AdminOrderBody>,
 ) -> ApiResult<Json<Value>> {
-    let c = s.clients().get(b.customer_id).await?.ok_or(AppError::NotFound)?;
+    let c = s
+        .clients()
+        .get(b.customer_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
     let currency = b.currency.unwrap_or(c.currency);
-    let (order, invoice) = crate::routes::billing::place_order(&s, &u, c.id, &currency, &b.items, b.coupon.as_deref(), None).await?;
-    audit::record(&s.pool, Some(u.user_id), "order.created_by_admin", Some(&order.id.to_string()), u.ip.as_deref(), json!({ "customer_id": c.id })).await?;
+    let (order, invoice) = crate::routes::billing::place_order(
+        &s,
+        &u,
+        c.id,
+        &currency,
+        &b.items,
+        b.coupon.as_deref(),
+        None,
+    )
+    .await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "order.created_by_admin",
+        Some(&order.id.to_string()),
+        u.ip.as_deref(),
+        json!({ "customer_id": c.id }),
+    )
+    .await?;
     let mut services = vec![];
     if b.approve {
         services = s.orders().approve(order.id, u.user_id).await?;
-        s.emit(pelty_extensions::events::DomainEvent::new("order.approved", json!({ "order_id": order.id, "services": services })));
+        s.emit(pelty_extensions::events::DomainEvent::new(
+            "order.approved",
+            json!({ "order_id": order.id, "services": services }),
+        ));
         for sid in &services {
-            s.emit(pelty_extensions::events::DomainEvent::new("service.created", json!({ "service_id": sid, "order_id": order.id })));
+            s.emit(pelty_extensions::events::DomainEvent::new(
+                "service.created",
+                json!({ "service_id": sid, "order_id": order.id }),
+            ));
             crate::provision::on_transition(&s, *sid, "pending", "active").await;
         }
     }
-    Ok(Json(json!({ "order": order, "invoice": invoice, "services": services })))
+    Ok(Json(
+        json!({ "order": order, "invoice": invoice, "services": services }),
+    ))
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -487,7 +770,9 @@ pub struct NoteBody {
 #[utoipa::path(post, path = "/api/v1/admin/orders/{id}/notes", request_body = NoteBody, responses((status = 200), (status = 404), (status = 422)))]
 pub async fn admin_add_note(
     State(s): State<AppState>,
-    crate::extract::RequirePermission(u, _): crate::extract::RequirePermission<crate::extract::perms::OrdersManage>,
+    crate::extract::RequirePermission(u, _): crate::extract::RequirePermission<
+        crate::extract::perms::OrdersManage,
+    >,
     Path(id): Path<Uuid>,
     Json(b): Json<NoteBody>,
 ) -> ApiResult<Json<Value>> {
@@ -500,7 +785,9 @@ pub async fn admin_add_note(
 #[utoipa::path(post, path = "/api/v1/admin/orders/{id}/refund", responses((status = 200), (status = 404), (status = 409)))]
 pub async fn admin_refund_order(
     State(s): State<AppState>,
-    crate::extract::RequirePermission(u, _): crate::extract::RequirePermission<crate::extract::perms::OrdersManage>,
+    crate::extract::RequirePermission(u, _): crate::extract::RequirePermission<
+        crate::extract::perms::OrdersManage,
+    >,
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<Value>> {
     if !u.has("invoices.manage") {
@@ -516,8 +803,22 @@ pub async fn admin_refund_order(
     }
     let cn = s.invoices().credit_note(inv.id).await?;
     sf::mark_order_refunded(&s.pool, id).await?;
-    audit::record(&s.pool, Some(u.user_id), "order.refunded", Some(&id.to_string()), u.ip.as_deref(), json!({ "credit_note": cn.id })).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("invoice.refunded", json!({ "invoice_id": inv.id, "credit_note_id": cn.id })));
-    s.emit(pelty_extensions::events::DomainEvent::new("order.refunded", json!({ "order_id": id, "credit_note_id": cn.id })));
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "order.refunded",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "credit_note": cn.id }),
+    )
+    .await?;
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "invoice.refunded",
+        json!({ "invoice_id": inv.id, "credit_note_id": cn.id }),
+    ));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "order.refunded",
+        json!({ "order_id": id, "credit_note_id": cn.id }),
+    ));
     Ok(Json(json!({ "credit_note": cn })))
 }

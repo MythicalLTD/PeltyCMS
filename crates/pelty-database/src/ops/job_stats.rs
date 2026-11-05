@@ -48,5 +48,10 @@ pub async fn for_kinds(pool: &PgPool, kinds: &[&str]) -> AppResult<Vec<KindStats
 
 /// Queue totals by status (all kinds).
 pub async fn totals(pool: &PgPool) -> AppResult<Vec<(String, i64)>> {
-    sqlx::query_as::<_, (String, i64)>("SELECT status, count(*) FROM jobs GROUP BY status ORDER BY status").fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as::<_, (String, i64)>(
+        "SELECT status, count(*) FROM jobs GROUP BY status ORDER BY status",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }

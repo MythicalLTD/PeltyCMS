@@ -14,9 +14,16 @@ struct Env {
 }
 
 fn env(ctx: &Ctx) -> R<Env> {
-    let need = |k: &str| ctx.get(k).ok_or_else(|| format!("{k} is not set (seed needs ADMIN_EMAIL, ADMIN_PASSWORD, CLIENT_PASSWORD; PELTY_URL optional)"));
+    let need = |k: &str| {
+        ctx.get(k).ok_or_else(|| format!("{k} is not set (seed needs ADMIN_EMAIL, ADMIN_PASSWORD, CLIENT_PASSWORD; PELTY_URL optional)"))
+    };
     Ok(Env {
-        base: format!("{}/api/v1", ctx.get("PELTY_URL").unwrap_or_else(|| "http://localhost:8080".into()).trim_end_matches('/')),
+        base: format!(
+            "{}/api/v1",
+            ctx.get("PELTY_URL")
+                .unwrap_or_else(|| "http://localhost:8080".into())
+                .trim_end_matches('/')
+        ),
         admin_email: need("ADMIN_EMAIL")?,
         admin_password: need("ADMIN_PASSWORD")?,
         client_password: need("CLIENT_PASSWORD")?,
@@ -33,47 +40,91 @@ struct Session {
 
 impl Session {
     fn new(base: &str) -> Session {
-        let agent: ureq::Agent = ureq::Agent::config_builder().http_status_as_error(false).build().into();
-        Session { base: base.into(), agent, cookies: BTreeMap::new(), csrf: None }
+        let agent: ureq::Agent = ureq::Agent::config_builder()
+            .http_status_as_error(false)
+            .build()
+            .into();
+        Session {
+            base: base.into(),
+            agent,
+            cookies: BTreeMap::new(),
+            csrf: None,
+        }
     }
 
     /// (status, JSON body or the text as a string). Network errors are status 0.
     fn req(&mut self, method: &str, path: &str, body: Option<&Value>) -> (u16, Value) {
-        let mut b = ureq::http::Request::builder().method(method).uri(format!("{}{path}", self.base)).header("content-type", "application/json");
+        let mut b = ureq::http::Request::builder()
+            .method(method)
+            .uri(format!("{}{path}", self.base))
+            .header("content-type", "application/json");
         if let Some(t) = &self.csrf {
             b = b.header("x-csrf-token", t);
         }
         if !self.cookies.is_empty() {
-            b = b.header("cookie", self.cookies.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join("; "));
+            b = b.header(
+                "cookie",
+                self.cookies
+                    .iter()
+                    .map(|(k, v)| format!("{k}={v}"))
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            );
         }
         let res = match body {
-            Some(v) => b.body(serde_json::to_vec(v).unwrap_or_default()).map_err(|e| e.to_string()).and_then(|r| self.agent.run(r).map_err(|e| e.to_string())),
-            None => b.body(()).map_err(|e| e.to_string()).and_then(|r| self.agent.run(r).map_err(|e| e.to_string())),
+            Some(v) => b
+                .body(serde_json::to_vec(v).unwrap_or_default())
+                .map_err(|e| e.to_string())
+                .and_then(|r| self.agent.run(r).map_err(|e| e.to_string())),
+            None => b
+                .body(())
+                .map_err(|e| e.to_string())
+                .and_then(|r| self.agent.run(r).map_err(|e| e.to_string())),
         };
         let mut resp = match res {
             Ok(r) => r,
             Err(e) => return (0, Value::String(e)),
         };
         for h in resp.headers().get_all("set-cookie") {
-            if let Some((k, v)) = h.to_str().ok().and_then(|s| s.split(';').next()).and_then(|kv| kv.split_once('=')) {
+            if let Some((k, v)) = h
+                .to_str()
+                .ok()
+                .and_then(|s| s.split(';').next())
+                .and_then(|kv| kv.split_once('='))
+            {
                 self.cookies.insert(k.trim().into(), v.trim().into());
             }
         }
         let status = resp.status().as_u16();
         let text = resp.body_mut().read_to_string().unwrap_or_default();
         let t = text.trim_start();
-        let v = if t.starts_with('{') || t.starts_with('[') { serde_json::from_str(&text).unwrap_or(Value::String(text)) } else { Value::String(text) };
+        let v = if t.starts_with('{') || t.starts_with('[') {
+            serde_json::from_str(&text).unwrap_or(Value::String(text))
+        } else {
+            Value::String(text)
+        };
         (status, v)
     }
 
     fn login(&mut self, email: &str, password: &str) -> R {
-        let (c, b) = self.req("POST", "/auth/login", Some(&json!({"email": email, "password": password})));
+        let (c, b) = self.req(
+            "POST",
+            "/auth/login",
+            Some(&json!({"email": email, "password": password})),
+        );
         if !(200..300).contains(&c) {
             return Err(format!("login failed for {email}: {c}"));
         }
-        self.csrf = b.get("csrf_token").and_then(Value::as_str).map(String::from).or_else(|| {
-            self.cookies.iter().find(|(k, _)| k.to_ascii_lowercase().contains("csrf")).map(|(_, v)| v.clone())
-        });
+        self.csrf = b
+            .get("csrf_token")
+            .and_then(Value::as_str)
+            .map(String::from)
+            .or_else(|| {
+                self.cookies
+                    .iter()
+                    .find(|(k, _)| k.to_ascii_lowercase().contains("csrf"))
+                    .map(|(_, v)| v.clone())
+            });
         Ok(())
     }
 }
@@ -103,7 +154,24 @@ fn items(b: &Value) -> Vec<Value> {
     if let Value::Array(a) = b {
         return a.clone();
     }
-    for k in ["items", "data", "results", "products", "groups", "customers", "rules", "coupons", "servers", "articles", "categories", "announcements", "tickets", "departments", "invoices", "orders"] {
+    for k in [
+        "items",
+        "data",
+        "results",
+        "products",
+        "groups",
+        "customers",
+        "rules",
+        "coupons",
+        "servers",
+        "articles",
+        "categories",
+        "announcements",
+        "tickets",
+        "departments",
+        "invoices",
+        "orders",
+    ] {
         if let Some(Value::Array(a)) = b.get(k) {
             return a.clone();
         }
@@ -157,7 +225,14 @@ impl Seeder {
     }
 
     /// Finds a matching row in `list_path`, else creates it.
-    fn ensure(&mut self, kind: &str, list_path: &str, matches: impl Fn(&Value) -> bool, create_path: &str, body: Value) -> Option<Value> {
+    fn ensure(
+        &mut self,
+        kind: &str,
+        list_path: &str,
+        matches: impl Fn(&Value) -> bool,
+        create_path: &str,
+        body: Value,
+    ) -> Option<Value> {
         let list = self.get(list_path);
         if let Some(x) = items(&list).into_iter().find(|x| matches(x)) {
             self.existing(kind);
@@ -201,17 +276,28 @@ fn micros(v: Option<&Value>) -> i128 {
         Some(Value::Number(n)) => n.to_string(),
         _ => return 0,
     };
-    let (neg, t) = t.strip_prefix('-').map(|r| (true, r)).unwrap_or((false, t.as_str()));
+    let (neg, t) = t
+        .strip_prefix('-')
+        .map(|r| (true, r))
+        .unwrap_or((false, t.as_str()));
     let (int, frac) = t.split_once('.').unwrap_or((t, ""));
     let frac: String = frac.chars().chain(std::iter::repeat('0')).take(6).collect();
     let n = int.parse::<i128>().unwrap_or(0) * 1_000_000 + frac.parse::<i128>().unwrap_or(0);
-    if neg { -n } else { n }
+    if neg {
+        -n
+    } else {
+        n
+    }
 }
 
 /// Rounds millionths to cents (half to even, like Decimal.quantize) as "12.34".
 fn cents_str(m: i128) -> String {
     let (q, r) = (m.div_euclid(10_000), m.rem_euclid(10_000));
-    let c = if r > 5_000 || (r == 5_000 && q % 2 != 0) { q + 1 } else { q };
+    let c = if r > 5_000 || (r == 5_000 && q % 2 != 0) {
+        q + 1
+    } else {
+        q
+    };
     format!("{}.{:02}", c / 100, c % 100)
 }
 
@@ -219,7 +305,12 @@ pub fn seed(ctx: &Ctx) -> R {
     let e = env(ctx)?;
     let mut a = Session::new(&e.base);
     a.login(&e.admin_email, &e.admin_password)?;
-    let mut sd = Seeder { a, created: BTreeMap::new(), existing: BTreeMap::new(), refused: vec![] };
+    let mut sd = Seeder {
+        a,
+        created: BTreeMap::new(),
+        existing: BTreeMap::new(),
+        refused: vec![],
+    };
     let res = seed_inner(&mut sd, &e);
     if ctx.get("SEED_DEBUG").is_some() {
         println!("REFUSED:\n{}", sd.refused.join("\n"));
@@ -235,7 +326,13 @@ fn seed_inner(sd: &mut Seeder, e: &Env) -> R {
     let mut groups: BTreeMap<&str, Option<Value>> = BTreeMap::new();
     for name in ["Game Servers", "Web Hosting"] {
         let slug = name.to_lowercase().replace(' ', "-");
-        let g = sd.ensure("group", "/admin/catalog/groups", |x| s(x, "name") == name, "/admin/catalog/groups", json!({"name": name, "slug": slug, "sort_order": 0, "hidden": false}));
+        let g = sd.ensure(
+            "group",
+            "/admin/catalog/groups",
+            |x| s(x, "name") == name,
+            "/admin/catalog/groups",
+            json!({"name": name, "slug": slug, "sort_order": 0, "hidden": false}),
+        );
         groups.insert(name, g);
     }
 
@@ -255,22 +352,66 @@ fn seed_inner(sd: &mut Seeder, e: &Env) -> R {
                {"currency": "EUR", "cycle": "annual", "amount": y, "setup_fee": "0.00"}])
     };
     let products = [
-        ("Game Servers", "minecraft-2gb", "Minecraft 2 GB", "2 GB RAM, 2 vCPU, 20 GB NVMe", prices("4.99", "13.99", "49.90")),
-        ("Game Servers", "minecraft-8gb", "Minecraft 8 GB", "8 GB RAM, 4 vCPU, 80 GB NVMe", prices("16.99", "47.99", "169.90")),
-        ("Game Servers", "rust-pro", "Rust Pro", "12 GB RAM, dedicated cores", prices("24.99", "70.99", "249.90")),
-        ("Web Hosting", "web-starter", "Web Starter", "1 site, 10 GB SSD, free SSL", prices("2.99", "8.49", "29.90")),
-        ("Web Hosting", "web-business", "Web Business", "Unlimited sites, 100 GB SSD, daily backups", prices("9.99", "28.49", "99.90")),
-        ("Web Hosting", "web-agency", "Web Agency", "Reseller-ready, 250 GB SSD, priority support", prices("19.99", "56.99", "199.90")),
+        (
+            "Game Servers",
+            "minecraft-2gb",
+            "Minecraft 2 GB",
+            "2 GB RAM, 2 vCPU, 20 GB NVMe",
+            prices("4.99", "13.99", "49.90"),
+        ),
+        (
+            "Game Servers",
+            "minecraft-8gb",
+            "Minecraft 8 GB",
+            "8 GB RAM, 4 vCPU, 80 GB NVMe",
+            prices("16.99", "47.99", "169.90"),
+        ),
+        (
+            "Game Servers",
+            "rust-pro",
+            "Rust Pro",
+            "12 GB RAM, dedicated cores",
+            prices("24.99", "70.99", "249.90"),
+        ),
+        (
+            "Web Hosting",
+            "web-starter",
+            "Web Starter",
+            "1 site, 10 GB SSD, free SSL",
+            prices("2.99", "8.49", "29.90"),
+        ),
+        (
+            "Web Hosting",
+            "web-business",
+            "Web Business",
+            "Unlimited sites, 100 GB SSD, daily backups",
+            prices("9.99", "28.49", "99.90"),
+        ),
+        (
+            "Web Hosting",
+            "web-agency",
+            "Web Agency",
+            "Reseller-ready, 250 GB SSD, priority support",
+            prices("19.99", "56.99", "199.90"),
+        ),
     ];
     let pl = sd.get("/admin/catalog/products");
-    let existing: BTreeMap<String, Value> = items(&pl).into_iter().map(|x| (s(&x, "slug").to_string(), x)).collect();
+    let existing: BTreeMap<String, Value> = items(&pl)
+        .into_iter()
+        .map(|x| (s(&x, "slug").to_string(), x))
+        .collect();
     let mut by_slug: BTreeMap<&str, Value> = BTreeMap::new();
     for (grp, slug, name, desc, pr) in products {
         let x = if let Some(x) = existing.get(slug) {
             sd.existing("product");
             x.clone()
         } else {
-            let gid = groups.get(grp).cloned().flatten().and_then(|g| g.get("id").cloned()).unwrap_or(Value::Null);
+            let gid = groups
+                .get(grp)
+                .cloned()
+                .flatten()
+                .and_then(|g| g.get("id").cloned())
+                .unwrap_or(Value::Null);
             let (c, x) = sd.req("POST", "/admin/catalog/products", Some(json!({"name": name, "slug": slug, "description": desc, "group_id": gid, "status": "active"})));
             if !ok(c) {
                 continue;
@@ -280,16 +421,32 @@ fn seed_inner(sd: &mut Seeder, e: &Env) -> R {
         };
         let id = x["id"].clone();
         let ids = id.as_str().unwrap_or_default().to_string();
-        sd.req("PUT", &format!("/admin/catalog/products/{ids}/prices"), Some(json!({"prices": pr})));
+        sd.req(
+            "PUT",
+            &format!("/admin/catalog/products/{ids}/prices"),
+            Some(json!({"prices": pr})),
+        );
         if let Some(srv) = srv.as_ref().filter(|v| truthy(Some(v))) {
             if grp == "Game Servers" {
-                sd.req("PUT", &format!("/admin/products/{ids}/module"), Some(json!({"module": "webhook", "server_id": srv.get("id"), "config": {}})));
+                sd.req(
+                    "PUT",
+                    &format!("/admin/products/{ids}/module"),
+                    Some(json!({"module": "webhook", "server_id": srv.get("id"), "config": {}})),
+                );
             }
         }
-        let opts: Vec<Value> = sd.catalog_options(&id).into_iter().filter(|o| s(o, "name") == "Server location").collect();
+        let opts: Vec<Value> = sd
+            .catalog_options(&id)
+            .into_iter()
+            .filter(|o| s(o, "name") == "Server location")
+            .collect();
         for dup in opts.iter().skip(1) {
             // self-heal duplicates from earlier runs
-            sd.req("DELETE", &format!("/admin/catalog/products/{ids}/options/{}", s(dup, "id")), None);
+            sd.req(
+                "DELETE",
+                &format!("/admin/catalog/products/{ids}/options/{}", s(dup, "id")),
+                None,
+            );
         }
         if slug == "minecraft-8gb" && opts.is_empty() {
             sd.req("POST", &format!("/admin/catalog/products/{ids}/options"), Some(json!({
@@ -303,9 +460,14 @@ fn seed_inner(sd: &mut Seeder, e: &Env) -> R {
     sd.ensure("coupon", "/admin/coupons", |x| s(x, "code") == "WELCOME10", "/admin/coupons",
         json!({"code": "WELCOME10", "kind": "percent", "value": "10", "description": "10% off first order",
                "active": true, "recurring": false, "max_uses": 500, "max_uses_per_customer": 1, "product_ids": []}));
-    sd.ensure("tax-rule", "/admin/tax-rules", |x| s(x, "name") == "RO VAT", "/admin/tax-rules",
+    sd.ensure(
+        "tax-rule",
+        "/admin/tax-rules",
+        |x| s(x, "name") == "RO VAT",
+        "/admin/tax-rules",
         json!({"name": "RO VAT", "rate": "19.00", "country": "RO", "region": "", "is_vat": true,
-               "compound": false, "enabled": true, "priority": 1}));
+               "compound": false, "enabled": true, "priority": 1}),
+    );
 
     // Clients: register publicly (sets password), then fill profile as admin
     let clients = [
@@ -333,7 +495,13 @@ fn seed_inner(sd: &mut Seeder, e: &Env) -> R {
             u.req("GET", "/client/invoices", None);
             cust = find_customer(sd, &email);
             if cust.is_none() {
-                let (c, x) = sd.req("POST", "/admin/customers", Some(json!({"email": email, "first_name": fn_, "last_name": ln, "country": co})));
+                let (c, x) = sd.req(
+                    "POST",
+                    "/admin/customers",
+                    Some(
+                        json!({"email": email, "first_name": fn_, "last_name": ln, "country": co}),
+                    ),
+                );
                 cust = ok(c).then(|| x.get("data").cloned().unwrap_or(x));
             }
             if cust.is_some() {
@@ -361,8 +529,18 @@ fn seed_inner(sd: &mut Seeder, e: &Env) -> R {
 
     // Orders, invoices and payments, each idempotent per client
     let invs = items(&sd.get("/admin/invoices?per_page=200"));
-    let have_order: Vec<Value> = items(&sd.get("/admin/orders?per_page=200")).iter().map(|x| x.get("customer_id").cloned().unwrap_or(Value::Null)).collect();
-    let plan = ["minecraft-2gb", "web-business", "minecraft-8gb", "web-starter", "rust-pro", "web-agency"];
+    let have_order: Vec<Value> = items(&sd.get("/admin/orders?per_page=200"))
+        .iter()
+        .map(|x| x.get("customer_id").cloned().unwrap_or(Value::Null))
+        .collect();
+    let plan = [
+        "minecraft-2gb",
+        "web-business",
+        "minecraft-8gb",
+        "web-starter",
+        "rust-pro",
+        "web-agency",
+    ];
     for (i, cust) in customers.iter().enumerate() {
         let cid = cust["id"].clone();
         let prod = plan.get(i).and_then(|p| by_slug.get(p)).cloned();
@@ -371,7 +549,11 @@ fn seed_inner(sd: &mut Seeder, e: &Env) -> R {
         } else if let Some(prod) = prod {
             let mut config = Map::new();
             for o in sd.catalog_options(&prod["id"]) {
-                if let Some(ch) = o.get("choices").and_then(Value::as_array).filter(|c| !c.is_empty()) {
+                if let Some(ch) = o
+                    .get("choices")
+                    .and_then(Value::as_array)
+                    .filter(|c| !c.is_empty())
+                {
                     config.insert(s(&o, "id").into(), ch[i % ch.len()]["id"].clone());
                 }
             }
@@ -383,9 +565,22 @@ fn seed_inner(sd: &mut Seeder, e: &Env) -> R {
             }
         }
         let mine: Vec<&Value> = {
-            let own: Vec<&Value> = invs.iter().filter(|x| x.get("customer_id") == Some(&cid)).collect();
-            let with_support: Vec<&Value> = own.iter().copied().filter(|x| x.to_string().contains("Priority support")).collect();
-            if with_support.is_empty() { own.into_iter().filter(|x| !truthy(x.get("order_id"))).collect() } else { with_support }
+            let own: Vec<&Value> = invs
+                .iter()
+                .filter(|x| x.get("customer_id") == Some(&cid))
+                .collect();
+            let with_support: Vec<&Value> = own
+                .iter()
+                .copied()
+                .filter(|x| x.to_string().contains("Priority support"))
+                .collect();
+            if with_support.is_empty() {
+                own.into_iter()
+                    .filter(|x| !truthy(x.get("order_id")))
+                    .collect()
+            } else {
+                with_support
+            }
         };
         let x = if let Some(x) = mine.first() {
             sd.existing("invoice");
@@ -420,10 +615,30 @@ fn seed_inner(sd: &mut Seeder, e: &Env) -> R {
         json!({"name": "Technical Support", "description": "Servers, panels, DNS", "is_active": true}));
     let tl = items(&sd.get("/admin/tickets?per_page=200"));
     let tickets = [
-        ("Server not starting after update", "high", "My Minecraft server crashes on boot since last night.", "We rolled back the Java version on your node, please try again."),
-        ("Invoice question", "low", "Can I get the invoice with my company VAT number?", "Sure, we updated your profile and reissued it."),
-        ("DNS propagation", "medium", "My domain still points to the old IP.", "Propagation can take up to 24h; TTL is now 300s."),
-        ("Upgrade to 8 GB plan", "medium", "How do I upgrade without losing my world?", "Upgrades are in place, data is kept. Prorated invoice sent."),
+        (
+            "Server not starting after update",
+            "high",
+            "My Minecraft server crashes on boot since last night.",
+            "We rolled back the Java version on your node, please try again.",
+        ),
+        (
+            "Invoice question",
+            "low",
+            "Can I get the invoice with my company VAT number?",
+            "Sure, we updated your profile and reissued it.",
+        ),
+        (
+            "DNS propagation",
+            "medium",
+            "My domain still points to the old IP.",
+            "Propagation can take up to 24h; TTL is now 300s.",
+        ),
+        (
+            "Upgrade to 8 GB plan",
+            "medium",
+            "How do I upgrade without losing my world?",
+            "Upgrades are in place, data is kept. Prorated invoice sent.",
+        ),
     ];
     if let Some(dep) = dep {
         for (i, (subj, pr, body, reply)) in tickets.into_iter().enumerate() {
@@ -432,18 +647,36 @@ fn seed_inner(sd: &mut Seeder, e: &Env) -> R {
                 sd.existing("ticket");
                 let tid = s(t, "id").to_string();
                 let full = sd.get(&format!("/admin/tickets/{tid}"));
-                if !full.to_string().contains(reply) && ok(sd.req("POST", &format!("/admin/tickets/{tid}/reply"), Some(reply_body)).0) {
+                if !full.to_string().contains(reply)
+                    && ok(sd
+                        .req(
+                            "POST",
+                            &format!("/admin/tickets/{tid}/reply"),
+                            Some(reply_body),
+                        )
+                        .0)
+                {
                     sd.created("ticket-reply");
                 }
                 continue;
             }
-            let cid = customers.get(i).map(|c| c["id"].clone()).unwrap_or(Value::Null);
+            let cid = customers
+                .get(i)
+                .map(|c| c["id"].clone())
+                .unwrap_or(Value::Null);
             let (c, t) = sd.req("POST", "/admin/tickets", Some(json!({"department_id": dep["id"], "subject": subj, "body": body, "priority": pr,
                 "customer_id": cid, "attachment_ids": []})));
             if ok(c) {
                 let t = unwrap(t);
                 sd.created("ticket");
-                if ok(sd.req("POST", &format!("/admin/tickets/{}/reply", s(&t, "id")), Some(reply_body)).0) {
+                if ok(sd
+                    .req(
+                        "POST",
+                        &format!("/admin/tickets/{}/reply", s(&t, "id")),
+                        Some(reply_body),
+                    )
+                    .0)
+                {
                     sd.created("ticket-reply");
                 }
             }
@@ -454,9 +687,21 @@ fn seed_inner(sd: &mut Seeder, e: &Env) -> R {
         json!({"slug": "getting-started", "name": "Getting started", "description": "First steps", "sort_order": 1}));
     if let Some(cat) = cat {
         for (slug, title, body) in [
-            ("connect-to-your-server", "Connect to your game server", "Use the panel link from your service page..."),
-            ("pay-an-invoice", "How to pay an invoice", "Open Invoices, choose an unpaid invoice and click Pay..."),
-            ("reset-password", "Reset your password", "Click 'Forgot password' on the login page..."),
+            (
+                "connect-to-your-server",
+                "Connect to your game server",
+                "Use the panel link from your service page...",
+            ),
+            (
+                "pay-an-invoice",
+                "How to pay an invoice",
+                "Open Invoices, choose an unpaid invoice and click Pay...",
+            ),
+            (
+                "reset-password",
+                "Reset your password",
+                "Click 'Forgot password' on the login page...",
+            ),
         ] {
             sd.ensure("kb-article", "/admin/kb/articles", |x| s(x, "slug") == slug, "/admin/kb/articles",
                 json!({"category_id": cat["id"], "slug": slug, "title": title, "body": body, "is_published": true}));
@@ -468,7 +713,11 @@ fn seed_inner(sd: &mut Seeder, e: &Env) -> R {
     // Demo accounts are trusted: mark every demo user's email as confirmed (no permanent banner).
     for u in items(&sd.get("/admin/users?limit=500")) {
         if !truthy(u.get("email_verified_at")) {
-            sd.req("POST", &format!("/admin/users/{}/verify-email", s(&u, "id")), None);
+            sd.req(
+                "POST",
+                &format!("/admin/users/{}/verify-email", s(&u, "id")),
+                None,
+            );
         }
     }
     Ok(())
@@ -486,13 +735,24 @@ pub fn seed_extra(ctx: &Ctx) -> R {
             Value::Array(a) => a.iter().filter(|x| x.is_object()).cloned().collect(),
             Value::Object(m) => m
                 .values()
-                .find_map(|v| v.as_array().filter(|a| !a.is_empty() && a.iter().all(Value::is_object)).cloned())
+                .find_map(|v| {
+                    v.as_array()
+                        .filter(|a| !a.is_empty() && a.iter().all(Value::is_object))
+                        .cloned()
+                })
                 .unwrap_or_default(),
             _ => vec![],
         }
     }
     let rec = |res: &mut Map<String, Value>, k: &str, r: &(u16, Value)| {
-        res.insert(k.into(), if r.0 >= 300 || r.0 == 0 { json!(r.0) } else { json!("ok") });
+        res.insert(
+            k.into(),
+            if r.0 >= 300 || r.0 == 0 {
+                json!(r.0)
+            } else {
+                json!("ok")
+            },
+        );
     };
     let exists = |res: &mut Map<String, Value>, k: &str| {
         res.insert(k.into(), json!("exists"));
@@ -513,11 +773,22 @@ pub fn seed_extra(ctx: &Ctx) -> R {
     // server group
     let gl = a.req("GET", "/admin/server-groups", None).1;
     if !items(&gl).iter().any(|x| s(x, "name") == "EU Nodes") {
-        let r = a.req("POST", "/admin/server-groups", Some(&json!({"name": "EU Nodes", "strategy": "least_services"})));
+        let r = a.req(
+            "POST",
+            "/admin/server-groups",
+            Some(&json!({"name": "EU Nodes", "strategy": "least_services"})),
+        );
         rec(&mut res, "server_group", &r);
         if r.0 != 0 && r.0 < 300 {
-            let srv: Vec<Value> = items(&a.req("GET", "/admin/servers", None).1).iter().map(|x| x["id"].clone()).collect();
-            let m = a.req("PUT", &format!("/admin/server-groups/{}/servers", s(&r.1, "id")), Some(&json!({"servers": srv})));
+            let srv: Vec<Value> = items(&a.req("GET", "/admin/servers", None).1)
+                .iter()
+                .map(|x| x["id"].clone())
+                .collect();
+            let m = a.req(
+                "PUT",
+                &format!("/admin/server-groups/{}/servers", s(&r.1, "id")),
+                Some(&json!({"servers": srv})),
+            );
             rec(&mut res, "server_group_members", &m);
         }
     } else {
@@ -527,7 +798,11 @@ pub fn seed_extra(ctx: &Ctx) -> R {
     let r = a.req("POST", "/admin/servers/health/check", Some(&json!({})));
     rec(&mut res, "health_check", &r);
     for srv in items(&a.req("GET", "/admin/servers", None).1) {
-        a.req("POST", &format!("/admin/servers/{}/test", s(&srv, "id")), Some(&json!({})));
+        a.req(
+            "POST",
+            &format!("/admin/servers/{}/test", s(&srv, "id")),
+            Some(&json!({})),
+        );
     }
     let n = items(&a.req("GET", "/admin/module-log", None).1).len();
     res.insert("module_log_entries".into(), json!(n));
@@ -537,7 +812,11 @@ pub fn seed_extra(ctx: &Ctx) -> R {
     }
     if let Some(p0) = prods.first() {
         let pid = s(p0, "id").to_string();
-        let r = a.req("PUT", &format!("/admin/catalog/products/{pid}/stock"), Some(&json!({"stock_enabled": true, "stock_qty": 25, "allow_backorder": false})));
+        let r = a.req(
+            "PUT",
+            &format!("/admin/catalog/products/{pid}/stock"),
+            Some(&json!({"stock_enabled": true, "stock_qty": 25, "allow_backorder": false})),
+        );
         rec(&mut res, "stock", &r);
         let fl = a.req("GET", "/admin/order-forms", None).1;
         if !items(&fl).iter().any(|x| s(x, "slug") == "vps-wizard") {
@@ -558,7 +837,11 @@ pub fn seed_extra(ctx: &Ctx) -> R {
         exists(&mut res, "promo");
     }
     if items(&a.req("GET", "/admin/gift-cards", None).1).is_empty() {
-        let r = a.req("POST", "/admin/gift-cards", Some(&json!({"currency": "EUR", "amount": "25"})));
+        let r = a.req(
+            "POST",
+            "/admin/gift-cards",
+            Some(&json!({"currency": "EUR", "amount": "25"})),
+        );
         rec(&mut res, "gift_card", &r);
     } else {
         exists(&mut res, "gift_card");
@@ -598,7 +881,10 @@ pub fn seed_extra(ctx: &Ctx) -> R {
     } else {
         exists(&mut res, "affiliate");
     }
-    println!("{}", serde_json::to_string_pretty(&Value::Object(res)).unwrap_or_default());
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&Value::Object(res)).unwrap_or_default()
+    );
     Ok(())
 }
 
@@ -608,8 +894,14 @@ mod tests {
 
     #[test]
     fn money_and_unwrap() {
-        assert_eq!(cents_str(micros(Some(&json!("16.99"))) - micros(Some(&json!("0.00")))), "16.99");
-        assert_eq!(cents_str(micros(Some(&json!(21.5))) - micros(Some(&json!("5")))), "16.50");
+        assert_eq!(
+            cents_str(micros(Some(&json!("16.99"))) - micros(Some(&json!("0.00")))),
+            "16.99"
+        );
+        assert_eq!(
+            cents_str(micros(Some(&json!(21.5))) - micros(Some(&json!("5")))),
+            "16.50"
+        );
         assert_eq!(cents_str(micros(Some(&json!("0.125")))), "0.12");
         assert_eq!(cents_str(micros(Some(&json!("0.135")))), "0.14");
         assert_eq!(unwrap(json!({"group": {"id": "g1"}}))["id"], "g1");

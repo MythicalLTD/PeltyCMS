@@ -4,9 +4,9 @@
 pub mod http;
 pub mod wire;
 
-pub use http::{HttpRequestSpec, HttpTransport, MockTransport, NoTransport};
 #[cfg(not(target_family = "wasm"))]
 pub use http::ReqwestTransport;
+pub use http::{HttpRequestSpec, HttpTransport, MockTransport, NoTransport};
 use pelty_core::money::Money;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -95,7 +95,12 @@ pub struct WebhookEvent {
 }
 
 impl WebhookEvent {
-    pub fn new(event_id: impl Into<String>, event_type: impl Into<String>, kind: WebhookKind, provider_ref: Option<String>) -> Self {
+    pub fn new(
+        event_id: impl Into<String>,
+        event_type: impl Into<String>,
+        kind: WebhookKind,
+        provider_ref: Option<String>,
+    ) -> Self {
         WebhookEvent {
             event_id: event_id.into(),
             event_type: event_type.into(),
@@ -128,11 +133,17 @@ pub struct SavedMethod {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum ChargeOutcome {
-    Succeeded { provider_ref: String },
+    Succeeded {
+        provider_ref: String,
+    },
     /// Accepted; final result arrives by webhook.
-    Pending { provider_ref: String },
+    Pending {
+        provider_ref: String,
+    },
     /// Declined (insufficient funds, expired card …); safe to retry later.
-    Declined { reason: String },
+    Declined {
+        reason: String,
+    },
 }
 
 /// Case-insensitive header lookup supplied by the HTTP layer.
@@ -250,7 +261,8 @@ pub trait PaymentGateway: Send + Sync {
 
 pub type GatewayFactory = fn(&GatewayConfig) -> Result<Box<dyn PaymentGateway>, GatewayError>;
 /// Factory that may capture state (WASM addons).
-pub type DynFactory = Arc<dyn Fn(&GatewayConfig) -> Result<Box<dyn PaymentGateway>, GatewayError> + Send + Sync>;
+pub type DynFactory =
+    Arc<dyn Fn(&GatewayConfig) -> Result<Box<dyn PaymentGateway>, GatewayError> + Send + Sync>;
 
 /// One admin-editable setting; the admin UI renders these natively.
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -265,10 +277,20 @@ pub struct SettingField {
 
 impl SettingField {
     pub const fn text(key: &'static str, required: bool) -> Self {
-        SettingField { key, kind: "text", required, options: &[] }
+        SettingField {
+            key,
+            kind: "text",
+            required,
+            options: &[],
+        }
     }
     pub const fn of(key: &'static str, kind: &'static str) -> Self {
-        SettingField { key, kind, required: false, options: &[] }
+        SettingField {
+            key,
+            kind,
+            required: false,
+            options: &[],
+        }
     }
 }
 
@@ -306,17 +328,26 @@ impl Default for GatewayRegistry {
     /// addon (`extensions/addons/<id>`) registered at runtime with
     /// [`GatewayRegistry::register_dyn`].
     fn default() -> Self {
-        GatewayRegistry { factories: Default::default(), transport: Arc::new(NoTransport) }
+        GatewayRegistry {
+            factories: Default::default(),
+            transport: Arc::new(NoTransport),
+        }
     }
 }
 
 impl GatewayRegistry {
     /// Registry with no gateways at all (addons only).
     pub fn empty(t: Arc<dyn HttpTransport>) -> Self {
-        GatewayRegistry { factories: Default::default(), transport: t }
+        GatewayRegistry {
+            factories: Default::default(),
+            transport: t,
+        }
     }
     pub fn with_transport(t: Arc<dyn HttpTransport>) -> Self {
-        GatewayRegistry { transport: t, ..Self::default() }
+        GatewayRegistry {
+            transport: t,
+            ..Self::default()
+        }
     }
     pub fn set_transport(&mut self, t: Arc<dyn HttpTransport>) {
         self.transport = t;
@@ -339,16 +370,36 @@ impl GatewayRegistry {
         }
     }
     pub fn descriptors(&self) -> Vec<GatewayDescriptor> {
-        self.factories.read().map(|m| m.values().map(|(d, _)| d.clone()).collect()).unwrap_or_default()
+        self.factories
+            .read()
+            .map(|m| m.values().map(|(d, _)| d.clone()).collect())
+            .unwrap_or_default()
     }
     /// Descriptor for a row id; `custom-*` ids map to the custom gateway.
     pub fn descriptor(&self, id: &str) -> Option<GatewayDescriptor> {
-        let key = if id.starts_with(CUSTOM_PREFIX) { CUSTOM_ID } else { id };
+        let key = if id.starts_with(CUSTOM_PREFIX) {
+            CUSTOM_ID
+        } else {
+            id
+        };
         self.factories.read().ok()?.get(key).map(|(d, _)| d.clone())
     }
-    pub fn build(&self, id: &str, cfg: &GatewayConfig) -> Result<Box<dyn PaymentGateway>, GatewayError> {
-        let key = if id.starts_with(CUSTOM_PREFIX) { CUSTOM_ID } else { id };
-        let f = self.factories.read().ok().and_then(|m| m.get(key).map(|(_, f)| f.clone())).ok_or_else(|| GatewayError::Config("unknown gateway".into()))?;
+    pub fn build(
+        &self,
+        id: &str,
+        cfg: &GatewayConfig,
+    ) -> Result<Box<dyn PaymentGateway>, GatewayError> {
+        let key = if id.starts_with(CUSTOM_PREFIX) {
+            CUSTOM_ID
+        } else {
+            id
+        };
+        let f = self
+            .factories
+            .read()
+            .ok()
+            .and_then(|m| m.get(key).map(|(_, f)| f.clone()))
+            .ok_or_else(|| GatewayError::Config("unknown gateway".into()))?;
         let mut c = cfg.clone();
         c.id = id.to_string();
         c.transport = self.transport.clone();
@@ -406,7 +457,10 @@ pub mod test_util {
     use pelty_core::money::Currency;
     use std::str::FromStr;
     pub fn money(v: &str, c: &str) -> Money {
-        Money::new(rust_decimal::Decimal::from_str(v).unwrap(), Currency::parse(c).unwrap())
+        Money::new(
+            rust_decimal::Decimal::from_str(v).unwrap(),
+            Currency::parse(c).unwrap(),
+        )
     }
     pub fn req(v: &str, c: &str) -> PaymentRequest {
         PaymentRequest {
@@ -421,15 +475,25 @@ pub mod test_util {
             idempotency_key: "idem-1".into(),
         }
     }
-    pub fn cfg(id: &str, config: serde_json::Value, secrets: &[(&str, &str)], t: &MockTransport) -> GatewayConfig {
+    pub fn cfg(
+        id: &str,
+        config: serde_json::Value,
+        secrets: &[(&str, &str)],
+        t: &MockTransport,
+    ) -> GatewayConfig {
         GatewayConfig {
             id: id.into(),
             config,
-            secrets: secrets.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+            secrets: secrets
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
             transport: Arc::new(t.clone()),
         }
     }
     pub fn hdrs(p: &[(&str, &str)]) -> Headers {
-        p.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+        p.iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
     }
 }

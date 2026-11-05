@@ -4,10 +4,10 @@
 //! `crate::routes::<module>` keep working through re-exports in `routes/mod.rs`.
 //! Covered by the pelty-api integration tests for these domains and by pelty-docs route inventory tests.
 
-pub mod email_templates;
-pub mod email_log;
-pub mod smtp;
 pub mod campaigns;
+pub mod email_log;
+pub mod email_templates;
 pub mod link_tracking;
+pub mod smtp;
 pub mod webhook_endpoints;
 pub mod webhooks;

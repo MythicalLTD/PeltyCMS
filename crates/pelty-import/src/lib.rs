@@ -18,8 +18,8 @@ mod import_more;
 pub mod map;
 pub mod paymenter;
 pub mod sqldump;
-pub mod whmcs_crypt;
 pub mod whmcs;
+pub mod whmcs_crypt;
 
 pub use import::{run, run_source, run_with, Report, Sealer};
 pub use whmcs::WhmcsData;

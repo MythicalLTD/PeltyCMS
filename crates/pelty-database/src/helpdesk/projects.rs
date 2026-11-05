@@ -39,10 +39,17 @@ fn active() -> String {
 
 pub fn check(p: &ProjectInput) -> AppResult<()> {
     let n = p.title.trim().chars().count();
-    if n == 0 || n > 200 || p.description.chars().count() > 10_000 || !STATUSES.contains(&p.status.as_str()) {
+    if n == 0
+        || n > 200
+        || p.description.chars().count() > 10_000
+        || !STATUSES.contains(&p.status.as_str())
+    {
         return Err(v());
     }
-    if p.hourly_rate < Decimal::ZERO || p.hourly_rate > Decimal::from(1_000_000) || p.hourly_rate.scale() > 2 {
+    if p.hourly_rate < Decimal::ZERO
+        || p.hourly_rate > Decimal::from(1_000_000)
+        || p.hourly_rate.scale() > 2
+    {
         return Err(AppError::Validation("error.invalid_amount"));
     }
     Ok(())
@@ -50,7 +57,8 @@ pub fn check(p: &ProjectInput) -> AppResult<()> {
 
 /// Price of an entry: rate × minutes / 60, rounded half-up to cents.
 pub fn entry_amount(rate: Decimal, minutes: i32) -> Decimal {
-    (rate * Decimal::from(minutes) / Decimal::from(60)).round_dp_with_strategy(2, rust_decimal::RoundingStrategy::MidpointAwayFromZero)
+    (rate * Decimal::from(minutes) / Decimal::from(60))
+        .round_dp_with_strategy(2, rust_decimal::RoundingStrategy::MidpointAwayFromZero)
 }
 
 const SUMMARY: &str = "SELECT p.id, p.customer_id, c.email::text AS customer_email, p.title, p.status, p.due_date, p.client_visible,
@@ -100,7 +108,11 @@ pub async fn detail(pool: &PgPool, id: Uuid, customer: Option<Uuid>) -> AppResul
 
 async fn customer_exists(pool: &PgPool, c: Option<Uuid>) -> AppResult<()> {
     if let Some(c) = c {
-        let ok: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM customers WHERE id = $1)").bind(c).fetch_one(pool).await.map_err(db_err)?;
+        let ok: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM customers WHERE id = $1)")
+            .bind(c)
+            .fetch_one(pool)
+            .await
+            .map_err(db_err)?;
         if !ok {
             return Err(AppError::NotFound);
         }
@@ -153,7 +165,11 @@ pub async fn update(pool: &PgPool, id: Uuid, p: &ProjectInput) -> AppResult<()> 
 }
 
 pub async fn delete(pool: &PgPool, id: Uuid) -> AppResult<()> {
-    let r = sqlx::query("DELETE FROM projects WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("DELETE FROM projects WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
@@ -190,7 +206,13 @@ pub async fn add_task(pool: &PgPool, project: Uuid, t: &TaskInput) -> AppResult<
 }
 
 pub async fn set_task_done(pool: &PgPool, project: Uuid, task: Uuid, done: bool) -> AppResult<()> {
-    let r = sqlx::query("UPDATE project_tasks SET done = $3 WHERE id = $2 AND project_id = $1").bind(project).bind(task).bind(done).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("UPDATE project_tasks SET done = $3 WHERE id = $2 AND project_id = $1")
+        .bind(project)
+        .bind(task)
+        .bind(done)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
@@ -198,7 +220,12 @@ pub async fn set_task_done(pool: &PgPool, project: Uuid, task: Uuid, done: bool)
 }
 
 pub async fn delete_task(pool: &PgPool, project: Uuid, task: Uuid) -> AppResult<()> {
-    let r = sqlx::query("DELETE FROM project_tasks WHERE id = $2 AND project_id = $1").bind(project).bind(task).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("DELETE FROM project_tasks WHERE id = $2 AND project_id = $1")
+        .bind(project)
+        .bind(task)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
@@ -227,7 +254,14 @@ pub async fn add_time(pool: &PgPool, project: Uuid, user: Uuid, t: &TimeInput) -
         return Err(v());
     }
     if let Some(task) = t.task_id {
-        let ok: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM project_tasks WHERE id = $1 AND project_id = $2)").bind(task).bind(project).fetch_one(pool).await.map_err(db_err)?;
+        let ok: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM project_tasks WHERE id = $1 AND project_id = $2)",
+        )
+        .bind(task)
+        .bind(project)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
         if !ok {
             return Err(v());
         }
@@ -251,7 +285,14 @@ pub async fn add_time(pool: &PgPool, project: Uuid, user: Uuid, t: &TimeInput) -
 
 /// Invoiced entries are kept (they back an invoice line).
 pub async fn delete_time(pool: &PgPool, project: Uuid, entry: Uuid) -> AppResult<()> {
-    let r = sqlx::query("DELETE FROM project_time_entries WHERE id = $2 AND project_id = $1 AND invoice_id IS NULL").bind(project).bind(entry).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query(
+        "DELETE FROM project_time_entries WHERE id = $2 AND project_id = $1 AND invoice_id IS NULL",
+    )
+    .bind(project)
+    .bind(entry)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::Conflict("error.time_entry_locked"));
     }
@@ -285,15 +326,26 @@ pub async fn link(pool: &PgPool, project: Uuid, kind: &str, target: Uuid) -> App
 }
 
 pub async fn unlink(pool: &PgPool, project: Uuid, kind: &str, target: Uuid) -> AppResult<()> {
-    sqlx::query("DELETE FROM project_links WHERE project_id = $1 AND kind = $2 AND target_id = $3").bind(project).bind(kind).bind(target).execute(pool).await.map_err(db_err)?;
+    sqlx::query("DELETE FROM project_links WHERE project_id = $1 AND kind = $2 AND target_id = $3")
+        .bind(project)
+        .bind(kind)
+        .bind(target)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(())
 }
 
 /// Invoice all unbilled billable time (one line per entry) and link it.
 pub async fn invoice_time(pool: &PgPool, project: Uuid, due_days: i64) -> AppResult<Uuid> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let row: Option<(Option<Uuid>, Decimal, String)> = sqlx::query_as("SELECT customer_id, hourly_rate, title FROM projects WHERE id = $1 FOR UPDATE")
-        .bind(project).fetch_optional(&mut *tx).await.map_err(db_err)?;
+    let row: Option<(Option<Uuid>, Decimal, String)> = sqlx::query_as(
+        "SELECT customer_id, hourly_rate, title FROM projects WHERE id = $1 FOR UPDATE",
+    )
+    .bind(project)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_err)?;
     let (cust, rate, title) = row.ok_or(AppError::NotFound)?;
     let cust = cust.ok_or(AppError::Conflict("error.project_no_client"))?;
     let entries: Vec<(Uuid, i32, String, Date)> = sqlx::query_as(
@@ -303,11 +355,27 @@ pub async fn invoice_time(pool: &PgPool, project: Uuid, due_days: i64) -> AppRes
     if entries.is_empty() || rate.is_zero() {
         return Err(AppError::Conflict("error.project_nothing_to_bill"));
     }
-    let cur: String = sqlx::query_scalar("SELECT currency::text FROM customers WHERE id = $1").bind(cust).fetch_one(&mut *tx).await.map_err(db_err)?;
+    let cur: String = sqlx::query_scalar("SELECT currency::text FROM customers WHERE id = $1")
+        .bind(cust)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_err)?;
     let lines: Vec<NewItem> = entries
         .iter()
         .map(|(_, m, note, d)| NewItem {
-            description: format!("{title}: {d} {}h{:02}m{}", m / 60, m % 60, if note.is_empty() { String::new() } else { format!(", {note}") }).chars().take(500).collect(),
+            description: format!(
+                "{title}: {d} {}h{:02}m{}",
+                m / 60,
+                m % 60,
+                if note.is_empty() {
+                    String::new()
+                } else {
+                    format!(", {note}")
+                }
+            )
+            .chars()
+            .take(500)
+            .collect(),
             quantity: Decimal::ONE,
             unit_price: entry_amount(rate, *m),
             tax_rate: Decimal::ZERO,
@@ -320,7 +388,12 @@ pub async fn invoice_time(pool: &PgPool, project: Uuid, due_days: i64) -> AppRes
     invoices::add_items(&mut tx, inv, &cur, &lines).await?;
     invoices::finalize(&mut tx, inv, due_days).await?;
     let ids: Vec<Uuid> = entries.iter().map(|e| e.0).collect();
-    sqlx::query("UPDATE project_time_entries SET invoice_id = $2 WHERE id = ANY($1)").bind(&ids).bind(inv).execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("UPDATE project_time_entries SET invoice_id = $2 WHERE id = ANY($1)")
+        .bind(&ids)
+        .bind(inv)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     sqlx::query("INSERT INTO project_links (project_id, kind, target_id) VALUES ($1,'invoice',$2) ON CONFLICT DO NOTHING").bind(project).bind(inv).execute(&mut *tx).await.map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
     Ok(inv)
@@ -334,12 +407,26 @@ mod tests {
         let r: Decimal = "90.00".parse().unwrap();
         assert_eq!(entry_amount(r, 60), "90.00".parse::<Decimal>().unwrap());
         assert_eq!(entry_amount(r, 10), "15.00".parse::<Decimal>().unwrap());
-        assert_eq!(entry_amount("50.00".parse().unwrap(), 7), "5.83".parse::<Decimal>().unwrap());
-        assert_eq!(entry_amount("0.03".parse().unwrap(), 30), "0.02".parse::<Decimal>().unwrap());
+        assert_eq!(
+            entry_amount("50.00".parse().unwrap(), 7),
+            "5.83".parse::<Decimal>().unwrap()
+        );
+        assert_eq!(
+            entry_amount("0.03".parse().unwrap(), 30),
+            "0.02".parse::<Decimal>().unwrap()
+        );
     }
     #[test]
     fn validation() {
-        let mut p = ProjectInput { customer_id: None, title: "X".into(), description: String::new(), status: "active".into(), due_date: None, client_visible: false, hourly_rate: Decimal::ZERO };
+        let mut p = ProjectInput {
+            customer_id: None,
+            title: "X".into(),
+            description: String::new(),
+            status: "active".into(),
+            due_date: None,
+            client_visible: false,
+            hourly_rate: Decimal::ZERO,
+        };
         assert!(check(&p).is_ok());
         p.status = "bogus".into();
         assert!(check(&p).is_err());

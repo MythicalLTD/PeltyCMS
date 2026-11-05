@@ -27,7 +27,9 @@ pub async fn sweep(s: &AppState) -> pelty_core::AppResult<()> {
         crate::provision::on_plan_change(s, id).await;
     }
     for id in cancel {
-        if let Err(crate::error::ApiError(e)) = crate::routes::service_changes::cancel_service(s, id, None).await {
+        if let Err(crate::error::ApiError(e)) =
+            crate::routes::service_changes::cancel_service(s, id, None).await
+        {
             tracing::error!(error = %e, service_id = %id, "scheduled cancellation failed");
         }
     }

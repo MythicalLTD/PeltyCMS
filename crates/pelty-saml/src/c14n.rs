@@ -34,14 +34,35 @@ fn esc_attr(s: &str, out: &mut String) {
 /// Canonicalize the subtree rooted at `apex`. `exclude` (the enveloped
 /// signature) is skipped with its descendants. `inclusive` is the
 /// InclusiveNamespaces PrefixList (`#default` for the default namespace).
-pub fn canonicalize(doc: &Doc, apex: usize, exclude: Option<usize>, inclusive: &[String]) -> String {
-    let inc: Vec<String> = inclusive.iter().map(|p| if p == "#default" { String::new() } else { p.clone() }).collect();
+pub fn canonicalize(
+    doc: &Doc,
+    apex: usize,
+    exclude: Option<usize>,
+    inclusive: &[String],
+) -> String {
+    let inc: Vec<String> = inclusive
+        .iter()
+        .map(|p| {
+            if p == "#default" {
+                String::new()
+            } else {
+                p.clone()
+            }
+        })
+        .collect();
     let mut out = String::new();
     elem(doc, apex, exclude, &inc, &BTreeMap::new(), &mut out);
     out
 }
 
-fn elem(doc: &Doc, i: usize, exclude: Option<usize>, inc: &[String], rendered: &BTreeMap<String, String>, out: &mut String) {
+fn elem(
+    doc: &Doc,
+    i: usize,
+    exclude: Option<usize>,
+    inc: &[String],
+    rendered: &BTreeMap<String, String>,
+    out: &mut String,
+) {
     let e = doc.e(i);
     let mut used: Vec<String> = vec![e.prefix.clone()];
     for a in &e.attrs {
@@ -70,7 +91,11 @@ fn elem(doc: &Doc, i: usize, exclude: Option<usize>, inc: &[String], rendered: &
         }
         decls.insert(p, uri);
     }
-    let qname = if e.prefix.is_empty() { e.local.clone() } else { format!("{}:{}", e.prefix, e.local) };
+    let qname = if e.prefix.is_empty() {
+        e.local.clone()
+    } else {
+        format!("{}:{}", e.prefix, e.local)
+    };
     out.push('<');
     out.push_str(&qname);
     for (p, uri) in &decls {
@@ -156,16 +181,26 @@ mod tests {
     #[test]
     fn default_namespace_undeclared() {
         let xml = "<r xmlns=\"urn:d\"><x xmlns=\"\"><y/></x></r>";
-        assert_eq!(c(xml, &[]), "<r xmlns=\"urn:d\"><x xmlns=\"\"><y></y></x></r>");
+        assert_eq!(
+            c(xml, &[]),
+            "<r xmlns=\"urn:d\"><x xmlns=\"\"><y></y></x></r>"
+        );
         assert_eq!(c(xml, &["x"]), "<x><y></y></x>");
     }
 
     #[test]
     fn inclusive_prefix_list() {
-        let d = Doc::parse("<r xmlns:xs=\"urn:xs\" xmlns:p=\"urn:p\"><p:a v=\"xs:string\"/></r>").unwrap();
+        let d = Doc::parse("<r xmlns:xs=\"urn:xs\" xmlns:p=\"urn:p\"><p:a v=\"xs:string\"/></r>")
+            .unwrap();
         let a = d.kids(d.root).next().unwrap();
-        assert_eq!(canonicalize(&d, a, None, &[]), "<p:a xmlns:p=\"urn:p\" v=\"xs:string\"></p:a>");
-        assert_eq!(canonicalize(&d, a, None, &["xs".into()]), "<p:a xmlns:p=\"urn:p\" xmlns:xs=\"urn:xs\" v=\"xs:string\"></p:a>");
+        assert_eq!(
+            canonicalize(&d, a, None, &[]),
+            "<p:a xmlns:p=\"urn:p\" v=\"xs:string\"></p:a>"
+        );
+        assert_eq!(
+            canonicalize(&d, a, None, &["xs".into()]),
+            "<p:a xmlns:p=\"urn:p\" xmlns:xs=\"urn:xs\" v=\"xs:string\"></p:a>"
+        );
     }
 
     #[test]

@@ -102,7 +102,14 @@ func init() {
 func main() {}
 "#;
 
-pub fn scaffold(dir: &Path, id: &str, kind: &str, name: &str, lang: &str, sdk: &str) -> Result<PathBuf, String> {
+pub fn scaffold(
+    dir: &Path,
+    id: &str,
+    kind: &str,
+    name: &str,
+    lang: &str,
+    sdk: &str,
+) -> Result<PathBuf, String> {
     if !pelty_extensions::addon_pkg::id_ok(id) {
         return Err("id must match [a-z0-9-]{3,64}".into());
     }
@@ -114,8 +121,20 @@ pub fn scaffold(dir: &Path, id: &str, kind: &str, name: &str, lang: &str, sdk: &
         return Err(format!("{} already exists", d.display()));
     }
     let provides = id.rsplit('-').next().unwrap_or(id);
-    let fill = |t: &str| t.replace("__PROVIDES__", provides).replace("__NAME__", name).replace("__MODULE__", id);
-    let mut files: Vec<(&str, String)> = vec![("addon.json", manifest(id, kind, name, if lang == "rust" { "0.5.0" } else { "0.4.0" }))];
+    let fill = |t: &str| {
+        t.replace("__PROVIDES__", provides)
+            .replace("__NAME__", name)
+            .replace("__MODULE__", id)
+    };
+    let mut files: Vec<(&str, String)> = vec![(
+        "addon.json",
+        manifest(
+            id,
+            kind,
+            name,
+            if lang == "rust" { "0.5.0" } else { "0.4.0" },
+        ),
+    )];
     match lang {
         "rust" => {
             files.push(("Cargo.toml", format!("[package]\nname = \"{id}\"\nversion = \"0.1.0\"\nedition = \"2021\"\npublish = false\n\n[lib]\ncrate-type = [\"cdylib\"]\n\n[dependencies]\npelty-addon-sdk = {{ path = \"{sdk}\", features = [\"cron\"] }}\n\n[profile.release]\nopt-level = \"s\"\nlto = true\nstrip = true\n")));
@@ -128,7 +147,10 @@ pub fn scaffold(dir: &Path, id: &str, kind: &str, name: &str, lang: &str, sdk: &
         }
         _ => {
             files.push(("main.go", fill(GO_MAIN)));
-            files.push(("go.mod", format!("module {id}\n\ngo 1.23\n\nrequire go.bytecodealliance.org/cm v0.3.0\n")));
+            files.push((
+                "go.mod",
+                format!("module {id}\n\ngo 1.23\n\nrequire go.bytecodealliance.org/cm v0.3.0\n"),
+            ));
             files.push(("README.md", "UNTESTED TinyGo template (tinygo >= 0.34, wasip2). See main.go header, then `pelty-cli addon pack .`\n".into()));
         }
     }
@@ -152,7 +174,9 @@ mod tests {
         for lang in LANGS {
             let id = format!("sso-demo{lang}");
             let d = scaffold(&tmp, &id, "sso", "Demo", lang, "../sdk").unwrap();
-            let m: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(d.join("addon.json")).unwrap()).unwrap();
+            let m: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(d.join("addon.json")).unwrap())
+                    .unwrap();
             assert!(crate::lint_manifest(&m).is_empty(), "{lang}");
             assert_eq!(m["engine"], "wasm");
             assert_eq!(m["abi"], if *lang == "rust" { "0.5.0" } else { "0.4.0" });

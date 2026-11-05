@@ -324,7 +324,15 @@ async fn imported_whmcs_hash_logs_in_and_is_rehashed() {
     let e = email();
     state
         .auth
-        .register(pelty_auth::RegisterInput { email: &e, password: "Placeholder-Pass-1", display_name: "W" }, "client", None)
+        .register(
+            pelty_auth::RegisterInput {
+                email: &e,
+                password: "Placeholder-Pass-1",
+                display_name: "W",
+            },
+            "client",
+            None,
+        )
         .await
         .expect("register");
     // md5("a1#Zx" . "Bob-Old-Pass") ":" salt, the pre-bcrypt WHMCS format
@@ -335,11 +343,25 @@ async fn imported_whmcs_hash_logs_in_and_is_rehashed() {
         .unwrap();
     let login = |pw: &'static str| {
         let (app, e) = (app.clone(), e.clone());
-        async move { call(&app, "POST", "/api/v1/auth/login", Some(json!({"email": e, "password": pw})), &[]).await.status }
+        async move {
+            call(
+                &app,
+                "POST",
+                "/api/v1/auth/login",
+                Some(json!({"email": e, "password": pw})),
+                &[],
+            )
+            .await
+            .status
+        }
     };
     assert_eq!(login("bob-old-pass").await, StatusCode::UNAUTHORIZED);
     assert_eq!(login("Bob-Old-Pass").await, StatusCode::OK);
-    let h: String = sqlx::query_scalar("SELECT password_hash FROM users WHERE email=$1").bind(&e).fetch_one(&state.pool).await.unwrap();
+    let h: String = sqlx::query_scalar("SELECT password_hash FROM users WHERE email=$1")
+        .bind(&e)
+        .fetch_one(&state.pool)
+        .await
+        .unwrap();
     assert!(h.starts_with("$argon2id$"), "rehashed on login: {h}");
     assert_eq!(login("Bob-Old-Pass").await, StatusCode::OK);
 }

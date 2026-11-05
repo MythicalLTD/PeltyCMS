@@ -7,11 +7,22 @@ use sqlx::PgPool;
 pub const MAX_KEYS: i64 = 10_000;
 
 pub async fn get(pool: &PgPool, addon: &str, key: &str) -> AppResult<Option<(Vec<u8>, bool)>> {
-    sqlx::query_as("SELECT value, sealed FROM addon_kv WHERE addon_id = $1 AND key = $2").bind(addon).bind(key).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as("SELECT value, sealed FROM addon_kv WHERE addon_id = $1 AND key = $2")
+        .bind(addon)
+        .bind(key)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 /// Upsert; `false` when the addon is at [`MAX_KEYS`] and `key` is new.
-pub async fn set(pool: &PgPool, addon: &str, key: &str, value: &[u8], sealed: bool) -> AppResult<bool> {
+pub async fn set(
+    pool: &PgPool,
+    addon: &str,
+    key: &str,
+    value: &[u8],
+    sealed: bool,
+) -> AppResult<bool> {
     let r = sqlx::query(
         "INSERT INTO addon_kv (addon_id, key, value, sealed)
          SELECT $1, $2, $3, $4
@@ -30,11 +41,21 @@ pub async fn set(pool: &PgPool, addon: &str, key: &str, value: &[u8], sealed: bo
 }
 
 pub async fn delete(pool: &PgPool, addon: &str, key: &str) -> AppResult<()> {
-    sqlx::query("DELETE FROM addon_kv WHERE addon_id = $1 AND key = $2").bind(addon).bind(key).execute(pool).await.map_err(db_err)?;
+    sqlx::query("DELETE FROM addon_kv WHERE addon_id = $1 AND key = $2")
+        .bind(addon)
+        .bind(key)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(())
 }
 
 /// Drop everything an addon stored (uninstall).
 pub async fn clear(pool: &PgPool, addon: &str) -> AppResult<u64> {
-    Ok(sqlx::query("DELETE FROM addon_kv WHERE addon_id = $1").bind(addon).execute(pool).await.map_err(db_err)?.rows_affected())
+    Ok(sqlx::query("DELETE FROM addon_kv WHERE addon_id = $1")
+        .bind(addon)
+        .execute(pool)
+        .await
+        .map_err(db_err)?
+        .rows_affected())
 }

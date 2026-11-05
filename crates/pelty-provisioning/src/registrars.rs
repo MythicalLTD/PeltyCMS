@@ -23,15 +23,25 @@ pub struct RegRequest {
 
 impl RegRequest {
     pub fn get(url: String) -> Self {
-        RegRequest { method: "GET", url, headers: vec![], body: String::new() }
+        RegRequest {
+            method: "GET",
+            url,
+            headers: vec![],
+            body: String::new(),
+        }
     }
     pub fn header(&self, k: &str) -> Option<&str> {
-        self.headers.iter().find(|(h, _)| h.eq_ignore_ascii_case(k)).map(|(_, v)| v.as_str())
+        self.headers
+            .iter()
+            .find(|(h, _)| h.eq_ignore_ascii_case(k))
+            .map(|(_, v)| v.as_str())
     }
     /// Decoded query parameter (first match).
     pub fn query(&self, k: &str) -> Option<String> {
         let q = self.url.split_once('?')?.1;
-        form_urlencoded::parse(q.as_bytes()).find(|(a, _)| a == k).map(|(_, v)| v.into_owned())
+        form_urlencoded::parse(q.as_bytes())
+            .find(|(a, _)| a == k)
+            .map(|(_, v)| v.into_owned())
     }
 }
 
@@ -64,7 +74,8 @@ impl RegTransport for ReqwestRegTransport {
     fn send(&self, req: RegRequest) -> BoxFuture<'_, Result<(u16, String), String>> {
         Box::pin(async move {
             let c = self.client.as_ref().ok_or("http client unavailable")?;
-            let m = reqwest::Method::from_bytes(req.method.as_bytes()).map_err(|e| e.to_string())?;
+            let m =
+                reqwest::Method::from_bytes(req.method.as_bytes()).map_err(|e| e.to_string())?;
             let mut b = c.request(m, &req.url);
             for (k, v) in &req.headers {
                 b = b.header(k, v);
@@ -94,7 +105,14 @@ pub struct HostRegTransport;
 #[cfg(target_family = "wasm")]
 impl RegTransport for HostRegTransport {
     fn send(&self, req: RegRequest) -> BoxFuture<'_, Result<(u16, String), String>> {
-        Box::pin(async move { crate::http::host_send(crate::http::RawRequest { method: req.method.to_string(), url: req.url, headers: req.headers, body: req.body }) })
+        Box::pin(async move {
+            crate::http::host_send(crate::http::RawRequest {
+                method: req.method.to_string(),
+                url: req.url,
+                headers: req.headers,
+                body: req.body,
+            })
+        })
     }
 }
 
@@ -123,7 +141,11 @@ impl RegTransport for MockRegTransport {
             if let Ok(mut s) = self.sent.lock() {
                 s.push(req);
             }
-            self.queue.lock().ok().and_then(|mut q| q.pop_front()).ok_or_else(|| "mock: no scripted response".into())
+            self.queue
+                .lock()
+                .ok()
+                .and_then(|mut q| q.pop_front())
+                .ok_or_else(|| "mock: no scripted response".into())
         })
     }
 }
@@ -144,42 +166,99 @@ pub struct RdapInfo {
 /// redirector such as `https://rdap.org/` (redirects are not followed by the
 /// production transport, so point it at a server that answers directly or
 /// accept the 3xx as "registered"). 404 = not registered.
-pub async fn rdap_lookup(t: &dyn RegTransport, base: &str, domain: &str) -> Result<RdapInfo, String> {
-    let url = format!("{}/domain/{}", base.trim_end_matches('/'), enc(&domain.to_ascii_lowercase()));
-    let req = RegRequest { method: "GET", url, headers: vec![("Accept".into(), "application/rdap+json".into())], body: String::new() };
+pub async fn rdap_lookup(
+    t: &dyn RegTransport,
+    base: &str,
+    domain: &str,
+) -> Result<RdapInfo, String> {
+    let url = format!(
+        "{}/domain/{}",
+        base.trim_end_matches('/'),
+        enc(&domain.to_ascii_lowercase())
+    );
+    let req = RegRequest {
+        method: "GET",
+        url,
+        headers: vec![("Accept".into(), "application/rdap+json".into())],
+        body: String::new(),
+    };
     let (st, body) = t.send(req).await?;
     if st == 404 {
-        return Ok(RdapInfo { registered: false, registrar: None, created: None, expires: None, status: vec![], nameservers: vec![] });
+        return Ok(RdapInfo {
+            registered: false,
+            registrar: None,
+            created: None,
+            expires: None,
+            status: vec![],
+            nameservers: vec![],
+        });
     }
     if (300..400).contains(&st) {
-        return Ok(RdapInfo { registered: true, registrar: None, created: None, expires: None, status: vec![], nameservers: vec![] });
+        return Ok(RdapInfo {
+            registered: true,
+            registrar: None,
+            created: None,
+            expires: None,
+            status: vec![],
+            nameservers: vec![],
+        });
     }
     if !ok2xx(st) {
         return Err(format!("RDAP HTTP {st}"));
     }
     let v: Value = serde_json::from_str(&body).map_err(|_| "RDAP: bad json".to_string())?;
     let event = |action: &str| {
-        v["events"].as_array().and_then(|a| a.iter().find(|e| e["eventAction"] == action)).and_then(|e| e["eventDate"].as_str()).and_then(iso_date)
+        v["events"]
+            .as_array()
+            .and_then(|a| a.iter().find(|e| e["eventAction"] == action))
+            .and_then(|e| e["eventDate"].as_str())
+            .and_then(iso_date)
     };
     let registrar = v["entities"].as_array().and_then(|a| {
-        a.iter().find(|e| e["roles"].as_array().is_some_and(|r| r.iter().any(|x| x == "registrar"))).and_then(|e| {
-            e["vcardArray"][1].as_array().and_then(|props| props.iter().find(|p| p[0] == "fn").and_then(|p| p[3].as_str().map(str::to_string)))
-        })
+        a.iter()
+            .find(|e| {
+                e["roles"]
+                    .as_array()
+                    .is_some_and(|r| r.iter().any(|x| x == "registrar"))
+            })
+            .and_then(|e| {
+                e["vcardArray"][1].as_array().and_then(|props| {
+                    props
+                        .iter()
+                        .find(|p| p[0] == "fn")
+                        .and_then(|p| p[3].as_str().map(str::to_string))
+                })
+            })
     });
     Ok(RdapInfo {
         registered: true,
         registrar,
         created: event("registration"),
         expires: event("expiration"),
-        status: v["status"].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default(),
-        nameservers: v["nameservers"].as_array().map(|a| a.iter().filter_map(|n| n["ldhName"].as_str().map(|x| x.to_ascii_lowercase())).collect()).unwrap_or_default(),
+        status: v["status"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default(),
+        nameservers: v["nameservers"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|n| n["ldhName"].as_str().map(|x| x.to_ascii_lowercase()))
+                    .collect()
+            })
+            .unwrap_or_default(),
     })
 }
 
 fn iso_date(s: &str) -> Option<String> {
     let d = s.get(..10)?;
     let b = d.as_bytes();
-    (b[4] == b'-' && b[7] == b'-' && d.chars().filter(|c| c.is_ascii_digit()).count() == 8).then(|| d.to_string())
+    (b[4] == b'-' && b[7] == b'-' && d.chars().filter(|c| c.is_ascii_digit()).count() == 8)
+        .then(|| d.to_string())
 }
 
 fn ok2xx(st: u16) -> bool {
@@ -198,13 +277,23 @@ mod tests {
     async fn rdap() {
         let t = MockRegTransport::default();
         t.push(404, "");
-        assert!(!rdap_lookup(&t, "https://rdap.test/", "free-name.com").await.unwrap().registered);
-        assert_eq!(t.requests()[0].url, "https://rdap.test/domain/free-name.com");
+        assert!(
+            !rdap_lookup(&t, "https://rdap.test/", "free-name.com")
+                .await
+                .unwrap()
+                .registered
+        );
+        assert_eq!(
+            t.requests()[0].url,
+            "https://rdap.test/domain/free-name.com"
+        );
         t.push(200, r#"{"objectClassName":"domain","ldhName":"EXAMPLE.COM","status":["client transfer prohibited"],
             "events":[{"eventAction":"registration","eventDate":"1995-08-14T04:00:00Z"},{"eventAction":"expiration","eventDate":"2027-08-13T04:00:00Z"}],
             "nameservers":[{"ldhName":"A.IANA-SERVERS.NET"}],
             "entities":[{"roles":["registrar"],"vcardArray":["vcard",[["version",{},"text","4.0"],["fn",{},"text","RESERVED-IANA"]]]}]}"#);
-        let i = rdap_lookup(&t, "https://rdap.test", "example.com").await.unwrap();
+        let i = rdap_lookup(&t, "https://rdap.test", "example.com")
+            .await
+            .unwrap();
         assert!(i.registered);
         assert_eq!(i.expires.as_deref(), Some("2027-08-13"));
         assert_eq!(i.created.as_deref(), Some("1995-08-14"));

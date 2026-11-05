@@ -56,7 +56,12 @@ const AGG: &str = "count(t.rating) AS ratings,
     CASE WHEN count(t.rating) = 0 THEN NULL ELSE to_char(round(100.0 * count(*) FILTER (WHERE t.rating >= 4) / count(t.rating), 2), 'FM990.00') END AS csat";
 
 /// `only_low` limits comments to 1-2 star ratings.
-pub async fn report(pool: &PgPool, since: OffsetDateTime, department: Option<Uuid>, only_low: bool) -> AppResult<Report> {
+pub async fn report(
+    pool: &PgPool,
+    since: OffsetDateTime,
+    department: Option<Uuid>,
+    only_low: bool,
+) -> AppResult<Report> {
     let filter = "t.rating IS NOT NULL AND t.rated_at >= $1 AND ($2::uuid IS NULL OR t.department_id = $2) AND t.merged_into IS NULL";
     let summary: Summary = sqlx::query_as(&format!(
         "SELECT {AGG},
@@ -77,7 +82,11 @@ pub async fn report(pool: &PgPool, since: OffsetDateTime, department: Option<Uui
          FROM tickets t LEFT JOIN users u ON u.id = t.assigned_to
          WHERE {filter} GROUP BY u.id ORDER BY count(t.rating) DESC, 2"
     ))
-    .bind(since).bind(department).fetch_all(pool).await.map_err(db_err)?;
+    .bind(since)
+    .bind(department)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
     let comments: Vec<Comment> = sqlx::query_as(&format!(
         "SELECT t.id AS ticket_id, t.number::bigint AS number, t.subject,
             COALESCE(NULLIF(trim(c.first_name || ' ' || c.last_name), ''), c.organization, c.email::text) AS customer_name,
@@ -87,5 +96,10 @@ pub async fn report(pool: &PgPool, since: OffsetDateTime, department: Option<Uui
          ORDER BY t.rated_at DESC LIMIT 50"
     ))
     .bind(since).bind(department).bind(only_low).fetch_all(pool).await.map_err(db_err)?;
-    Ok(Report { summary, by_department, by_staff, comments })
+    Ok(Report {
+        summary,
+        by_department,
+        by_staff,
+        comments,
+    })
 }

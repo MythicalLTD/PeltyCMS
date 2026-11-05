@@ -1,8 +1,8 @@
 //! Quotes / proposals: admin drafts and sends (`quotes.manage`); the customer
 //! views, accepts (→ finalized invoice) or declines.
-use crate::routes::customers::customer_of;
 use crate::error::ApiResult;
 use crate::extract::{perms, CurrentUser, RequirePermission};
+use crate::routes::customers::customer_of;
 use crate::routes::ListQuery;
 use crate::AppState;
 use axum::extract::{Path, Query, State};
@@ -46,7 +46,9 @@ async fn notify_customer(s: &AppState, id: Uuid) -> ApiResult<()> {
     let q = quotes::get(&s.pool, id, None)
         .await?
         .ok_or(AppError::NotFound)?;
-    let c = s.clients().get(q.customer_id)
+    let c = s
+        .clients()
+        .get(q.customer_id)
         .await?
         .ok_or(AppError::NotFound)?;
     let owner = match c.owner_user_id {
@@ -120,7 +122,10 @@ pub async fn admin_create(
 ) -> ApiResult<Json<Value>> {
     let id = quotes::save(&s.pool, None, &b).await?;
     log(&s, &u, "quote.created", id).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("quote.created", json!({ "quote_id": id, "by": u.user_id })));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "quote.created",
+        json!({ "quote_id": id, "by": u.user_id }),
+    ));
     Ok(Json(json!(quotes::get(&s.pool, id, None).await?)))
 }
 
@@ -133,7 +138,10 @@ pub async fn admin_update(
 ) -> ApiResult<Json<Value>> {
     quotes::save(&s.pool, Some(id), &b).await?;
     log(&s, &u, "quote.updated", id).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("quote.updated", json!({ "quote_id": id, "by": u.user_id })));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "quote.updated",
+        json!({ "quote_id": id, "by": u.user_id }),
+    ));
     Ok(Json(json!(quotes::get(&s.pool, id, None).await?)))
 }
 
@@ -145,7 +153,10 @@ pub async fn admin_delete(
 ) -> ApiResult<Json<Value>> {
     quotes::delete(&s.pool, id).await?;
     log(&s, &u, "quote.deleted", id).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("quote.deleted", json!({ "quote_id": id, "by": u.user_id })));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "quote.deleted",
+        json!({ "quote_id": id, "by": u.user_id }),
+    ));
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -197,10 +208,18 @@ pub async fn client_accept(
 ) -> ApiResult<Json<Value>> {
     let cid = customer_of(&s, &u).await?;
     // Cancel-only pre-event: an addon may block acceptance (e.g. pending approval).
-    crate::addon_ext::pre_event(&s, "quote.before_accept", json!({ "quote_id": id, "customer_id": cid })).await?;
+    crate::addon_ext::pre_event(
+        &s,
+        "quote.before_accept",
+        json!({ "quote_id": id, "customer_id": cid }),
+    )
+    .await?;
     let inv = quotes::decide(&s.pool, id, cid, true).await?;
     log(&s, &u, "quote.accepted", id).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("quote.accepted", json!({ "quote_id": id, "customer_id": cid, "invoice_id": inv })));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "quote.accepted",
+        json!({ "quote_id": id, "customer_id": cid, "invoice_id": inv }),
+    ));
     Ok(Json(json!({ "invoice_id": inv })))
 }
 
@@ -213,6 +232,9 @@ pub async fn client_decline(
     let cid = customer_of(&s, &u).await?;
     quotes::decide(&s.pool, id, cid, false).await?;
     log(&s, &u, "quote.declined", id).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("quote.declined", json!({ "quote_id": id, "customer_id": cid })));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "quote.declined",
+        json!({ "quote_id": id, "customer_id": cid }),
+    ));
     Ok(Json(json!({ "ok": true })))
 }

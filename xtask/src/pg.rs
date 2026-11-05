@@ -57,11 +57,23 @@ impl DbUrl {
             },
         };
         Ok(DbUrl {
-            user: if user.is_empty() { "postgres".into() } else { user.into() },
+            user: if user.is_empty() {
+                "postgres".into()
+            } else {
+                user.into()
+            },
             password: password.into(),
-            host: if host.is_empty() { "localhost".into() } else { host },
+            host: if host.is_empty() {
+                "localhost".into()
+            } else {
+                host
+            },
             port: port.parse().unwrap_or(5432),
-            name: if name.is_empty() { "postgres".into() } else { name.into() },
+            name: if name.is_empty() {
+                "postgres".into()
+            } else {
+                name.into()
+            },
         })
     }
 
@@ -71,19 +83,34 @@ impl DbUrl {
 
     /// Same server, `postgres` maintenance database.
     pub fn admin_url(&self) -> String {
-        let auth = if self.password.is_empty() { self.user.clone() } else { format!("{}:{}", self.user, self.password) };
-        let host = if self.host.contains(':') { format!("[{}]", self.host) } else { self.host.clone() };
+        let auth = if self.password.is_empty() {
+            self.user.clone()
+        } else {
+            format!("{}:{}", self.user, self.password)
+        };
+        let host = if self.host.contains(':') {
+            format!("[{}]", self.host)
+        } else {
+            self.host.clone()
+        };
         format!("postgres://{auth}@{host}:{}/postgres", self.port)
     }
 
     pub fn reachable(&self) -> bool {
-        let Ok(addrs) = (self.host.as_str(), self.port).to_socket_addrs() else { return false };
-        addrs.into_iter().any(|a| TcpStream::connect_timeout(&a, Duration::from_secs(1)).is_ok())
+        let Ok(addrs) = (self.host.as_str(), self.port).to_socket_addrs() else {
+            return false;
+        };
+        addrs
+            .into_iter()
+            .any(|a| TcpStream::connect_timeout(&a, Duration::from_secs(1)).is_ok())
     }
 }
 
 pub fn db_url(ctx: &Ctx) -> R<DbUrl> {
-    DbUrl::parse(&ctx.get("DATABASE_URL").ok_or("DATABASE_URL is not set (add it to .env)")?)
+    DbUrl::parse(
+        &ctx.get("DATABASE_URL")
+            .ok_or("DATABASE_URL is not set (add it to .env)")?,
+    )
 }
 
 /// Makes sure the DATABASE_URL server is up (the database itself is created
@@ -94,7 +121,10 @@ pub fn ensure_server(ctx: &Ctx) -> R<DbUrl> {
         return Ok(db);
     }
     if !db.is_local() {
-        return Err(format!("cannot reach PostgreSQL at {}:{} (DATABASE_URL)", db.host, db.port));
+        return Err(format!(
+            "cannot reach PostgreSQL at {}:{} (DATABASE_URL)",
+            db.host, db.port
+        ));
     }
     start(ctx, &db)?;
     let deadline = Instant::now() + Duration::from_secs(30);
@@ -110,7 +140,12 @@ pub fn ensure_server(ctx: &Ctx) -> R<DbUrl> {
 fn is_root() -> bool {
     static ROOT: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ROOT.get_or_init(|| {
-        cfg!(unix) && Command::new("id").arg("-u").output().map(|o| String::from_utf8_lossy(&o.stdout).trim() == "0").unwrap_or(false)
+        cfg!(unix)
+            && Command::new("id")
+                .arg("-u")
+                .output()
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "0")
+                .unwrap_or(false)
     })
 }
 
@@ -148,7 +183,17 @@ fn system_bin(ctx: &Ctx) -> Option<PathBuf> {
             .into_iter()
             .flatten()
             .flatten()
-            .map(|e| (e.file_name().to_string_lossy().split('.').next().and_then(|n| n.parse().ok()).unwrap_or(0), e.path().join("bin")))
+            .map(|e| {
+                (
+                    e.file_name()
+                        .to_string_lossy()
+                        .split('.')
+                        .next()
+                        .and_then(|n| n.parse().ok())
+                        .unwrap_or(0),
+                    e.path().join("bin"),
+                )
+            })
             .collect();
         v.sort_by_key(|e| std::cmp::Reverse(e.0));
         v.into_iter().map(|(_, p)| p).collect()
@@ -185,13 +230,26 @@ fn mac_bins() -> Vec<PathBuf> {
             let name = e.file_name().to_string_lossy().into_owned();
             if let Some(rest) = name.strip_prefix("postgresql") {
                 // `postgresql` (unversioned formula) sorts after the numbered ones.
-                let n = rest.strip_prefix('@').and_then(|n| n.parse().ok()).unwrap_or(1);
+                let n = rest
+                    .strip_prefix('@')
+                    .and_then(|n| n.parse().ok())
+                    .unwrap_or(1);
                 v.push((n, e.path().join("bin")));
             }
         }
     }
-    for e in std::fs::read_dir("/Applications/Postgres.app/Contents/Versions").into_iter().flatten().flatten() {
-        let n = e.file_name().to_string_lossy().split('.').next().and_then(|n| n.parse().ok()).unwrap_or(0);
+    for e in std::fs::read_dir("/Applications/Postgres.app/Contents/Versions")
+        .into_iter()
+        .flatten()
+        .flatten()
+    {
+        let n = e
+            .file_name()
+            .to_string_lossy()
+            .split('.')
+            .next()
+            .and_then(|n| n.parse().ok())
+            .unwrap_or(0);
         v.push((n, e.path().join("bin")));
     }
     v.sort_by_key(|e| std::cmp::Reverse(e.0));
@@ -200,7 +258,11 @@ fn mac_bins() -> Vec<PathBuf> {
 
 /// `psql`, for db-reset: PATH, then the server bin dirs.
 pub fn psql(ctx: &Ctx) -> Option<PathBuf> {
-    which("psql").or_else(|| system_bin(ctx).map(|d| d.join(exe("psql"))).filter(|p| p.is_file()))
+    which("psql").or_else(|| {
+        system_bin(ctx)
+            .map(|d| d.join(exe("psql")))
+            .filter(|p| p.is_file())
+    })
 }
 
 pub fn docker_ok() -> bool {
@@ -224,7 +286,12 @@ pub fn start(ctx: &Ctx, db: &DbUrl) -> R {
     if cfg!(target_os = "linux") && is_root() && which("apt-get").is_some() {
         eprintln!("PostgreSQL not found; installing: apt-get install -y postgresql");
         let install = || {
-            Command::new("apt-get").args(["install", "-y", "postgresql"]).env("DEBIAN_FRONTEND", "noninteractive").status().map(|s| s.success()).unwrap_or(false)
+            Command::new("apt-get")
+                .args(["install", "-y", "postgresql"])
+                .env("DEBIAN_FRONTEND", "noninteractive")
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
         };
         if !install() {
             let _ = Command::new("apt-get").arg("update").status();
@@ -266,20 +333,28 @@ fn prepare_home(ctx: &Ctx) -> R<PathBuf> {
         if !util::succeeds(Command::new("id").arg(&user)) {
             util::run(Command::new(sbin("useradd")).args(["-m", "-s", "/bin/bash", &user]))?;
         }
-        let _ = Command::new("chown").arg(format!("{user}:")).arg(&home).status();
+        let _ = Command::new("chown")
+            .arg(format!("{user}:"))
+            .arg(&home)
+            .status();
     }
     Ok(home)
 }
 
 fn start_native(ctx: &Ctx, bin: &Path, port: u16) -> R {
     if is_root() && !cfg!(target_os = "linux") {
-        return Err("PostgreSQL refuses to run as root; run `cargo dev` as your own user (not with sudo)".into());
+        return Err(
+            "PostgreSQL refuses to run as root; run `cargo dev` as your own user (not with sudo)"
+                .into(),
+        );
     }
     let home = prepare_home(ctx)?;
     let data = home.join("data");
     if !data.join("PG_VERSION").exists() {
         let mut c = as_pg(ctx, &bin.join(exe("initdb")));
-        c.arg("-D").arg(&data).args(["-U", "postgres", "-A", "trust"]);
+        c.arg("-D")
+            .arg(&data)
+            .args(["-U", "postgres", "-A", "trust"]);
         if cfg!(windows) {
             // The Windows default (system code page) cannot hold UTF-8 text.
             c.args(["-E", "UTF8", "--no-locale"]);
@@ -291,9 +366,17 @@ fn start_native(ctx: &Ctx, bin: &Path, port: u16) -> R {
     } else {
         format!("-p {port} -k /tmp -c listen_addresses=127.0.0.1")
     };
-    eprintln!("starting PostgreSQL ({}) on 127.0.0.1:{port}, data in {}", bin.display(), data.display());
+    eprintln!(
+        "starting PostgreSQL ({}) on 127.0.0.1:{port}, data in {}",
+        bin.display(),
+        data.display()
+    );
     let mut c = as_pg(ctx, &bin.join(exe("pg_ctl")));
-    c.arg("-D").arg(&data).arg("-l").arg(home.join("pg.log")).args(["-w", "-o", &opts, "start"]);
+    c.arg("-D")
+        .arg(&data)
+        .arg("-l")
+        .arg(home.join("pg.log"))
+        .args(["-w", "-o", &opts, "start"]);
     #[cfg(windows)]
     {
         // Own process group: the console's Ctrl+C (stopping `cargo dev`) must not
@@ -310,7 +393,14 @@ fn start_native(ctx: &Ctx, bin: &Path, port: u16) -> R {
 
 fn docker_exists() -> bool {
     Command::new("docker")
-        .args(["ps", "-a", "--filter", &format!("name=^/{CONTAINER}$"), "--format", "{{.Names}}"])
+        .args([
+            "ps",
+            "-a",
+            "--filter",
+            &format!("name=^/{CONTAINER}$"),
+            "--format",
+            "{{.Names}}",
+        ])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim() == CONTAINER)
         .unwrap_or(false)
@@ -319,13 +409,32 @@ fn docker_exists() -> bool {
 fn start_docker(db: &DbUrl) -> R {
     if docker_exists() {
         eprintln!("starting Docker container {CONTAINER}");
-        util::run(Command::new("docker").args(["start", CONTAINER]).stdout(std::process::Stdio::null()))?;
+        util::run(
+            Command::new("docker")
+                .args(["start", CONTAINER])
+                .stdout(std::process::Stdio::null()),
+        )?;
     } else {
-        eprintln!("starting PostgreSQL 16 in Docker ({CONTAINER}, volume {VOLUME}) on 127.0.0.1:{}", db.port);
+        eprintln!(
+            "starting PostgreSQL 16 in Docker ({CONTAINER}, volume {VOLUME}) on 127.0.0.1:{}",
+            db.port
+        );
         let mut c = Command::new("docker");
-        c.args(["run", "-d", "--name", CONTAINER, "-p", &format!("127.0.0.1:{}:5432", db.port)])
-            .args(["-e", &format!("POSTGRES_USER={}", db.user), "-e", &format!("POSTGRES_DB={}", db.name)])
-            .args(["-v", &format!("{VOLUME}:/var/lib/postgresql/data")]);
+        c.args([
+            "run",
+            "-d",
+            "--name",
+            CONTAINER,
+            "-p",
+            &format!("127.0.0.1:{}:5432", db.port),
+        ])
+        .args([
+            "-e",
+            &format!("POSTGRES_USER={}", db.user),
+            "-e",
+            &format!("POSTGRES_DB={}", db.name),
+        ])
+        .args(["-v", &format!("{VOLUME}:/var/lib/postgresql/data")]);
         if db.password.is_empty() {
             c.args(["-e", "POSTGRES_HOST_AUTH_METHOD=trust"]);
         } else {
@@ -337,9 +446,19 @@ fn start_docker(db: &DbUrl) -> R {
     // The image's first-start init server has no TCP listener, so a TCP
     // pg_isready inside the container only succeeds on the real server.
     let deadline = Instant::now() + Duration::from_secs(90);
-    while !util::succeeds(Command::new("docker").args(["exec", CONTAINER, "pg_isready", "-h", "127.0.0.1", "-U", &db.user])) {
+    while !util::succeeds(Command::new("docker").args([
+        "exec",
+        CONTAINER,
+        "pg_isready",
+        "-h",
+        "127.0.0.1",
+        "-U",
+        &db.user,
+    ])) {
         if Instant::now() > deadline {
-            return Err(format!("PostgreSQL in {CONTAINER} did not become ready (docker logs {CONTAINER})"));
+            return Err(format!(
+                "PostgreSQL in {CONTAINER} did not become ready (docker logs {CONTAINER})"
+            ));
         }
         std::thread::sleep(Duration::from_millis(500));
     }
@@ -366,22 +485,47 @@ fn download(ctx: &Ctx) -> R<PathBuf> {
     let arch = match (os, std::env::consts::ARCH) {
         (_, "x86_64") => "amd64",
         ("linux" | "darwin", "aarch64") => "arm64v8",
-        (_, a) => return Err(format!("no PostgreSQL download for {os}/{a}: install PostgreSQL 16+ or Docker")),
+        (_, a) => {
+            return Err(format!(
+                "no PostgreSQL download for {os}/{a}: install PostgreSQL 16+ or Docker"
+            ))
+        }
     };
     let ver = ctx.get("PG_VER").unwrap_or_else(|| "16.4.0".into());
     let art = format!("embedded-postgres-binaries-{os}-{arch}");
-    let url = format!("https://repo1.maven.org/maven2/io/zonky/test/postgres/{art}/{ver}/{art}-{ver}.jar");
+    let url = format!(
+        "https://repo1.maven.org/maven2/io/zonky/test/postgres/{art}/{ver}/{art}-{ver}.jar"
+    );
     eprintln!("PostgreSQL not found; downloading PostgreSQL {ver} binaries ({url})");
     let jar = home.join("pg.jar");
-    let curl = if cfg!(windows) { system32("curl.exe") } else { PathBuf::from("curl") };
-    util::run(Command::new(curl).args(["-fSL", "--retry", "2", &url, "-o"]).arg(&jar))?;
+    let curl = if cfg!(windows) {
+        system32("curl.exe")
+    } else {
+        PathBuf::from("curl")
+    };
+    util::run(
+        Command::new(curl)
+            .args(["-fSL", "--retry", "2", &url, "-o"])
+            .arg(&jar),
+    )?;
     let j = home.join("j");
     let _ = std::fs::remove_dir_all(&j);
     std::fs::create_dir_all(&j).map_err(|e| e.to_string())?;
     if cfg!(windows) {
-        util::run(Command::new(system32("tar.exe")).arg("-xf").arg(&jar).arg("-C").arg(&j))?;
+        util::run(
+            Command::new(system32("tar.exe"))
+                .arg("-xf")
+                .arg(&jar)
+                .arg("-C")
+                .arg(&j),
+        )?;
     } else {
-        util::run(Command::new("unzip").args(["-oq"]).arg(&jar).current_dir(&j))?;
+        util::run(
+            Command::new("unzip")
+                .args(["-oq"])
+                .arg(&jar)
+                .current_dir(&j),
+        )?;
     }
     let txz = std::fs::read_dir(&j)
         .map_err(|e| e.to_string())?
@@ -395,11 +539,20 @@ fn download(ctx: &Ctx) -> R<PathBuf> {
     let _ = std::fs::remove_dir_all(&j);
     let _ = std::fs::remove_file(&jar);
     if !has_server_bins(&bin) {
-        return Err(format!("the download has no {} / {} in {}", exe("initdb"), exe("pg_ctl"), bin.display()));
+        return Err(format!(
+            "the download has no {} / {} in {}",
+            exe("initdb"),
+            exe("pg_ctl"),
+            bin.display()
+        ));
     }
     if is_root() {
         let user = ctx.get("PG_USER").unwrap_or_else(|| "pelty".into());
-        let _ = Command::new("chown").arg("-R").arg(format!("{user}:")).arg(&home).status();
+        let _ = Command::new("chown")
+            .arg("-R")
+            .arg(format!("{user}:"))
+            .arg(&home)
+            .status();
     }
     Ok(bin)
 }
@@ -419,13 +572,20 @@ fn system32(name: &str) -> PathBuf {
 fn unpack_txz(txz: &Path, dest: &Path) -> R {
     let tar_path = txz.with_extension("tar");
     {
-        let mut input = std::io::BufReader::new(std::fs::File::open(txz).map_err(|e| format!("{}: {e}", txz.display()))?);
-        let mut out = std::io::BufWriter::new(std::fs::File::create(&tar_path).map_err(|e| format!("{}: {e}", tar_path.display()))?);
-        lzma_rs::xz_decompress(&mut input, &mut out).map_err(|e| format!("{}: {e:?}", txz.display()))?;
+        let mut input = std::io::BufReader::new(
+            std::fs::File::open(txz).map_err(|e| format!("{}: {e}", txz.display()))?,
+        );
+        let mut out = std::io::BufWriter::new(
+            std::fs::File::create(&tar_path).map_err(|e| format!("{}: {e}", tar_path.display()))?,
+        );
+        lzma_rs::xz_decompress(&mut input, &mut out)
+            .map_err(|e| format!("{}: {e:?}", txz.display()))?;
         std::io::Write::flush(&mut out).map_err(|e| e.to_string())?;
     }
     let file = std::fs::File::open(&tar_path).map_err(|e| e.to_string())?;
-    tar::Archive::new(file).unpack(dest).map_err(|e| format!("unpacking {}: {e}", txz.display()))?;
+    tar::Archive::new(file)
+        .unpack(dest)
+        .map_err(|e| format!("unpacking {}: {e}", txz.display()))?;
     let _ = std::fs::remove_file(&tar_path);
     Ok(())
 }
@@ -434,14 +594,27 @@ fn unpack_txz(txz: &Path, dest: &Path) -> R {
 /// Returns whether there was one.
 pub fn stop_managed(ctx: &Ctx) -> R<bool> {
     let data = pg_home(ctx).join("data");
-    let Some(bin) = system_bin(ctx) else { return Ok(false) };
+    let Some(bin) = system_bin(ctx) else {
+        return Ok(false);
+    };
     if !data.join("PG_VERSION").exists() {
         return Ok(false);
     }
     let pg_ctl = bin.join(exe("pg_ctl"));
-    let running = as_pg(ctx, &pg_ctl).arg("-D").arg(&data).arg("status").stdout(std::process::Stdio::null()).status().is_ok_and(|s| s.success());
+    let running = as_pg(ctx, &pg_ctl)
+        .arg("-D")
+        .arg(&data)
+        .arg("status")
+        .stdout(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success());
     if running {
-        util::run(as_pg(ctx, &pg_ctl).arg("-D").arg(&data).args(["-m", "fast", "-w", "stop"]))?;
+        util::run(
+            as_pg(ctx, &pg_ctl)
+                .arg("-D")
+                .arg(&data)
+                .args(["-m", "fast", "-w", "stop"]),
+        )?;
         println!("dev PostgreSQL stopped ({})", data.display());
     }
     Ok(running)
@@ -466,21 +639,42 @@ pub fn cmd(ctx: &Ctx, sub: &str) -> R {
                     let mut c = as_pg(ctx, &bin.join(exe("pg_ctl")));
                     c.arg("-D").arg(&data).arg(sub);
                     // `pg_ctl status` exits 3 when stopped; that is an answer, not an error.
-                    return if sub == "status" { util::status(&mut c).map(|_| ()) } else { util::run(&mut c) };
+                    return if sub == "status" {
+                        util::status(&mut c).map(|_| ())
+                    } else {
+                        util::run(&mut c)
+                    };
                 }
             }
             if docker_ok() && docker_exists() {
                 return if sub == "stop" {
                     util::run(Command::new("docker").args(["stop", CONTAINER]))
                 } else {
-                    util::run(Command::new("docker").args(["ps", "-a", "--filter", &format!("name=^/{CONTAINER}$")]))
+                    util::run(Command::new("docker").args([
+                        "ps",
+                        "-a",
+                        "--filter",
+                        &format!("name=^/{CONTAINER}$"),
+                    ]))
                 };
             }
             if sub == "status" {
-                println!("{}:{} {}", db.host, db.port, if db.reachable() { "reachable" } else { "not reachable" });
+                println!(
+                    "{}:{} {}",
+                    db.host,
+                    db.port,
+                    if db.reachable() {
+                        "reachable"
+                    } else {
+                        "not reachable"
+                    }
+                );
                 return Ok(());
             }
-            Err("no dev PostgreSQL started by xtask was found (stop your own server yourself)".into())
+            Err(
+                "no dev PostgreSQL started by xtask was found (stop your own server yourself)"
+                    .into(),
+            )
         }
         _ => Err("usage: cargo xtask pg start|stop|status".into()),
     }
@@ -491,12 +685,22 @@ pub fn reset(ctx: &Ctx, db: &DbUrl) -> R {
     let drop = format!("drop database if exists \"{}\" with (force)", db.name);
     let create = format!("create database \"{}\"", db.name);
     if let Some(psql) = psql(ctx) {
-        return util::run(Command::new(psql).arg(db.admin_url()).args(["-qc", &drop, "-c", &create]));
+        return util::run(
+            Command::new(psql)
+                .arg(db.admin_url())
+                .args(["-qc", &drop, "-c", &create]),
+        );
     }
     if docker_ok() && docker_exists() {
-        return util::run(Command::new("docker").args(["exec", CONTAINER, "psql", "-U", &db.user, "-d", "postgres", "-qc", &drop, "-c", &create]));
+        return util::run(Command::new("docker").args([
+            "exec", CONTAINER, "psql", "-U", &db.user, "-d", "postgres", "-qc", &drop, "-c",
+            &create,
+        ]));
     }
-    Err("db-reset needs psql (PostgreSQL client tools on PATH) or the xtask Docker container".into())
+    Err(
+        "db-reset needs psql (PostgreSQL client tools on PATH) or the xtask Docker container"
+            .into(),
+    )
 }
 
 #[cfg(test)]
@@ -506,10 +710,19 @@ mod tests {
     #[test]
     fn parses_database_urls() {
         let d = DbUrl::parse("postgres://postgres@127.0.0.1:55432/peltycms").unwrap();
-        assert_eq!((d.user.as_str(), d.host.as_str(), d.port, d.name.as_str()), ("postgres", "127.0.0.1", 55432, "peltycms"));
-        assert_eq!(d.admin_url(), "postgres://postgres@127.0.0.1:55432/postgres");
+        assert_eq!(
+            (d.user.as_str(), d.host.as_str(), d.port, d.name.as_str()),
+            ("postgres", "127.0.0.1", 55432, "peltycms")
+        );
+        assert_eq!(
+            d.admin_url(),
+            "postgres://postgres@127.0.0.1:55432/postgres"
+        );
         let d = DbUrl::parse("postgresql://u:p@db.example.com/x?sslmode=require").unwrap();
-        assert_eq!((d.password.as_str(), d.port, d.name.as_str(), d.is_local()), ("p", 5432, "x", false));
+        assert_eq!(
+            (d.password.as_str(), d.port, d.name.as_str(), d.is_local()),
+            ("p", 5432, "x", false)
+        );
         assert!(DbUrl::parse("postgres://localhost/y").unwrap().is_local());
     }
 }

@@ -4,11 +4,11 @@
 //! `crate::routes::<module>` keep working through re-exports in `routes/mod.rs`.
 //! Covered by the pelty-api integration tests for these domains and by pelty-docs route inventory tests.
 
+pub mod admin_security;
+pub mod api_keys;
 pub mod auth;
 pub mod mfa;
 pub mod passkeys;
-pub mod sso;
-pub mod api_keys;
-pub mod staff;
 pub mod security_questions;
-pub mod admin_security;
+pub mod sso;
+pub mod staff;

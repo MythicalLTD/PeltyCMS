@@ -14,14 +14,25 @@ use pelty_core::AppError;
 use serde_json::{json, Value};
 
 pub fn router() -> Router<AppState> {
-    let mut r = Router::new().route("/plugins/ui", get(ui_entries)).route(
-        "/admin/plugins/{id}/settings",
-        get(get_settings).put(put_settings),
-    )
-    .route("/admin/plugins/{id}/webhook", get(get_webhook).put(put_webhook))
-    .route("/admin/plugins/{id}/webhook/secret", axum::routing::post(rotate_secret))
-    .route("/admin/plugins/{id}/deliveries", get(list_deliveries))
-    .route("/admin/plugins/{id}/deliveries/{did}/redeliver", axum::routing::post(redeliver));
+    let mut r = Router::new()
+        .route("/plugins/ui", get(ui_entries))
+        .route(
+            "/admin/plugins/{id}/settings",
+            get(get_settings).put(put_settings),
+        )
+        .route(
+            "/admin/plugins/{id}/webhook",
+            get(get_webhook).put(put_webhook),
+        )
+        .route(
+            "/admin/plugins/{id}/webhook/secret",
+            axum::routing::post(rotate_secret),
+        )
+        .route("/admin/plugins/{id}/deliveries", get(list_deliveries))
+        .route(
+            "/admin/plugins/{id}/deliveries/{did}/redeliver",
+            axum::routing::post(redeliver),
+        );
     for (id, module) in modules() {
         r = r.nest(&format!("/plugins/{id}"), module);
     }
@@ -65,10 +76,22 @@ pub async fn ui_entries(State(s): State<AppState>, u: CurrentUser) -> Json<Value
     let mut slots = Vec::new();
     for p in s.plugins.list().into_iter().filter(|p| p.enabled) {
         let id = p.manifest.id.clone();
-        for pg in p.manifest.ui.pages.into_iter().filter(|pg| can(Some(&pg.area), &pg.permission)) {
+        for pg in p
+            .manifest
+            .ui
+            .pages
+            .into_iter()
+            .filter(|pg| can(Some(&pg.area), &pg.permission))
+        {
             pages.push(json!({ "plugin": id, "id": pg.id, "area": pg.area, "title": pg.title, "icon": pg.icon, "nav": pg.nav, "data": pg.data, "body": pg.body }));
         }
-        for sl in p.manifest.ui.slots.into_iter().filter(|sl| can(sl.slot.split('.').next(), &sl.permission)) {
+        for sl in p
+            .manifest
+            .ui
+            .slots
+            .into_iter()
+            .filter(|sl| can(sl.slot.split('.').next(), &sl.permission))
+        {
             slots.push(json!({ "plugin": id, "slot": sl.slot, "data": sl.data, "body": sl.body }));
         }
     }
@@ -80,16 +103,29 @@ pub async fn ui_entries(State(s): State<AppState>, u: CurrentUser) -> Json<Value
     let mut ui = json!({ "pages": pages, "slots": slots });
     if crate::addon_filters::has(&s, "ui.contributions") {
         let staff = u.has("admin.access");
-        let out = crate::addon_filters::apply_with(&s, "ui.contributions", ui.clone(), json!({ "staff": staff }), false).await;
+        let out = crate::addon_filters::apply_with(
+            &s,
+            "ui.contributions",
+            ui.clone(),
+            json!({ "staff": staff }),
+            false,
+        )
+        .await;
         ui = crate::addon_filters::restrict_ui(&ui, &out);
     }
     // An override only counts when its page survived the filter.
     let mut overrides = overrides;
     if let Some(list) = overrides["pages"].as_array_mut() {
         let shown = ui["pages"].as_array().cloned().unwrap_or_default();
-        list.retain(|o| shown.iter().any(|p| p["plugin"] == o["plugin"] && p["id"] == o["page"]));
+        list.retain(|o| {
+            shown
+                .iter()
+                .any(|p| p["plugin"] == o["plugin"] && p["id"] == o["page"])
+        });
     }
-    Json(json!({ "items": items, "pages": ui["pages"], "slots": ui["slots"], "overrides": overrides }))
+    Json(
+        json!({ "items": items, "pages": ui["pages"], "slots": ui["slots"], "overrides": overrides }),
+    )
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/plugins/{id}/settings", responses((status = 200), (status = 403), (status = 404)))]
@@ -155,13 +191,21 @@ fn event_logger_routes() -> Router<AppState> {
         )
 }
 
-fn external_webhook(s: &AppState, id: &str) -> Result<pelty_extensions::plugins::PluginManifest, AppError> {
-    s.plugins.manifest(id).filter(|m| m.webhook_url.is_some()).ok_or(AppError::NotFound)
+fn external_webhook(
+    s: &AppState,
+    id: &str,
+) -> Result<pelty_extensions::plugins::PluginManifest, AppError> {
+    s.plugins
+        .manifest(id)
+        .filter(|m| m.webhook_url.is_some())
+        .ok_or(AppError::NotFound)
 }
 
 /// Accepted override URLs: https anywhere, plain http only to loopback (dev).
 pub fn valid_webhook_url(u: &str) -> bool {
-    let Ok(url) = reqwest_free_parse(u) else { return false };
+    let Ok(url) = reqwest_free_parse(u) else {
+        return false;
+    };
     match url.0.as_str() {
         "https" => !url.1.is_empty(),
         "http" => matches!(url.1.as_str(), "localhost" | "127.0.0.1" | "[::1]"),
@@ -173,11 +217,18 @@ pub fn valid_webhook_url(u: &str) -> bool {
 fn reqwest_free_parse(u: &str) -> Result<(String, String), ()> {
     let (scheme, rest) = u.split_once("://").ok_or(())?;
     let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
-    if authority.contains('@') || authority.is_empty() || u.chars().any(|c| c.is_whitespace() || c.is_control()) {
+    if authority.contains('@')
+        || authority.is_empty()
+        || u.chars().any(|c| c.is_whitespace() || c.is_control())
+    {
         return Err(());
     }
     let host = if authority.starts_with('[') {
-        authority.split_inclusive(']').next().unwrap_or("").to_string()
+        authority
+            .split_inclusive(']')
+            .next()
+            .unwrap_or("")
+            .to_string()
     } else {
         authority.split(':').next().unwrap_or("").to_string()
     };
@@ -185,10 +236,16 @@ fn reqwest_free_parse(u: &str) -> Result<(String, String), ()> {
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/plugins/{id}/webhook", responses((status = 200), (status = 403), (status = 404)))]
-pub async fn get_webhook(State(s): State<AppState>, _p: RequirePermission<perms::PluginsManage>, Path(id): Path<String>) -> ApiResult<Json<Value>> {
+pub async fn get_webhook(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::PluginsManage>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<Value>> {
     let m = external_webhook(&s, &id)?;
     let (o, sealed) = pelty_database::plugin_webhooks::endpoint(&s.pool, &id).await?;
-    Ok(Json(json!({ "manifest_url": m.webhook_url, "url_override": o, "secret_set": sealed.is_some(), "hooks": m.hooks, "enabled": s.plugins.enabled(&id) })))
+    Ok(Json(
+        json!({ "manifest_url": m.webhook_url, "url_override": o, "secret_set": sealed.is_some(), "hooks": m.hooks, "enabled": s.plugins.enabled(&id) }),
+    ))
 }
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]
@@ -198,7 +255,12 @@ pub struct WebhookBody {
 }
 
 #[utoipa::path(put, path = "/api/v1/admin/plugins/{id}/webhook", request_body = WebhookBody, responses((status = 204), (status = 403), (status = 404), (status = 422)))]
-pub async fn put_webhook(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::PluginsManage>, Path(id): Path<String>, Json(b): Json<WebhookBody>) -> ApiResult<axum::http::StatusCode> {
+pub async fn put_webhook(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::PluginsManage>,
+    Path(id): Path<String>,
+    Json(b): Json<WebhookBody>,
+) -> ApiResult<axum::http::StatusCode> {
     external_webhook(&s, &id)?;
     let url = b.url.as_deref().map(str::trim).filter(|x| !x.is_empty());
     if let Some(x) = url {
@@ -207,40 +269,86 @@ pub async fn put_webhook(State(s): State<AppState>, RequirePermission(u, _): Req
         }
     }
     pelty_database::plugin_webhooks::set_url(&s.pool, &id, url).await?;
-    pelty_database::audit::record(&s.pool, Some(u.user_id), "plugin.webhook_updated", Some(&id), u.ip.as_deref(), json!({ "override": url.is_some() })).await?;
+    pelty_database::audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "plugin.webhook_updated",
+        Some(&id),
+        u.ip.as_deref(),
+        json!({ "override": url.is_some() }),
+    )
+    .await?;
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
 /// Generate a new signing secret and return it once.
 #[utoipa::path(post, path = "/api/v1/admin/plugins/{id}/webhook/secret", responses((status = 200), (status = 403), (status = 404), (status = 409)))]
-pub async fn rotate_secret(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::PluginsManage>, Path(id): Path<String>) -> ApiResult<Json<Value>> {
+pub async fn rotate_secret(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::PluginsManage>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<Value>> {
     external_webhook(&s, &id)?;
-    let sb = s.secret_box.as_ref().ok_or(AppError::Conflict("error.encryption_not_configured"))?;
+    let sb = s
+        .secret_box
+        .as_ref()
+        .ok_or(AppError::Conflict("error.encryption_not_configured"))?;
     let secret = crate::plugin_hooks::new_secret();
     pelty_database::plugin_webhooks::set_secret(&s.pool, &id, &sb.seal(secret.as_bytes())).await?;
-    pelty_database::audit::record(&s.pool, Some(u.user_id), "plugin.webhook_secret_rotated", Some(&id), u.ip.as_deref(), json!({})).await?;
+    pelty_database::audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "plugin.webhook_secret_rotated",
+        Some(&id),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(Json(json!({ "secret": secret })))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/plugins/{id}/deliveries", params(crate::routes::ListQuery), responses((status = 200), (status = 403), (status = 404)))]
-pub async fn list_deliveries(State(s): State<AppState>, _p: RequirePermission<perms::PluginsManage>, Path(id): Path<String>, Query(q): Query<crate::routes::ListQuery>) -> ApiResult<Json<Value>> {
+pub async fn list_deliveries(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::PluginsManage>,
+    Path(id): Path<String>,
+    Query(q): Query<crate::routes::ListQuery>,
+) -> ApiResult<Json<Value>> {
     if !s.plugins.exists(&id) {
         return Err(AppError::NotFound.into());
     }
     let status = match q.status() {
-        Some(x) if !["pending", "delivered", "failed"].contains(&x) => return Err(AppError::Validation("error.invalid_status").into()),
+        Some(x) if !["pending", "delivered", "failed"].contains(&x) => {
+            return Err(AppError::Validation("error.invalid_status").into())
+        }
         x => x,
     };
     let (limit, offset, page, per) = q.bounds();
-    let (items, total) = pelty_database::plugin_webhooks::list(&s.pool, &id, status, limit, offset).await?;
+    let (items, total) =
+        pelty_database::plugin_webhooks::list(&s.pool, &id, status, limit, offset).await?;
     Ok(Json(crate::routes::paged(items, page, per, total)))
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/plugins/{id}/deliveries/{did}/redeliver", responses((status = 204), (status = 403), (status = 404)))]
-pub async fn redeliver(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::PluginsManage>, Path((id, did)): Path<(String, uuid::Uuid)>) -> ApiResult<axum::http::StatusCode> {
-    let d = pelty_database::plugin_webhooks::get(&s.pool, did).await?.filter(|d| d.plugin_id == id).ok_or(AppError::NotFound)?;
+pub async fn redeliver(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::PluginsManage>,
+    Path((id, did)): Path<(String, uuid::Uuid)>,
+) -> ApiResult<axum::http::StatusCode> {
+    let d = pelty_database::plugin_webhooks::get(&s.pool, did)
+        .await?
+        .filter(|d| d.plugin_id == id)
+        .ok_or(AppError::NotFound)?;
     crate::plugin_hooks::redeliver(&s, d.id).await?;
-    pelty_database::audit::record(&s.pool, Some(u.user_id), "plugin.webhook_redelivered", Some(&id), u.ip.as_deref(), json!({ "delivery_id": did })).await?;
+    pelty_database::audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "plugin.webhook_redelivered",
+        Some(&id),
+        u.ip.as_deref(),
+        json!({ "delivery_id": did }),
+    )
+    .await?;
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
 

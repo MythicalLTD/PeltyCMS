@@ -25,7 +25,13 @@ pub struct Verification {
 const COLS: &str = "domain_id, email, status, deadline, sent_at, reminders, verified_at";
 
 pub async fn get(pool: &PgPool, domain: Uuid) -> AppResult<Option<Verification>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM registrant_verifications WHERE domain_id = $1")).bind(domain).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {COLS} FROM registrant_verifications WHERE domain_id = $1"
+    ))
+    .bind(domain)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Has this address been verified before (for any domain)?
@@ -35,7 +41,13 @@ pub async fn email_verified(pool: &PgPool, email: &str) -> AppResult<bool> {
 }
 
 /// Start (or restart) a pending verification with a fresh token.
-pub async fn start(pool: &PgPool, domain: Uuid, email: &str, token_hash: &[u8], deadline: Date) -> AppResult<Verification> {
+pub async fn start(
+    pool: &PgPool,
+    domain: Uuid,
+    email: &str,
+    token_hash: &[u8],
+    deadline: Date,
+) -> AppResult<Verification> {
     sqlx::query_as(&format!(
         "INSERT INTO registrant_verifications (domain_id, email, token_hash, deadline) VALUES ($1, $2, $3, $4)
          ON CONFLICT (domain_id) DO UPDATE SET email = EXCLUDED.email, token_hash = EXCLUDED.token_hash, deadline = EXCLUDED.deadline,
@@ -46,7 +58,13 @@ pub async fn start(pool: &PgPool, domain: Uuid, email: &str, token_hash: &[u8], 
 }
 
 /// Already verified without a mail (address known good).
-pub async fn mark_verified_direct(pool: &PgPool, domain: Uuid, email: &str, token_hash: &[u8], today: Date) -> AppResult<Verification> {
+pub async fn mark_verified_direct(
+    pool: &PgPool,
+    domain: Uuid,
+    email: &str,
+    token_hash: &[u8],
+    today: Date,
+) -> AppResult<Verification> {
     sqlx::query_as(&format!(
         "INSERT INTO registrant_verifications (domain_id, email, token_hash, deadline, status, verified_at) VALUES ($1, $2, $3, $4, 'verified', now())
          ON CONFLICT (domain_id) DO UPDATE SET email = EXCLUDED.email, token_hash = EXCLUDED.token_hash, status = 'verified', verified_at = now()
@@ -56,7 +74,12 @@ pub async fn mark_verified_direct(pool: &PgPool, domain: Uuid, email: &str, toke
 }
 
 /// New token on resend; keeps the deadline.
-pub async fn rotate(pool: &PgPool, domain: Uuid, token_hash: &[u8], reminder: bool) -> AppResult<Option<Verification>> {
+pub async fn rotate(
+    pool: &PgPool,
+    domain: Uuid,
+    token_hash: &[u8],
+    reminder: bool,
+) -> AppResult<Option<Verification>> {
     sqlx::query_as(&format!(
         "UPDATE registrant_verifications SET token_hash = $2, sent_at = now(), reminders = reminders + CASE WHEN $3 THEN 1 ELSE 0 END
          WHERE domain_id = $1 AND status <> 'verified' RETURNING {COLS}"
@@ -70,7 +93,9 @@ pub async fn verify_token(pool: &PgPool, token_hash: &[u8]) -> AppResult<Vec<Uui
     let mut tx = pool.begin().await.map_err(db_err)?;
     let email: Option<String> = sqlx::query_scalar("SELECT email FROM registrant_verifications WHERE token_hash = $1 AND status <> 'verified' FOR UPDATE")
         .bind(token_hash).fetch_optional(&mut *tx).await.map_err(db_err)?;
-    let Some(email) = email else { return Ok(vec![]) };
+    let Some(email) = email else {
+        return Ok(vec![]);
+    };
     let ids: Vec<Uuid> = sqlx::query_scalar("UPDATE registrant_verifications SET status = 'verified', verified_at = now() WHERE lower(email) = lower($1) AND status <> 'verified' RETURNING domain_id")
         .bind(&email).fetch_all(&mut *tx).await.map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
@@ -84,7 +109,12 @@ pub async fn admin_verify(pool: &PgPool, domain: Uuid) -> AppResult<bool> {
 
 /// Open requests: (row, days left until deadline).
 pub async fn open(pool: &PgPool) -> AppResult<Vec<Verification>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM registrant_verifications WHERE status = 'pending' ORDER BY deadline")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {COLS} FROM registrant_verifications WHERE status = 'pending' ORDER BY deadline"
+    ))
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Pending past the deadline → overdue. Returns those domain ids.

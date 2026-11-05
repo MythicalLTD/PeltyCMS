@@ -11,14 +11,23 @@ use uuid::Uuid;
 // ----- captcha -----
 
 /// Consume a one-time captcha nonce; false when it was already used.
-pub async fn consume_captcha_nonce(pool: &PgPool, nonce: &str, expires_at: OffsetDateTime) -> AppResult<bool> {
-    sqlx::query("DELETE FROM captcha_nonces WHERE expires_at < now()").execute(pool).await.map_err(db_err)?;
-    let r = sqlx::query("INSERT INTO captcha_nonces (nonce, expires_at) VALUES ($1,$2) ON CONFLICT DO NOTHING")
-        .bind(nonce)
-        .bind(expires_at)
+pub async fn consume_captcha_nonce(
+    pool: &PgPool,
+    nonce: &str,
+    expires_at: OffsetDateTime,
+) -> AppResult<bool> {
+    sqlx::query("DELETE FROM captcha_nonces WHERE expires_at < now()")
         .execute(pool)
         .await
         .map_err(db_err)?;
+    let r = sqlx::query(
+        "INSERT INTO captcha_nonces (nonce, expires_at) VALUES ($1,$2) ON CONFLICT DO NOTHING",
+    )
+    .bind(nonce)
+    .bind(expires_at)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
     Ok(r.rows_affected() == 1)
 }
 
@@ -33,8 +42,19 @@ pub struct OauthState {
     pub user_id: Option<Uuid>,
 }
 
-pub async fn put_oauth_state(pool: &PgPool, hash: &[u8], provider: &str, verifier: &str, nonce: &str, mode: &str, user_id: Option<Uuid>) -> AppResult<()> {
-    sqlx::query("DELETE FROM oauth_states WHERE expires_at < now()").execute(pool).await.map_err(db_err)?;
+pub async fn put_oauth_state(
+    pool: &PgPool,
+    hash: &[u8],
+    provider: &str,
+    verifier: &str,
+    nonce: &str,
+    mode: &str,
+    user_id: Option<Uuid>,
+) -> AppResult<()> {
+    sqlx::query("DELETE FROM oauth_states WHERE expires_at < now()")
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     sqlx::query("INSERT INTO oauth_states (state_hash, provider, verifier, nonce, mode, user_id, expires_at) VALUES ($1,$2,$3,$4,$5,$6, now() + interval '10 minutes')")
         .bind(hash)
         .bind(provider)
@@ -71,21 +91,37 @@ pub struct Identity {
 }
 const ID_COLS: &str = "id, user_id, provider, subject, email, created_at, last_login_at";
 
-pub async fn find_identity(pool: &PgPool, provider: &str, subject: &str) -> AppResult<Option<Identity>> {
-    sqlx::query_as(&format!("SELECT {ID_COLS} FROM user_identities WHERE provider = $1 AND subject = $2"))
-        .bind(provider)
-        .bind(subject)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+pub async fn find_identity(
+    pool: &PgPool,
+    provider: &str,
+    subject: &str,
+) -> AppResult<Option<Identity>> {
+    sqlx::query_as(&format!(
+        "SELECT {ID_COLS} FROM user_identities WHERE provider = $1 AND subject = $2"
+    ))
+    .bind(provider)
+    .bind(subject)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn touch_identity(pool: &PgPool, id: Uuid) -> AppResult<()> {
-    sqlx::query("UPDATE user_identities SET last_login_at = now() WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?;
+    sqlx::query("UPDATE user_identities SET last_login_at = now() WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(())
 }
 
-pub async fn link_identity(pool: &PgPool, user_id: Uuid, provider: &str, subject: &str, email: &str) -> AppResult<Identity> {
+pub async fn link_identity(
+    pool: &PgPool,
+    user_id: Uuid,
+    provider: &str,
+    subject: &str,
+    email: &str,
+) -> AppResult<Identity> {
     sqlx::query_as(&format!(
         "INSERT INTO user_identities (id, user_id, provider, subject, email) VALUES ($1,$2,$3,$4,$5) RETURNING {ID_COLS}"
     ))
@@ -103,20 +139,24 @@ pub async fn link_identity(pool: &PgPool, user_id: Uuid, provider: &str, subject
 }
 
 pub async fn list_identities(pool: &PgPool, user_id: Uuid) -> AppResult<Vec<Identity>> {
-    sqlx::query_as(&format!("SELECT {ID_COLS} FROM user_identities WHERE user_id = $1 ORDER BY provider"))
-        .bind(user_id)
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {ID_COLS} FROM user_identities WHERE user_id = $1 ORDER BY provider"
+    ))
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn unlink_identity(pool: &PgPool, user_id: Uuid, id: Uuid) -> AppResult<Option<String>> {
-    sqlx::query_scalar("DELETE FROM user_identities WHERE id = $1 AND user_id = $2 RETURNING provider")
-        .bind(id)
-        .bind(user_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_scalar(
+        "DELETE FROM user_identities WHERE id = $1 AND user_id = $2 RETURNING provider",
+    )
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 // ----- IP rules -----
@@ -144,10 +184,22 @@ pub async fn active_ip_rules(pool: &PgPool) -> AppResult<Vec<IpRule>> {
 }
 
 pub async fn list_ip_rules(pool: &PgPool) -> AppResult<Vec<IpRule>> {
-    sqlx::query_as(&format!("SELECT {IP_COLS} FROM ip_rules ORDER BY kind, created_at DESC")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {IP_COLS} FROM ip_rules ORDER BY kind, created_at DESC"
+    ))
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
-pub async fn add_ip_rule(pool: &PgPool, cidr: &str, kind: &str, reason: &str, expires_at: Option<OffsetDateTime>, by: Uuid) -> AppResult<IpRule> {
+pub async fn add_ip_rule(
+    pool: &PgPool,
+    cidr: &str,
+    kind: &str,
+    reason: &str,
+    expires_at: Option<OffsetDateTime>,
+    by: Uuid,
+) -> AppResult<IpRule> {
     sqlx::query_as(&format!(
         "INSERT INTO ip_rules (id, cidr, kind, reason, expires_at, created_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING {IP_COLS}"
     ))
@@ -166,14 +218,23 @@ pub async fn add_ip_rule(pool: &PgPool, cidr: &str, kind: &str, reason: &str, ex
 }
 
 pub async fn delete_ip_rule(pool: &PgPool, id: Uuid) -> AppResult<bool> {
-    let r = sqlx::query("DELETE FROM ip_rules WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("DELETE FROM ip_rules WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(r.rows_affected() == 1)
 }
 
 // ----- impersonation -----
 
 /// Mark a freshly created session as an impersonation of `target` by `admin`.
-pub async fn mark_impersonation(pool: &PgPool, session_id: Uuid, admin: Uuid, parent: Uuid) -> AppResult<()> {
+pub async fn mark_impersonation(
+    pool: &PgPool,
+    session_id: Uuid,
+    admin: Uuid,
+    parent: Uuid,
+) -> AppResult<()> {
     sqlx::query("UPDATE sessions SET impersonator_id = $2, parent_session_id = $3 WHERE id = $1")
         .bind(session_id)
         .bind(admin)
@@ -185,12 +246,16 @@ pub async fn mark_impersonation(pool: &PgPool, session_id: Uuid, admin: Uuid, pa
 }
 
 /// (impersonator_id, parent_session_id) of a session.
-pub async fn impersonation_of(pool: &PgPool, session_id: Uuid) -> AppResult<Option<(Uuid, Option<Uuid>)>> {
-    let r: Option<(Option<Uuid>, Option<Uuid>)> = sqlx::query_as("SELECT impersonator_id, parent_session_id FROM sessions WHERE id = $1")
-        .bind(session_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?;
+pub async fn impersonation_of(
+    pool: &PgPool,
+    session_id: Uuid,
+) -> AppResult<Option<(Uuid, Option<Uuid>)>> {
+    let r: Option<(Option<Uuid>, Option<Uuid>)> =
+        sqlx::query_as("SELECT impersonator_id, parent_session_id FROM sessions WHERE id = $1")
+            .bind(session_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?;
     Ok(r.and_then(|(a, p)| a.map(|a| (a, p))))
 }
 
@@ -215,7 +280,12 @@ pub struct TosVersion {
     pub published_at: OffsetDateTime,
 }
 
-pub async fn publish_tos(pool: &PgPool, version: &str, url: &str, summary: &str) -> AppResult<TosVersion> {
+pub async fn publish_tos(
+    pool: &PgPool,
+    version: &str,
+    url: &str,
+    summary: &str,
+) -> AppResult<TosVersion> {
     sqlx::query_as("INSERT INTO tos_versions (id, version, url, summary) VALUES ($1,$2,$3,$4) RETURNING id, version, url, summary, published_at")
         .bind(Uuid::new_v4())
         .bind(version)
@@ -237,7 +307,21 @@ pub async fn list_tos(pool: &PgPool) -> AppResult<Vec<(TosVersion, i64)>> {
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    Ok(rows.into_iter().map(|(id, version, url, summary, published_at, n)| (TosVersion { id, version, url, summary, published_at }, n)).collect())
+    Ok(rows
+        .into_iter()
+        .map(|(id, version, url, summary, published_at, n)| {
+            (
+                TosVersion {
+                    id,
+                    version,
+                    url,
+                    summary,
+                    published_at,
+                },
+                n,
+            )
+        })
+        .collect())
 }
 
 pub async fn current_tos(pool: &PgPool) -> AppResult<Option<TosVersion>> {
@@ -247,16 +331,27 @@ pub async fn current_tos(pool: &PgPool) -> AppResult<Option<TosVersion>> {
         .map_err(db_err)
 }
 
-pub async fn accepted_tos(pool: &PgPool, user_id: Uuid, version_id: Uuid) -> AppResult<Option<OffsetDateTime>> {
-    sqlx::query_scalar("SELECT accepted_at FROM tos_acceptances WHERE user_id = $1 AND version_id = $2")
-        .bind(user_id)
-        .bind(version_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+pub async fn accepted_tos(
+    pool: &PgPool,
+    user_id: Uuid,
+    version_id: Uuid,
+) -> AppResult<Option<OffsetDateTime>> {
+    sqlx::query_scalar(
+        "SELECT accepted_at FROM tos_acceptances WHERE user_id = $1 AND version_id = $2",
+    )
+    .bind(user_id)
+    .bind(version_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
-pub async fn accept_tos(pool: &PgPool, user_id: Uuid, version_id: Uuid, ip: Option<&str>) -> AppResult<()> {
+pub async fn accept_tos(
+    pool: &PgPool,
+    user_id: Uuid,
+    version_id: Uuid,
+    ip: Option<&str>,
+) -> AppResult<()> {
     sqlx::query("INSERT INTO tos_acceptances (user_id, version_id, ip) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING")
         .bind(user_id)
         .bind(version_id)
@@ -288,7 +383,13 @@ pub async fn close_customer(pool: &PgPool, id: Uuid) -> AppResult<Option<Option<
         .await
         .map_err(db_err)?;
     if let Some(Some(u)) = owner {
-        sqlx::query("UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL").bind(u).execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query(
+            "UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL",
+        )
+        .bind(u)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     }
     tx.commit().await.map_err(db_err)?;
     Ok(owner)
@@ -303,12 +404,14 @@ pub async fn merge_customers(pool: &PgPool, from: Uuid, into: Uuid) -> AppResult
         return Err(AppError::Validation("error.merge_same"));
     }
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let ok: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM customers WHERE id IN ($1,$2) AND merged_into IS NULL FOR UPDATE")
-        .bind(from)
-        .bind(into)
-        .fetch_all(&mut *tx)
-        .await
-        .map_err(db_err)?;
+    let ok: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM customers WHERE id IN ($1,$2) AND merged_into IS NULL FOR UPDATE",
+    )
+    .bind(from)
+    .bind(into)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(db_err)?;
     if ok.len() != 2 {
         return Err(AppError::NotFound);
     }
@@ -332,24 +435,40 @@ pub async fn merge_customers(pool: &PgPool, from: Uuid, into: Uuid) -> AppResult
             col.replace('"', ""),
             col.replace('"', "")
         );
-        sqlx::query("SAVEPOINT merge_step").execute(&mut *tx).await.map_err(db_err)?;
-        match sqlx::query(&q).bind(from).bind(into).execute(&mut *tx).await {
+        sqlx::query("SAVEPOINT merge_step")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        match sqlx::query(&q)
+            .bind(from)
+            .bind(into)
+            .execute(&mut *tx)
+            .await
+        {
             Ok(r) => {
                 moved += r.rows_affected() as i64;
-                sqlx::query("RELEASE SAVEPOINT merge_step").execute(&mut *tx).await.map_err(db_err)?;
+                sqlx::query("RELEASE SAVEPOINT merge_step")
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(db_err)?;
             }
             Err(sqlx::Error::Database(d)) if d.is_unique_violation() => {
-                sqlx::query("ROLLBACK TO SAVEPOINT merge_step").execute(&mut *tx).await.map_err(db_err)?;
+                sqlx::query("ROLLBACK TO SAVEPOINT merge_step")
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(db_err)?;
             }
             Err(e) => return Err(db_err(e)),
         }
     }
-    sqlx::query("UPDATE customers SET status = 'closed', closed_at = now(), merged_into = $2 WHERE id = $1")
-        .bind(from)
-        .bind(into)
-        .execute(&mut *tx)
-        .await
-        .map_err(db_err)?;
+    sqlx::query(
+        "UPDATE customers SET status = 'closed', closed_at = now(), merged_into = $2 WHERE id = $1",
+    )
+    .bind(from)
+    .bind(into)
+    .execute(&mut *tx)
+    .await
+    .map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
     Ok(moved)
 }

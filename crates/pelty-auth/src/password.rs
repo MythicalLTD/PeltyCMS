@@ -45,10 +45,18 @@ fn verify_whmcs(password: &str, h: &str) -> bool {
     if h.starts_with("$2") {
         return bcrypt::verify(password, h).unwrap_or(false);
     }
-    let Some((md5_hex, salt)) = h.split_once(':') else { return false };
-    let got: String = md5::compute(format!("{salt}{password}")).0.iter().map(|b| format!("{b:02x}")).collect();
+    let Some((md5_hex, salt)) = h.split_once(':') else {
+        return false;
+    };
+    let got: String = md5::compute(format!("{salt}{password}"))
+        .0
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
     use subtle::ConstantTimeEq;
-    got.as_bytes().ct_eq(md5_hex.to_ascii_lowercase().as_bytes()).into()
+    got.as_bytes()
+        .ct_eq(md5_hex.to_ascii_lowercase().as_bytes())
+        .into()
 }
 
 /// Burn the same CPU as a real verification when the user does not exist.
@@ -109,12 +117,18 @@ mod tests {
     #[test]
     fn whmcs_hashes_verify_and_need_rehash() {
         // PHP password_hash() writes $2y$; same algorithm as $2b$.
-        let b = bcrypt::hash("Client-Pass-1", 4).unwrap().replacen("$2b$", "$2y$", 1);
+        let b = bcrypt::hash("Client-Pass-1", 4)
+            .unwrap()
+            .replacen("$2b$", "$2y$", 1);
         let enc = format!("{LEGACY_WHMCS}{b}");
         assert!(verify("Client-Pass-1", &enc) && !verify("client-pass-1", &enc));
         assert!(needs_rehash(&enc) && !needs_rehash(&hash("x-long-password").unwrap()));
         // Legacy WHMCS: md5(salt . password):salt.
-        let md5: String = md5::compute("ab#1Csecret").0.iter().map(|b| format!("{b:02x}")).collect();
+        let md5: String = md5::compute("ab#1Csecret")
+            .0
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
         let old = format!("{LEGACY_WHMCS}{md5}:ab#1C");
         assert!(verify("secret", &old) && !verify("Secret", &old));
         assert!(!verify("x", "whmcs:") && !verify("x", "!whmcs-import:password-reset-required"));
@@ -124,7 +138,10 @@ mod tests {
         assert!(is_breached("qwertyuiop123"));
         assert!(is_breached("football2024!!"));
         assert!(!is_breached("violet-kettle-orbit-42"));
-        assert!(matches!(check_policy("Football2024!!", "a@b.c"), Err(AppError::Validation("error.password_breached"))));
+        assert!(matches!(
+            check_policy("Football2024!!", "a@b.c"),
+            Err(AppError::Validation("error.password_breached"))
+        ));
         assert!(check_policy("violet-kettle-orbit-42", "a@b.c").is_ok());
     }
     #[test]

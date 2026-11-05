@@ -37,12 +37,22 @@ fn yes() -> bool {
 
 impl Default for ApprovalRules {
     fn default() -> Self {
-        Self { auto_approve: false, require_paid: true, max_total: None, existing_clients_only: false, manual_product_ids: vec![], hold_fraud_review: true }
+        Self {
+            auto_approve: false,
+            require_paid: true,
+            max_total: None,
+            existing_clients_only: false,
+            manual_product_ids: vec![],
+            hold_fraud_review: true,
+        }
     }
 }
 
 pub async fn rules(pool: &PgPool) -> AppResult<ApprovalRules> {
-    Ok(crate::settings::get(pool, KEY).await?.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default())
+    Ok(crate::settings::get(pool, KEY)
+        .await?
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default())
 }
 
 pub async fn set_rules(pool: &PgPool, mut r: ApprovalRules) -> AppResult<ApprovalRules> {
@@ -51,7 +61,12 @@ pub async fn set_rules(pool: &PgPool, mut r: ApprovalRules) -> AppResult<Approva
     }
     r.manual_product_ids.sort();
     r.manual_product_ids.dedup();
-    crate::settings::set(pool, KEY, serde_json::to_value(&r).map_err(AppError::internal)?).await?;
+    crate::settings::set(
+        pool,
+        KEY,
+        serde_json::to_value(&r).map_err(AppError::internal)?,
+    )
+    .await?;
     Ok(r)
 }
 
@@ -96,7 +111,12 @@ const FACTS: &str = "SELECT o.total, COALESCE(i.status = 'paid', false) AS paid,
     FROM orders o LEFT JOIN invoices i ON i.id = o.invoice_id WHERE o.id = $1";
 
 pub async fn facts(pool: &PgPool, order: Uuid, r: &ApprovalRules) -> AppResult<Option<Facts>> {
-    sqlx::query_as(FACTS).bind(order).bind(&r.manual_product_ids).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as(FACTS)
+        .bind(order)
+        .bind(&r.manual_product_ids)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
@@ -114,7 +134,16 @@ pub struct QueueItem {
     pub reasons: Vec<&'static str>,
 }
 
-type QueueRow = (Uuid, i64, Uuid, String, Decimal, String, Option<String>, OffsetDateTime);
+type QueueRow = (
+    Uuid,
+    i64,
+    Uuid,
+    String,
+    Decimal,
+    String,
+    Option<String>,
+    OffsetDateTime,
+);
 
 /// Pending orders with the rule reasons holding each one.
 pub async fn queue(pool: &PgPool) -> AppResult<Vec<QueueItem>> {
@@ -128,26 +157,48 @@ pub async fn queue(pool: &PgPool) -> AppResult<Vec<QueueItem>> {
     .await
     .map_err(db_err)?;
     let mut out = Vec::with_capacity(rows.len());
-    for (id, number, customer_id, customer_email, total, currency, invoice_status, created_at) in rows {
+    for (id, number, customer_id, customer_email, total, currency, invoice_status, created_at) in
+        rows
+    {
         let f = facts(pool, id, &r).await?.unwrap_or_default();
-        out.push(QueueItem { id, number, customer_id, customer_email, total, currency, invoice_status, created_at, reasons: hold_reasons(&r, &f) });
+        out.push(QueueItem {
+            id,
+            number,
+            customer_id,
+            customer_email,
+            total,
+            currency,
+            invoice_status,
+            created_at,
+            reasons: hold_reasons(&r, &f),
+        });
     }
     Ok(out)
 }
 
 /// Pending order attached to an invoice, if any.
 pub async fn pending_for_invoice(pool: &PgPool, invoice: Uuid) -> AppResult<Option<Uuid>> {
-    sqlx::query_scalar("SELECT id FROM orders WHERE invoice_id = $1 AND status = 'pending'").bind(invoice).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_scalar("SELECT id FROM orders WHERE invoice_id = $1 AND status = 'pending'")
+        .bind(invoice)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 /// True if a pending order passes every rule right now.
 pub async fn auto_ok(pool: &PgPool, order: Uuid) -> AppResult<bool> {
     let r = rules(pool).await?;
-    let st: Option<String> = sqlx::query_scalar("SELECT status FROM orders WHERE id = $1").bind(order).fetch_optional(pool).await.map_err(db_err)?;
+    let st: Option<String> = sqlx::query_scalar("SELECT status FROM orders WHERE id = $1")
+        .bind(order)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?;
     if st.as_deref() != Some("pending") {
         return Ok(false);
     }
-    Ok(facts(pool, order, &r).await?.is_some_and(|f| hold_reasons(&r, &f).is_empty()))
+    Ok(facts(pool, order, &r)
+        .await?
+        .is_some_and(|f| hold_reasons(&r, &f).is_empty()))
 }
 
 #[cfg(test)]
@@ -156,13 +207,57 @@ mod tests {
     use std::str::FromStr;
     #[test]
     fn reasons() {
-        let f = Facts { total: Decimal::from(50), paid: true, prior_approved: 1, manual_products: 0, fraud_review: false };
-        assert_eq!(hold_reasons(&ApprovalRules::default(), &f), vec!["manual_mode"]);
-        let auto = ApprovalRules { auto_approve: true, ..Default::default() };
+        let f = Facts {
+            total: Decimal::from(50),
+            paid: true,
+            prior_approved: 1,
+            manual_products: 0,
+            fraud_review: false,
+        };
+        assert_eq!(
+            hold_reasons(&ApprovalRules::default(), &f),
+            vec!["manual_mode"]
+        );
+        let auto = ApprovalRules {
+            auto_approve: true,
+            ..Default::default()
+        };
         assert!(hold_reasons(&auto, &f).is_empty());
-        assert_eq!(hold_reasons(&auto, &Facts { paid: false, ..f.clone() }), vec!["awaiting_payment"]);
-        let lim = ApprovalRules { max_total: Some(Decimal::from_str("49.99").unwrap()), existing_clients_only: true, ..auto.clone() };
-        assert_eq!(hold_reasons(&lim, &Facts { prior_approved: 0, ..f.clone() }), vec!["over_limit", "new_client"]);
-        assert_eq!(hold_reasons(&auto, &Facts { fraud_review: true, manual_products: 1, ..f }), vec!["manual_product", "fraud_review"]);
+        assert_eq!(
+            hold_reasons(
+                &auto,
+                &Facts {
+                    paid: false,
+                    ..f.clone()
+                }
+            ),
+            vec!["awaiting_payment"]
+        );
+        let lim = ApprovalRules {
+            max_total: Some(Decimal::from_str("49.99").unwrap()),
+            existing_clients_only: true,
+            ..auto.clone()
+        };
+        assert_eq!(
+            hold_reasons(
+                &lim,
+                &Facts {
+                    prior_approved: 0,
+                    ..f.clone()
+                }
+            ),
+            vec!["over_limit", "new_client"]
+        );
+        assert_eq!(
+            hold_reasons(
+                &auto,
+                &Facts {
+                    fraud_review: true,
+                    manual_products: 1,
+                    ..f
+                }
+            ),
+            vec!["manual_product", "fraud_review"]
+        );
     }
 }

@@ -21,7 +21,10 @@ pub fn sign_enveloped(xml: &str, id: &str, key: &SigningKey) -> Result<String, E
         return Err(Error::Invalid("marker"));
     }
     let d = Doc::parse(xml)?;
-    let el = d.all().find(|&i| d.attr(i, "ID") == Some(id)).ok_or(Error::Invalid("id"))?;
+    let el = d
+        .all()
+        .find(|&i| d.attr(i, "ID") == Some(id))
+        .ok_or(Error::Invalid("id"))?;
     let digest = STANDARD.encode(Sha256::digest(canonicalize(&d, el, None, &[]).as_bytes()));
     let si = format!(
         "<ds:SignedInfo><ds:CanonicalizationMethod Algorithm=\"{EXC_C14N}\"/><ds:SignatureMethod Algorithm=\"{}\"/><ds:Reference URI=\"#{id}\"><ds:Transforms><ds:Transform Algorithm=\"{ENVELOPED}\"/><ds:Transform Algorithm=\"{EXC_C14N}\"/></ds:Transforms><ds:DigestMethod Algorithm=\"{SHA256}\"/><ds:DigestValue>{digest}</ds:DigestValue></ds:Reference></ds:SignedInfo>",
@@ -59,7 +62,13 @@ pub struct ResponseSpec {
 }
 
 impl ResponseSpec {
-    pub fn new(idp: &str, sp_entity: &str, acs: &str, name_id: &str, in_response_to: Option<&str>) -> Self {
+    pub fn new(
+        idp: &str,
+        sp_entity: &str,
+        acs: &str,
+        name_id: &str,
+        in_response_to: Option<&str>,
+    ) -> Self {
         ResponseSpec {
             response_id: crate::sp::new_id(),
             assertion_id: crate::sp::new_id(),
@@ -80,19 +89,34 @@ impl ResponseSpec {
 
 impl TestIdp {
     pub fn new(entity_id: &str, ec: bool) -> Result<TestIdp, Error> {
-        let key = if ec { SigningKey::generate_ec()? } else { SigningKey::generate_rsa()? };
+        let key = if ec {
+            SigningKey::generate_ec()?
+        } else {
+            SigningKey::generate_rsa()?
+        };
         let cert_pem = key.certificate("test-idp", 30)?;
-        Ok(TestIdp { entity_id: entity_id.into(), key, cert_pem })
+        Ok(TestIdp {
+            entity_id: entity_id.into(),
+            key,
+            cert_pem,
+        })
     }
 
     /// Unsigned assertion XML with a signature marker (for wrapping tests).
     pub fn assertion_xml(&self, r: &ResponseSpec) -> String {
-        let irt = r.in_response_to.as_ref().map(|v| format!(" InResponseTo=\"{}\"", esc(v))).unwrap_or_default();
+        let irt = r
+            .in_response_to
+            .as_ref()
+            .map(|v| format!(" InResponseTo=\"{}\"", esc(v)))
+            .unwrap_or_default();
         let attrs: String = r
             .attributes
             .iter()
             .map(|(n, vs)| {
-                let v: String = vs.iter().map(|v| format!("<saml:AttributeValue>{}</saml:AttributeValue>", esc(v))).collect();
+                let v: String = vs
+                    .iter()
+                    .map(|v| format!("<saml:AttributeValue>{}</saml:AttributeValue>", esc(v)))
+                    .collect();
                 format!("<saml:Attribute Name=\"{}\">{v}</saml:Attribute>", esc(n))
             })
             .collect();
@@ -120,7 +144,11 @@ impl TestIdp {
 
     /// Put arbitrary assertion XML inside a Response envelope.
     pub fn wrap(&self, r: &ResponseSpec, assertion: &str) -> Result<String, Error> {
-        let irt = r.in_response_to.as_ref().map(|v| format!(" InResponseTo=\"{}\"", esc(v))).unwrap_or_default();
+        let irt = r
+            .in_response_to
+            .as_ref()
+            .map(|v| format!(" InResponseTo=\"{}\"", esc(v)))
+            .unwrap_or_default();
         let xml = format!(
             "<samlp:Response xmlns:samlp=\"{PROTO}\" xmlns:saml=\"{ASSERT}\" ID=\"{rid}\" Version=\"2.0\" IssueInstant=\"{}\" Destination=\"{}\"{irt}><saml:Issuer>{}</saml:Issuer><!--SIG:{rid}--><samlp:Status><samlp:StatusCode Value=\"{SUCCESS}\"/></samlp:Status>{assertion}</samlp:Response>",
             now_str(r.issued),
@@ -136,7 +164,11 @@ impl TestIdp {
     }
 
     pub fn metadata(&self, sso_url: &str, slo_url: &str) -> String {
-        let b: String = self.cert_pem.lines().filter(|l| !l.starts_with("-----")).collect();
+        let b: String = self
+            .cert_pem
+            .lines()
+            .filter(|l| !l.starts_with("-----"))
+            .collect();
         format!(
             "<md:EntityDescriptor xmlns:md=\"urn:oasis:names:tc:SAML:2.0:metadata\" entityID=\"{}\"><md:IDPSSODescriptor protocolSupportEnumeration=\"{PROTO}\"><md:KeyDescriptor use=\"signing\"><ds:KeyInfo xmlns:ds=\"{DS}\"><ds:X509Data><ds:X509Certificate>{b}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></md:KeyDescriptor><md:SingleLogoutService Binding=\"{}\" Location=\"{}\"/><md:SingleSignOnService Binding=\"{}\" Location=\"{}\"/></md:IDPSSODescriptor></md:EntityDescriptor>",
             esc(&self.entity_id),

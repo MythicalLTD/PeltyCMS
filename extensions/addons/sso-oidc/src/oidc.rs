@@ -4,7 +4,12 @@ use pelty_addon_sso_common::{self as sso, Provider};
 use serde_json::{json, Value};
 
 pub const PROVIDER: Provider = Provider {
-    id: "oidc", name: "OpenID Connect", authorize: "", token: "", userinfo: "", scope: "openid email profile",
+    id: "oidc",
+    name: "OpenID Connect",
+    authorize: "",
+    token: "",
+    userinfo: "",
+    scope: "openid email profile",
     profile: sso::oidc_profile,
     enrich: None,
 };
@@ -16,6 +21,9 @@ mod tests {
     #[test]
     fn maps_claims() {
         assert!((PROVIDER.profile)(&json!({"email": "x"})).is_none());
-        assert_eq!((PROVIDER.profile)(&json!({"sub": "s"})).unwrap()["subject"], "s");
+        assert_eq!(
+            (PROVIDER.profile)(&json!({"sub": "s"})).unwrap()["subject"],
+            "s"
+        );
     }
 }

@@ -2,7 +2,11 @@
 //! suspension of linked services, and unsuspension once paid. Every action
 //! is recorded in `overdue_actions` (unique per invoice + action), so a run
 //! is idempotent and safe to repeat.
-use crate::{db_err, invoices::{self, NewItem}, settings};
+use crate::{
+    db_err,
+    invoices::{self, NewItem},
+    settings,
+};
 use pelty_billing::math;
 use pelty_core::{AppError, AppResult};
 use rust_decimal::Decimal;
@@ -61,8 +65,17 @@ impl OverdueSettings {
         if self.reminder_days.len() > 10 || !self.reminder_days.iter().all(|d| day(*d)) {
             return Err("error.invalid_days");
         }
-        if [self.late_fee_days, self.suspend_days, self.terminate_days, self.cancel_unpaid_days].iter().any(|d| !(0..=730).contains(d))
-            || (self.terminate_days > 0 && self.suspend_days > 0 && self.terminate_days <= self.suspend_days)
+        if [
+            self.late_fee_days,
+            self.suspend_days,
+            self.terminate_days,
+            self.cancel_unpaid_days,
+        ]
+        .iter()
+        .any(|d| !(0..=730).contains(d))
+            || (self.terminate_days > 0
+                && self.suspend_days > 0
+                && self.terminate_days <= self.suspend_days)
         {
             return Err("error.invalid_days");
         }
@@ -85,7 +98,12 @@ pub async fn get_settings(pool: &PgPool) -> AppResult<OverdueSettings> {
 }
 
 pub async fn put_settings(pool: &PgPool, s: &OverdueSettings) -> AppResult<()> {
-    settings::set(pool, KEY, serde_json::to_value(s).map_err(|e| AppError::Internal(e.to_string()))?).await
+    settings::set(
+        pool,
+        KEY,
+        serde_json::to_value(s).map_err(|e| AppError::Internal(e.to_string()))?,
+    )
+    .await
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -125,7 +143,10 @@ pub struct Report {
 
 /// Late fee for an open balance, rounded to the currency exponent.
 pub fn late_fee(s: &OverdueSettings, balance: Decimal, exponent: u32) -> Decimal {
-    math::round(s.late_fee_fixed + balance * s.late_fee_percent / Decimal::from(100), exponent)
+    math::round(
+        s.late_fee_fixed + balance * s.late_fee_percent / Decimal::from(100),
+        exponent,
+    )
 }
 
 type Row = (Uuid, Uuid, String, Decimal, Decimal, String, Date);
@@ -160,16 +181,32 @@ pub async fn run_overdue(pool: &PgPool, today: Date) -> AppResult<Report> {
             newly |= mark(pool, id, &format!("reminder:{d}"), None).await?;
         }
         if newly {
-            report.reminders.push(Reminder { invoice_id: id, customer_id, number: number.clone(), balance, currency: currency.clone(), due_date: due, days_overdue: days });
+            report.reminders.push(Reminder {
+                invoice_id: id,
+                customer_id,
+                number: number.clone(),
+                balance,
+                currency: currency.clone(),
+                due_date: due,
+                days_overdue: days,
+            });
         }
 
-        if cfg.late_fee_days > 0 && days >= i64::from(cfg.late_fee_days) && !late_fee_exempt(pool, customer_id).await? {
-            if let Some(f) = charge_late_fee(pool, &cfg, id, customer_id, &number, balance, &currency).await? {
+        if cfg.late_fee_days > 0
+            && days >= i64::from(cfg.late_fee_days)
+            && !late_fee_exempt(pool, customer_id).await?
+        {
+            if let Some(f) =
+                charge_late_fee(pool, &cfg, id, customer_id, &number, balance, &currency).await?
+            {
                 report.late_fees.push(f);
             }
         }
 
-        if cfg.suspend_days > 0 && days >= i64::from(cfg.suspend_days) && mark(pool, id, "suspend", None).await? {
+        if cfg.suspend_days > 0
+            && days >= i64::from(cfg.suspend_days)
+            && mark(pool, id, "suspend", None).await?
+        {
             let ids: Vec<Uuid> = sqlx::query_scalar(
                 "UPDATE services SET status = 'suspended', suspend_reason = $2, updated_at = now()
                  WHERE status = 'active' AND id IN (SELECT service_id FROM invoice_items WHERE invoice_id = $1 AND service_id IS NOT NULL)
@@ -180,12 +217,21 @@ pub async fn run_overdue(pool: &PgPool, today: Date) -> AppResult<Report> {
             .fetch_all(pool)
             .await
             .map_err(db_err)?;
-            report.suspended.extend(ids.into_iter().map(|service_id| Suspended { service_id, invoice_id: id, customer_id }));
+            report
+                .suspended
+                .extend(ids.into_iter().map(|service_id| Suspended {
+                    service_id,
+                    invoice_id: id,
+                    customer_id,
+                }));
         }
 
         // Only services this automation suspended are terminated; a manual
         // suspension (other reason) is left to staff, as in WHMCS.
-        if cfg.terminate_days > 0 && days >= i64::from(cfg.terminate_days) && mark(pool, id, "terminate", None).await? {
+        if cfg.terminate_days > 0
+            && days >= i64::from(cfg.terminate_days)
+            && mark(pool, id, "terminate", None).await?
+        {
             let ids: Vec<Uuid> = sqlx::query_scalar(
                 "UPDATE services SET status = 'terminated', updated_at = now()
                  WHERE status = 'suspended' AND suspend_reason = $2
@@ -197,10 +243,20 @@ pub async fn run_overdue(pool: &PgPool, today: Date) -> AppResult<Report> {
             .fetch_all(pool)
             .await
             .map_err(db_err)?;
-            report.terminated.extend(ids.into_iter().map(|service_id| Suspended { service_id, invoice_id: id, customer_id }));
+            report
+                .terminated
+                .extend(ids.into_iter().map(|service_id| Suspended {
+                    service_id,
+                    invoice_id: id,
+                    customer_id,
+                }));
         }
 
-        if cfg.cancel_unpaid_days > 0 && days >= i64::from(cfg.cancel_unpaid_days) && paid == Decimal::ZERO && mark(pool, id, "auto_void", None).await? {
+        if cfg.cancel_unpaid_days > 0
+            && days >= i64::from(cfg.cancel_unpaid_days)
+            && paid == Decimal::ZERO
+            && mark(pool, id, "auto_void", None).await?
+        {
             let n = sqlx::query("UPDATE invoices SET status = 'void' WHERE id = $1 AND status = 'unpaid' AND amount_paid = 0")
                 .bind(id)
                 .execute(pool)
@@ -228,7 +284,12 @@ async fn late_fee_exempt(pool: &PgPool, customer_id: Uuid) -> AppResult<bool> {
     .map_err(db_err)
 }
 
-async fn mark(pool: &PgPool, invoice_id: Uuid, action: &str, ref_id: Option<Uuid>) -> AppResult<bool> {
+async fn mark(
+    pool: &PgPool,
+    invoice_id: Uuid,
+    action: &str,
+    ref_id: Option<Uuid>,
+) -> AppResult<bool> {
     let r = sqlx::query("INSERT INTO overdue_actions (invoice_id, action, ref_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING")
         .bind(invoice_id)
         .bind(action)
@@ -278,14 +339,21 @@ async fn charge_late_fee(
     };
     invoices::add_items(&mut tx, fee, currency, &[line]).await?;
     invoices::finalize(&mut tx, fee, 7).await?;
-    sqlx::query("UPDATE overdue_actions SET ref_id = $2 WHERE invoice_id = $1 AND action = 'late_fee'")
-        .bind(invoice_id)
-        .bind(fee)
-        .execute(&mut *tx)
-        .await
-        .map_err(db_err)?;
+    sqlx::query(
+        "UPDATE overdue_actions SET ref_id = $2 WHERE invoice_id = $1 AND action = 'late_fee'",
+    )
+    .bind(invoice_id)
+    .bind(fee)
+    .execute(&mut *tx)
+    .await
+    .map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
-    Ok(Some(LateFee { invoice_id, fee_invoice_id: fee, customer_id, amount }))
+    Ok(Some(LateFee {
+        invoice_id,
+        fee_invoice_id: fee,
+        customer_id,
+        amount,
+    }))
 }
 
 /// After `invoice_id` is paid: reactivate services this automation suspended
@@ -310,7 +378,10 @@ pub async fn after_payment(pool: &PgPool, invoice_id: Uuid) -> AppResult<Vec<Uui
 }
 
 /// (email, display name, preferred locale) for mailing a customer.
-pub async fn recipient(pool: &PgPool, customer_id: Uuid) -> AppResult<Option<(String, String, Option<String>)>> {
+pub async fn recipient(
+    pool: &PgPool,
+    customer_id: Uuid,
+) -> AppResult<Option<(String, String, Option<String>)>> {
     sqlx::query_as(
         "SELECT c.email::text, COALESCE(NULLIF(trim(c.first_name || ' ' || c.last_name), ''), c.email::text), u.locale
          FROM customers c LEFT JOIN users u ON u.id = c.owner_user_id WHERE c.id = $1",
@@ -328,18 +399,53 @@ mod tests {
 
     #[test]
     fn fee_is_fixed_plus_percent_rounded() {
-        let s = OverdueSettings { late_fee_fixed: Decimal::from(5), late_fee_percent: Decimal::from_str("2.5").unwrap(), ..Default::default() };
-        assert_eq!(late_fee(&s, Decimal::from_str("123.45").unwrap(), 2), Decimal::from_str("8.09").unwrap());
-        assert_eq!(late_fee(&s, Decimal::from_str("10").unwrap(), 0), Decimal::from(5));
+        let s = OverdueSettings {
+            late_fee_fixed: Decimal::from(5),
+            late_fee_percent: Decimal::from_str("2.5").unwrap(),
+            ..Default::default()
+        };
+        assert_eq!(
+            late_fee(&s, Decimal::from_str("123.45").unwrap(), 2),
+            Decimal::from_str("8.09").unwrap()
+        );
+        assert_eq!(
+            late_fee(&s, Decimal::from_str("10").unwrap(), 0),
+            Decimal::from(5)
+        );
     }
 
     #[test]
     fn settings_validation() {
-        let ok = OverdueSettings { reminder_days: vec![7, 1, 7], ..Default::default() }.normalized().unwrap();
+        let ok = OverdueSettings {
+            reminder_days: vec![7, 1, 7],
+            ..Default::default()
+        }
+        .normalized()
+        .unwrap();
         assert_eq!(ok.reminder_days, vec![1, 7]);
-        assert!(OverdueSettings { reminder_days: vec![0], ..Default::default() }.normalized().is_err());
-        assert!(OverdueSettings { late_fee_percent: Decimal::from(101), ..Default::default() }.normalized().is_err());
-        assert!(OverdueSettings { late_fee_fixed: Decimal::from(-1), ..Default::default() }.normalized().is_err());
-        assert!(OverdueSettings { suspend_days: 800, ..Default::default() }.normalized().is_err());
+        assert!(OverdueSettings {
+            reminder_days: vec![0],
+            ..Default::default()
+        }
+        .normalized()
+        .is_err());
+        assert!(OverdueSettings {
+            late_fee_percent: Decimal::from(101),
+            ..Default::default()
+        }
+        .normalized()
+        .is_err());
+        assert!(OverdueSettings {
+            late_fee_fixed: Decimal::from(-1),
+            ..Default::default()
+        }
+        .normalized()
+        .is_err());
+        assert!(OverdueSettings {
+            suspend_days: 800,
+            ..Default::default()
+        }
+        .normalized()
+        .is_err());
     }
 }

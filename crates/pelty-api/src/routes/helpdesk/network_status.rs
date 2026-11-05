@@ -23,7 +23,14 @@ pub fn router() -> Router<AppState> {
 #[utoipa::path(get, path = "/api/v1/public/network-status", responses((status = 200)))]
 pub async fn public_status(State(s): State<AppState>) -> ApiResult<Json<Value>> {
     let items = ns::list(&s.pool, true, 100).await?;
-    let open = items.as_array().map(|a| a.iter().filter(|i| i["status"] != "resolved" && i["status"] != "scheduled").count()).unwrap_or(0);
+    let open = items
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter(|i| i["status"] != "resolved" && i["status"] != "scheduled")
+                .count()
+        })
+        .unwrap_or(0);
     Ok(Json(json!({ "operational": open == 0, "items": items })))
 }
 
@@ -32,7 +39,9 @@ pub async fn admin_list(
     State(s): State<AppState>,
     RequirePermission(_u, _): RequirePermission<perms::StatusManage>,
 ) -> ApiResult<Json<Value>> {
-    Ok(Json(json!({ "items": ns::list(&s.pool, false, 200).await? })))
+    Ok(Json(
+        json!({ "items": ns::list(&s.pool, false, 200).await? }),
+    ))
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/network-issues", request_body = IssueBody, responses((status = 200), (status = 422)))]
@@ -42,7 +51,15 @@ pub async fn create(
     Json(b): Json<IssueBody>,
 ) -> ApiResult<Json<Value>> {
     let id = ns::create(&s.pool, &b, u.user_id).await?;
-    audit::record(&s.pool, Some(u.user_id), "network_issue.created", Some(&id.to_string()), u.ip.as_deref(), json!({ "status": b.status })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "network_issue.created",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "status": b.status }),
+    )
+    .await?;
     Ok(Json(json!({ "id": id })))
 }
 
@@ -54,7 +71,15 @@ pub async fn update(
     Json(b): Json<IssueBody>,
 ) -> ApiResult<Json<Value>> {
     ns::update(&s.pool, id, &b).await?;
-    audit::record(&s.pool, Some(u.user_id), "network_issue.updated", Some(&id.to_string()), u.ip.as_deref(), json!({ "status": b.status })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "network_issue.updated",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "status": b.status }),
+    )
+    .await?;
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -66,7 +91,15 @@ pub async fn add_update(
     Json(b): Json<UpdateBody>,
 ) -> ApiResult<Json<Value>> {
     ns::add_update(&s.pool, id, &b, u.user_id).await?;
-    audit::record(&s.pool, Some(u.user_id), "network_issue.update_posted", Some(&id.to_string()), u.ip.as_deref(), json!({ "status": b.status })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "network_issue.update_posted",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "status": b.status }),
+    )
+    .await?;
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -77,6 +110,14 @@ pub async fn remove(
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<Value>> {
     ns::delete(&s.pool, id).await?;
-    audit::record(&s.pool, Some(u.user_id), "network_issue.deleted", Some(&id.to_string()), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "network_issue.deleted",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(Json(json!({ "ok": true })))
 }

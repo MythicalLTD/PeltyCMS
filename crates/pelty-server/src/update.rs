@@ -38,11 +38,16 @@ pub fn parse_args(args: &[&str]) -> Result<Opts, String> {
             "--check" => o.check = true,
             "--yes" | "-y" => o.yes = true,
             "--no-backup" => o.no_backup = true,
-            "--version" => o.version = Some(it.next().ok_or(usage)?.trim_start_matches('v').to_string()),
+            "--version" => {
+                o.version = Some(it.next().ok_or(usage)?.trim_start_matches('v').to_string())
+            }
             _ => return Err(usage.into()),
         }
     }
-    if o.version.as_deref().is_some_and(|v| updates::parse_version(v).is_none()) {
+    if o.version
+        .as_deref()
+        .is_some_and(|v| updates::parse_version(v).is_none())
+    {
         return Err(usage.into());
     }
     Ok(o)
@@ -51,8 +56,14 @@ pub fn parse_args(args: &[&str]) -> Result<Opts, String> {
 /// The compiled-in release public key (32 bytes), if one is configured.
 pub fn public_key() -> Option<Vec<u8>> {
     use base64::Engine;
-    let line = PUBKEY.lines().map(str::trim).find(|l| !l.is_empty() && !l.starts_with('#'))?;
-    base64::engine::general_purpose::STANDARD.decode(line).ok().filter(|k| k.len() == 32)
+    let line = PUBKEY
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty() && !l.starts_with('#'))?;
+    base64::engine::general_purpose::STANDARD
+        .decode(line)
+        .ok()
+        .filter(|k| k.len() == 32)
 }
 
 fn client() -> Result<reqwest::Client, String> {
@@ -82,11 +93,16 @@ pub async fn fetch(feed: &str, version: Option<&str>) -> Result<Release, String>
         None => feed.to_string(),
     };
     let body = get(&client()?, &url, false).await?;
-    updates::parse_feed(&String::from_utf8_lossy(&body), &url).map_err(|e| format!("{url}: unreadable release feed ({e})"))
+    updates::parse_feed(&String::from_utf8_lossy(&body), &url)
+        .map_err(|e| format!("{url}: unreadable release feed ({e})"))
 }
 
 fn sha256_hex(b: &[u8]) -> String {
-    ring::digest::digest(&ring::digest::SHA256, b).as_ref().iter().map(|x| format!("{x:02x}")).collect()
+    ring::digest::digest(&ring::digest::SHA256, b)
+        .as_ref()
+        .iter()
+        .map(|x| format!("{x:02x}"))
+        .collect()
 }
 
 /// Checksum for `name` from a `SHA256SUMS` file (`<hex>  <name>` lines).
@@ -100,13 +116,21 @@ pub fn sum_for(sums: &str, name: &str) -> Option<String> {
 /// Verify `SHA256SUMS` against its base64 ed25519 signature.
 pub fn verify_sig(key: &[u8], sums: &[u8], sig_b64: &str) -> bool {
     use base64::Engine;
-    let Ok(sig) = base64::engine::general_purpose::STANDARD.decode(sig_b64.trim()) else { return false };
-    ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, key).verify(sums, &sig).is_ok()
+    let Ok(sig) = base64::engine::general_purpose::STANDARD.decode(sig_b64.trim()) else {
+        return false;
+    };
+    ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, key)
+        .verify(sums, &sig)
+        .is_ok()
 }
 
 /// The `pelty-server` binary inside a release archive.
 pub fn extract_binary(name: &str, bytes: &[u8]) -> Result<Vec<u8>, String> {
-    let want = |p: &str| p.rsplit('/').next().is_some_and(|f| f == "pelty-server" || f == "pelty-server.exe");
+    let want = |p: &str| {
+        p.rsplit('/')
+            .next()
+            .is_some_and(|f| f == "pelty-server" || f == "pelty-server.exe")
+    };
     if name.ends_with(".zip") {
         let mut z = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| e.to_string())?;
         for i in 0..z.len() {
@@ -121,7 +145,11 @@ pub fn extract_binary(name: &str, bytes: &[u8]) -> Result<Vec<u8>, String> {
         let mut t = tar::Archive::new(flate2::read::GzDecoder::new(bytes));
         for e in t.entries().map_err(|e| e.to_string())? {
             let mut e = e.map_err(|e| e.to_string())?;
-            let p = e.path().map_err(|e| e.to_string())?.to_string_lossy().to_string();
+            let p = e
+                .path()
+                .map_err(|e| e.to_string())?
+                .to_string_lossy()
+                .to_string();
             if want(&p) {
                 let mut out = vec![];
                 e.read_to_end(&mut out).map_err(|e| e.to_string())?;
@@ -133,14 +161,23 @@ pub fn extract_binary(name: &str, bytes: &[u8]) -> Result<Vec<u8>, String> {
 }
 
 /// Download and verify the archive for this target; returns the new binary.
-pub async fn download_verified(r: &Release, target: &str, key: Option<&[u8]>, say: &mut (dyn FnMut(String) + Send)) -> Result<Vec<u8>, String> {
+pub async fn download_verified(
+    r: &Release,
+    target: &str,
+    key: Option<&[u8]>,
+    say: &mut (dyn FnMut(String) + Send),
+) -> Result<Vec<u8>, String> {
     let c = client()?;
-    let a = r.archive_for(target).ok_or_else(|| format!("release v{} has no build for {target}", r.version))?;
+    let a = r
+        .archive_for(target)
+        .ok_or_else(|| format!("release v{} has no build for {target}", r.version))?;
     let sums_a = r.asset("SHA256SUMS").ok_or("release has no SHA256SUMS")?;
     let sums = get(&c, &sums_a.url, true).await?;
     match key {
         Some(k) => {
-            let sig_a = r.asset("SHA256SUMS.sig").ok_or("release is not signed (no SHA256SUMS.sig) but this build requires signed releases")?;
+            let sig_a = r.asset("SHA256SUMS.sig").ok_or(
+                "release is not signed (no SHA256SUMS.sig) but this build requires signed releases",
+            )?;
             let sig = get(&c, &sig_a.url, true).await?;
             if !verify_sig(k, &sums, &String::from_utf8_lossy(&sig)) {
                 return Err("SHA256SUMS signature is INVALID; not installing".into());
@@ -150,8 +187,12 @@ pub async fn download_verified(r: &Release, target: &str, key: Option<&[u8]>, sa
         None => say("warning: no release public key compiled in; checking SHA256 only".into()),
     }
     let sums = String::from_utf8_lossy(&sums).to_string();
-    let want = sum_for(&sums, &a.name).ok_or_else(|| format!("{} is not listed in SHA256SUMS", a.name))?;
-    if a.sha256.as_deref().is_some_and(|m| !m.eq_ignore_ascii_case(&want)) {
+    let want =
+        sum_for(&sums, &a.name).ok_or_else(|| format!("{} is not listed in SHA256SUMS", a.name))?;
+    if a.sha256
+        .as_deref()
+        .is_some_and(|m| !m.eq_ignore_ascii_case(&want))
+    {
         return Err("manifest and SHA256SUMS disagree; not installing".into());
     }
     say(format!("downloading {}", a.name));
@@ -175,9 +216,14 @@ pub fn replace(exe: Option<&Path>, bin: &[u8]) -> Result<(), String> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
+        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755))
+            .map_err(|e| e.to_string())?;
     }
-    let res = if exe.is_some() { std::fs::rename(&tmp, &cur).map_err(|e| e.to_string()) } else { self_replace::self_replace(&tmp).map_err(|e| e.to_string()) };
+    let res = if exe.is_some() {
+        std::fs::rename(&tmp, &cur).map_err(|e| e.to_string())
+    } else {
+        self_replace::self_replace(&tmp).map_err(|e| e.to_string())
+    };
     let _ = std::fs::remove_file(&tmp);
     res.map_err(|e| format!("could not replace {}: {e}", cur.display()))
 }
@@ -193,17 +239,35 @@ pub fn restart_hint() -> &'static str {
 
 /// The whole flow. `pool` + `database_url` are for the backup and the saved
 /// feed URL; `say` prints progress.
-pub async fn run(pool: Option<&pelty_database::Pool>, database_url: &str, o: &Opts, say: &mut (dyn FnMut(String) + Send)) -> Result<(), String> {
+pub async fn run(
+    pool: Option<&pelty_database::Pool>,
+    database_url: &str,
+    o: &Opts,
+    say: &mut (dyn FnMut(String) + Send),
+) -> Result<(), String> {
     if crate::in_container() && !o.check {
         return Err("running in a container: pull the new image instead (docker compose pull && docker compose up -d)".into());
     }
     let feed = match pool {
-        Some(p) => updates::config_in(p).await.map(|c| c.1).unwrap_or_else(|_| updates::env_url().unwrap_or_else(|| updates::DEFAULT_URL.into())),
+        Some(p) => updates::config_in(p)
+            .await
+            .map(|c| c.1)
+            .unwrap_or_else(|_| updates::env_url().unwrap_or_else(|| updates::DEFAULT_URL.into())),
         None => updates::env_url().unwrap_or_else(|| updates::DEFAULT_URL.into()),
     };
     let r = fetch(&feed, o.version.as_deref()).await?;
     let newer = updates::is_newer(&r.version, updates::CURRENT);
-    say(format!("installed {} ({TARGET}); {} v{}{}", updates::CURRENT, if o.version.is_some() { "requested" } else { "latest" }, r.version, if newer { " is newer" } else { "" }));
+    say(format!(
+        "installed {} ({TARGET}); {} v{}{}",
+        updates::CURRENT,
+        if o.version.is_some() {
+            "requested"
+        } else {
+            "latest"
+        },
+        r.version,
+        if newer { " is newer" } else { "" }
+    ));
     if o.check {
         if newer && r.archive_for(TARGET).is_none() {
             say(format!("note: v{} has no build for {TARGET}", r.version));
@@ -243,12 +307,16 @@ mod tests {
     use axum::routing::get as route;
 
     fn targz(bin: &[u8]) -> Vec<u8> {
-        let mut t = tar::Builder::new(flate2::write::GzEncoder::new(vec![], flate2::Compression::fast()));
+        let mut t = tar::Builder::new(flate2::write::GzEncoder::new(
+            vec![],
+            flate2::Compression::fast(),
+        ));
         let mut h = tar::Header::new_gnu();
         h.set_size(bin.len() as u64);
         h.set_mode(0o755);
         h.set_cksum();
-        t.append_data(&mut h, "pelty-server-9.9.9-x/pelty-server", bin).unwrap();
+        t.append_data(&mut h, "pelty-server-9.9.9-x/pelty-server", bin)
+            .unwrap();
         t.into_inner().unwrap().finish().unwrap()
     }
 
@@ -256,7 +324,13 @@ mod tests {
     async fn serve(files: Vec<(&'static str, Vec<u8>)>) -> String {
         let mut app = axum::Router::new();
         for (name, body) in files {
-            app = app.route(&format!("/rel/latest/{name}"), route(move || { let b = body.clone(); async move { b } }));
+            app = app.route(
+                &format!("/rel/latest/{name}"),
+                route(move || {
+                    let b = body.clone();
+                    async move { b }
+                }),
+            );
         }
         let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = l.local_addr().unwrap();
@@ -270,7 +344,10 @@ mod tests {
         let rng = ring::rand::SystemRandom::new();
         let der = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
         let kp = ring::signature::Ed25519KeyPair::from_pkcs8(der.as_ref()).unwrap();
-        (kp.public_key().as_ref().to_vec(), base64::engine::general_purpose::STANDARD.encode(kp.sign(sums.as_bytes()).as_ref()))
+        (
+            kp.public_key().as_ref().to_vec(),
+            base64::engine::general_purpose::STANDARD.encode(kp.sign(sums.as_bytes()).as_ref()),
+        )
     }
 
     #[test]
@@ -298,20 +375,28 @@ mod tests {
             (leak(name.clone()), archive.clone()),
             ("SHA256SUMS", sums.clone().into_bytes()),
             ("SHA256SUMS.sig", sig.into_bytes()),
-        ]).await;
+        ])
+        .await;
         let r = fetch(&feed, None).await.unwrap();
         assert_eq!(r.version, "9.9.9");
         let mut log = vec![];
-        let got = download_verified(&r, TARGET, Some(&key), &mut |m| log.push(m)).await.unwrap();
+        let got = download_verified(&r, TARGET, Some(&key), &mut |m| log.push(m))
+            .await
+            .unwrap();
         assert_eq!(got, bin);
         assert!(log.iter().any(|l| l.contains("signature ok")), "{log:?}");
 
         // A different key (or a tampered SHA256SUMS) is refused.
         let (other, _) = signed("x");
-        let e = download_verified(&r, TARGET, Some(&other), &mut |_| {}).await.unwrap_err();
+        let e = download_verified(&r, TARGET, Some(&other), &mut |_| {})
+            .await
+            .unwrap_err();
         assert!(e.contains("INVALID"), "{e}");
         // No build for another target.
-        assert!(download_verified(&r, "riscv64-none", None, &mut |_| {}).await.unwrap_err().contains("no build"));
+        assert!(download_verified(&r, "riscv64-none", None, &mut |_| {})
+            .await
+            .unwrap_err()
+            .contains("no build"));
 
         // Atomic replace of a given binary path.
         let d = std::env::temp_dir().join(format!("pelty-upd-{}", uuid::Uuid::new_v4().simple()));
@@ -320,7 +405,11 @@ mod tests {
         std::fs::write(&exe, b"old").unwrap();
         replace(Some(&exe), &got).unwrap();
         assert_eq!(std::fs::read(&exe).unwrap(), bin);
-        assert_eq!(std::fs::read_dir(&d).unwrap().count(), 1, "no temp file left");
+        assert_eq!(
+            std::fs::read_dir(&d).unwrap().count(),
+            1,
+            "no temp file left"
+        );
         let _ = std::fs::remove_dir_all(&d);
     }
 
@@ -333,16 +422,25 @@ mod tests {
         let feed = serve(vec![
             ("manifest.json", manifest.to_string().into_bytes()),
             (leak(name.clone()), archive),
-            ("SHA256SUMS", format!("{}  {name}\n", "0".repeat(64)).into_bytes()),
-        ]).await;
+            (
+                "SHA256SUMS",
+                format!("{}  {name}\n", "0".repeat(64)).into_bytes(),
+            ),
+        ])
+        .await;
         let r = fetch(&feed, None).await.unwrap();
-        let e = download_verified(&r, TARGET, None, &mut |_| {}).await.unwrap_err();
+        let e = download_verified(&r, TARGET, None, &mut |_| {})
+            .await
+            .unwrap_err();
         assert!(e.contains("SHA256 mismatch"), "{e}");
     }
 
     #[test]
     fn sums_parsing() {
-        assert_eq!(sum_for("AB12  a.tar.gz\ncd34 *b.zip\n", "b.zip").as_deref(), Some("cd34"));
+        assert_eq!(
+            sum_for("AB12  a.tar.gz\ncd34 *b.zip\n", "b.zip").as_deref(),
+            Some("cd34")
+        );
         assert_eq!(sum_for("ab  a.tar.gz\n", "a.zip"), None);
     }
 }

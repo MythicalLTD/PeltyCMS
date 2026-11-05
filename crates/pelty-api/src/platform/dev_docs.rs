@@ -18,7 +18,9 @@ pub fn root_router() -> Router<AppState> {
 
 fn dir() -> PathBuf {
     // Folder written by `cargo xtask docs` (default `target/docs`).
-    std::env::var("PELTY_DOCS_DIR").map(PathBuf::from).unwrap_or_else(|_| PathBuf::from("target/docs"))
+    std::env::var("PELTY_DOCS_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("target/docs"))
 }
 
 fn public() -> bool {
@@ -34,14 +36,34 @@ async fn serve(State(s): State<AppState>, req: Request) -> Response {
     let (mut parts, _) = req.into_parts();
     if !public() {
         match CurrentUser::from_request_parts(&mut parts, &s).await {
-            Err(_) => return page(StatusCode::UNAUTHORIZED, "Sign in required", "The developer docs are for staff. Sign in to the admin area first."),
-            Ok(u) if !u.roles.iter().any(|r| r != "customer") => return page(StatusCode::FORBIDDEN, "Staff only", "The developer docs are only available to staff accounts."),
+            Err(_) => {
+                return page(
+                    StatusCode::UNAUTHORIZED,
+                    "Sign in required",
+                    "The developer docs are for staff. Sign in to the admin area first.",
+                )
+            }
+            Ok(u) if !u.roles.iter().any(|r| r != "customer") => {
+                return page(
+                    StatusCode::FORBIDDEN,
+                    "Staff only",
+                    "The developer docs are only available to staff accounts.",
+                )
+            }
             Ok(_) => {}
         }
     }
-    let rel = parts.uri.path().trim_start_matches("/docs").trim_start_matches('/');
+    let rel = parts
+        .uri
+        .path()
+        .trim_start_matches("/docs")
+        .trim_start_matches('/');
     // A folder (`/docs/`, `/docs/developers/`) serves its index.html.
-    let rel = if rel.is_empty() || rel.ends_with('/') { format!("{rel}index.html") } else { rel.to_string() };
+    let rel = if rel.is_empty() || rel.ends_with('/') {
+        format!("{rel}index.html")
+    } else {
+        rel.to_string()
+    };
     // The admin page probes the page index; answer "no pages" instead of a 404
     // so an unbuilt docs folder doesn't log errors in the browser console.
     let index_probe = rel == "developers/pages.json";
@@ -50,22 +72,36 @@ async fn serve(State(s): State<AppState>, req: Request) -> Response {
         if index_probe {
             return empty_index();
         }
-        return page(StatusCode::NOT_FOUND, "Docs not built", "Run <code>cargo xtask docs</code> (or set PELTY_DOCS_DIR).");
+        return page(
+            StatusCode::NOT_FOUND,
+            "Docs not built",
+            "Run <code>cargo xtask docs</code> (or set PELTY_DOCS_DIR).",
+        );
     };
     let p = Path::new(&rel);
     if !p.components().all(|c| matches!(c, Component::Normal(_))) {
         return StatusCode::NOT_FOUND.into_response();
     }
-    let Some(file) = root.join(p).canonicalize().ok().filter(|f| f.starts_with(&root) && f.is_file()) else {
+    let Some(file) = root
+        .join(p)
+        .canonicalize()
+        .ok()
+        .filter(|f| f.starts_with(&root) && f.is_file())
+    else {
         if index_probe {
             return empty_index();
         }
         return page(StatusCode::NOT_FOUND, "Not found", "No such docs page.");
     };
-    match crate::static_files::serve_file(&file, &parts.headers, crate::static_files::NO_CACHE).await {
+    match crate::static_files::serve_file(&file, &parts.headers, crate::static_files::NO_CACHE)
+        .await
+    {
         Some(mut r) => {
             // Docs never need framing or third-party content.
-            r.headers_mut().insert(header::X_FRAME_OPTIONS, header::HeaderValue::from_static("DENY"));
+            r.headers_mut().insert(
+                header::X_FRAME_OPTIONS,
+                header::HeaderValue::from_static("DENY"),
+            );
             r
         }
         None => StatusCode::NOT_FOUND.into_response(),

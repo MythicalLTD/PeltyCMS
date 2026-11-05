@@ -63,11 +63,11 @@ macro_rules! __cron_export {
 }
 
 pub use exports::pelty::addon::addon::Guest;
+/// Addon-defined events (ABI 0.3): `emit` runs the `before` phase.
+pub use pelty::addon::events;
 pub use pelty::addon::host;
 /// Opt-in powers (db, sql, exec, jobs); each needs an approved capability.
 pub use pelty::addon::power;
-/// Addon-defined events (ABI 0.3): `emit` runs the `before` phase.
-pub use pelty::addon::events;
 pub use serde_json;
 
 /// Drive a future to completion. Host imports are synchronous, so module
@@ -84,8 +84,18 @@ pub fn block_on<F: std::future::Future>(f: F) -> Result<F::Output, String> {
 }
 
 /// Raw HTTP through the host.
-pub fn fetch(method: &str, url: &str, headers: Vec<(String, String)>, body: String) -> Result<(u16, String), String> {
-    let r = host::http_fetch(&host::HttpRequest { method: method.into(), url: url.into(), headers, body })?;
+pub fn fetch(
+    method: &str,
+    url: &str,
+    headers: Vec<(String, String)>,
+    body: String,
+) -> Result<(u16, String), String> {
+    let r = host::http_fetch(&host::HttpRequest {
+        method: method.into(),
+        url: url.into(),
+        headers,
+        body,
+    })?;
     Ok((r.status, r.body))
 }
 
@@ -101,8 +111,13 @@ pub struct Emitted {
 /// Emit `<own-id>:<name>` (declared in `capabilities.emits`). Listeners of
 /// other addons may cancel or modify it; `after`/`finished` follow.
 pub fn emit(name: &str, payload: &serde_json::Value) -> Result<Emitted, String> {
-    let out: serde_json::Value = serde_json::from_str(&events::emit(name, &payload.to_string())?).map_err(|e| e.to_string())?;
-    Ok(Emitted { cancelled: out["cancelled"].as_bool().unwrap_or(false), reason: out["reason"].as_str().map(str::to_string), payload: out["payload"].clone() })
+    let out: serde_json::Value = serde_json::from_str(&events::emit(name, &payload.to_string())?)
+        .map_err(|e| e.to_string())?;
+    Ok(Emitted {
+        cancelled: out["cancelled"].as_bool().unwrap_or(false),
+        reason: out["reason"].as_str().map(str::to_string),
+        payload: out["payload"].clone(),
+    })
 }
 
 /// The context of the operation being served (ABI 0.4): which hook, filter
@@ -114,8 +129,17 @@ pub fn context() -> serde_json::Value {
 /// Apply this addon's own filter point `<own-id>:<point>` (ABI 0.4, declared
 /// in `capabilities.filter_points`): other addons subscribed to it rewrite
 /// `value`. Never fails; returns `value` unchanged when nothing applies.
-pub fn apply_filter(name: &str, value: &serde_json::Value, context: &serde_json::Value) -> serde_json::Value {
-    serde_json::from_str(&pelty::addon::filters::apply(name, &value.to_string(), &context.to_string())).unwrap_or_else(|_| value.clone())
+pub fn apply_filter(
+    name: &str,
+    value: &serde_json::Value,
+    context: &serde_json::Value,
+) -> serde_json::Value {
+    serde_json::from_str(&pelty::addon::filters::apply(
+        name,
+        &value.to_string(),
+        &context.to_string(),
+    ))
+    .unwrap_or_else(|_| value.clone())
 }
 
 /// Replies for the `hook` op (`input = {event, phase, payload, cancelled}`).
@@ -193,7 +217,13 @@ pub mod op {
     }
     impl Hook {
         pub fn parse(v: Value) -> Self {
-            Hook { event: s(&v, "event"), phase: s(&v, "phase"), payload: v["payload"].clone(), cancelled: v["cancelled"].as_bool().unwrap_or(false), raw: v }
+            Hook {
+                event: s(&v, "event"),
+                phase: s(&v, "phase"),
+                payload: v["payload"].clone(),
+                cancelled: v["cancelled"].as_bool().unwrap_or(false),
+                raw: v,
+            }
         }
         /// String field of the payload.
         pub fn str(&self, key: &str) -> Option<&str> {
@@ -211,7 +241,12 @@ pub mod op {
     }
     impl Filter {
         pub fn parse(v: Value) -> Self {
-            Filter { name: s(&v, "filter"), value: v["value"].clone(), context: v["context"].clone(), raw: v }
+            Filter {
+                name: s(&v, "filter"),
+                value: v["value"].clone(),
+                context: v["context"].clone(),
+                raw: v,
+            }
         }
     }
 
@@ -334,7 +369,11 @@ pub fn dispatch_cron<A: Addon>(job: &str) -> Result<String, String> {
 
 /// Route one `call(op, input)` to an [`Addon`].
 pub fn dispatch<A: Addon>(op_name: &str, input: &str) -> Result<String, String> {
-    let v: serde_json::Value = if input.is_empty() { serde_json::Value::Null } else { serde_json::from_str(input).map_err(|e| e.to_string())? };
+    let v: serde_json::Value = if input.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::from_str(input).map_err(|e| e.to_string())?
+    };
     let out = match op_name {
         "hook" => A::hook(&op::Hook::parse(v))?,
         "filter" => A::filter(&op::Filter::parse(v))?,
@@ -347,7 +386,10 @@ pub fn dispatch<A: Addon>(op_name: &str, input: &str) -> Result<String, String> 
 
 /// Route `on-event` to an [`Addon`].
 pub fn dispatch_event<A: Addon>(name: &str, payload: &str) -> Result<(), String> {
-    A::event(name, serde_json::from_str(payload).unwrap_or(serde_json::Value::Null))
+    A::event(
+        name,
+        serde_json::from_str(payload).unwrap_or(serde_json::Value::Null),
+    )
 }
 
 /// Export an integration addon from a type implementing [`Addon`]:
@@ -383,7 +425,9 @@ pub fn setting(key: &str) -> Option<serde_json::Value> {
 
 #[cfg(feature = "gateway")]
 pub mod gateway {
-    use pelty_payments::{BoxFuture, GatewayDescriptor, GatewayError, GatewayFactory, HttpRequestSpec, HttpTransport};
+    use pelty_payments::{
+        BoxFuture, GatewayDescriptor, GatewayError, GatewayFactory, HttpRequestSpec, HttpTransport,
+    };
     use serde_json::Value;
     use std::sync::Arc;
 
@@ -399,10 +443,26 @@ pub mod gateway {
         serde_json::to_string(d).unwrap_or_else(|_| "{}".into())
     }
 
-    pub fn call(d: &GatewayDescriptor, f: GatewayFactory, op: &str, input: &str) -> Result<String, String> {
-        let input: Value = serde_json::from_str(input).map_err(|e| format!("malformed_payload:{e}"))?;
-        let bo = |fut: BoxFuture<'_, Result<Value, GatewayError>>| crate::block_on(fut).map_err(GatewayError::Provider)?;
-        let out = pelty_payments::wire::dispatch(d, f, Arc::new(HostTransport), &|k| crate::host::secret(k), &bo, op, &input)?;
+    pub fn call(
+        d: &GatewayDescriptor,
+        f: GatewayFactory,
+        op: &str,
+        input: &str,
+    ) -> Result<String, String> {
+        let input: Value =
+            serde_json::from_str(input).map_err(|e| format!("malformed_payload:{e}"))?;
+        let bo = |fut: BoxFuture<'_, Result<Value, GatewayError>>| {
+            crate::block_on(fut).map_err(GatewayError::Provider)?
+        };
+        let out = pelty_payments::wire::dispatch(
+            d,
+            f,
+            Arc::new(HostTransport),
+            &|k| crate::host::secret(k),
+            &bo,
+            op,
+            &input,
+        )?;
         Ok(out.to_string())
     }
 }
@@ -437,9 +497,18 @@ pub mod provisioning {
     pub fn describe_registrar(m: &dyn RegistrarModule, settings: serde_json::Value) -> String {
         pelty_provisioning::wire::describe_registrar(m, settings)
     }
-    pub fn call_registrar(m: &dyn RegistrarModule, op: &str, input: &str) -> Result<String, String> {
+    pub fn call_registrar(
+        m: &dyn RegistrarModule,
+        op: &str,
+        input: &str,
+    ) -> Result<String, String> {
         init();
-        pelty_provisioning::wire::call_registrar(m, &|f| crate::block_on(f).map_err(|e| format!("remote:{e}"))?, op, input)
+        pelty_provisioning::wire::call_registrar(
+            m,
+            &|f| crate::block_on(f).map_err(|e| format!("remote:{e}"))?,
+            op,
+            input,
+        )
     }
 }
 
@@ -509,4 +578,3 @@ macro_rules! gateway_addon {
         $crate::export!(PeltyAddon with_types_in $crate);
     };
 }
-

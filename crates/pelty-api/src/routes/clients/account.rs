@@ -1,9 +1,9 @@
 //! Password reset and email verification. Every public endpoint here is
 //! rate-limited (AuthGuard) and never reveals whether an account exists.
-use crate::routes::auth::AuthGuard;
 use crate::error::ApiResult;
 use crate::extract::CurrentUser;
 use crate::mail;
+use crate::routes::auth::AuthGuard;
 use crate::AppState;
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -90,7 +90,14 @@ pub async fn forgot(
         .filter(|u| u.is_active)
     {
         // Cancel-only; a cancelled reset still answers 204 (no account probing).
-        if crate::addon_ext::pre_event(&s, "user.before_password_reset", json!({ "user_id": u.id, "email": u.email, "ip": g.ip() })).await.is_err() {
+        if crate::addon_ext::pre_event(
+            &s,
+            "user.before_password_reset",
+            json!({ "user_id": u.id, "email": u.email, "ip": g.ip() }),
+        )
+        .await
+        .is_err()
+        {
             return Ok(StatusCode::NO_CONTENT);
         }
         let tok = token::generate();
@@ -126,7 +133,10 @@ pub async fn forgot(
             json!({}),
         )
         .await?;
-        s.emit(pelty_extensions::events::DomainEvent::new("user.password_reset_requested", json!({ "user_id": u.id })));
+        s.emit(pelty_extensions::events::DomainEvent::new(
+            "user.password_reset_requested",
+            json!({ "user_id": u.id }),
+        ));
     }
     Ok(StatusCode::NO_CONTENT)
 }
@@ -142,7 +152,9 @@ pub async fn reset(
     let hash = token::hash(b.token.trim());
     let peek = user_tokens::peek(&s.pool, user_tokens::PASSWORD_RESET, &hash).await?;
     let (_, email) = peek.ok_or(AppError::Validation("error.invalid_token"))?;
-    pelty_auth::policy::load(&s.pool).await?.check_password(&b.password, &email)?;
+    pelty_auth::policy::load(&s.pool)
+        .await?
+        .check_password(&b.password, &email)?;
     let uid = user_tokens::consume(&s.pool, user_tokens::PASSWORD_RESET, &hash)
         .await?
         .ok_or(AppError::Validation("error.invalid_token"))?;
@@ -160,7 +172,10 @@ pub async fn reset(
         json!({ "sessions_revoked": revoked }),
     )
     .await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("user.password_reset", json!({ "user_id": uid, "sessions_revoked": revoked })));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "user.password_reset",
+        json!({ "user_id": uid, "sessions_revoked": revoked }),
+    ));
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -188,7 +203,10 @@ pub async fn verify(
         json!({}),
     )
     .await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("user.email_verified", json!({ "user_id": uid })));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "user.email_verified",
+        json!({ "user_id": uid }),
+    ));
     Ok(StatusCode::NO_CONTENT)
 }
 

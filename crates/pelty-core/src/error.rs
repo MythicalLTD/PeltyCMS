@@ -35,7 +35,10 @@ impl AppError {
     /// Stable message code (also the translation key).
     pub fn code(&self) -> &'static str {
         match self {
-            AppError::Validation(c) | AppError::Conflict(c) | AppError::BadRequest(c) | AppError::Denied(c) => c,
+            AppError::Validation(c)
+            | AppError::Conflict(c)
+            | AppError::BadRequest(c)
+            | AppError::Denied(c) => c,
             AppError::InvalidCredentials => "error.invalid_credentials",
             AppError::Unauthenticated => "error.unauthenticated",
             AppError::Forbidden => "error.forbidden",

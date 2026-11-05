@@ -2,8 +2,8 @@
 //! password rules, session lifetimes and the login rate limit. Read through a
 //! short in-process cache; [`invalidate`] after an update.
 use pelty_core::{AppError, AppResult};
-use serde_json::{json, Value};
 use pelty_database::Pool as PgPool;
+use serde_json::{json, Value};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -55,12 +55,17 @@ impl SecurityPolicy {
         let opt = |k: &str| -> Result<Option<i64>, AppError> {
             match &v[k] {
                 Value::Null => Ok(None),
-                x => x.as_i64().map(Some).ok_or(AppError::Validation("error.security_policy")),
+                x => x
+                    .as_i64()
+                    .map(Some)
+                    .ok_or(AppError::Validation("error.security_policy")),
             }
         };
         let min = match &v["password_min_length"] {
             Value::Null => d.password_min_length,
-            x => x.as_u64().ok_or(AppError::Validation("error.security_policy"))? as usize,
+            x => x
+                .as_u64()
+                .ok_or(AppError::Validation("error.security_policy"))? as usize,
         };
         if !(8..=128).contains(&min) {
             return Err(bad);
@@ -70,10 +75,15 @@ impl SecurityPolicy {
         let rate = opt("login_rate_per_minute")?;
         let reauth = opt("admin_reauth_minutes")?;
         let max_age = opt("password_max_age_days")?;
-        if reauth.is_some_and(|m| !(1..=60 * 24 * 7).contains(&m)) || max_age.is_some_and(|d| !(1..=3650).contains(&d)) {
+        if reauth.is_some_and(|m| !(1..=60 * 24 * 7).contains(&m))
+            || max_age.is_some_and(|d| !(1..=3650).contains(&d))
+        {
             return Err(AppError::Validation("error.security_policy"));
         }
-        if idle.is_some_and(|m| !(5..=60 * 24 * 30).contains(&m)) || abs.is_some_and(|h| !(1..=24 * 365).contains(&h)) || rate.is_some_and(|r| !(1..=10_000).contains(&r)) {
+        if idle.is_some_and(|m| !(5..=60 * 24 * 30).contains(&m))
+            || abs.is_some_and(|h| !(1..=24 * 365).contains(&h))
+            || rate.is_some_and(|r| !(1..=10_000).contains(&r))
+        {
             return Err(bad);
         }
         Ok(SecurityPolicy {
@@ -140,7 +150,9 @@ pub async fn load(pool: &PgPool) -> AppResult<SecurityPolicy> {
         }
     }
     let v = pelty_database::settings::get(pool, SETTING_KEY).await?;
-    let p = v.and_then(|v| SecurityPolicy::from_value(&v).ok()).unwrap_or_default();
+    let p = v
+        .and_then(|v| SecurityPolicy::from_value(&v).ok())
+        .unwrap_or_default();
     if let Ok(mut c) = CACHE.lock() {
         *c = Some((Instant::now(), p.clone()));
     }
@@ -152,20 +164,35 @@ mod tests {
     use super::*;
     #[test]
     fn parse_and_check() {
-        assert_eq!(SecurityPolicy::from_value(&json!({})).unwrap(), SecurityPolicy::default());
+        assert_eq!(
+            SecurityPolicy::from_value(&json!({})).unwrap(),
+            SecurityPolicy::default()
+        );
         assert!(SecurityPolicy::from_value(&json!({"password_min_length": 4})).is_err());
         assert!(SecurityPolicy::from_value(&json!({"session_idle_minutes": 1})).is_err());
-        let p = SecurityPolicy::from_value(&json!({"password_min_length": 10, "require_digit": true, "require_symbol": true})).unwrap();
+        let p = SecurityPolicy::from_value(
+            &json!({"password_min_length": 10, "require_digit": true, "require_symbol": true}),
+        )
+        .unwrap();
         assert!(p.check_password("Zebra-Quartz-Pine", "a@b.c").is_err()); // no digit
         assert!(p.check_password("Zebra-Quartz-9", "a@b.c").is_ok());
         assert!(p.check_password("Zebra9Quar", "a@b.c").is_err()); // no symbol
         let a = SecurityPolicy::from_value(&json!({"admin_reauth_minutes": 15, "password_max_age_days": 90, "login_alerts": false})).unwrap();
-        assert_eq!((a.admin_reauth_minutes, a.password_max_age_days, a.login_alerts), (Some(15), Some(90), false));
+        assert_eq!(
+            (
+                a.admin_reauth_minutes,
+                a.password_max_age_days,
+                a.login_alerts
+            ),
+            (Some(15), Some(90), false)
+        );
         assert_eq!(SecurityPolicy::from_value(&a.to_value()).unwrap(), a);
         assert!(SecurityPolicy::from_value(&json!({"admin_reauth_minutes": 0})).is_err());
         assert!(SecurityPolicy::from_value(&json!({"password_max_age_days": 99999})).is_err());
         let short = SecurityPolicy::from_value(&json!({"password_min_length": 8})).unwrap();
         assert!(short.check_password("Qz7!kLpw", "a@b.c").is_ok());
-        assert!(SecurityPolicy::default().check_password("Qz7!kLpw", "a@b.c").is_err());
+        assert!(SecurityPolicy::default()
+            .check_password("Qz7!kLpw", "a@b.c")
+            .is_err());
     }
 }

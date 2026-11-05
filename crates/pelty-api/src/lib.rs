@@ -1,67 +1,67 @@
 //! HTTP layer: routing, extractors, error mapping. Business logic lives in
 //! service crates; SQL lives in `pelty-database`.
 pub mod addon_host;
-pub use addon_host::addons;
+pub use addon_host::addon_events;
 pub use addon_host::addon_ext;
+pub use addon_host::addon_filters;
+pub use addon_host::addon_functions;
+pub use addon_host::addon_health;
 pub use addon_host::addon_power;
 pub use addon_host::addon_secrets;
 pub use addon_host::addon_trust;
 pub use addon_host::addon_upgrade;
-pub use addon_host::wasm_addons;
-pub use addon_host::addon_events;
-pub use addon_host::addon_filters;
-pub use addon_host::addon_functions;
-pub use addon_host::addon_health;
+pub use addon_host::addons;
 pub use addon_host::plugin_hooks;
+pub use addon_host::wasm_addons;
 pub mod money;
-pub use money::overdue;
 pub use money::autopay;
-pub use money::exchange_rates;
 pub use money::einvoice;
+pub use money::exchange_rates;
+pub use money::overdue;
 pub use money::pdf;
 pub use money::vies;
 pub mod comms;
+pub use comms::chat_bus;
+pub use comms::event_mail;
 pub use comms::mail;
 pub use comms::mailbox;
-pub use comms::pipe;
 pub use comms::notify;
-pub use comms::event_mail;
-pub use comms::webhooks_out;
-pub use comms::chat_bus;
+pub use comms::pipe;
 pub use comms::support_ext;
+pub use comms::webhooks_out;
 pub mod access;
+pub use access::captcha;
+pub use access::duo;
+pub use access::fraud;
+pub use access::geoip;
 pub use access::oauth;
 pub use access::oidc_provider;
 pub use access::saml;
-pub use access::duo;
-pub use access::captcha;
 pub use access::security;
 pub use access::security_headers;
 pub use access::trusted_proxy;
-pub use access::fraud;
-pub use access::geoip;
 pub mod hosting;
-pub use hosting::provision;
+pub use hosting::cluster;
 pub use hosting::domains;
+pub use hosting::provision;
 pub use hosting::registrant_verify;
 pub use hosting::ssl_probe;
-pub use hosting::cluster;
 pub mod platform;
-pub use platform::worker;
-pub use platform::cron;
-pub use platform::backup;
-pub use platform::updates;
-pub use platform::changes;
 pub use platform::approval;
+pub use platform::backup;
+pub use platform::changes;
+pub use platform::cron;
 pub use platform::csv;
-pub use platform::extract;
 pub use platform::dev_docs;
-pub use platform::whmcs_api;
-pub use platform::translations;
+pub use platform::extract;
 pub use platform::static_files;
-pub mod shared;
+pub use platform::translations;
+pub use platform::updates;
+pub use platform::whmcs_api;
+pub use platform::worker;
 pub mod error;
 pub mod routes;
+pub mod shared;
 
 use axum::http::HeaderName;
 use axum::{middleware, Router};
@@ -166,7 +166,9 @@ impl AppState {
             cfg.auth_rate_per_minute,
             std::time::Duration::from_secs(60),
         ));
-        let shared = Arc::new(shared::Shared::new(cfg.redis_url.as_ref().map(|r| r.0.clone())));
+        let shared = Arc::new(shared::Shared::new(
+            cfg.redis_url.as_ref().map(|r| r.0.clone()),
+        ));
         if shared.enabled() {
             auth_limiter.set_shared(Arc::new(shared::RedisCounter(shared.clone())));
         }
@@ -207,7 +209,10 @@ impl AppState {
             pelty_auth::crypto::SecretBox::from_base64(&k.0)
                 .unwrap_or_else(|e| panic!("invalid PELTY_ENCRYPTION_KEY: {e}"))
         });
-        let addon_kv: Arc<dyn pelty_wasm::KvStore> = Arc::new(wasm_addons::PgKv { pool: pool.clone(), secret_box: secret_box.clone() });
+        let addon_kv: Arc<dyn pelty_wasm::KvStore> = Arc::new(wasm_addons::PgKv {
+            pool: pool.clone(),
+            secret_box: secret_box.clone(),
+        });
         let geoip = geoip::GeoIp::load(cfg.geoip_db.as_deref());
         AppState {
             provisioning: Arc::new(pelty_provisioning::Registry::default()),
@@ -230,7 +235,9 @@ impl AppState {
             event_logger,
             gateways: Arc::new(GatewayRegistry::empty(Arc::new(pelty_wasm::GuardedHttp))),
             active_theme_cache: Arc::new(RwLock::new("default".into())),
-            http_transport: Arc::new(RwLock::new(Arc::new(pelty_wasm::GuardedHttp) as Arc<dyn pelty_payments::http::HttpTransport>)),
+            http_transport: Arc::new(RwLock::new(
+                Arc::new(pelty_wasm::GuardedHttp) as Arc<dyn pelty_payments::http::HttpTransport>
+            )),
             wasm_addons: Arc::new(RwLock::new(Default::default())),
             mixins_off: Arc::new(RwLock::new(Default::default())),
             addon_health: Arc::new(Default::default()),
@@ -318,15 +325,33 @@ pub fn router(state: AppState) -> Router {
     let x_request_id = HeaderName::from_static("x-request-id");
     Router::new()
         .merge(routes::health::router())
-        .nest("/api/v1", routes::api_router().route_layer(middleware::from_fn_with_state(state.clone(), addon_events::lifecycle)))
-        .route("/api/openapi.json", axum::routing::get(routes::openapi::spec))
+        .nest(
+            "/api/v1",
+            routes::api_router().route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                addon_events::lifecycle,
+            )),
+        )
+        .route(
+            "/api/openapi.json",
+            axum::routing::get(routes::openapi::spec),
+        )
         .merge(whmcs_api::root_router())
         .merge(oidc_provider::root_router())
         .merge(dev_docs::root_router())
         .fallback(static_files::frontend)
-        .layer(middleware::from_fn_with_state(state.clone(), cluster::publish_admin_writes))
-        .layer(middleware::from_fn_with_state(state.clone(), security::ip_guard))
-        .layer(middleware::from_fn_with_state(state.clone(), trusted_proxy::rewrite))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            cluster::publish_admin_writes,
+        ))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            security::ip_guard,
+        ))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            trusted_proxy::rewrite,
+        ))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             routes::general_settings::maintenance_guard,

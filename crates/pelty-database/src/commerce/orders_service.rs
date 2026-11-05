@@ -39,24 +39,71 @@ impl OrderService {
     }
 
     /// Same as [`orders::place`].
-    pub async fn place(&self, customer_id: Uuid, currency: &str, items: &[CartItem], coupon: Option<&str>, due_days: i64) -> AppResult<(Order, Invoice)> {
+    pub async fn place(
+        &self,
+        customer_id: Uuid,
+        currency: &str,
+        items: &[CartItem],
+        coupon: Option<&str>,
+        due_days: i64,
+    ) -> AppResult<(Order, Invoice)> {
         orders::place(&self.pool, customer_id, currency, items, coupon, due_days).await
     }
 
     /// Same as [`orders::place_with`].
-    pub async fn place_with(&self, customer_id: Uuid, currency: &str, items: &[CartItem], coupon: Option<&str>, due_days: i64, bundle: Option<&BundleDiscount>) -> AppResult<(Order, Invoice)> {
-        orders::place_with(&self.pool, customer_id, currency, items, coupon, due_days, bundle).await
+    pub async fn place_with(
+        &self,
+        customer_id: Uuid,
+        currency: &str,
+        items: &[CartItem],
+        coupon: Option<&str>,
+        due_days: i64,
+        bundle: Option<&BundleDiscount>,
+    ) -> AppResult<(Order, Invoice)> {
+        orders::place_with(
+            &self.pool,
+            customer_id,
+            currency,
+            items,
+            coupon,
+            due_days,
+            bundle,
+        )
+        .await
     }
 
     /// Same as [`orders::line_amounts`].
-    pub async fn line_amounts(&self, currency: &str, items: &[CartItem]) -> AppResult<Vec<catalog::Quote>> {
+    pub async fn line_amounts(
+        &self,
+        currency: &str,
+        items: &[CartItem],
+    ) -> AppResult<Vec<catalog::Quote>> {
         orders::line_amounts(&self.pool, currency, items).await
     }
 
     /// Same as [`orders::place_full`].
     #[allow(clippy::too_many_arguments)]
-    pub async fn place_full(&self, customer_id: Uuid, currency: &str, items: &[CartItem], coupon: Option<&str>, due_days: i64, bundle: Option<&BundleDiscount>, addon_discounts: &[AddonDiscount]) -> AppResult<(Order, Invoice)> {
-        orders::place_full(&self.pool, customer_id, currency, items, coupon, due_days, bundle, addon_discounts).await
+    pub async fn place_full(
+        &self,
+        customer_id: Uuid,
+        currency: &str,
+        items: &[CartItem],
+        coupon: Option<&str>,
+        due_days: i64,
+        bundle: Option<&BundleDiscount>,
+        addon_discounts: &[AddonDiscount],
+    ) -> AppResult<(Order, Invoice)> {
+        orders::place_full(
+            &self.pool,
+            customer_id,
+            currency,
+            items,
+            coupon,
+            due_days,
+            bundle,
+            addon_discounts,
+        )
+        .await
     }
 
     /// Same as [`orders::get`].
@@ -70,7 +117,13 @@ impl OrderService {
     }
 
     /// Same as [`orders::list`].
-    pub async fn list(&self, customer: Option<Uuid>, status: Option<&str>, limit: i64, offset: i64) -> AppResult<(Vec<Order>, i64)> {
+    pub async fn list(
+        &self,
+        customer: Option<Uuid>,
+        status: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> AppResult<(Vec<Order>, i64)> {
         orders::list(&self.pool, customer, status, limit, offset).await
     }
 

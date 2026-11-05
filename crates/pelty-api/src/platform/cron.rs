@@ -25,13 +25,20 @@ fn to_chrono(t: OffsetDateTime) -> Option<chrono::DateTime<chrono::FixedOffset>>
 
 /// The next `n` run times (unix seconds) strictly after `now` (company time).
 pub fn next_runs(cron: &Cron, now: OffsetDateTime, n: usize) -> Vec<i64> {
-    let Some(start) = to_chrono(now) else { return vec![] };
-    cron.iter_after(start).take(n).map(|d| d.timestamp()).collect()
+    let Some(start) = to_chrono(now) else {
+        return vec![];
+    };
+    cron.iter_after(start)
+        .take(n)
+        .map(|d| d.timestamp())
+        .collect()
 }
 
 /// The latest run time at or before `now` (company time).
 pub fn prev_run(cron: &Cron, now: OffsetDateTime) -> Option<i64> {
-    cron.find_previous_occurrence(&to_chrono(now)?, true).ok().map(|d| d.timestamp())
+    cron.find_previous_occurrence(&to_chrono(now)?, true)
+        .ok()
+        .map(|d| d.timestamp())
 }
 
 /// English description of an expression ("At minute 0, at hour 3 ...").
@@ -44,8 +51,16 @@ pub fn describe(cron: &Cron) -> String {
 pub fn from_interval(secs: i64, run_hour: Option<i16>) -> Option<String> {
     match secs {
         86_400 => Some(format!("0 {} * * *", run_hour.unwrap_or(0))),
-        s if s >= 3_600 && s % 3_600 == 0 && 24 % (s / 3_600) == 0 => Some(if s == 3_600 { "0 * * * *".into() } else { format!("0 */{} * * *", s / 3_600) }),
-        s if (60..3_600).contains(&s) && s % 60 == 0 && 60 % (s / 60) == 0 => Some(if s == 60 { "* * * * *".into() } else { format!("*/{} * * * *", s / 60) }),
+        s if s >= 3_600 && s % 3_600 == 0 && 24 % (s / 3_600) == 0 => Some(if s == 3_600 {
+            "0 * * * *".into()
+        } else {
+            format!("0 */{} * * *", s / 3_600)
+        }),
+        s if (60..3_600).contains(&s) && s % 60 == 0 && 60 % (s / 60) == 0 => Some(if s == 60 {
+            "* * * * *".into()
+        } else {
+            format!("*/{} * * * *", s / 60)
+        }),
         _ => None,
     }
 }
@@ -67,7 +82,9 @@ mod tests {
         assert!(parse("61 * * * *").is_err());
         let c = parse("0 3 * * *").unwrap();
         // 2026-11-01 12:00 UTC == 13:00 at +01:00; next 03:00 local is 02:00 UTC on 11-02.
-        let now = OffsetDateTime::from_unix_timestamp(1_793_534_400).unwrap().to_offset(time::UtcOffset::from_hms(1, 0, 0).unwrap());
+        let now = OffsetDateTime::from_unix_timestamp(1_793_534_400)
+            .unwrap()
+            .to_offset(time::UtcOffset::from_hms(1, 0, 0).unwrap());
         let n = next_runs(&c, now, 2);
         assert_eq!(n[0], 1_793_584_800);
         assert_eq!(n[1] - n[0], 86_400);

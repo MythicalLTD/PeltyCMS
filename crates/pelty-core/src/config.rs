@@ -82,7 +82,10 @@ pub struct AiConfig {
 impl AiConfig {
     pub fn enabled(&self) -> bool {
         self.base_url.as_ref().is_some_and(|v| !v.trim().is_empty())
-            && self.api_key.as_ref().is_some_and(|v| !v.0.trim().is_empty())
+            && self
+                .api_key
+                .as_ref()
+                .is_some_and(|v| !v.0.trim().is_empty())
             && self.model.as_ref().is_some_and(|v| !v.trim().is_empty())
     }
 }
@@ -102,7 +105,14 @@ const MB: usize = 1024 * 1024;
 
 impl Default for UploadLimits {
     fn default() -> Self {
-        UploadLimits { attachment: 50 * MB, avatar: 2 * MB, kyc: 20 * MB, download: 25 * MB, import: 5 * MB, addon: 64 * MB }
+        UploadLimits {
+            attachment: 50 * MB,
+            avatar: 2 * MB,
+            kyc: 20 * MB,
+            download: 25 * MB,
+            import: 5 * MB,
+            addon: 64 * MB,
+        }
     }
 }
 
@@ -233,14 +243,27 @@ impl Config {
             ));
         }
         if !(5..=3600).contains(&c.scheduler_interval_secs) {
-            return Err(ConfigError::Invalid("PELTY_SCHEDULER_INTERVAL_SECS", "5..=3600".into()));
+            return Err(ConfigError::Invalid(
+                "PELTY_SCHEDULER_INTERVAL_SECS",
+                "5..=3600".into(),
+            ));
         }
         if !(1..=200).contains(&c.worker_concurrency) {
-            return Err(ConfigError::Invalid("PELTY_WORKER_CONCURRENCY", "1..=200".into()));
+            return Err(ConfigError::Invalid(
+                "PELTY_WORKER_CONCURRENCY",
+                "1..=200".into(),
+            ));
         }
         if let Some(r) = &c.redis_url {
-            if !r.0.starts_with("redis://") && !r.0.starts_with("rediss://") && !r.0.starts_with("redis+unix://") && !r.0.starts_with("unix://") {
-                return Err(ConfigError::Invalid("PELTY_REDIS_URL", "must be a redis:// URL".into()));
+            if !r.0.starts_with("redis://")
+                && !r.0.starts_with("rediss://")
+                && !r.0.starts_with("redis+unix://")
+                && !r.0.starts_with("unix://")
+            {
+                return Err(ConfigError::Invalid(
+                    "PELTY_REDIS_URL",
+                    "must be a redis:// URL".into(),
+                ));
             }
         }
         if !c.public_url.starts_with("http://") && !c.public_url.starts_with("https://") {

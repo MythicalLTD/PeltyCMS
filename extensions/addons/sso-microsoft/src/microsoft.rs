@@ -20,6 +20,9 @@ mod tests {
 
     #[test]
     fn maps_claims() {
-        assert_eq!((PROVIDER.profile)(&json!({"sub": "m", "email": "a@x"})).unwrap()["email_verified"], false);
+        assert_eq!(
+            (PROVIDER.profile)(&json!({"sub": "m", "email": "a@x"})).unwrap()["email_verified"],
+            false
+        );
     }
 }

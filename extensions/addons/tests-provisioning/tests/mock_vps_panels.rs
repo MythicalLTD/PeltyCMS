@@ -23,19 +23,45 @@ struct Mock {
     routes: Arc<Vec<(String, String, u16, Value)>>,
 }
 
-async fn handler(State(m): State<Mock>, method: Method, uri: Uri, headers: HeaderMap, body: Bytes) -> impl IntoResponse {
-    let path = uri.path_and_query().map(|p| p.as_str().to_string()).unwrap_or_default();
-    m.log.lock().unwrap().push(Req { method: method.to_string(), path: path.clone(), body: String::from_utf8_lossy(&body).into_owned(), headers });
+async fn handler(
+    State(m): State<Mock>,
+    method: Method,
+    uri: Uri,
+    headers: HeaderMap,
+    body: Bytes,
+) -> impl IntoResponse {
+    let path = uri
+        .path_and_query()
+        .map(|p| p.as_str().to_string())
+        .unwrap_or_default();
+    m.log.lock().unwrap().push(Req {
+        method: method.to_string(),
+        path: path.clone(),
+        body: String::from_utf8_lossy(&body).into_owned(),
+        headers,
+    });
     for (rm, rp, st, rb) in m.routes.iter() {
         if rm == method.as_str() && path.starts_with(rp.as_str()) {
             return (StatusCode::from_u16(*st).unwrap(), axum::Json(rb.clone())).into_response();
         }
     }
-    (StatusCode::NOT_FOUND, axum::Json(json!({"message": "no route"}))).into_response()
+    (
+        StatusCode::NOT_FOUND,
+        axum::Json(json!({"message": "no route"})),
+    )
+        .into_response()
 }
 
 async fn start(routes: Vec<(&str, &str, u16, Value)>) -> (Mock, String) {
-    let m = Mock { log: Default::default(), routes: Arc::new(routes.into_iter().map(|(a, b, c, d)| (a.to_string(), b.to_string(), c, d)).collect()) };
+    let m = Mock {
+        log: Default::default(),
+        routes: Arc::new(
+            routes
+                .into_iter()
+                .map(|(a, b, c, d)| (a.to_string(), b.to_string(), c, d))
+                .collect(),
+        ),
+    };
     let app = Router::new().fallback(handler).with_state(m.clone());
     let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = l.local_addr().unwrap();
@@ -44,7 +70,11 @@ async fn start(routes: Vec<(&str, &str, u16, Value)>) -> (Mock, String) {
 }
 
 fn conn(url: &str, key: &str, config: Value) -> ServerConn {
-    ServerConn { base_url: url.into(), api_key: key.into(), config }
+    ServerConn {
+        base_url: url.into(),
+        api_key: key.into(),
+        config,
+    }
 }
 
 fn svc(config: Value, remote: Option<&str>, data: Value) -> ServiceCtx {
@@ -65,48 +95,103 @@ fn reqs(m: &Mock) -> Vec<Req> {
 }
 
 fn find<'a>(r: &'a [Req], method: &str, prefix: &str) -> &'a Req {
-    r.iter().find(|x| x.method == method && x.path.starts_with(prefix)).unwrap_or_else(|| panic!("no {method} {prefix}"))
+    r.iter()
+        .find(|x| x.method == method && x.path.starts_with(prefix))
+        .unwrap_or_else(|| panic!("no {method} {prefix}"))
 }
 #[tokio::test]
 async fn convoy_lifecycle() {
     let (m, url) = start(vec![
         ("GET", "/api/application/users", 200, json!({"data": []})),
-        ("POST", "/api/application/users/7/generate-sso-token", 200, json!({"data": {"token": "tok"}})),
-        ("POST", "/api/application/users", 201, json!({"data": {"id": 7}})),
-        ("POST", "/api/application/servers/abc-1/settings/suspend", 204, Value::Null),
-        ("POST", "/api/application/servers", 201, json!({"data": {"uuid": "abc-1"}})),
-        ("PATCH", "/api/application/servers/abc-1/settings/build", 200, json!({})),
-        ("DELETE", "/api/application/servers/abc-1", 404, json!({"message": "gone"})),
+        (
+            "POST",
+            "/api/application/users/7/generate-sso-token",
+            200,
+            json!({"data": {"token": "tok"}}),
+        ),
+        (
+            "POST",
+            "/api/application/users",
+            201,
+            json!({"data": {"id": 7}}),
+        ),
+        (
+            "POST",
+            "/api/application/servers/abc-1/settings/suspend",
+            204,
+            Value::Null,
+        ),
+        (
+            "POST",
+            "/api/application/servers",
+            201,
+            json!({"data": {"uuid": "abc-1"}}),
+        ),
+        (
+            "PATCH",
+            "/api/application/servers/abc-1/settings/build",
+            200,
+            json!({}),
+        ),
+        (
+            "DELETE",
+            "/api/application/servers/abc-1",
+            404,
+            json!({"message": "gone"}),
+        ),
         ("PATCH", "/api/client/servers/abc-1/state", 204, Value::Null),
     ])
     .await;
     let reg = pelty_addon_tests_provisioning::builtins();
     let mo = reg.get("convoy").unwrap();
     let s = conn(&url, "k", json!({}));
-    let cfg = json!({"node_id": 1, "template_uuid": "t-1", "cpu": 2, "memory": 2048, "disk": 10240});
-    let c = run(mo.as_ref(), "create", &s, &svc(cfg.clone(), None, json!({}))).await.unwrap().unwrap();
+    let cfg =
+        json!({"node_id": 1, "template_uuid": "t-1", "cpu": 2, "memory": 2048, "disk": 10240});
+    let c = run(
+        mo.as_ref(),
+        "create",
+        &s,
+        &svc(cfg.clone(), None, json!({})),
+    )
+    .await
+    .unwrap()
+    .unwrap();
     assert_eq!(c.remote_id, "abc-1");
     let r = reqs(&m);
-    let b: Value = serde_json::from_str(&find(&r, "POST", "/api/application/servers").body).unwrap();
+    let b: Value =
+        serde_json::from_str(&find(&r, "POST", "/api/application/servers").body).unwrap();
     assert_eq!(b["user_id"], 7);
     assert_eq!(b["limits"]["memory"], 2048u64 * 1024 * 1024);
-    assert_eq!(find(&r, "POST", "/api/application/servers").headers["authorization"], "Bearer k");
+    assert_eq!(
+        find(&r, "POST", "/api/application/servers").headers["authorization"],
+        "Bearer k"
+    );
     let sv = svc(cfg, Some("abc-1"), c.module_data.clone());
     run(mo.as_ref(), "suspend", &s, &sv).await.unwrap();
     run(mo.as_ref(), "change_package", &s, &sv).await.unwrap();
     run(mo.as_ref(), "terminate", &s, &sv).await.unwrap();
-    run_custom(mo.as_ref(), "restart", &s, &sv, &json!({})).await.unwrap();
+    run_custom(mo.as_ref(), "restart", &s, &sv, &json!({}))
+        .await
+        .unwrap();
     let u = mo.sso_url(&s, &sv, "x").await.unwrap().unwrap();
     assert_eq!(u, format!("{url}/authenticate?token=tok"));
     let bad = svc(json!({}), Some("../x"), json!({}));
-    assert!(matches!(run(mo.as_ref(), "suspend", &s, &bad).await, Err(ProvisionError::Config(_))));
+    assert!(matches!(
+        run(mo.as_ref(), "suspend", &s, &bad).await,
+        Err(ProvisionError::Config(_))
+    ));
 }
 
 #[tokio::test]
 async fn virtfusion_lifecycle() {
     let (m, url) = start(vec![
         ("GET", "/api/v1/users/", 404, json!({"msg": "not found"})),
-        ("POST", "/api/v1/users/", 200, json!({"data": {"authentication": {"endpoint_complete": "/token/xyz"}}})),
+        (
+            "POST",
+            "/api/v1/users/",
+            200,
+            json!({"data": {"authentication": {"endpoint_complete": "/token/xyz"}}}),
+        ),
         ("POST", "/api/v1/users", 201, json!({"data": {"id": 9}})),
         ("POST", "/api/v1/servers/55/build", 200, json!({})),
         ("POST", "/api/v1/servers/55/suspend", 204, Value::Null),
@@ -120,32 +205,66 @@ async fn virtfusion_lifecycle() {
     let mo = reg.get("virtfusion").unwrap();
     let s = conn(&url, "k", json!({}));
     let cfg = json!({"package_id": 3, "hypervisor_group_id": 2, "os_template_id": 11});
-    let c = run(mo.as_ref(), "create", &s, &svc(cfg.clone(), None, json!({}))).await.unwrap().unwrap();
+    let c = run(
+        mo.as_ref(),
+        "create",
+        &s,
+        &svc(cfg.clone(), None, json!({})),
+    )
+    .await
+    .unwrap()
+    .unwrap();
     assert_eq!(c.remote_id, "55");
     let r = reqs(&m);
     let b: Value = serde_json::from_str(&find(&r, "POST", "/api/v1/servers").body).unwrap();
-    assert_eq!(b, json!({"packageId": 3, "userId": 9, "hypervisorId": 2, "ipv4": 1}));
-    let bb: Value = serde_json::from_str(&find(&r, "POST", "/api/v1/servers/55/build").body).unwrap();
+    assert_eq!(
+        b,
+        json!({"packageId": 3, "userId": 9, "hypervisorId": 2, "ipv4": 1})
+    );
+    let bb: Value =
+        serde_json::from_str(&find(&r, "POST", "/api/v1/servers/55/build").body).unwrap();
     assert_eq!(bb["operatingSystemId"], 11);
     let sv = svc(cfg, Some("55"), c.module_data.clone());
     run(mo.as_ref(), "suspend", &s, &sv).await.unwrap();
     run(mo.as_ref(), "change_package", &s, &sv).await.unwrap();
     run(mo.as_ref(), "terminate", &s, &sv).await.unwrap();
-    assert!(find(&reqs(&m), "DELETE", "/api/v1/servers/55").path.ends_with("delay=0"));
-    run_custom(mo.as_ref(), "restart", &s, &sv, &json!({})).await.unwrap();
-    assert_eq!(mo.sso_url(&s, &sv, "x").await.unwrap().unwrap(), format!("{url}/token/xyz"));
+    assert!(find(&reqs(&m), "DELETE", "/api/v1/servers/55")
+        .path
+        .ends_with("delay=0"));
+    run_custom(mo.as_ref(), "restart", &s, &sv, &json!({}))
+        .await
+        .unwrap();
+    assert_eq!(
+        mo.sso_url(&s, &sv, "x").await.unwrap().unwrap(),
+        format!("{url}/token/xyz")
+    );
 }
 
 #[tokio::test]
 async fn enhance_lifecycle() {
     let (m, url) = start(vec![
-        ("POST", "/api/orgs/master/customers/c1/subscriptions", 201, json!({"id": 44})),
-        ("POST", "/api/orgs/master/customers", 201, json!({"id": "c1"})),
+        (
+            "POST",
+            "/api/orgs/master/customers/c1/subscriptions",
+            201,
+            json!({"id": 44}),
+        ),
+        (
+            "POST",
+            "/api/orgs/master/customers",
+            201,
+            json!({"id": "c1"}),
+        ),
         ("POST", "/api/logins", 201, json!({"id": "l1"})),
         ("POST", "/api/orgs/c1/members", 201, json!({"id": "m1"})),
         ("POST", "/api/orgs/c1/websites", 201, json!({"id": "w1"})),
         ("PATCH", "/api/orgs/c1/subscriptions/44", 204, Value::Null),
-        ("GET", "/api/orgs/c1/members/m1/sso", 200, json!("https://panel/sso/abc")),
+        (
+            "GET",
+            "/api/orgs/c1/members/m1/sso",
+            200,
+            json!("https://panel/sso/abc"),
+        ),
         ("DELETE", "/api/orgs/c1", 204, Value::Null),
     ])
     .await;
@@ -153,7 +272,15 @@ async fn enhance_lifecycle() {
     let mo = reg.get("enhance").unwrap();
     let s = conn(&url, "k", json!({"org_id": "master"}));
     let cfg = json!({"plan_id": 5});
-    let c = run(mo.as_ref(), "create", &s, &svc(cfg.clone(), None, json!({}))).await.unwrap().unwrap();
+    let c = run(
+        mo.as_ref(),
+        "create",
+        &s,
+        &svc(cfg.clone(), None, json!({})),
+    )
+    .await
+    .unwrap()
+    .unwrap();
     assert_eq!(c.remote_id, "c1");
     assert_eq!(c.module_data["subscription_id"], "44");
     let r = reqs(&m);
@@ -161,18 +288,31 @@ async fn enhance_lifecycle() {
     assert_eq!(w, json!({"domain": "alice.example", "subscriptionId": 44}));
     let sv = svc(cfg, Some("c1"), c.module_data.clone());
     run(mo.as_ref(), "suspend", &s, &sv).await.unwrap();
-    let p: Value = serde_json::from_str(&find(&reqs(&m), "PATCH", "/api/orgs/c1/subscriptions/44").body).unwrap();
+    let p: Value =
+        serde_json::from_str(&find(&reqs(&m), "PATCH", "/api/orgs/c1/subscriptions/44").body)
+            .unwrap();
     assert_eq!(p, json!({"isSuspended": true}));
     run(mo.as_ref(), "terminate", &s, &sv).await.unwrap();
-    assert_eq!(mo.sso_url(&s, &sv, "x").await.unwrap().unwrap(), "https://panel/sso/abc");
+    assert_eq!(
+        mo.sso_url(&s, &sv, "x").await.unwrap().unwrap(),
+        "https://panel/sso/abc"
+    );
     let no_org = conn(&url, "k", json!({}));
-    assert!(matches!(mo.test_connection(&no_org).await, Err(ProvisionError::Config(_))));
+    assert!(matches!(
+        mo.test_connection(&no_org).await,
+        Err(ProvisionError::Config(_))
+    ));
 }
 
 #[tokio::test]
 async fn solusio_lifecycle() {
     let (m, url) = start(vec![
-        ("GET", "/api/v1/users?", 200, json!({"data": [{"id": 4, "email": "bob@example.com"}]})),
+        (
+            "GET",
+            "/api/v1/users?",
+            200,
+            json!({"data": [{"id": 4, "email": "bob@example.com"}]}),
+        ),
         ("POST", "/api/v1/users", 201, json!({"data": {"id": 7}})),
         ("POST", "/api/v1/servers/88/", 200, json!({"data": {}})),
         ("POST", "/api/v1/servers", 201, json!({"data": {"id": 88}})),
@@ -185,29 +325,88 @@ async fn solusio_lifecycle() {
     let s = conn(&url, "tok", json!({}));
     mo.test_connection(&s).await.unwrap();
     let cfg = json!({"plan_id": 2, "location_id": 1, "os_image_version_id": 6});
-    let c = run(mo.as_ref(), "create", &s, &svc(cfg.clone(), None, json!({}))).await.unwrap().unwrap();
+    let c = run(
+        mo.as_ref(),
+        "create",
+        &s,
+        &svc(cfg.clone(), None, json!({})),
+    )
+    .await
+    .unwrap()
+    .unwrap();
     assert_eq!(c.remote_id, "88");
     let r = reqs(&m);
-    assert_eq!(find(&r, "GET", "/api/v1/plans").headers["authorization"], "Bearer tok");
-    assert!(find(&r, "GET", "/api/v1/users?").path.contains("alice%40example.com"));
+    assert_eq!(
+        find(&r, "GET", "/api/v1/plans").headers["authorization"],
+        "Bearer tok"
+    );
+    assert!(find(&r, "GET", "/api/v1/users?")
+        .path
+        .contains("alice%40example.com"));
     // No exact email match in the search result, so a user is created.
-    let u: Value = serde_json::from_str(&r.iter().find(|x| x.method == "POST" && x.path == "/api/v1/users").unwrap().body).unwrap();
+    let u: Value = serde_json::from_str(
+        &r.iter()
+            .find(|x| x.method == "POST" && x.path == "/api/v1/users")
+            .unwrap()
+            .body,
+    )
+    .unwrap();
     assert_eq!(u["email"], "alice@example.com");
-    let b: Value = serde_json::from_str(&r.iter().find(|x| x.method == "POST" && x.path == "/api/v1/servers").unwrap().body).unwrap();
-    assert_eq!((b["plan"].clone(), b["location"].clone(), b["os"].clone(), b["user"].clone(), b["name"].clone()), (json!(2), json!(1), json!(6), json!(7), json!("alice.example")));
+    let b: Value = serde_json::from_str(
+        &r.iter()
+            .find(|x| x.method == "POST" && x.path == "/api/v1/servers")
+            .unwrap()
+            .body,
+    )
+    .unwrap();
+    assert_eq!(
+        (
+            b["plan"].clone(),
+            b["location"].clone(),
+            b["os"].clone(),
+            b["user"].clone(),
+            b["name"].clone()
+        ),
+        (
+            json!(2),
+            json!(1),
+            json!(6),
+            json!(7),
+            json!("alice.example")
+        )
+    );
     assert_eq!(c.module_data["initial_password"], b["password"]);
     let sv = svc(cfg, Some("88"), c.module_data.clone());
-    for (a, p) in [("suspend", "suspend"), ("unsuspend", "resume"), ("change_package", "resize"), ("terminate", "")] {
+    for (a, p) in [
+        ("suspend", "suspend"),
+        ("unsuspend", "resume"),
+        ("change_package", "resize"),
+        ("terminate", ""),
+    ] {
         run(mo.as_ref(), a, &s, &sv).await.unwrap();
         if !p.is_empty() {
             find(&reqs(&m), "POST", &format!("/api/v1/servers/88/{p}"));
         }
     }
-    let rz: Value = serde_json::from_str(&find(&reqs(&m), "POST", "/api/v1/servers/88/resize").body).unwrap();
+    let rz: Value =
+        serde_json::from_str(&find(&reqs(&m), "POST", "/api/v1/servers/88/resize").body).unwrap();
     assert_eq!(rz, json!({"plan_id": 2, "preserve_disk": true}));
-    run_custom(mo.as_ref(), "restart", &s, &sv, &json!({})).await.unwrap();
-    let pw = run_custom(mo.as_ref(), "change_password", &s, &sv, &json!({"password": "Secret12345"})).await.unwrap();
+    run_custom(mo.as_ref(), "restart", &s, &sv, &json!({}))
+        .await
+        .unwrap();
+    let pw = run_custom(
+        mo.as_ref(),
+        "change_password",
+        &s,
+        &sv,
+        &json!({"password": "Secret12345"}),
+    )
+    .await
+    .unwrap();
     assert_eq!(pw["password"], "Secret12345");
     let bad = svc(json!({}), Some("../x"), json!({}));
-    assert!(matches!(run(mo.as_ref(), "suspend", &s, &bad).await, Err(ProvisionError::Config(_))));
+    assert!(matches!(
+        run(mo.as_ref(), "suspend", &s, &bad).await,
+        Err(ProvisionError::Config(_))
+    ));
 }

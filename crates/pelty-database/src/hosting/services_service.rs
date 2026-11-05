@@ -45,27 +45,55 @@ impl HostingService {
     }
 
     /// Same as [`services::list`].
-    pub async fn list(&self, customer: Option<Uuid>, status: Option<&str>, limit: i64, offset: i64) -> AppResult<(Vec<Service>, i64)> {
+    pub async fn list(
+        &self,
+        customer: Option<Uuid>,
+        status: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> AppResult<(Vec<Service>, i64)> {
         services::list(&self.pool, customer, status, limit, offset).await
     }
 
     /// Same as [`services::transition`].
-    pub async fn transition(&self, id: Uuid, action: &str, reason: &str) -> AppResult<(String, Service)> {
+    pub async fn transition(
+        &self,
+        id: Uuid,
+        action: &str,
+        reason: &str,
+    ) -> AppResult<(String, Service)> {
         services::transition(&self.pool, id, action, reason).await
     }
 
     /// Same as [`services::bill_due`].
-    pub async fn bill_due(&self, horizon: Date, batch: i64, due_days: i64) -> AppResult<Vec<Renewal>> {
+    pub async fn bill_due(
+        &self,
+        horizon: Date,
+        batch: i64,
+        due_days: i64,
+    ) -> AppResult<Vec<Renewal>> {
         services::bill_due(&self.pool, horizon, batch, due_days).await
     }
 
     /// Same as [`services::bill_due_ahead`].
-    pub async fn bill_due_ahead(&self, today: Date, default_days: i64, batch: i64, due_days: i64) -> AppResult<Vec<Renewal>> {
+    pub async fn bill_due_ahead(
+        &self,
+        today: Date,
+        default_days: i64,
+        batch: i64,
+        due_days: i64,
+    ) -> AppResult<Vec<Renewal>> {
         services::bill_due_ahead(&self.pool, today, default_days, batch, due_days).await
     }
 
     /// Same as [`services::renew_now`].
-    pub async fn renew_now(&self, sid: Uuid, customer: Option<Uuid>, max_days_ahead: i64, today: Date) -> AppResult<EarlyRenewal> {
+    pub async fn renew_now(
+        &self,
+        sid: Uuid,
+        customer: Option<Uuid>,
+        max_days_ahead: i64,
+        today: Date,
+    ) -> AppResult<EarlyRenewal> {
         services::renew_now(&self.pool, sid, customer, max_days_ahead, today).await
     }
 }

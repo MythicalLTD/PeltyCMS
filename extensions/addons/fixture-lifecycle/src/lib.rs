@@ -32,7 +32,9 @@ fn hook(input: Value) -> Result<Value, String> {
             }
         }
         // Own custom event, `highest` + `ignore_cancelled`: rescue "rescue".
-        "integration-lifecycle:greet" if input["cancelled"] == true && p["name"] == "rescue" => reply::uncancel(),
+        "integration-lifecycle:greet" if input["cancelled"] == true && p["name"] == "rescue" => {
+            reply::uncancel()
+        }
         _ => reply::proceed(),
     })
 }
@@ -54,7 +56,9 @@ fn mixin(input: Value) -> Result<Value, String> {
             let _ = host::kv_set("around_state", &input["state"].to_string());
             json!({})
         }
-        ("after", "after", t) if t.starts_with("GET ") && input["request"]["query"] == "break=1" => {
+        ("after", "after", t)
+            if t.starts_with("GET ") && input["request"]["query"] == "break=1" =>
+        {
             resp["evil"] = json!(true); // new key: the host must ignore this
             json!({ "response": resp })
         }
@@ -81,13 +85,30 @@ fn http(input: Value) -> Result<Value, String> {
             let e = pelty_addon_sdk::emit("integration-lifecycle:greet", &json!({ "name": name }))?;
             json!({ "status": 200, "body": { "cancelled": e.cancelled, "reason": e.reason, "payload": e.payload } })
         }
-        ("POST", "/greet-other") => match pelty_addon_sdk::emit("integration-listener:spoof", &json!({})) {
-            Ok(_) => json!({ "status": 200, "body": { "emitted": true } }),
-            Err(e) => json!({ "status": 403, "body": { "error": e } }),
-        },
+        ("POST", "/greet-other") => {
+            match pelty_addon_sdk::emit("integration-listener:spoof", &json!({})) {
+                Ok(_) => json!({ "status": 200, "body": { "emitted": true } }),
+                Err(e) => json!({ "status": 403, "body": { "error": e } }),
+            }
+        }
         ("GET", "/log") => {
-            let keys = ["phase:before", "phase:during", "phase:after", "phase:finished", "finished:ok", "finished:cancelled", "finished:failed", "mixin:around:before", "mixin:around:after", "mixin:after:after", "mixin:return:after"];
-            let rows: Vec<Value> = keys.iter().map(|k| json!({ "key": k, "value": counter(k) })).collect();
+            let keys = [
+                "phase:before",
+                "phase:during",
+                "phase:after",
+                "phase:finished",
+                "finished:ok",
+                "finished:cancelled",
+                "finished:failed",
+                "mixin:around:before",
+                "mixin:around:after",
+                "mixin:after:after",
+                "mixin:return:after",
+            ];
+            let rows: Vec<Value> = keys
+                .iter()
+                .map(|k| json!({ "key": k, "value": counter(k) }))
+                .collect();
             json!({ "status": 200, "body": { "rows": rows, "around_state": host::kv_get("around_state") } })
         }
         _ => json!({ "status": 404, "body": null }),

@@ -67,14 +67,27 @@ impl CurrentUser {
 /// Resources with a separate `<res>.read` permission (migration 0319).
 /// `<res>.manage` implies `<res>.read`.
 pub const READ_LEVEL_RESOURCES: &[&str] = &[
-    "customers", "catalog", "orders", "invoices", "services", "tickets", "coupons",
-    "affiliates", "content", "quotes", "downloads", "client_groups", "campaigns",
+    "customers",
+    "catalog",
+    "orders",
+    "invoices",
+    "services",
+    "tickets",
+    "coupons",
+    "affiliates",
+    "content",
+    "quotes",
+    "downloads",
+    "client_groups",
+    "campaigns",
 ];
 
 /// `customers.manage` -> `Some("customers.read")` for read-level resources.
 pub fn read_level(perm: &str) -> Option<String> {
     let res = perm.strip_suffix(".manage")?;
-    READ_LEVEL_RESOURCES.contains(&res).then(|| format!("{res}.read"))
+    READ_LEVEL_RESOURCES
+        .contains(&res)
+        .then(|| format!("{res}.read"))
 }
 
 pub fn is_safe(method: &Method) -> bool {
@@ -138,8 +151,14 @@ impl FromRequestParts<AppState> for CurrentUser {
 pub const API_KEY_PREFIX: &str = "pelty_";
 
 fn bearer(headers: &HeaderMap) -> Option<String> {
-    let v = headers.get(axum::http::header::AUTHORIZATION)?.to_str().ok()?;
-    let t = v.strip_prefix("Bearer ").or_else(|| v.strip_prefix("bearer "))?.trim();
+    let v = headers
+        .get(axum::http::header::AUTHORIZATION)?
+        .to_str()
+        .ok()?;
+    let t = v
+        .strip_prefix("Bearer ")
+        .or_else(|| v.strip_prefix("bearer "))?
+        .trim();
     t.starts_with(API_KEY_PREFIX).then(|| t.to_string())
 }
 
@@ -151,7 +170,11 @@ fn key_forbidden(path: &str) -> bool {
 }
 
 /// API-key auth. No cookie is involved, so CSRF does not apply.
-async fn api_key_user(parts: &mut Parts, state: &AppState, key: &str) -> Result<CurrentUser, ApiError> {
+async fn api_key_user(
+    parts: &mut Parts,
+    state: &AppState,
+    key: &str,
+) -> Result<CurrentUser, ApiError> {
     let path = parts
         .extensions
         .get::<axum::extract::OriginalUri>()
@@ -166,19 +189,36 @@ async fn api_key_user(parts: &mut Parts, state: &AppState, key: &str) -> Result<
     if state.auth_limiter.exceeded(&rl_key) {
         return Err(AppError::RateLimited.into());
     }
-    let Some(ctx) = pelty_database::api_keys::resolve(&state.pool, &pelty_auth::token::hash(key), ip.as_deref()).await? else {
+    let Some(ctx) = pelty_database::api_keys::resolve(
+        &state.pool,
+        &pelty_auth::token::hash(key),
+        ip.as_deref(),
+    )
+    .await?
+    else {
         state.auth_limiter.check(&rl_key);
         return Err(AppError::Unauthenticated.into());
     };
     if !ctx.ip_allowed {
         tracing::warn!(key = %ctx.key_id, ip = ?ip, "API key used from an IP outside its allowlist");
-        let _ = pelty_database::audit::record(&state.pool, Some(ctx.user_id), "api_key.ip_denied", Some(&ctx.key_id.to_string()), ip.as_deref(), serde_json::json!({})).await;
+        let _ = pelty_database::audit::record(
+            &state.pool,
+            Some(ctx.user_id),
+            "api_key.ip_denied",
+            Some(&ctx.key_id.to_string()),
+            ip.as_deref(),
+            serde_json::json!({}),
+        )
+        .await;
         return Err(AppError::Denied("error.api_key_ip_denied").into());
     }
     // Key permissions = (owner permissions + implied read levels) ∩ scopes.
     let mut owner = ctx.owner_permissions;
     expand_implied(&mut owner);
-    let permissions: Vec<String> = owner.into_iter().filter(|p| ctx.scopes.contains(p)).collect();
+    let permissions: Vec<String> = owner
+        .into_iter()
+        .filter(|p| ctx.scopes.contains(p))
+        .collect();
     let cu = CurrentUser {
         user_id: ctx.user_id,
         session_id: ctx.key_id,
@@ -209,21 +249,26 @@ impl<P: Permission + Send + Sync> FromRequestParts<AppState> for RequirePermissi
             return Err(AppError::Forbidden.into());
         }
         // Staff 2FA policy: staff without 2FA keep client access only.
-        if P::NAME != "client.access" && u.has("admin.access") && pelty_database::staff::blocked_by_2fa(&state.pool, u.user_id).await? {
+        if P::NAME != "client.access"
+            && u.has("admin.access")
+            && pelty_database::staff::blocked_by_2fa(&state.pool, u.user_id).await?
+        {
             return Err(AppError::Denied("error.mfa_required").into());
         }
         if P::NAME != "client.access" && u.has("admin.access") && !u.api_key {
             let pol = pelty_auth::policy::load(&state.pool).await?;
             let now = time::OffsetDateTime::now_utc();
             if let Some(days) = pol.password_max_age_days {
-                let changed = pelty_database::users::password_changed_at(&state.pool, u.user_id).await?;
+                let changed =
+                    pelty_database::users::password_changed_at(&state.pool, u.user_id).await?;
                 if password_expired(changed, days, now) {
                     return Err(AppError::Denied("error.password_expired").into());
                 }
             }
             if let Some(mins) = pol.admin_reauth_minutes {
                 if is_sensitive(P::NAME, &parts.method) {
-                    let last = pelty_database::sessions::last_auth_at(&state.pool, u.session_id).await?;
+                    let last =
+                        pelty_database::sessions::last_auth_at(&state.pool, u.session_id).await?;
                     if !recently_authenticated(last, mins, now) {
                         return Err(AppError::Denied("error.reauth_required").into());
                     }
@@ -235,18 +280,35 @@ impl<P: Permission + Send + Sync> FromRequestParts<AppState> for RequirePermissi
 }
 
 /// Permissions whose writes need a recent full authentication (step-up).
-pub const SENSITIVE_PERMS: &[&str] = &["settings.manage", "plugins.manage", "gateways.manage", "users.manage", "api_keys.manage", "servers.manage", "webhooks.manage"];
+pub const SENSITIVE_PERMS: &[&str] = &[
+    "settings.manage",
+    "plugins.manage",
+    "gateways.manage",
+    "users.manage",
+    "api_keys.manage",
+    "servers.manage",
+    "webhooks.manage",
+];
 
 /// Writes guarded by a sensitive permission need step-up re-auth.
 pub fn is_sensitive(perm: &str, method: &Method) -> bool {
-    SENSITIVE_PERMS.contains(&perm) && !matches!(*method, Method::GET | Method::HEAD | Method::OPTIONS)
+    SENSITIVE_PERMS.contains(&perm)
+        && !matches!(*method, Method::GET | Method::HEAD | Method::OPTIONS)
 }
 
-pub fn recently_authenticated(last: Option<time::OffsetDateTime>, minutes: i64, now: time::OffsetDateTime) -> bool {
+pub fn recently_authenticated(
+    last: Option<time::OffsetDateTime>,
+    minutes: i64,
+    now: time::OffsetDateTime,
+) -> bool {
     last.is_some_and(|t| now - t <= time::Duration::minutes(minutes))
 }
 
-pub fn password_expired(changed: Option<time::OffsetDateTime>, days: i64, now: time::OffsetDateTime) -> bool {
+pub fn password_expired(
+    changed: Option<time::OffsetDateTime>,
+    days: i64,
+    now: time::OffsetDateTime,
+) -> bool {
     changed.is_some_and(|t| now - t > time::Duration::days(days))
 }
 
@@ -260,23 +322,51 @@ mod step_up_tests {
         assert!(!is_sensitive("settings.manage", &Method::GET));
         assert!(!is_sensitive("tickets.manage", &Method::POST));
         let now = time::OffsetDateTime::now_utc();
-        assert!(recently_authenticated(Some(now - time::Duration::minutes(5)), 15, now));
-        assert!(!recently_authenticated(Some(now - time::Duration::minutes(16)), 15, now));
+        assert!(recently_authenticated(
+            Some(now - time::Duration::minutes(5)),
+            15,
+            now
+        ));
+        assert!(!recently_authenticated(
+            Some(now - time::Duration::minutes(16)),
+            15,
+            now
+        ));
         assert!(!recently_authenticated(None, 15, now));
-        assert!(password_expired(Some(now - time::Duration::days(91)), 90, now));
-        assert!(!password_expired(Some(now - time::Duration::days(10)), 90, now));
+        assert!(password_expired(
+            Some(now - time::Duration::days(91)),
+            90,
+            now
+        ));
+        assert!(!password_expired(
+            Some(now - time::Duration::days(10)),
+            90,
+            now
+        ));
         assert!(!password_expired(None, 90, now));
     }
 
     fn user(perms: &[&str]) -> CurrentUser {
         let mut permissions: Vec<String> = perms.iter().map(|p| p.to_string()).collect();
         expand_implied(&mut permissions);
-        CurrentUser { user_id: Uuid::nil(), session_id: Uuid::nil(), csrf_token: String::new(), roles: vec![], permissions, ip: None, api_key: false, signals: Default::default() }
+        CurrentUser {
+            user_id: Uuid::nil(),
+            session_id: Uuid::nil(),
+            csrf_token: String::new(),
+            roles: vec![],
+            permissions,
+            ip: None,
+            api_key: false,
+            signals: Default::default(),
+        }
     }
 
     #[test]
     fn read_levels() {
-        assert_eq!(read_level("customers.manage").as_deref(), Some("customers.read"));
+        assert_eq!(
+            read_level("customers.manage").as_deref(),
+            Some("customers.read")
+        );
         assert_eq!(read_level("settings.manage"), None);
         assert_eq!(read_level("users.manage"), None);
         let ro = user(&["customers.read"]);

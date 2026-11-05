@@ -1,9 +1,9 @@
 //! Branded invoice PDF download (client: own invoices; staff: any) and the
 //! branding settings.
-use crate::routes::customers::customer_of;
 use crate::error::ApiResult;
 use crate::extract::{perms, CurrentUser, RequirePermission};
 use crate::pdf::{self, InvoiceDoc, Line};
+use crate::routes::customers::customer_of;
 use crate::AppState;
 use axum::extract::{Path, State};
 use axum::http::header;
@@ -21,21 +21,32 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/client/invoices/{id}/pdf", get(client_pdf))
         .route("/admin/invoices/{id}/pdf", get(admin_pdf))
-        .route("/admin/settings/invoice-branding", get(get_branding).put(put_branding))
+        .route(
+            "/admin/settings/invoice-branding",
+            get(get_branding).put(put_branding),
+        )
 }
 
 /// Logo for PDFs: the general-settings logo when it is a local path under the
 /// frontend dir (no network fetches), else the bundled brand logo.
 pub(crate) async fn logo(s: &AppState) -> Option<pdf::Logo> {
     let dir = s.cfg.frontend_dir.clone();
-    let url = pelty_database::general_settings::load(&s.pool).await.ok().map(|g| g.general.logo_url).unwrap_or_default();
-    let local = url.strip_prefix('/').filter(|p| !p.is_empty() && !p.starts_with('/') && !p.split('/').any(|c| c == ".." || c.is_empty()));
+    let url = pelty_database::general_settings::load(&s.pool)
+        .await
+        .ok()
+        .map(|g| g.general.logo_url)
+        .unwrap_or_default();
+    let local = url.strip_prefix('/').filter(|p| {
+        !p.is_empty() && !p.starts_with('/') && !p.split('/').any(|c| c == ".." || c.is_empty())
+    });
     let mut candidates = Vec::new();
     if let Some(p) = local {
         candidates.push(dir.join(p));
     }
     candidates.push(dir.join("brand/pelty-logo-128.png"));
-    candidates.push(std::path::PathBuf::from("frontend/public/brand/pelty-logo-128.png"));
+    candidates.push(std::path::PathBuf::from(
+        "frontend/public/brand/pelty-logo-128.png",
+    ));
     for c in candidates {
         if let Ok(bytes) = tokio::fs::read(&c).await {
             if let Some(l) = pdf::Logo::decode(&bytes) {
@@ -43,7 +54,9 @@ pub(crate) async fn logo(s: &AppState) -> Option<pdf::Logo> {
             }
         }
     }
-    if let Some(l) = crate::static_files::embedded_file("brand/pelty-logo-128.png").and_then(pdf::Logo::decode) {
+    if let Some(l) =
+        crate::static_files::embedded_file("brand/pelty-logo-128.png").and_then(pdf::Logo::decode)
+    {
         return Some(l);
     }
     None
@@ -54,18 +67,39 @@ fn money(v: Decimal, exp: u32, cur: &str) -> String {
 }
 
 fn opt(v: &Value, k: &str) -> String {
-    v.get(k).and_then(Value::as_str).unwrap_or_default().trim().to_string()
+    v.get(k)
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_string()
 }
 
 /// Bill-to lines from the frozen snapshot (or the live customer record).
 pub(crate) fn bill_to(c: &Value) -> Vec<String> {
-    let name = format!("{} {}", opt(c, "first_name"), opt(c, "last_name")).trim().to_string();
-    let city = [opt(c, "postal_code"), opt(c, "city")].join(" ").trim().to_string();
-    let region = [opt(c, "region"), opt(c, "country")].iter().filter(|s| !s.is_empty()).cloned().collect::<Vec<_>>().join(", ");
-    let mut out: Vec<String> = [opt(c, "organization"), name, opt(c, "address_line1"), opt(c, "address_line2"), city, region]
-        .into_iter()
+    let name = format!("{} {}", opt(c, "first_name"), opt(c, "last_name"))
+        .trim()
+        .to_string();
+    let city = [opt(c, "postal_code"), opt(c, "city")]
+        .join(" ")
+        .trim()
+        .to_string();
+    let region = [opt(c, "region"), opt(c, "country")]
+        .iter()
         .filter(|s| !s.is_empty())
-        .collect();
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut out: Vec<String> = [
+        opt(c, "organization"),
+        name,
+        opt(c, "address_line1"),
+        opt(c, "address_line2"),
+        city,
+        region,
+    ]
+    .into_iter()
+    .filter(|s| !s.is_empty())
+    .collect();
     if out.is_empty() {
         out.push(opt(c, "email"));
     }
@@ -86,7 +120,12 @@ pub async fn build(s: &AppState, inv: &invoices::Invoice, locale: &str) -> ApiRe
     let items = s.invoices().items(inv.id).await?;
     let snapshot = match &inv.customer_snapshot {
         Some(v) => v.clone(),
-        None => s.clients().get(inv.customer_id).await?.map(|c| serde_json::to_value(c).unwrap_or_default()).unwrap_or_default(),
+        None => s
+            .clients()
+            .get(inv.customer_id)
+            .await?
+            .map(|c| serde_json::to_value(c).unwrap_or_default())
+            .unwrap_or_default(),
     };
     // Issued documents use the frozen legal-entity snapshot; else branding.
     let entity = pelty_database::legal_entities::seller_snapshot(&s.pool, inv.id).await?;
@@ -96,27 +135,48 @@ pub async fn build(s: &AppState, inv: &invoices::Invoice, locale: &str) -> ApiRe
     };
     let company = if name.is_empty() { t("app.name") } else { name };
     let mut seller = vec![company];
-    seller.extend(address.lines().map(str::to_string).filter(|l| !l.trim().is_empty()));
+    seller.extend(
+        address
+            .lines()
+            .map(str::to_string)
+            .filter(|l| !l.trim().is_empty()),
+    );
     if !tax_id.is_empty() {
         seller.push(format!("{}: {}", t("pdf.tax_id"), tax_id));
     }
     let mut footer: Vec<String> = vec![];
     match &entity {
         Some(e) => {
-            let bank: Vec<String> = [(t("pdf.bank"), &e.bank_name), ("IBAN".to_string(), &e.iban), ("SWIFT".to_string(), &e.swift)]
-                .into_iter()
-                .filter(|(_, v)| !v.is_empty())
-                .map(|(k, v)| format!("{k}: {v}"))
-                .collect();
+            let bank: Vec<String> = [
+                (t("pdf.bank"), &e.bank_name),
+                ("IBAN".to_string(), &e.iban),
+                ("SWIFT".to_string(), &e.swift),
+            ]
+            .into_iter()
+            .filter(|(_, v)| !v.is_empty())
+            .map(|(k, v)| format!("{k}: {v}"))
+            .collect();
             if !bank.is_empty() {
                 footer.push(bank.join(" · "));
             }
-            footer.extend(e.footer.lines().map(str::to_string).filter(|l| !l.trim().is_empty()));
+            footer.extend(
+                e.footer
+                    .lines()
+                    .map(str::to_string)
+                    .filter(|l| !l.trim().is_empty()),
+            );
         }
         None => footer.extend(b.footer.lines().map(str::to_string)),
     }
-    let date = |d: Option<time::OffsetDateTime>| d.map(|d| d.date().to_string()).unwrap_or_else(|| "-".into());
-    let mut meta = vec![(t("pdf.issued"), date(inv.issued_at)), (t("pdf.due"), date(inv.due_at)), (t("pdf.status"), t(&format!("status.{}", inv.status)))];
+    let date = |d: Option<time::OffsetDateTime>| {
+        d.map(|d| d.date().to_string())
+            .unwrap_or_else(|| "-".into())
+    };
+    let mut meta = vec![
+        (t("pdf.issued"), date(inv.issued_at)),
+        (t("pdf.due"), date(inv.due_at)),
+        (t("pdf.status"), t(&format!("status.{}", inv.status))),
+    ];
     if let Some(p) = inv.paid_at {
         meta.push((t("pdf.paid_on"), p.date().to_string()));
     }
@@ -148,9 +208,20 @@ pub async fn build(s: &AppState, inv: &invoices::Invoice, locale: &str) -> ApiRe
     match inv.tax_breakdown.as_array().filter(|a| !a.is_empty()) {
         Some(parts) => {
             for p in parts {
-                let rate = p["rate"].as_str().and_then(|r| r.parse::<Decimal>().ok()).map(|r| r.normalize().to_string()).unwrap_or_default();
-                let amt = p["amount"].as_str().and_then(|r| r.parse::<Decimal>().ok()).unwrap_or_default();
-                totals.push((format!("{} {rate}%", p["name"].as_str().unwrap_or_default()), money(amt, exp, cur), false));
+                let rate = p["rate"]
+                    .as_str()
+                    .and_then(|r| r.parse::<Decimal>().ok())
+                    .map(|r| r.normalize().to_string())
+                    .unwrap_or_default();
+                let amt = p["amount"]
+                    .as_str()
+                    .and_then(|r| r.parse::<Decimal>().ok())
+                    .unwrap_or_default();
+                totals.push((
+                    format!("{} {rate}%", p["name"].as_str().unwrap_or_default()),
+                    money(amt, exp, cur),
+                    false,
+                ));
             }
         }
         None => totals.push((t("pdf.tax"), money(inv.tax_total, exp, cur), false)),
@@ -168,9 +239,18 @@ pub async fn build(s: &AppState, inv: &invoices::Invoice, locale: &str) -> ApiRe
         notes.push(t("pdf.tax_inclusive"));
     }
     if let Some(e) = entity.as_ref().filter(|e| !e.terms.is_empty()) {
-        notes.extend(e.terms.lines().map(str::to_string).filter(|l| !l.trim().is_empty()));
+        notes.extend(
+            e.terms
+                .lines()
+                .map(str::to_string)
+                .filter(|l| !l.trim().is_empty()),
+        );
     }
-    let unnumbered = if inv.finalized_at.is_some() { t("pdf.proforma") } else { t("pdf.draft") };
+    let unnumbered = if inv.finalized_at.is_some() {
+        t("pdf.proforma")
+    } else {
+        t("pdf.draft")
+    };
     if inv.number.is_none() {
         notes.push(unnumbered.clone());
     }
@@ -181,7 +261,13 @@ pub async fn build(s: &AppState, inv: &invoices::Invoice, locale: &str) -> ApiRe
         seller,
         bill_to_label: t("pdf.bill_to"),
         bill_to: bill_to(&snapshot),
-        headers: [t("pdf.description"), t("pdf.qty"), t("pdf.unit_price"), t("pdf.tax"), t("pdf.amount")],
+        headers: [
+            t("pdf.description"),
+            t("pdf.qty"),
+            t("pdf.unit_price"),
+            t("pdf.tax"),
+            t("pdf.amount"),
+        ],
         lines,
         totals,
         notes,
@@ -194,11 +280,26 @@ pub async fn build(s: &AppState, inv: &invoices::Invoice, locale: &str) -> ApiRe
 }
 
 fn respond(inv: &invoices::Invoice, bytes: Vec<u8>) -> Response {
-    let name: String = inv.number.clone().unwrap_or_else(|| if inv.finalized_at.is_some() { format!("proforma-{}", inv.id) } else { "draft".into() }).chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').collect();
+    let name: String = inv
+        .number
+        .clone()
+        .unwrap_or_else(|| {
+            if inv.finalized_at.is_some() {
+                format!("proforma-{}", inv.id)
+            } else {
+                "draft".into()
+            }
+        })
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .collect();
     (
         [
             (header::CONTENT_TYPE, "application/pdf".to_string()),
-            (header::CONTENT_DISPOSITION, format!("attachment; filename=\"invoice-{name}.pdf\"")),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"invoice-{name}.pdf\""),
+            ),
             (header::CACHE_CONTROL, "private, no-store".to_string()),
         ],
         bytes,
@@ -207,27 +308,50 @@ fn respond(inv: &invoices::Invoice, bytes: Vec<u8>) -> Response {
 }
 
 #[utoipa::path(get, path = "/api/v1/client/invoices/{id}/pdf", responses((status = 200, content_type = "application/pdf"), (status = 404)))]
-pub async fn client_pdf(State(s): State<AppState>, u: CurrentUser, Path(id): Path<Uuid>) -> ApiResult<Response> {
+pub async fn client_pdf(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Response> {
     let cid = customer_of(&s, &u).await?;
-    let inv = s.invoices().get_owned(id, cid).await?.ok_or(AppError::NotFound)?;
+    let inv = s
+        .invoices()
+        .get_owned(id, cid)
+        .await?
+        .ok_or(AppError::NotFound)?;
     if inv.finalized_at.is_none() {
         return Err(AppError::NotFound.into());
     }
-    let locale = overdue::recipient(&s.pool, cid).await?.and_then(|r| r.2).filter(|l| s.i18n.has(l)).unwrap_or_else(|| s.cfg.default_locale.clone());
+    let locale = overdue::recipient(&s.pool, cid)
+        .await?
+        .and_then(|r| r.2)
+        .filter(|l| s.i18n.has(l))
+        .unwrap_or_else(|| s.cfg.default_locale.clone());
     let bytes = build(&s, &inv, &locale).await?;
     Ok(respond(&inv, bytes))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/invoices/{id}/pdf", responses((status = 200, content_type = "application/pdf"), (status = 404)))]
-pub async fn admin_pdf(State(s): State<AppState>, _p: RequirePermission<perms::InvoicesManage>, Path(id): Path<Uuid>) -> ApiResult<Response> {
+pub async fn admin_pdf(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::InvoicesManage>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Response> {
     let inv = s.invoices().get(id).await?.ok_or(AppError::NotFound)?;
-    let locale = overdue::recipient(&s.pool, inv.customer_id).await?.and_then(|r| r.2).filter(|l| s.i18n.has(l)).unwrap_or_else(|| s.cfg.default_locale.clone());
+    let locale = overdue::recipient(&s.pool, inv.customer_id)
+        .await?
+        .and_then(|r| r.2)
+        .filter(|l| s.i18n.has(l))
+        .unwrap_or_else(|| s.cfg.default_locale.clone());
     let bytes = build(&s, &inv, &locale).await?;
     Ok(respond(&inv, bytes))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/settings/invoice-branding", responses((status = 200, body = InvoiceBranding), (status = 403)))]
-pub async fn get_branding(State(s): State<AppState>, _p: RequirePermission<perms::SettingsManage>) -> ApiResult<Json<InvoiceBranding>> {
+pub async fn get_branding(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::SettingsManage>,
+) -> ApiResult<Json<InvoiceBranding>> {
     Ok(Json(branding::get(&s.pool).await?))
 }
 
@@ -239,6 +363,14 @@ pub async fn put_branding(
 ) -> ApiResult<Json<InvoiceBranding>> {
     let b = b.normalized().map_err(AppError::Validation)?;
     branding::put(&s.pool, &b).await?;
-    audit::record(&s.pool, Some(u.user_id), "settings.invoice_branding", None, u.ip.as_deref(), json!(b)).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "settings.invoice_branding",
+        None,
+        u.ip.as_deref(),
+        json!(b),
+    )
+    .await?;
     Ok(Json(b))
 }

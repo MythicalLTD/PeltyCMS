@@ -141,7 +141,8 @@ pub async fn save(
     let d = check(&s, &name, &locale)?;
     validate(d, &b)?;
     let html = normalize_html(&b.html);
-    let t = email_templates::upsert(&s.pool, &name, &locale, b.subject.trim(), &b.body, html).await?;
+    let t =
+        email_templates::upsert(&s.pool, &name, &locale, b.subject.trim(), &b.body, html).await?;
     audit::record(
         &s.pool,
         Some(u.user_id),
@@ -198,7 +199,9 @@ pub async fn preview(
         customized: true,
     };
     let (subject, text, html) = mail::build_parts(&src, &v);
-    Ok(Json(json!({ "subject": subject, "text": text, "html": html, "custom_html": src.html.is_some() })))
+    Ok(Json(
+        json!({ "subject": subject, "text": text, "html": html, "custom_html": src.html.is_some() }),
+    ))
 }
 
 /// Queue the saved template, with sample data, to the signed-in admin.

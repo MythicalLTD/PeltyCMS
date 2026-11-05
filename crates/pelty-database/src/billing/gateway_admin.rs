@@ -94,7 +94,11 @@ pub struct Delivery {
     pub body_bytes: i32,
 }
 
-pub async fn deliveries(pool: &PgPool, gateway: Option<&str>, limit: i64) -> AppResult<Vec<Delivery>> {
+pub async fn deliveries(
+    pool: &PgPool,
+    gateway: Option<&str>,
+    limit: i64,
+) -> AppResult<Vec<Delivery>> {
     sqlx::query_as(
         "SELECT id, gateway, received_at, is_test, status_code, signature_ok, duplicate, event_id, event_type,
                 kind, provider_ref, error, body_bytes
@@ -109,14 +113,21 @@ pub async fn deliveries(pool: &PgPool, gateway: Option<&str>, limit: i64) -> App
 }
 
 /// Stored provider_ref of a payment (fallback when a webhook only echoes our id).
-pub async fn provider_ref_for(pool: &PgPool, gateway: &str, payment_id: &str) -> AppResult<Option<String>> {
-    let Ok(id) = Uuid::parse_str(payment_id) else { return Ok(None) };
-    let r: Option<Option<String>> = sqlx::query_scalar("SELECT provider_ref FROM payments WHERE id = $1 AND gateway = $2")
-        .bind(id)
-        .bind(gateway)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?;
+pub async fn provider_ref_for(
+    pool: &PgPool,
+    gateway: &str,
+    payment_id: &str,
+) -> AppResult<Option<String>> {
+    let Ok(id) = Uuid::parse_str(payment_id) else {
+        return Ok(None);
+    };
+    let r: Option<Option<String>> =
+        sqlx::query_scalar("SELECT provider_ref FROM payments WHERE id = $1 AND gateway = $2")
+            .bind(id)
+            .bind(gateway)
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?;
     Ok(r.flatten())
 }
 
@@ -128,7 +139,11 @@ pub struct OwnedPayment {
     pub status: String,
 }
 
-pub async fn owned_payment(pool: &PgPool, id: Uuid, customer_id: Uuid) -> AppResult<Option<OwnedPayment>> {
+pub async fn owned_payment(
+    pool: &PgPool,
+    id: Uuid,
+    customer_id: Uuid,
+) -> AppResult<Option<OwnedPayment>> {
     sqlx::query_as("SELECT gateway, provider_ref, invoice_id, status FROM payments WHERE id = $1 AND customer_id = $2")
         .bind(id)
         .bind(customer_id)
@@ -137,11 +152,17 @@ pub async fn owned_payment(pool: &PgPool, id: Uuid, customer_id: Uuid) -> AppRes
         .map_err(db_err)
 }
 
-pub async fn payment_exists_by_ref(pool: &PgPool, gateway: &str, provider_ref: &str) -> AppResult<bool> {
-    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM payments WHERE gateway = $1 AND provider_ref = $2)")
-        .bind(gateway)
-        .bind(provider_ref)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)
+pub async fn payment_exists_by_ref(
+    pool: &PgPool,
+    gateway: &str,
+    provider_ref: &str,
+) -> AppResult<bool> {
+    sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM payments WHERE gateway = $1 AND provider_ref = $2)",
+    )
+    .bind(gateway)
+    .bind(provider_ref)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)
 }

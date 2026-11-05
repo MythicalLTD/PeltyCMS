@@ -15,7 +15,11 @@ pub struct Currencies {
 impl Currencies {
     pub fn id(&mut self, code: &str) -> i64 {
         let code = code.trim().to_ascii_uppercase();
-        let code = if code.is_empty() { "EUR".to_string() } else { code };
+        let code = if code.is_empty() {
+            "EUR".to_string()
+        } else {
+            code
+        };
         if let Some(id) = self.ids.get(&code) {
             return *id;
         }
@@ -33,17 +37,22 @@ impl Currencies {
 /// Maps a `(unit, length)` billing period to a WHMCS cycle name.
 /// Units: `day|week|month|year|onetime|free`.
 pub fn cycle(unit: &str, length: i64) -> Option<&'static str> {
-    Some(match (unit.trim().to_ascii_lowercase().trim_end_matches('s'), length) {
-        ("month", 1) => "Monthly",
-        ("month", 3) => "Quarterly",
-        ("month", 6) => "Semi-Annually",
-        ("month", 12) | ("year", 1) => "Annually",
-        ("month", 24) | ("year", 2) => "Biennially",
-        ("month", 36) | ("year", 3) => "Triennially",
-        ("onetime", _) | ("one-time", _) => "One Time",
-        ("free", _) => "Free Account",
-        _ => return None,
-    })
+    Some(
+        match (
+            unit.trim().to_ascii_lowercase().trim_end_matches('s'),
+            length,
+        ) {
+            ("month", 1) => "Monthly",
+            ("month", 3) => "Quarterly",
+            ("month", 6) => "Semi-Annually",
+            ("month", 12) | ("year", 1) => "Annually",
+            ("month", 24) | ("year", 2) => "Biennially",
+            ("month", 36) | ("year", 3) => "Triennially",
+            ("onetime", _) | ("one-time", _) => "One Time",
+            ("free", _) => "Free Account",
+            _ => return None,
+        },
+    )
 }
 
 /// Sets one cycle's price + setup fee on a WHMCS pricing row. One-time prices
@@ -105,7 +114,9 @@ pub fn int<'de, D: serde::Deserializer<'de>>(d: D) -> Result<i64, D::Error> {
     use serde::Deserialize;
     match serde_json::Value::deserialize(d)? {
         serde_json::Value::Null => Ok(0),
-        serde_json::Value::Number(n) => n.as_i64().ok_or_else(|| serde::de::Error::custom("bad int")),
+        serde_json::Value::Number(n) => n
+            .as_i64()
+            .ok_or_else(|| serde::de::Error::custom("bad int")),
         serde_json::Value::String(s) if s.trim().is_empty() => Ok(0),
         serde_json::Value::String(s) => s.trim().parse().map_err(serde::de::Error::custom),
         serde_json::Value::Bool(b) => Ok(i64::from(b)),
@@ -119,7 +130,10 @@ pub fn flag<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
     Ok(match serde_json::Value::deserialize(d)? {
         serde_json::Value::Bool(b) => b,
         serde_json::Value::Number(n) => n.as_i64().unwrap_or(0) != 0,
-        serde_json::Value::String(s) => matches!(s.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"),
+        serde_json::Value::String(s) => matches!(
+            s.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        ),
         _ => false,
     })
 }

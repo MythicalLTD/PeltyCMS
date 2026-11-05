@@ -84,9 +84,13 @@ pub fn write_new(path: &Path, content: &str) -> std::io::Result<bool> {
 pub fn ensure_env_file(root: &Path, r: &mut Report) {
     let p = root.join(ENV_FILE);
     match write_new(&p, &env_template(&generate_key())) {
-        Ok(true) => r.created.push(format!("{ENV_FILE} (configuration with a new PELTY_ENCRYPTION_KEY; edit DATABASE_URL)")),
+        Ok(true) => r.created.push(format!(
+            "{ENV_FILE} (configuration with a new PELTY_ENCRYPTION_KEY; edit DATABASE_URL)"
+        )),
         Ok(false) => {}
-        Err(e) => r.warnings.push(format!("could not write {}: {e}", p.display())),
+        Err(e) => r
+            .warnings
+            .push(format!("could not write {}: {e}", p.display())),
     }
 }
 
@@ -105,7 +109,10 @@ pub fn parse_env(text: &str) -> Vec<(String, String)> {
                 return None;
             }
             let v = v.trim();
-            let v = if v.len() >= 2 && ((v.starts_with('"') && v.ends_with('"')) || (v.starts_with('\'') && v.ends_with('\''))) {
+            let v = if v.len() >= 2
+                && ((v.starts_with('"') && v.ends_with('"'))
+                    || (v.starts_with('\'') && v.ends_with('\'')))
+            {
                 &v[1..v.len() - 1]
             } else {
                 v
@@ -117,7 +124,9 @@ pub fn parse_env(text: &str) -> Vec<(String, String)> {
 
 /// Values from `<root>/.env` (empty when the file is missing).
 pub fn read_env_file(root: &Path) -> Vec<(String, String)> {
-    std::fs::read_to_string(root.join(ENV_FILE)).map(|t| parse_env(&t)).unwrap_or_default()
+    std::fs::read_to_string(root.join(ENV_FILE))
+        .map(|t| parse_env(&t))
+        .unwrap_or_default()
 }
 
 /// Folders the server writes to or reads from, with the env var that moves
@@ -151,7 +160,9 @@ pub fn ensure_dirs(root: &Path, get: &dyn Fn(&str) -> Option<String>, r: &mut Re
         }
         match std::fs::create_dir_all(&dir) {
             Ok(()) => r.created.push(format!("{rel}/ ({what})")),
-            Err(e) => r.warnings.push(format!("could not create {} ({what}): {e}", dir.display())),
+            Err(e) => r
+                .warnings
+                .push(format!("could not create {} ({what}): {e}", dir.display())),
         }
     }
     let loc_rel = get("PELTY_LOCALES_DIR").unwrap_or_else(|| "locales".into());
@@ -159,21 +170,31 @@ pub fn ensure_dirs(root: &Path, get: &dyn Fn(&str) -> Option<String>, r: &mut Re
     if loc.is_dir() && !loc.join("en.json").exists() {
         for (name, body) in LOCALES {
             match write_new(&loc.join(name), body) {
-                Ok(true) => r.created.push(format!("{loc_rel}/{name} (default translations)")),
+                Ok(true) => r
+                    .created
+                    .push(format!("{loc_rel}/{name} (default translations)")),
                 Ok(false) => {}
-                Err(e) => r.warnings.push(format!("could not write {}: {e}", loc.join(name).display())),
+                Err(e) => r
+                    .warnings
+                    .push(format!("could not write {}: {e}", loc.join(name).display())),
             }
         }
     }
     let th_rel = get("PELTY_THEMES_DIR").unwrap_or_else(|| "extensions/themes".into());
     match crate::embedded::seed_themes(&at(root, &th_rel)) {
-        Ok(made) if !made.is_empty() => r.created.push(format!("{th_rel}/ default themes ({})", made.join(", "))),
+        Ok(made) if !made.is_empty() => r
+            .created
+            .push(format!("{th_rel}/ default themes ({})", made.join(", "))),
         Ok(_) => {}
-        Err(e) => r.warnings.push(format!("could not write the default themes to {th_rel}/: {e}")),
+        Err(e) => r.warnings.push(format!(
+            "could not write the default themes to {th_rel}/: {e}"
+        )),
     }
     let fe_rel = get("PELTY_FRONTEND_DIR").unwrap_or_else(|| "frontend/dist".into());
     if !at(root, &fe_rel).join("index.html").exists() && !crate::embedded::has_frontend() {
-        r.warnings.push(format!("no web UI build in {fe_rel}/ (set PELTY_FRONTEND_DIR); only the API is served"));
+        r.warnings.push(format!(
+            "no web UI build in {fe_rel}/ (set PELTY_FRONTEND_DIR); only the API is served"
+        ));
     }
 }
 
@@ -185,7 +206,11 @@ pub fn run(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> (Report, Vec<(S
     ensure_env_file(root, &mut r);
     let file = read_env_file(root);
     let map: HashMap<String, String> = file.iter().cloned().collect();
-    let get = |k: &str| env(k).filter(|v| !v.trim().is_empty()).or_else(|| map.get(k).cloned().filter(|v| !v.trim().is_empty()));
+    let get = |k: &str| {
+        env(k)
+            .filter(|v| !v.trim().is_empty())
+            .or_else(|| map.get(k).cloned().filter(|v| !v.trim().is_empty()))
+    };
     ensure_dirs(root, &get, &mut r);
     (r, file)
 }
@@ -205,17 +230,36 @@ mod tests {
         let d = tmp();
         let (r, vars) = run(&d, &|_| None);
         assert!(d.join(".env").is_file());
-        for p in ["data/addons", "extensions/themes", "extensions/plugins", "locales", "backups"] {
+        for p in [
+            "data/addons",
+            "extensions/themes",
+            "extensions/plugins",
+            "locales",
+            "backups",
+        ] {
             assert!(d.join(p).is_dir(), "{p}");
         }
         assert!(d.join("locales/en.json").is_file());
-        let key = vars.iter().find(|(k, _)| k == "PELTY_ENCRYPTION_KEY").map(|(_, v)| v.clone()).unwrap();
+        let key = vars
+            .iter()
+            .find(|(k, _)| k == "PELTY_ENCRYPTION_KEY")
+            .map(|(_, v)| v.clone())
+            .unwrap();
         use base64::Engine;
-        assert_eq!(base64::engine::general_purpose::STANDARD.decode(&key).unwrap().len(), 32);
+        assert_eq!(
+            base64::engine::general_purpose::STANDARD
+                .decode(&key)
+                .unwrap()
+                .len(),
+            32
+        );
         assert!(vars.iter().any(|(k, _)| k == "DATABASE_URL"));
         assert!(r.created.iter().any(|c| c.starts_with(".env")));
         // No UI warning when the binary carries an embedded UI build.
-        assert_eq!(r.warnings.iter().any(|w| w.contains("frontend/dist")), !crate::embedded::has_frontend());
+        assert_eq!(
+            r.warnings.iter().any(|w| w.contains("frontend/dist")),
+            !crate::embedded::has_frontend()
+        );
         assert!(!env_template("x").contains("{{"));
         std::fs::remove_dir_all(&d).ok();
     }
@@ -228,9 +272,18 @@ mod tests {
         std::fs::write(d.join("locales/en.json"), "{}").unwrap();
         let (r, vars) = run(&d, &|_| None);
         assert!(r.created.is_empty(), "{:?}", r.created);
-        assert_eq!(std::fs::read_to_string(d.join(".env")).unwrap(), "DATABASE_URL=postgres://mine\n");
-        assert_eq!(std::fs::read_to_string(d.join("locales/en.json")).unwrap(), "{}");
-        assert_eq!(vars, vec![("DATABASE_URL".to_string(), "postgres://mine".to_string())]);
+        assert_eq!(
+            std::fs::read_to_string(d.join(".env")).unwrap(),
+            "DATABASE_URL=postgres://mine\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(d.join("locales/en.json")).unwrap(),
+            "{}"
+        );
+        assert_eq!(
+            vars,
+            vec![("DATABASE_URL".to_string(), "postgres://mine".to_string())]
+        );
         // A deleted folder is recreated on the next start.
         std::fs::remove_dir_all(d.join("backups")).unwrap();
         let (r, _) = run(&d, &|_| None);
@@ -242,7 +295,9 @@ mod tests {
     #[test]
     fn env_overrides_folders() {
         let d = tmp();
-        let (_, _) = run(&d, &|k| (k == "PELTY_BACKUP_DIR").then(|| "store/bk".to_string()));
+        let (_, _) = run(&d, &|k| {
+            (k == "PELTY_BACKUP_DIR").then(|| "store/bk".to_string())
+        });
         assert!(d.join("store/bk").is_dir());
         assert!(!d.join("backups").exists());
         std::fs::remove_dir_all(&d).ok();
@@ -256,6 +311,13 @@ mod tests {
     #[test]
     fn parses_env_lines() {
         let v = parse_env("# c\nA=1\nexport B = \"two words\"\n\nC='x=y'\nbad line\n#D=4\n");
-        assert_eq!(v, vec![("A".into(), "1".into()), ("B".into(), "two words".into()), ("C".into(), "x=y".into())]);
+        assert_eq!(
+            v,
+            vec![
+                ("A".into(), "1".into()),
+                ("B".into(), "two words".into()),
+                ("C".into(), "x=y".into())
+            ]
+        );
     }
 }

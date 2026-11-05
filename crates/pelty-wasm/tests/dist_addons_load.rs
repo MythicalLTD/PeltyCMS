@@ -10,7 +10,13 @@ fn all_dist_load() {
     let mut bad = vec![];
     for e in std::fs::read_dir(d).unwrap().flatten() {
         let z = std::fs::read(e.path()).unwrap();
-        if let Err(err) = pelty_wasm::WasmAddon::from_zip(&z, pelty_extensions::addon_pkg::Limits::default(), Default::default()) { bad.push(format!("{:?}: {err}", e.path().file_name())); }
+        if let Err(err) = pelty_wasm::WasmAddon::from_zip(
+            &z,
+            pelty_extensions::addon_pkg::Limits::default(),
+            Default::default(),
+        ) {
+            bad.push(format!("{:?}: {err}", e.path().file_name()));
+        }
     }
     assert!(bad.is_empty(), "{bad:#?}");
 }

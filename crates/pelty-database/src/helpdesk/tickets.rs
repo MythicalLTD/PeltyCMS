@@ -266,17 +266,32 @@ pub async fn awaiting_staff(pool: &PgPool) -> AppResult<i64> {
 }
 
 /// Replace a message's text. Returns the previous body.
-pub async fn edit_message(pool: &PgPool, ticket: Uuid, message: Uuid, body: &str) -> AppResult<String> {
+pub async fn edit_message(
+    pool: &PgPool,
+    ticket: Uuid,
+    message: Uuid,
+    body: &str,
+) -> AppResult<String> {
     let body = body.trim();
     if body.is_empty() || body.chars().count() > 20000 {
         return Err(AppError::Validation("error.validation"));
     }
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let old: Option<String> = sqlx::query_scalar("SELECT body FROM ticket_messages WHERE id = $1 AND ticket_id = $2 FOR UPDATE")
-        .bind(message).bind(ticket).fetch_optional(&mut *tx).await.map_err(db_err)?;
+    let old: Option<String> = sqlx::query_scalar(
+        "SELECT body FROM ticket_messages WHERE id = $1 AND ticket_id = $2 FOR UPDATE",
+    )
+    .bind(message)
+    .bind(ticket)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_err)?;
     let old = old.ok_or(AppError::NotFound)?;
     sqlx::query("UPDATE ticket_messages SET body = $2, edited_at = now() WHERE id = $1")
-        .bind(message).bind(body).execute(&mut *tx).await.map_err(db_err)?;
+        .bind(message)
+        .bind(body)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
     Ok(old)
 }
@@ -291,7 +306,11 @@ pub async fn delete_message(pool: &PgPool, ticket: Uuid, message: Uuid) -> AppRe
         return Err(AppError::Conflict("error.ticket_first_message"));
     }
     let r = sqlx::query("DELETE FROM ticket_messages WHERE id = $1 AND ticket_id = $2")
-        .bind(message).bind(ticket).execute(&mut *tx).await.map_err(db_err)?;
+        .bind(message)
+        .bind(ticket)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }

@@ -540,12 +540,26 @@ mod mysql_loader {
         for r in sqlx::query("SELECT CAST(id AS SIGNED) id, CAST(userid AS SIGNED) userid, type, domain, registrar, CAST(registrationperiod AS SIGNED) rp, CAST(registrationdate AS CHAR) rd, CAST(expirydate AS CHAR) ed, status, CAST(donotrenew AS SIGNED) dnr, CAST(dnsmanagement AS SIGNED) dns, CAST(idprotection AS SIGNED) idp FROM tbldomains").fetch_all(&pool).await? {
             out.domains.push(Domain { id: i(&r,"id"), userid: i(&r,"userid"), type_: s(&r,"type"), domain: s(&r,"domain"), registrar: s(&r,"registrar"), registrationperiod: i(&r,"rp") as i32, registrationdate: dt(&r,"rd"), expirydate: dt(&r,"ed"), status: s(&r,"status"), donotrenew: i(&r,"dnr") == 1, dnsmanagement: i(&r,"dns") == 1, idprotection: i(&r,"idp") == 1 });
         }
-        for r in sqlx::query("SELECT CAST(id AS SIGNED) id, name FROM tblproductconfiggroups").fetch_all(&pool).await? {
-            out.config_groups.push(ConfigGroup { id: i(&r,"id"), name: s(&r,"name"), product_ids: vec![] });
+        for r in sqlx::query("SELECT CAST(id AS SIGNED) id, name FROM tblproductconfiggroups")
+            .fetch_all(&pool)
+            .await?
+        {
+            out.config_groups.push(ConfigGroup {
+                id: i(&r, "id"),
+                name: s(&r, "name"),
+                product_ids: vec![],
+            });
         }
-        for r in sqlx::query("SELECT CAST(gid AS SIGNED) gid, CAST(pid AS SIGNED) pid FROM tblproductconfiglinks").fetch_all(&pool).await? {
-            let (g, p) = (i(&r,"gid"), i(&r,"pid"));
-            if let Some(cg) = out.config_groups.iter_mut().find(|x| x.id == g) { cg.product_ids.push(p); }
+        for r in sqlx::query(
+            "SELECT CAST(gid AS SIGNED) gid, CAST(pid AS SIGNED) pid FROM tblproductconfiglinks",
+        )
+        .fetch_all(&pool)
+        .await?
+        {
+            let (g, p) = (i(&r, "gid"), i(&r, "pid"));
+            if let Some(cg) = out.config_groups.iter_mut().find(|x| x.id == g) {
+                cg.product_ids.push(p);
+            }
         }
         for r in sqlx::query("SELECT CAST(id AS SIGNED) id, CAST(gid AS SIGNED) gid, optionname, CAST(optiontype AS SIGNED) ot, CAST(qtyminimum AS SIGNED) qmin, CAST(qtymaximum AS SIGNED) qmax, CAST(`order` AS SIGNED) ord, CAST(hidden AS SIGNED) hidden FROM tblproductconfigoptions").fetch_all(&pool).await? {
             out.config_options.push(ConfigOption { id: i(&r,"id"), gid: i(&r,"gid"), optionname: s(&r,"optionname"), optiontype: i(&r,"ot") as i32, qtyminimum: i(&r,"qmin") as i32, qtymaximum: i(&r,"qmax") as i32, order: i(&r,"ord") as i32, hidden: i(&r,"hidden") == 1 });
@@ -593,10 +607,19 @@ mod mysql_loader {
             out.tax_rules.push(TaxRule { id: i(&r,"id"), level: i(&r,"level") as i32, name: s(&r,"name"), state: s(&r,"state"), country: s(&r,"country"), taxrate: d(&r,"taxrate") });
         }
         // WHMCS 8+: logins live in tblusers (matched to clients by email).
-        if let Ok(rows) = sqlx::query("SELECT email, password FROM tblusers").fetch_all(&pool).await {
-            let hashes: std::collections::HashMap<String, String> = rows.iter().map(|r| (s(r, "email").to_lowercase(), s(r, "password"))).collect();
+        if let Ok(rows) = sqlx::query("SELECT email, password FROM tblusers")
+            .fetch_all(&pool)
+            .await
+        {
+            let hashes: std::collections::HashMap<String, String> = rows
+                .iter()
+                .map(|r| (s(r, "email").to_lowercase(), s(r, "password")))
+                .collect();
             for c in &mut out.clients {
-                if let Some(h) = hashes.get(&c.email.trim().to_lowercase()).filter(|h| !h.is_empty()) {
+                if let Some(h) = hashes
+                    .get(&c.email.trim().to_lowercase())
+                    .filter(|h| !h.is_empty())
+                {
                     c.password = h.clone();
                 }
             }

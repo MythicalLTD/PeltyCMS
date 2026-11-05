@@ -9,16 +9,23 @@
 //! The signing public key is pinned by the operator (`webhook_public_key`,
 //! SPKI PEM extracted from PayPal's signing cert); we never fetch
 //! `paypal-cert-url`. Capture after approval and refunds are not implemented.
+use base64::Engine;
 use pelty_payments::http::{api_base, send_json};
 use pelty_payments::*;
-#[allow(unused_imports)]
-use {pelty_core::money::Money, serde::{Deserialize, Serialize}, std::collections::{BTreeMap, HashMap}, std::future::Future, std::pin::Pin, std::sync::Arc};
-use base64::Engine;
 use rsa::pkcs1v15::{Signature, VerifyingKey};
 use rsa::pkcs8::DecodePublicKey;
 use rsa::signature::Verifier;
 use rsa::RsaPublicKey;
 use sha2::Sha256;
+#[allow(unused_imports)]
+use {
+    pelty_core::money::Money,
+    serde::{Deserialize, Serialize},
+    std::collections::{BTreeMap, HashMap},
+    std::future::Future,
+    std::pin::Pin,
+    std::sync::Arc,
+};
 
 pub const SANDBOX_BASE: &str = "https://api-m.sandbox.paypal.com";
 pub const LIVE_BASE: &str = "https://api-m.paypal.com";
@@ -34,7 +41,10 @@ pub struct PaypalGateway {
     transport: Arc<dyn HttpTransport>,
 }
 
-const SETTINGS: &[SettingField] = &[SettingField::of("live", "bool"), SettingField::of("api_base", "url")];
+const SETTINGS: &[SettingField] = &[
+    SettingField::of("live", "bool"),
+    SettingField::of("api_base", "url"),
+];
 
 pub fn descriptor() -> GatewayDescriptor {
     GatewayDescriptor {
@@ -46,9 +56,17 @@ pub fn descriptor() -> GatewayDescriptor {
             refunds: true,
             recurring: false,
         },
-        secrets: &["client_id", "client_secret", "webhook_id", "webhook_public_key"],
+        secrets: &[
+            "client_id",
+            "client_secret",
+            "webhook_id",
+            "webhook_public_key",
+        ],
         settings: SETTINGS,
-        currencies: &["AUD", "BRL", "CAD", "CNY", "CZK", "DKK", "EUR", "HKD", "HUF", "ILS", "JPY", "MYR", "MXN", "TWD", "NZD", "NOK", "PHP", "PLN", "GBP", "SGD", "SEK", "CHF", "THB", "USD"],
+        currencies: &[
+            "AUD", "BRL", "CAD", "CNY", "CZK", "DKK", "EUR", "HKD", "HUF", "ILS", "JPY", "MYR",
+            "MXN", "TWD", "NZD", "NOK", "PHP", "PLN", "GBP", "SGD", "SEK", "CHF", "THB", "USD",
+        ],
     }
 }
 
@@ -201,7 +219,11 @@ impl PaypalGateway {
     pub fn capture_request(&self, token: &str, order_id: &str) -> HttpRequestSpec {
         HttpRequestSpec {
             method: "POST",
-            url: format!("{}/v2/checkout/orders/{}/capture", self.base, pelty_payments::http::url_encode(order_id)),
+            url: format!(
+                "{}/v2/checkout/orders/{}/capture",
+                self.base,
+                pelty_payments::http::url_encode(order_id)
+            ),
             headers: self.bearer(token, Some(&format!("capture-{order_id}"))),
             body: "{}".into(),
         }
@@ -210,7 +232,11 @@ impl PaypalGateway {
     fn order_get(&self, token: &str, order_id: &str) -> HttpRequestSpec {
         HttpRequestSpec {
             method: "GET",
-            url: format!("{}/v2/checkout/orders/{}", self.base, pelty_payments::http::url_encode(order_id)),
+            url: format!(
+                "{}/v2/checkout/orders/{}",
+                self.base,
+                pelty_payments::http::url_encode(order_id)
+            ),
             headers: self.bearer(token, None),
             body: String::new(),
         }
@@ -302,10 +328,17 @@ impl PaymentGateway for PaypalGateway {
     ) -> BoxFuture<'a, Result<CompleteStatus, GatewayError>> {
         Box::pin(async move {
             let token = self.token().await?;
-            let v = match send_json(self.transport.as_ref(), self.capture_request(&token, order_id)).await {
+            let v = match send_json(
+                self.transport.as_ref(),
+                self.capture_request(&token, order_id),
+            )
+            .await
+            {
                 Ok(v) => v,
                 // Already captured (webhook or retry): read the order instead.
-                Err(GatewayError::Provider(m)) if m.contains("ORDER_ALREADY_CAPTURED") || m.starts_with("HTTP 422") => {
+                Err(GatewayError::Provider(m))
+                    if m.contains("ORDER_ALREADY_CAPTURED") || m.starts_with("HTTP 422") =>
+                {
                     send_json(self.transport.as_ref(), self.order_get(&token, order_id)).await?
                 }
                 Err(e) => return Err(e),
@@ -330,7 +363,11 @@ impl PaymentGateway for PaypalGateway {
             let capture_id = if provider_ref.starts_with("CAP-") {
                 provider_ref.to_string()
             } else {
-                let o = send_json(self.transport.as_ref(), self.order_get(&token, provider_ref)).await?;
+                let o = send_json(
+                    self.transport.as_ref(),
+                    self.order_get(&token, provider_ref),
+                )
+                .await?;
                 first_capture(&o)["id"]
                     .as_str()
                     .map(str::to_string)
@@ -343,7 +380,11 @@ impl PaymentGateway for PaypalGateway {
                 self.transport.as_ref(),
                 HttpRequestSpec {
                     method: "POST",
-                    url: format!("{}/v2/payments/captures/{}/refund", self.base, pelty_payments::http::url_encode(&capture_id)),
+                    url: format!(
+                        "{}/v2/payments/captures/{}/refund",
+                        self.base,
+                        pelty_payments::http::url_encode(&capture_id)
+                    ),
                     headers: self.bearer(&token, Some(idem)),
                     body: body.to_string(),
                 },
@@ -355,7 +396,10 @@ impl PaymentGateway for PaypalGateway {
                 Some("FAILED") => "failed",
                 _ => "pending",
             };
-            Ok(RefundResult { provider_ref: v["id"].as_str().map(str::to_string), status: status.into() })
+            Ok(RefundResult {
+                provider_ref: v["id"].as_str().map(str::to_string),
+                status: status.into(),
+            })
         })
     }
 }
@@ -406,7 +450,11 @@ rQIDAQAB
     #[test]
     fn known_vector_passes_and_parses() {
         let e = gw()
-            .parse_webhook(&hdrs(SIG, "2026-10-29T10:00:00Z"), BODY.as_bytes(), NOW + 10)
+            .parse_webhook(
+                &hdrs(SIG, "2026-10-29T10:00:00Z"),
+                BODY.as_bytes(),
+                NOW + 10,
+            )
             .unwrap();
         assert_eq!(e.event_id, "WH-TEST-1");
         assert_eq!(e.kind, WebhookKind::PaymentSucceeded);
@@ -451,11 +499,17 @@ rQIDAQAB
     #[test]
     fn builds_sandbox_requests_with_exact_decimal() {
         let g = gw();
-        assert_eq!(g.token_request().url, "https://api-m.sandbox.paypal.com/v1/oauth2/token");
+        assert_eq!(
+            g.token_request().url,
+            "https://api-m.sandbox.paypal.com/v1/oauth2/token"
+        );
         let r = PaymentRequest {
             payment_id: "pay_1".into(),
             reference: "INV-7".into(),
-            amount: Money::new(Decimal::from_str("12.50").unwrap(), Currency::parse("EUR").unwrap()),
+            amount: Money::new(
+                Decimal::from_str("12.50").unwrap(),
+                Currency::parse("EUR").unwrap(),
+            ),
             description: "Invoice INV-7".into(),
             customer_email: None,
             success_url: "https://panel.example/ok".into(),
@@ -468,7 +522,9 @@ rQIDAQAB
         let v: serde_json::Value = serde_json::from_str(&s.body).unwrap();
         assert_eq!(v["purchase_units"][0]["amount"]["value"], "12.50");
         assert_eq!(v["purchase_units"][0]["amount"]["currency_code"], "EUR");
-        assert!(s.headers.contains(&("PayPal-Request-Id".into(), "idem-1".into())));
+        assert!(s
+            .headers
+            .contains(&("PayPal-Request-Id".into(), "idem-1".into())));
     }
 }
 
@@ -491,23 +547,51 @@ mod flow_tests {
         t.push(200, tok).push(201, r#"{"id":"ORDER-9","status":"PAYER_ACTION_REQUIRED","links":[{"rel":"self","href":"x"},{"rel":"payer-action","href":"https://www.sandbox.paypal.com/checkoutnow?token=ORDER-9"}]}"#);
         let gw = g(&t);
         let init = gw.create_payment(&req("12.50", "EUR")).await.unwrap();
-        assert_eq!(init, PaymentInit::Redirect { url: "https://www.sandbox.paypal.com/checkoutnow?token=ORDER-9".into(), provider_ref: "ORDER-9".into() });
+        assert_eq!(
+            init,
+            PaymentInit::Redirect {
+                url: "https://www.sandbox.paypal.com/checkoutnow?token=ORDER-9".into(),
+                provider_ref: "ORDER-9".into()
+            }
+        );
 
         t.push(200, tok).push(201, r#"{"id":"ORDER-9","status":"COMPLETED","purchase_units":[{"payments":{"captures":[{"id":"CAP-7","status":"COMPLETED"}]}}]}"#);
-        assert_eq!(gw.complete_payment("ORDER-9", &HashMap::new()).await.unwrap(), CompleteStatus::Succeeded);
+        assert_eq!(
+            gw.complete_payment("ORDER-9", &HashMap::new())
+                .await
+                .unwrap(),
+            CompleteStatus::Succeeded
+        );
 
         // Retried capture: 422 → read the order.
         t.push(200, tok).push(422, r#"{"name":"UNPROCESSABLE_ENTITY","message":"ORDER_ALREADY_CAPTURED"}"#)
             .push(200, r#"{"id":"ORDER-9","status":"COMPLETED","purchase_units":[{"payments":{"captures":[{"id":"CAP-7","status":"COMPLETED"}]}}]}"#);
-        assert_eq!(gw.complete_payment("ORDER-9", &HashMap::new()).await.unwrap(), CompleteStatus::Succeeded);
+        assert_eq!(
+            gw.complete_payment("ORDER-9", &HashMap::new())
+                .await
+                .unwrap(),
+            CompleteStatus::Succeeded
+        );
 
         t.push(200, tok).push(200, r#"{"id":"ORDER-9","purchase_units":[{"payments":{"captures":[{"id":"CAP-7","status":"COMPLETED"}]}}]}"#)
             .push(201, r#"{"id":"RF-1","status":"COMPLETED"}"#);
-        let r = gw.refund("ORDER-9", money("2.5", "EUR"), "rk").await.unwrap();
-        assert_eq!(r, RefundResult { provider_ref: Some("RF-1".into()), status: "succeeded".into() });
+        let r = gw
+            .refund("ORDER-9", money("2.5", "EUR"), "rk")
+            .await
+            .unwrap();
+        assert_eq!(
+            r,
+            RefundResult {
+                provider_ref: Some("RF-1".into()),
+                status: "succeeded".into()
+            }
+        );
 
         let sent = t.requests();
-        assert!(sent.iter().all(|r| r.url.starts_with(SANDBOX_BASE)), "never live");
+        assert!(
+            sent.iter().all(|r| r.url.starts_with(SANDBOX_BASE)),
+            "never live"
+        );
         assert_eq!(sent[0].header("authorization"), Some("Basic Y2lkOmNzZWM="));
         assert!(sent[3].url.ends_with("/v2/checkout/orders/ORDER-9/capture"));
         let last = sent.last().unwrap();
@@ -521,6 +605,9 @@ mod flow_tests {
     async fn declined_capture_is_failed() {
         let t = MockTransport::new();
         t.push(200, r#"{"access_token":"A"}"#).push(201, r#"{"status":"COMPLETED","purchase_units":[{"payments":{"captures":[{"id":"CAP-1","status":"DECLINED"}]}}]}"#);
-        assert_eq!(g(&t).complete_payment("O", &HashMap::new()).await.unwrap(), CompleteStatus::Failed);
+        assert_eq!(
+            g(&t).complete_payment("O", &HashMap::new()).await.unwrap(),
+            CompleteStatus::Failed
+        );
     }
 }

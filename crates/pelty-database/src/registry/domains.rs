@@ -93,7 +93,18 @@ const COLS: &str = "id, customer_id, name, tld, kind, status, registrar, years, 
     nameservers, contact, privacy, invoice_id, last_error, created_at, dns_management, registrar_lock, admin_notes, synced_at, \
     premium, premium_renew_price, extra_fields";
 
-pub const STATUSES: &[&str] = &["pending", "active", "grace", "redemption", "expired", "transferring", "transferred_away", "cancelled", "failed", "fraud"];
+pub const STATUSES: &[&str] = &[
+    "pending",
+    "active",
+    "grace",
+    "redemption",
+    "expired",
+    "transferring",
+    "transferred_away",
+    "cancelled",
+    "failed",
+    "fraud",
+];
 /// Statuses in which the owner can still renew (late fees apply after expiry).
 pub const RENEWABLE: &[&str] = &["active", "grace", "redemption", "expired"];
 
@@ -106,7 +117,12 @@ pub fn normalize(name: &str) -> AppResult<(String, String)> {
         return Err(bad());
     }
     for label in n.split('.') {
-        if label.is_empty() || label.len() > 63 || label.starts_with('-') || label.ends_with('-') || !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        if label.is_empty()
+            || label.len() > 63
+            || label.starts_with('-')
+            || label.ends_with('-')
+            || !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+        {
             return Err(bad());
         }
     }
@@ -137,7 +153,8 @@ pub fn normalize_ns(ns: &[String]) -> AppResult<Vec<String>> {
 /// `d` plus `years`, clamping Feb 29 to Feb 28.
 pub fn add_years(d: Date, years: i32) -> Date {
     let y = d.year() + years;
-    Date::from_calendar_date(y, d.month(), d.day()).unwrap_or_else(|_| Date::from_calendar_date(y, Month::February, 28).unwrap_or(d))
+    Date::from_calendar_date(y, d.month(), d.day())
+        .unwrap_or_else(|_| Date::from_calendar_date(y, Month::February, 28).unwrap_or(d))
 }
 
 pub fn price_for(t: &Tld, kind: &str) -> Decimal {
@@ -171,18 +188,32 @@ pub async fn tlds(pool: &PgPool, active_only: bool, currency: Option<&str>) -> A
 }
 
 pub async fn tld(pool: &PgPool, tld: &str, currency: &str) -> AppResult<Option<Tld>> {
-    sqlx::query_as(&format!("SELECT {TLD_COLS} FROM tld_pricing WHERE tld = $1 AND currency = $2"))
-        .bind(tld)
-        .bind(currency)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {TLD_COLS} FROM tld_pricing WHERE tld = $1 AND currency = $2"
+    ))
+    .bind(tld)
+    .bind(currency)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn upsert_tld(pool: &PgPool, t: &Tld) -> AppResult<Tld> {
     let tl = t.tld.trim().trim_start_matches('.').to_ascii_lowercase();
-    let fees = [t.grace_fee, t.redemption_fee, t.id_protection_price, t.dns_management_price];
-    if t.register_price.is_sign_negative() || t.renew_price.is_sign_negative() || t.transfer_price.is_sign_negative() || t.min_years < 1 || t.max_years > 10 || t.min_years > t.max_years || fees.iter().any(|f| f.is_sign_negative()) {
+    let fees = [
+        t.grace_fee,
+        t.redemption_fee,
+        t.id_protection_price,
+        t.dns_management_price,
+    ];
+    if t.register_price.is_sign_negative()
+        || t.renew_price.is_sign_negative()
+        || t.transfer_price.is_sign_negative()
+        || t.min_years < 1
+        || t.max_years > 10
+        || t.min_years > t.max_years
+        || fees.iter().any(|f| f.is_sign_negative())
+    {
         return Err(AppError::Validation("error.validation"));
     }
     sqlx::query_as(&format!(
@@ -263,7 +294,12 @@ pub struct NewOrder<'a> {
 
 /// Product free-domain rule reached through a service or an order item the
 /// customer owns: (rule, eligible TLDs, eligible cycles, item cycle).
-async fn free_rule(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, customer: Uuid, service: Option<Uuid>, item: Option<Uuid>) -> AppResult<Option<(String, Vec<String>, Vec<String>, String)>> {
+async fn free_rule(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    customer: Uuid,
+    service: Option<Uuid>,
+    item: Option<Uuid>,
+) -> AppResult<Option<(String, Vec<String>, Vec<String>, String)>> {
     let row = if let Some(sid) = service {
         sqlx::query_as("SELECT p.free_domain, p.free_domain_tlds, p.free_domain_cycles, s.cycle FROM services s JOIN products p ON p.id = s.product_id
                         WHERE s.id = $1 AND s.customer_id = $2 AND s.status IN ('pending','active')")
@@ -279,12 +315,23 @@ async fn free_rule(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, customer: Uui
 }
 
 /// Whether a product's free-domain rule covers this TLD and billing cycle.
-pub fn free_domain_eligible(rule: &str, tlds: &[String], cycles: &[String], tld: &str, cycle: &str) -> bool {
-    rule != "none" && (tlds.is_empty() || tlds.iter().any(|t| t.trim_start_matches('.') == tld)) && (cycles.is_empty() || cycles.iter().any(|c| c == cycle))
+pub fn free_domain_eligible(
+    rule: &str,
+    tlds: &[String],
+    cycles: &[String],
+    tld: &str,
+    cycle: &str,
+) -> bool {
+    rule != "none"
+        && (tlds.is_empty() || tlds.iter().any(|t| t.trim_start_matches('.') == tld))
+        && (cycles.is_empty() || cycles.iter().any(|c| c == cycle))
 }
 
 /// Create a pending domain plus its finalized invoice in one transaction.
-pub async fn create_order(pool: &PgPool, o: NewOrder<'_>) -> AppResult<(Domain, invoices::Invoice)> {
+pub async fn create_order(
+    pool: &PgPool,
+    o: NewOrder<'_>,
+) -> AppResult<(Domain, invoices::Invoice)> {
     if o.years < o.tld.min_years || o.years > o.tld.max_years {
         return Err(AppError::Validation("error.invalid_years"));
     }
@@ -316,21 +363,60 @@ pub async fn create_order(pool: &PgPool, o: NewOrder<'_>) -> AppResult<(Domain, 
     .map_err(db_err)?;
     let inv = invoices::create_draft(&mut tx, o.customer_id, &o.tld.currency, None).await?;
     let (desc, qty, unit) = if o.kind == "transfer" {
-        (format!("Domain transfer: {} (+1 year)", o.name), Decimal::ONE, o.tld.transfer_price)
+        (
+            format!("Domain transfer: {} (+1 year)", o.name),
+            Decimal::ONE,
+            o.tld.transfer_price,
+        )
     } else {
-        (format!("Domain registration: {} ({} yr)", o.name, years), Decimal::from(years), o.tld.register_price)
+        (
+            format!("Domain registration: {} ({} yr)", o.name, years),
+            Decimal::from(years),
+            o.tld.register_price,
+        )
     };
-    let mut items = vec![NewItem { description: desc, quantity: qty, unit_price: unit, tax_rate: Decimal::ZERO, service_id: None, period: None, auto_tax: true }];
+    let mut items = vec![NewItem {
+        description: desc,
+        quantity: qty,
+        unit_price: unit,
+        tax_rate: Decimal::ZERO,
+        service_id: None,
+        period: None,
+        auto_tax: true,
+    }];
     if o.privacy && !o.tld.id_protection_price.is_zero() {
-        items.push(NewItem { description: format!("ID protection: {}", o.name), quantity: Decimal::from(years), unit_price: o.tld.id_protection_price, tax_rate: Decimal::ZERO, service_id: None, period: None, auto_tax: true });
+        items.push(NewItem {
+            description: format!("ID protection: {}", o.name),
+            quantity: Decimal::from(years),
+            unit_price: o.tld.id_protection_price,
+            tax_rate: Decimal::ZERO,
+            service_id: None,
+            period: None,
+            auto_tax: true,
+        });
     }
     if o.dns_management && !o.tld.dns_management_price.is_zero() {
-        items.push(NewItem { description: format!("DNS management: {}", o.name), quantity: Decimal::from(years), unit_price: o.tld.dns_management_price, tax_rate: Decimal::ZERO, service_id: None, period: None, auto_tax: true });
+        items.push(NewItem {
+            description: format!("DNS management: {}", o.name),
+            quantity: Decimal::from(years),
+            unit_price: o.tld.dns_management_price,
+            tax_rate: Decimal::ZERO,
+            service_id: None,
+            period: None,
+            auto_tax: true,
+        });
     }
-    let first_year = if o.kind == "transfer" { o.tld.transfer_price } else { o.tld.register_price };
+    let first_year = if o.kind == "transfer" {
+        o.tld.transfer_price
+    } else {
+        o.tld.register_price
+    };
     let mut free = false;
     if o.free_service.is_some() || o.free_order_item.is_some() {
-        let (rule, tlds, cycles, cyc) = free_rule(&mut tx, o.customer_id, o.free_service, o.free_order_item).await?.ok_or(AppError::Validation("error.free_domain_not_eligible"))?;
+        let (rule, tlds, cycles, cyc) =
+            free_rule(&mut tx, o.customer_id, o.free_service, o.free_order_item)
+                .await?
+                .ok_or(AppError::Validation("error.free_domain_not_eligible"))?;
         if !free_domain_eligible(&rule, &tlds, &cycles, &o.tld.tld, &cyc) {
             return Err(AppError::Validation("error.free_domain_not_eligible"));
         }
@@ -339,15 +425,31 @@ pub async fn create_order(pool: &PgPool, o: NewOrder<'_>) -> AppResult<(Domain, 
         if used {
             return Err(AppError::Conflict("error.free_domain_used"));
         }
-        sqlx::query("UPDATE domains SET free_with_service = $2, free_with_order_item = $3 WHERE id = $1")
-            .bind(id).bind(o.free_service).bind(o.free_order_item).execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query(
+            "UPDATE domains SET free_with_service = $2, free_with_order_item = $3 WHERE id = $1",
+        )
+        .bind(id)
+        .bind(o.free_service)
+        .bind(o.free_order_item)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
         if first_year > Decimal::ZERO {
-            items.push(NewItem { description: format!("Free domain (1 yr): {}", o.name), quantity: Decimal::ONE, unit_price: -first_year, tax_rate: Decimal::ZERO, service_id: None, period: None, auto_tax: true });
+            items.push(NewItem {
+                description: format!("Free domain (1 yr): {}", o.name),
+                quantity: Decimal::ONE,
+                unit_price: -first_year,
+                tax_rate: Decimal::ZERO,
+                service_id: None,
+                period: None,
+                auto_tax: true,
+            });
         }
         free = true;
     }
     if let Some(code) = o.coupon.map(str::trim).filter(|c| !c.is_empty()) {
-        let c = crate::coupons::lock_for_order(&mut tx, code, o.customer_id, &o.tld.currency).await?;
+        let c =
+            crate::coupons::lock_for_order(&mut tx, code, o.customer_id, &o.tld.currency).await?;
         if !c.applies_to_tld(&o.tld.tld) {
             return Err(AppError::Validation("error.coupon_not_applicable"));
         }
@@ -357,29 +459,48 @@ pub async fn create_order(pool: &PgPool, o: NewOrder<'_>) -> AppResult<(Domain, 
         if d <= Decimal::ZERO {
             return Err(AppError::Validation("error.coupon_not_applicable"));
         }
-        items.push(NewItem { description: format!("Promo {}", c.code), quantity: Decimal::ONE, unit_price: -d, tax_rate: Decimal::ZERO, service_id: None, period: None, auto_tax: true });
+        items.push(NewItem {
+            description: format!("Promo {}", c.code),
+            quantity: Decimal::ONE,
+            unit_price: -d,
+            tax_rate: Decimal::ZERO,
+            service_id: None,
+            period: None,
+            auto_tax: true,
+        });
         crate::coupons::redeem_domain(&mut tx, &c, o.customer_id, id, d).await?;
     }
     invoices::add_items(&mut tx, inv, &o.tld.currency, &items).await?;
     let invoice = invoices::finalize(&mut tx, inv, 7).await?;
-    sqlx::query("UPDATE domains SET invoice_id = $2 WHERE id = $1").bind(id).bind(inv).execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("UPDATE domains SET invoice_id = $2 WHERE id = $1")
+        .bind(id)
+        .bind(inv)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
     let d = get(pool, id).await?.ok_or(AppError::NotFound)?;
     Ok((d, invoice))
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Domain>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM domains WHERE id = $1")).bind(id).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as(&format!("SELECT {COLS} FROM domains WHERE id = $1"))
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn get_owned(pool: &PgPool, id: Uuid, customer_id: Uuid) -> AppResult<Domain> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM domains WHERE id = $1 AND customer_id = $2"))
-        .bind(id)
-        .bind(customer_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?
-        .ok_or(AppError::NotFound)
+    sqlx::query_as(&format!(
+        "SELECT {COLS} FROM domains WHERE id = $1 AND customer_id = $2"
+    ))
+    .bind(id)
+    .bind(customer_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?
+    .ok_or(AppError::NotFound)
 }
 
 /// True when a live record already holds the name.
@@ -392,18 +513,27 @@ pub async fn name_taken(pool: &PgPool, name: &str) -> AppResult<bool> {
     Ok(n > 0)
 }
 
-pub async fn list(pool: &PgPool, customer: Option<Uuid>, status: Option<&str>, q: Option<&str>, limit: i64, offset: i64) -> AppResult<(Vec<Domain>, i64)> {
+pub async fn list(
+    pool: &PgPool,
+    customer: Option<Uuid>,
+    status: Option<&str>,
+    q: Option<&str>,
+    limit: i64,
+    offset: i64,
+) -> AppResult<(Vec<Domain>, i64)> {
     let q = q.map(|s| format!("%{}%", s.trim().to_lowercase()));
     let filter = "($1::uuid IS NULL OR customer_id = $1) AND ($2::text IS NULL OR status = $2) AND ($3::text IS NULL OR lower(name) LIKE $3)";
-    let rows = sqlx::query_as(&format!("SELECT {COLS} FROM domains WHERE {filter} ORDER BY created_at DESC LIMIT $4 OFFSET $5"))
-        .bind(customer)
-        .bind(status)
-        .bind(&q)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)?;
+    let rows = sqlx::query_as(&format!(
+        "SELECT {COLS} FROM domains WHERE {filter} ORDER BY created_at DESC LIMIT $4 OFFSET $5"
+    ))
+    .bind(customer)
+    .bind(status)
+    .bind(&q)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
     let total = sqlx::query_scalar(&format!("SELECT count(*) FROM domains WHERE {filter}"))
         .bind(customer)
         .bind(status)
@@ -415,7 +545,12 @@ pub async fn list(pool: &PgPool, customer: Option<Uuid>, status: Option<&str>, q
 }
 
 pub async fn set_nameservers(pool: &PgPool, id: Uuid, ns: &[String]) -> AppResult<()> {
-    sqlx::query("UPDATE domains SET nameservers = $2, updated_at = now() WHERE id = $1").bind(id).bind(ns).execute(pool).await.map_err(db_err)?;
+    sqlx::query("UPDATE domains SET nameservers = $2, updated_at = now() WHERE id = $1")
+        .bind(id)
+        .bind(ns)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(())
 }
 
@@ -431,11 +566,22 @@ pub async fn set_contact(pool: &PgPool, id: Uuid, contact: &Value, privacy: bool
 }
 
 pub async fn set_auto_renew(pool: &PgPool, id: Uuid, on: bool) -> AppResult<()> {
-    sqlx::query("UPDATE domains SET auto_renew = $2, updated_at = now() WHERE id = $1").bind(id).bind(on).execute(pool).await.map_err(db_err)?;
+    sqlx::query("UPDATE domains SET auto_renew = $2, updated_at = now() WHERE id = $1")
+        .bind(id)
+        .bind(on)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(())
 }
 
-pub async fn admin_update(pool: &PgPool, id: Uuid, status: Option<&str>, expires_on: Option<Date>, auto_renew: Option<bool>) -> AppResult<Domain> {
+pub async fn admin_update(
+    pool: &PgPool,
+    id: Uuid,
+    status: Option<&str>,
+    expires_on: Option<Date>,
+    auto_renew: Option<bool>,
+) -> AppResult<Domain> {
     if status.is_some_and(|s| !STATUSES.contains(&s)) {
         return Err(AppError::Validation("error.validation"));
     }
@@ -464,13 +610,23 @@ pub async fn paid_pending(pool: &PgPool) -> AppResult<Vec<(Domain, Option<Vec<u8
     .map_err(db_err)?;
     let mut out = Vec::with_capacity(ds.len());
     for d in ds {
-        let a: Option<Vec<u8>> = sqlx::query_scalar("SELECT auth_code_sealed FROM domains WHERE id = $1").bind(d.id).fetch_one(pool).await.map_err(db_err)?;
+        let a: Option<Vec<u8>> =
+            sqlx::query_scalar("SELECT auth_code_sealed FROM domains WHERE id = $1")
+                .bind(d.id)
+                .fetch_one(pool)
+                .await
+                .map_err(db_err)?;
         out.push((d, a));
     }
     Ok(out)
 }
 
-pub async fn mark_active(pool: &PgPool, id: Uuid, registered_on: Date, expires_on: Date) -> AppResult<()> {
+pub async fn mark_active(
+    pool: &PgPool,
+    id: Uuid,
+    registered_on: Date,
+    expires_on: Date,
+) -> AppResult<()> {
     sqlx::query(
         "UPDATE domains SET status = 'active', registered_on = $2, expires_on = $3, last_error = NULL, auth_code_sealed = NULL, updated_at = now() WHERE id = $1",
     )
@@ -497,8 +653,15 @@ pub async fn mark_error(pool: &PgPool, id: Uuid, err: &str, fatal: bool) -> AppR
 
 /// Create a renewal invoice for the domain's current term (idempotent per
 /// term: returns `None` if one already exists).
-pub async fn create_renewal(pool: &PgPool, d: &Domain, t: &Tld, years: i32) -> AppResult<Option<invoices::Invoice>> {
-    let exp = d.expires_on.ok_or(AppError::Validation("error.domain_not_active"))?;
+pub async fn create_renewal(
+    pool: &PgPool,
+    d: &Domain,
+    t: &Tld,
+    years: i32,
+) -> AppResult<Option<invoices::Invoice>> {
+    let exp = d
+        .expires_on
+        .ok_or(AppError::Validation("error.domain_not_active"))?;
     if years < 1 || years > t.max_years {
         return Err(AppError::Validation("error.invalid_years"));
     }
@@ -516,12 +679,36 @@ pub async fn create_renewal(pool: &PgPool, d: &Domain, t: &Tld, years: i32) -> A
     let inv = invoices::create_draft(&mut tx, d.customer_id, &t.currency, None).await?;
     let end = add_years(exp, years);
     let renew_price = d.premium_renew_price.unwrap_or(t.renew_price);
-    let mut items = vec![NewItem { description: format!("Domain renewal: {} ({} yr, until {end})", d.name, years), quantity: Decimal::from(years), unit_price: renew_price, tax_rate: Decimal::ZERO, service_id: None, period: None, auto_tax: true }];
+    let mut items = vec![NewItem {
+        description: format!("Domain renewal: {} ({} yr, until {end})", d.name, years),
+        quantity: Decimal::from(years),
+        unit_price: renew_price,
+        tax_rate: Decimal::ZERO,
+        service_id: None,
+        period: None,
+        auto_tax: true,
+    }];
     if d.privacy && !t.id_protection_price.is_zero() {
-        items.push(NewItem { description: format!("ID protection: {}", d.name), quantity: Decimal::from(years), unit_price: t.id_protection_price, tax_rate: Decimal::ZERO, service_id: None, period: None, auto_tax: true });
+        items.push(NewItem {
+            description: format!("ID protection: {}", d.name),
+            quantity: Decimal::from(years),
+            unit_price: t.id_protection_price,
+            tax_rate: Decimal::ZERO,
+            service_id: None,
+            period: None,
+            auto_tax: true,
+        });
     }
     if d.dns_management && !t.dns_management_price.is_zero() {
-        items.push(NewItem { description: format!("DNS management: {}", d.name), quantity: Decimal::from(years), unit_price: t.dns_management_price, tax_rate: Decimal::ZERO, service_id: None, period: None, auto_tax: true });
+        items.push(NewItem {
+            description: format!("DNS management: {}", d.name),
+            quantity: Decimal::from(years),
+            unit_price: t.dns_management_price,
+            tax_rate: Decimal::ZERO,
+            service_id: None,
+            period: None,
+            auto_tax: true,
+        });
     }
     // Free domain renewing with its hosting (rule `on_renewal`, service still active).
     let free_renew: bool = sqlx::query_scalar(
@@ -534,17 +721,47 @@ pub async fn create_renewal(pool: &PgPool, d: &Domain, t: &Tld, years: i32) -> A
     .await
     .map_err(db_err)?;
     if free_renew && renew_price > Decimal::ZERO {
-        items.push(NewItem { description: format!("Free domain renewal (1 yr): {}", d.name), quantity: Decimal::ONE, unit_price: -renew_price, tax_rate: Decimal::ZERO, service_id: None, period: None, auto_tax: true });
+        items.push(NewItem {
+            description: format!("Free domain renewal (1 yr): {}", d.name),
+            quantity: Decimal::ONE,
+            unit_price: -renew_price,
+            tax_rate: Decimal::ZERO,
+            service_id: None,
+            period: None,
+            auto_tax: true,
+        });
     }
     let fee = late_fee(&d.status, t);
     if !fee.is_zero() {
-        let label = if d.status == "redemption" { "Redemption (restore) fee" } else { "Late renewal (grace) fee" };
-        items.push(NewItem { description: format!("{label}: {}", d.name), quantity: Decimal::ONE, unit_price: fee, tax_rate: Decimal::ZERO, service_id: None, period: None, auto_tax: true });
-        sqlx::query("UPDATE domain_renewals SET late_fee = $2 WHERE id = $1").bind(rid).bind(fee).execute(&mut *tx).await.map_err(db_err)?;
+        let label = if d.status == "redemption" {
+            "Redemption (restore) fee"
+        } else {
+            "Late renewal (grace) fee"
+        };
+        items.push(NewItem {
+            description: format!("{label}: {}", d.name),
+            quantity: Decimal::ONE,
+            unit_price: fee,
+            tax_rate: Decimal::ZERO,
+            service_id: None,
+            period: None,
+            auto_tax: true,
+        });
+        sqlx::query("UPDATE domain_renewals SET late_fee = $2 WHERE id = $1")
+            .bind(rid)
+            .bind(fee)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
     }
     invoices::add_items(&mut tx, inv, &t.currency, &items).await?;
     let invoice = invoices::finalize(&mut tx, inv, 7).await?;
-    sqlx::query("UPDATE domain_renewals SET invoice_id = $2 WHERE id = $1").bind(rid).bind(inv).execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("UPDATE domain_renewals SET invoice_id = $2 WHERE id = $1")
+        .bind(rid)
+        .bind(inv)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
     Ok(Some(invoice))
 }
@@ -583,7 +800,11 @@ pub async fn paid_renewals(pool: &PgPool) -> AppResult<Vec<PaidRenewal>> {
 
 pub async fn apply_renewal(pool: &PgPool, r: &PaidRenewal, new_expiry: Date) -> AppResult<()> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    sqlx::query("UPDATE domain_renewals SET applied_at = now() WHERE id = $1").bind(r.id).execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("UPDATE domain_renewals SET applied_at = now() WHERE id = $1")
+        .bind(r.id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     sqlx::query("UPDATE domains SET expires_on = $2, status = 'active', last_error = NULL, updated_at = now() WHERE id = $1")
         .bind(r.domain_id)
         .bind(new_expiry)
@@ -657,7 +878,9 @@ pub async fn expire_overdue(pool: &PgPool, today: Date) -> AppResult<u64> {
 
 // ---- DNS records ----
 
-pub const DNS_TYPES: &[&str] = &["A", "AAAA", "CNAME", "MX", "TXT", "SRV", "CAA", "NS", "URL", "FRAME"];
+pub const DNS_TYPES: &[&str] = &[
+    "A", "AAAA", "CNAME", "MX", "TXT", "SRV", "CAA", "NS", "URL", "FRAME",
+];
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize, PartialEq)]
 pub struct DnsRecord {
@@ -683,9 +906,19 @@ pub fn validate_dns(r: &DnsRecord) -> AppResult<DnsRecord> {
         return Err(bad());
     }
     let host = r.host.trim().trim_end_matches('.').to_ascii_lowercase();
-    let host = if host.is_empty() { "@".to_string() } else { host };
+    let host = if host.is_empty() {
+        "@".to_string()
+    } else {
+        host
+    };
     let host_ok = host == "@"
-        || host.split('.').all(|l| !l.is_empty() && l.len() <= 63 && (l == "*" || l.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')));
+        || host.split('.').all(|l| {
+            !l.is_empty()
+                && l.len() <= 63
+                && (l == "*"
+                    || l.bytes()
+                        .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_'))
+        });
     if !host_ok || host.len() > 253 {
         return Err(bad());
     }
@@ -704,11 +937,22 @@ pub fn validate_dns(r: &DnsRecord) -> AppResult<DnsRecord> {
         return Err(bad());
     }
     let needs_prio = matches!(rtype.as_str(), "MX" | "SRV");
-    let priority = if needs_prio { Some(r.priority.unwrap_or(10)) } else { None };
+    let priority = if needs_prio {
+        Some(r.priority.unwrap_or(10))
+    } else {
+        None
+    };
     if priority.is_some_and(|p| !(0..=65_535).contains(&p)) {
         return Err(bad());
     }
-    Ok(DnsRecord { id: r.id, rtype, host, value, ttl: r.ttl, priority })
+    Ok(DnsRecord {
+        id: r.id,
+        rtype,
+        host,
+        value,
+        ttl: r.ttl,
+        priority,
+    })
 }
 
 pub async fn dns_records(pool: &PgPool, domain_id: Uuid) -> AppResult<Vec<DnsRecord>> {
@@ -720,13 +964,21 @@ pub async fn dns_records(pool: &PgPool, domain_id: Uuid) -> AppResult<Vec<DnsRec
 }
 
 /// Replace the whole zone atomically (max 200 records).
-pub async fn replace_dns(pool: &PgPool, domain_id: Uuid, records: &[DnsRecord]) -> AppResult<Vec<DnsRecord>> {
+pub async fn replace_dns(
+    pool: &PgPool,
+    domain_id: Uuid,
+    records: &[DnsRecord],
+) -> AppResult<Vec<DnsRecord>> {
     if records.len() > 200 {
         return Err(AppError::Validation("error.too_many_records"));
     }
     let clean: Vec<DnsRecord> = records.iter().map(validate_dns).collect::<AppResult<_>>()?;
     let mut tx = pool.begin().await.map_err(db_err)?;
-    sqlx::query("DELETE FROM domain_dns_records WHERE domain_id = $1").bind(domain_id).execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("DELETE FROM domain_dns_records WHERE domain_id = $1")
+        .bind(domain_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     for r in &clean {
         sqlx::query("INSERT INTO domain_dns_records (domain_id, rtype, host, value, ttl, priority) VALUES ($1,$2,$3,$4,$5,$6)")
             .bind(domain_id)
@@ -743,7 +995,13 @@ pub async fn replace_dns(pool: &PgPool, domain_id: Uuid, records: &[DnsRecord]) 
     dns_records(pool, domain_id).await
 }
 
-pub async fn set_flags(pool: &PgPool, id: Uuid, dns_management: Option<bool>, registrar_lock: Option<bool>, privacy: Option<bool>) -> AppResult<()> {
+pub async fn set_flags(
+    pool: &PgPool,
+    id: Uuid,
+    dns_management: Option<bool>,
+    registrar_lock: Option<bool>,
+    privacy: Option<bool>,
+) -> AppResult<()> {
     sqlx::query(
         "UPDATE domains SET dns_management = COALESCE($2, dns_management), registrar_lock = COALESCE($3, registrar_lock),
            privacy = COALESCE($4, privacy), updated_at = now() WHERE id = $1",
@@ -759,12 +1017,25 @@ pub async fn set_flags(pool: &PgPool, id: Uuid, dns_management: Option<bool>, re
 }
 
 pub async fn set_admin_notes(pool: &PgPool, id: Uuid, notes: &str) -> AppResult<()> {
-    sqlx::query("UPDATE domains SET admin_notes = left($2, 5000), updated_at = now() WHERE id = $1").bind(id).bind(notes).execute(pool).await.map_err(db_err)?;
+    sqlx::query(
+        "UPDATE domains SET admin_notes = left($2, 5000), updated_at = now() WHERE id = $1",
+    )
+    .bind(id)
+    .bind(notes)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
     Ok(())
 }
 
 /// Record a registrar sync result.
-pub async fn mark_synced(pool: &PgPool, id: Uuid, expires_on: Date, status: Option<&str>, err: Option<&str>) -> AppResult<()> {
+pub async fn mark_synced(
+    pool: &PgPool,
+    id: Uuid,
+    expires_on: Date,
+    status: Option<&str>,
+    err: Option<&str>,
+) -> AppResult<()> {
     sqlx::query(
         "UPDATE domains SET expires_on = $2, status = COALESCE($3, status), last_error = $4, synced_at = now(), updated_at = now() WHERE id = $1",
     )
@@ -792,7 +1063,12 @@ pub async fn sync_batch(pool: &PgPool, limit: i64) -> AppResult<Vec<Domain>> {
 
 /// Bulk TLD price adjustment by `percent` (e.g. 10 = +10%), rounded to 2 dp.
 /// Only the given TLDs (all when empty) and currency (all when None).
-pub async fn bulk_adjust_prices(pool: &PgPool, tlds: &[String], currency: Option<&str>, percent: Decimal) -> AppResult<u64> {
+pub async fn bulk_adjust_prices(
+    pool: &PgPool,
+    tlds: &[String],
+    currency: Option<&str>,
+    percent: Decimal,
+) -> AppResult<u64> {
     if percent <= Decimal::from(-100) || percent > Decimal::from(1000) {
         return Err(AppError::Validation("error.validation"));
     }
@@ -813,7 +1089,13 @@ pub async fn bulk_adjust_prices(pool: &PgPool, tlds: &[String], currency: Option
 
 /// Copy every TLD price from `from` currency into `to` at `rate`, keeping
 /// existing rows for `to` unless `overwrite`.
-pub async fn copy_currency(pool: &PgPool, from: &str, to: &str, rate: Decimal, overwrite: bool) -> AppResult<u64> {
+pub async fn copy_currency(
+    pool: &PgPool,
+    from: &str,
+    to: &str,
+    rate: Decimal,
+    overwrite: bool,
+) -> AppResult<u64> {
     if rate <= Decimal::ZERO {
         return Err(AppError::Validation("error.validation"));
     }
@@ -850,7 +1132,9 @@ pub fn threshold(days_left: i64, thresholds: &[i64]) -> Option<i64> {
 
 /// Claim a reminder slot; true the first time only.
 pub async fn claim_reminder(pool: &PgPool, d: &Domain, days_before: i64) -> AppResult<bool> {
-    let Some(exp) = d.expires_on else { return Ok(false) };
+    let Some(exp) = d.expires_on else {
+        return Ok(false);
+    };
     let r = sqlx::query("INSERT INTO domain_reminders (domain_id, for_expiry, days_before) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING")
         .bind(d.id)
         .bind(exp)
@@ -876,13 +1160,21 @@ mod tests {
     use time::macros::date;
     #[test]
     fn names() {
-        assert_eq!(normalize(" Example.CO.uk. ").unwrap(), ("example.co.uk".into(), "co.uk".into()));
+        assert_eq!(
+            normalize(" Example.CO.uk. ").unwrap(),
+            ("example.co.uk".into(), "co.uk".into())
+        );
         assert!(normalize("nodot").is_err());
         assert!(normalize("-bad.com").is_err());
         assert!(normalize("a..com").is_err());
         assert!(normalize("sp ace.com").is_err());
         assert!(normalize_ns(&["ns1.x.io".into()]).is_err());
-        assert_eq!(normalize_ns(&["NS1.x.io".into(), "ns1.x.io".into(), "ns2.x.io".into()]).unwrap().len(), 2);
+        assert_eq!(
+            normalize_ns(&["NS1.x.io".into(), "ns1.x.io".into(), "ns2.x.io".into()])
+                .unwrap()
+                .len(),
+            2
+        );
         assert!(normalize_ns(&[]).unwrap().is_empty());
     }
     #[test]
@@ -892,11 +1184,23 @@ mod tests {
         assert_eq!(lapse_status(31, 30, 30), "redemption");
         assert_eq!(lapse_status(61, 30, 30), "expired");
         assert_eq!(lapse_status(5, 0, 30), "redemption");
-        let r = |t: &str, h: &str, v: &str| DnsRecord { id: Uuid::nil(), rtype: t.into(), host: h.into(), value: v.into(), ttl: 3600, priority: None };
+        let r = |t: &str, h: &str, v: &str| DnsRecord {
+            id: Uuid::nil(),
+            rtype: t.into(),
+            host: h.into(),
+            value: v.into(),
+            ttl: 3600,
+            priority: None,
+        };
         assert_eq!(validate_dns(&r("a", "", "1.2.3.4")).unwrap().host, "@");
         assert!(validate_dns(&r("A", "www", "1.2.3")).is_err());
         assert!(validate_dns(&r("AAAA", "v6", "2001:db8::1")).is_ok());
-        assert_eq!(validate_dns(&r("MX", "@", "mx.example.com")).unwrap().priority, Some(10));
+        assert_eq!(
+            validate_dns(&r("MX", "@", "mx.example.com"))
+                .unwrap()
+                .priority,
+            Some(10)
+        );
         assert!(validate_dns(&r("TXT", "_dmarc", "v=DMARC1; p=none")).is_ok());
         assert!(validate_dns(&r("URL", "go", "javascript:alert(1)")).is_err());
         assert!(validate_dns(&r("BOGUS", "@", "x")).is_err());

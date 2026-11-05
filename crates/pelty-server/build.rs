@@ -9,7 +9,10 @@ fn main() {
     println!("cargo:rustc-check-cfg=cfg(pelty_embed_addons)");
     println!("cargo:rerun-if-changed=build.rs");
     // The update command picks the release archive built for this target.
-    println!("cargo:rustc-env=PELTY_TARGET={}", std::env::var("TARGET").unwrap_or_default());
+    println!(
+        "cargo:rustc-env=PELTY_TARGET={}",
+        std::env::var("TARGET").unwrap_or_default()
+    );
     println!("cargo:rerun-if-changed=release-key.pub");
     if std::env::var_os("CARGO_FEATURE_EMBED_FRONTEND").is_none() {
         return;
@@ -24,7 +27,11 @@ fn main() {
         let d = root.join(dir);
         // A missing folder is watched too, so building it later re-embeds.
         println!("cargo:rerun-if-changed={}", d.display());
-        let ok = if marker.is_empty() { d.is_dir() } else { d.join(marker).is_file() };
+        let ok = if marker.is_empty() {
+            d.is_dir()
+        } else {
+            d.join(marker).is_file()
+        };
         if ok {
             println!("cargo:rustc-cfg={cfg}");
         } else {

@@ -19,8 +19,21 @@ pub struct FunctionSpec {
     pub since: &'static str,
 }
 
-const fn spec(name: &'static str, description: &'static str, input: &'static str, output: &'static str, context: &'static [&'static str]) -> FunctionSpec {
-    FunctionSpec { name, description, input, output, context, since: "0.4.0" }
+const fn spec(
+    name: &'static str,
+    description: &'static str,
+    input: &'static str,
+    output: &'static str,
+    context: &'static [&'static str],
+) -> FunctionSpec {
+    FunctionSpec {
+        name,
+        description,
+        input,
+        output,
+        context,
+        since: "0.4.0",
+    }
 }
 
 pub const FUNCTIONS: &[FunctionSpec] = &[

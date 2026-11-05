@@ -5,11 +5,27 @@ use sqlx::PgPool;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-pub async fn issue(pool: &PgPool, nonce: &str, service: Uuid, user: Uuid, expires: OffsetDateTime) -> AppResult<()> {
-    sqlx::query("DELETE FROM sso_tokens WHERE expires_at < now() - interval '1 day'").execute(pool).await.map_err(db_err)?;
-    sqlx::query("INSERT INTO sso_tokens (nonce, service_id, user_id, expires_at) VALUES ($1, $2, $3, $4)")
-        .bind(nonce).bind(service).bind(user).bind(expires)
-        .execute(pool).await.map_err(db_err)?;
+pub async fn issue(
+    pool: &PgPool,
+    nonce: &str,
+    service: Uuid,
+    user: Uuid,
+    expires: OffsetDateTime,
+) -> AppResult<()> {
+    sqlx::query("DELETE FROM sso_tokens WHERE expires_at < now() - interval '1 day'")
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
+    sqlx::query(
+        "INSERT INTO sso_tokens (nonce, service_id, user_id, expires_at) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(nonce)
+    .bind(service)
+    .bind(user)
+    .bind(expires)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
     Ok(())
 }
 

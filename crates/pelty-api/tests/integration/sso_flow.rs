@@ -21,23 +21,42 @@ async fn client_sso_one_time_token() {
     // No module: unsupported.
     let r = call(&app, "POST", &path, None, &cust.h()).await;
     assert_eq!(r.status, StatusCode::CONFLICT);
-    assert_eq!(r.body["error"]["code"], "error.sso_unsupported", "{:?}", r.body);
+    assert_eq!(
+        r.body["error"]["code"], "error.sso_unsupported",
+        "{:?}",
+        r.body
+    );
 
     let srv = call(&app, "POST", "/api/v1/admin/servers", Some(json!({"name": "SSO", "module": "webhook", "base_url": "https://panel.test", "api_key": "shared-secret",
         "config": {"sso_url": "{base_url}/sso/{remote_id}?t={token}"}})), &admin.h()).await;
     assert_eq!(srv.status, StatusCode::OK, "{:?}", srv.body);
     let srv = srv.body["id"].as_str().unwrap().to_string();
-    let pm = call(&app, "PUT", &format!("/api/v1/admin/products/{pid}/module"), Some(json!({"module": "webhook", "server_id": srv, "config": {}})), &admin.h()).await;
+    let pm = call(
+        &app,
+        "PUT",
+        &format!("/api/v1/admin/products/{pid}/module"),
+        Some(json!({"module": "webhook", "server_id": srv, "config": {}})),
+        &admin.h(),
+    )
+    .await;
     assert_eq!(pm.status, StatusCode::OK, "{:?}", pm.body);
 
-    assert_eq!(call(&app, "POST", &path, None, &other.h()).await.status, StatusCode::NOT_FOUND);
+    assert_eq!(
+        call(&app, "POST", &path, None, &other.h()).await.status,
+        StatusCode::NOT_FOUND
+    );
     let r = call(&app, "POST", &path, None, &cust.h()).await;
     assert_eq!(r.status, StatusCode::OK, "{:?}", r.body);
     let url = r.body["url"].as_str().unwrap();
     assert!(url.starts_with("https://panel.test/sso/r42?t="), "{url}");
     let token = url.split("?t=").nth(1).unwrap().to_string();
     // Signed with the server key: the panel can verify offline.
-    let c = pelty_provisioning::sso::verify("shared-secret", &token, time::OffsetDateTime::now_utc().unix_timestamp()).unwrap();
+    let c = pelty_provisioning::sso::verify(
+        "shared-secret",
+        &token,
+        time::OffsetDateTime::now_utc().unix_timestamp(),
+    )
+    .unwrap();
     assert_eq!(c.email, cust.email);
 
     // Tampered token rejected; genuine one works exactly once.
@@ -45,13 +64,49 @@ async fn client_sso_one_time_token() {
     forged.pop();
     forged.push(if token.ends_with('0') { '1' } else { '0' });
     let none: [(&str, &str); 0] = [];
-    assert_eq!(call(&app, "POST", "/api/v1/sso/consume", Some(json!({"token": forged})), &none).await.status, StatusCode::UNAUTHORIZED);
-    let ok = call(&app, "POST", "/api/v1/sso/consume", Some(json!({"token": token})), &none).await;
+    assert_eq!(
+        call(
+            &app,
+            "POST",
+            "/api/v1/sso/consume",
+            Some(json!({"token": forged})),
+            &none
+        )
+        .await
+        .status,
+        StatusCode::UNAUTHORIZED
+    );
+    let ok = call(
+        &app,
+        "POST",
+        "/api/v1/sso/consume",
+        Some(json!({"token": token})),
+        &none,
+    )
+    .await;
     assert_eq!(ok.status, StatusCode::OK, "{:?}", ok.body);
     assert_eq!(ok.body["remote_id"], "r42");
-    assert_eq!(call(&app, "POST", "/api/v1/sso/consume", Some(json!({"token": token})), &none).await.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        call(
+            &app,
+            "POST",
+            "/api/v1/sso/consume",
+            Some(json!({"token": token})),
+            &none
+        )
+        .await
+        .status,
+        StatusCode::UNAUTHORIZED
+    );
 
     // Suspended services can't SSO.
-    sqlx::query("UPDATE services SET status = 'suspended' WHERE id = $1").bind(sid).execute(&state.pool).await.unwrap();
-    assert_eq!(call(&app, "POST", &path, None, &cust.h()).await.status, StatusCode::CONFLICT);
+    sqlx::query("UPDATE services SET status = 'suspended' WHERE id = $1")
+        .bind(sid)
+        .execute(&state.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        call(&app, "POST", &path, None, &cust.h()).await.status,
+        StatusCode::CONFLICT
+    );
 }

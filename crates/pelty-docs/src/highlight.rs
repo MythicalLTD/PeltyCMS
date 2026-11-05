@@ -39,7 +39,8 @@ fn syntax(lang: &str) -> Option<&'static SyntaxReference> {
         "wit" => "rs",
         _ => return None,
     };
-    s.find_syntax_by_token(token).or_else(|| s.find_syntax_by_extension(token))
+    s.find_syntax_by_token(token)
+        .or_else(|| s.find_syntax_by_extension(token))
 }
 
 /// Human label for the code bar.
@@ -71,8 +72,14 @@ pub fn label(lang: &str) -> &str {
 
 /// Highlighted HTML for `code` (escaped plain text when the language is unknown).
 pub fn html(lang: &str, code: &str) -> String {
-    let Some(sx) = syntax(lang) else { return esc(code) };
-    let mut g = ClassedHTMLGenerator::new_with_class_style(sx, set(), ClassStyle::SpacedPrefixed { prefix: "hl-" });
+    let Some(sx) = syntax(lang) else {
+        return esc(code);
+    };
+    let mut g = ClassedHTMLGenerator::new_with_class_style(
+        sx,
+        set(),
+        ClassStyle::SpacedPrefixed { prefix: "hl-" },
+    );
     for line in LinesWithEndings::from(code) {
         if g.parse_html_for_line_which_includes_newline(line).is_err() {
             return esc(code);
@@ -85,7 +92,10 @@ pub fn html(lang: &str, code: &str) -> String {
 mod tests {
     #[test]
     fn every_documented_language_has_a_grammar() {
-        for l in ["rust", "json", "toml", "bash", "ts", "tsx", "js", "c", "go", "python", "html", "css", "sql", "yaml"] {
+        for l in [
+            "rust", "json", "toml", "bash", "ts", "tsx", "js", "c", "go", "python", "html", "css",
+            "sql", "yaml",
+        ] {
             assert!(super::syntax(l).is_some(), "no grammar for {l}");
         }
         let h = super::html("rust", "fn main() { let x = \"s\"; } // c\n");

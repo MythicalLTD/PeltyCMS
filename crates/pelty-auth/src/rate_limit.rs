@@ -69,7 +69,10 @@ impl RateLimiter {
             return n >= self.limit.load(Ordering::Relaxed);
         }
         let m = self.hits.lock().unwrap_or_else(|e| e.into_inner());
-        m.get(key).is_some_and(|(t, n)| Instant::now().duration_since(*t) < self.window && *n >= self.limit.load(Ordering::Relaxed))
+        m.get(key).is_some_and(|(t, n)| {
+            Instant::now().duration_since(*t) < self.window
+                && *n >= self.limit.load(Ordering::Relaxed)
+        })
     }
 }
 
@@ -89,13 +92,22 @@ mod tests {
         struct Fake(Mutex<HashMap<String, u32>>, bool);
         impl SharedCounter for Fake {
             fn incr(&self, k: &str, _: Duration) -> Option<u32> {
-                self.1.then(|| { let mut m = self.0.lock().unwrap(); let n = m.entry(k.into()).or_default(); *n += 1; *n })
+                self.1.then(|| {
+                    let mut m = self.0.lock().unwrap();
+                    let n = m.entry(k.into()).or_default();
+                    *n += 1;
+                    *n
+                })
             }
             fn get(&self, k: &str) -> Option<u32> {
-                self.1.then(|| self.0.lock().unwrap().get(k).copied().unwrap_or(0))
+                self.1
+                    .then(|| self.0.lock().unwrap().get(k).copied().unwrap_or(0))
             }
         }
-        let store = std::sync::Arc::new(Fake(Mutex::new(HashMap::from([("a".to_string(), 1)])), true));
+        let store = std::sync::Arc::new(Fake(
+            Mutex::new(HashMap::from([("a".to_string(), 1)])),
+            true,
+        ));
         let r = RateLimiter::new(2, Duration::from_secs(60));
         r.set_shared(store.clone());
         // Another instance already counted one hit for "a".

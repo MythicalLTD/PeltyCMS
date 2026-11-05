@@ -36,10 +36,17 @@ fn code_ok(c: &str) -> bool {
 
 impl GatewayRules {
     pub fn normalized(mut self) -> Result<Self, &'static str> {
-        if self.fee_percent < Decimal::ZERO || self.fee_percent > Decimal::ONE_HUNDRED || self.fee_percent.scale() > 4 {
+        if self.fee_percent < Decimal::ZERO
+            || self.fee_percent > Decimal::ONE_HUNDRED
+            || self.fee_percent.scale() > 4
+        {
             return Err("error.invalid_fee");
         }
-        let mut cur: Vec<String> = self.currencies.iter().map(|c| c.trim().to_ascii_uppercase()).collect();
+        let mut cur: Vec<String> = self
+            .currencies
+            .iter()
+            .map(|c| c.trim().to_ascii_uppercase())
+            .collect();
         cur.sort();
         cur.dedup();
         if cur.len() > 50 || !cur.iter().all(|c| code_ok(c)) {
@@ -87,19 +94,29 @@ impl GatewayRules {
 
     /// Processing fee for `amount`, rounded half-up to the currency exponent.
     pub fn fee(&self, currency: &str, amount: Decimal, exp: u32) -> Decimal {
-        let fixed = self.limits.get(currency).map_or(Decimal::ZERO, |l| l.fee_fixed);
-        (amount * self.fee_percent / Decimal::ONE_HUNDRED + fixed).round_dp_with_strategy(exp, RoundingStrategy::MidpointAwayFromZero)
+        let fixed = self
+            .limits
+            .get(currency)
+            .map_or(Decimal::ZERO, |l| l.fee_fixed);
+        (amount * self.fee_percent / Decimal::ONE_HUNDRED + fixed)
+            .round_dp_with_strategy(exp, RoundingStrategy::MidpointAwayFromZero)
     }
 }
 
 pub async fn get(pool: &PgPool, gateway: &str) -> AppResult<GatewayRules> {
-    let row: Option<(Decimal, Vec<String>, serde_json::Value)> = sqlx::query_as("SELECT fee_percent, currencies, limits FROM gateway_rules WHERE gateway = $1")
-        .bind(gateway)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?;
+    let row: Option<(Decimal, Vec<String>, serde_json::Value)> = sqlx::query_as(
+        "SELECT fee_percent, currencies, limits FROM gateway_rules WHERE gateway = $1",
+    )
+    .bind(gateway)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?;
     Ok(row
-        .map(|(p, c, l)| GatewayRules { fee_percent: p.normalize(), currencies: c, limits: serde_json::from_value(l).unwrap_or_default() })
+        .map(|(p, c, l)| GatewayRules {
+            fee_percent: p.normalize(),
+            currencies: c,
+            limits: serde_json::from_value(l).unwrap_or_default(),
+        })
         .unwrap_or_default())
 }
 
@@ -121,12 +138,22 @@ pub async fn put(pool: &PgPool, gateway: &str, r: &GatewayRules) -> AppResult<()
 
 /// Store the fee once (first computation wins, so retries don't change it).
 pub async fn record_fee(pool: &PgPool, payment_id: Uuid, fee: Decimal) -> AppResult<()> {
-    sqlx::query("UPDATE payments SET fee = $2 WHERE id = $1 AND fee IS NULL").bind(payment_id).bind(fee).execute(pool).await.map_err(db_err)?;
+    sqlx::query("UPDATE payments SET fee = $2 WHERE id = $1 AND fee IS NULL")
+        .bind(payment_id)
+        .bind(fee)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(())
 }
 
 pub async fn fee_of(pool: &PgPool, payment_id: Uuid) -> AppResult<Option<Decimal>> {
-    sqlx::query_scalar("SELECT fee FROM payments WHERE id = $1").bind(payment_id).fetch_optional(pool).await.map_err(db_err).map(Option::flatten)
+    sqlx::query_scalar("SELECT fee FROM payments WHERE id = $1")
+        .bind(payment_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
+        .map(Option::flatten)
 }
 
 #[cfg(test)]
@@ -143,7 +170,17 @@ mod tests {
         let r = GatewayRules {
             fee_percent: d("2.9"),
             currencies: vec!["eur".into(), "RON".into(), "EUR".into()],
-            limits: BTreeMap::from([("eur".into(), CurrencyLimit { min: Some(d("1.00")), max: Some(d("5000")), fee_fixed: d("0.25") }), ("USD".into(), CurrencyLimit::default())]),
+            limits: BTreeMap::from([
+                (
+                    "eur".into(),
+                    CurrencyLimit {
+                        min: Some(d("1.00")),
+                        max: Some(d("5000")),
+                        fee_fixed: d("0.25"),
+                    },
+                ),
+                ("USD".into(), CurrencyLimit::default()),
+            ]),
         }
         .normalized()
         .unwrap();
@@ -158,8 +195,26 @@ mod tests {
         assert_eq!(r.fee("EUR", d("100.00"), 2), d("3.15"));
         assert_eq!(r.fee("EUR", d("10.10"), 2), d("0.54"));
         assert_eq!(r.fee("RON", d("0.50"), 2), d("0.01"));
-        assert_eq!(GatewayRules { fee_percent: d("101"), ..Default::default() }.normalized().unwrap_err(), "error.invalid_fee");
-        let bad = GatewayRules { limits: BTreeMap::from([("EUR".into(), CurrencyLimit { min: Some(d("5")), max: Some(d("1")), fee_fixed: d("0") })]), ..Default::default() };
+        assert_eq!(
+            GatewayRules {
+                fee_percent: d("101"),
+                ..Default::default()
+            }
+            .normalized()
+            .unwrap_err(),
+            "error.invalid_fee"
+        );
+        let bad = GatewayRules {
+            limits: BTreeMap::from([(
+                "EUR".into(),
+                CurrencyLimit {
+                    min: Some(d("5")),
+                    max: Some(d("1")),
+                    fee_fixed: d("0"),
+                },
+            )]),
+            ..Default::default()
+        };
         assert_eq!(bad.normalized().unwrap_err(), "error.invalid_limits");
         assert!(GatewayRules::default().check("JPY", d("1")).is_ok());
     }

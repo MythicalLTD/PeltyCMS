@@ -19,8 +19,24 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-pub const KINDS: &[&str] = &["provisioning", "gateway", "registrar", "theme", "plugin", "captcha", "sso", "integration"];
-pub const PERMISSIONS: &[&str] = &["payments.process", "provisioning.manage", "domains.manage", "network.outbound", "db.migrate", "ui.extend"];
+pub const KINDS: &[&str] = &[
+    "provisioning",
+    "gateway",
+    "registrar",
+    "theme",
+    "plugin",
+    "captcha",
+    "sso",
+    "integration",
+];
+pub const PERMISSIONS: &[&str] = &[
+    "payments.process",
+    "provisioning.manage",
+    "domains.manage",
+    "network.outbound",
+    "db.migrate",
+    "ui.extend",
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SettingSpec {
@@ -111,16 +127,25 @@ pub fn builtin_id(kind: &str, engine: &str) -> String {
 }
 
 fn id_ok(s: &str) -> bool {
-    (3..=64).contains(&s.len()) && s.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-') && !s.starts_with('-')
+    (3..=64).contains(&s.len())
+        && s.bytes()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
+        && !s.starts_with('-')
 }
 
 pub fn addons_dir() -> PathBuf {
     // Default `data/addons`; an existing `./addons` (the pre-restructure
     // default) keeps working so older installs are not orphaned.
-    std::env::var("PELTY_ADDONS_DIR").map(PathBuf::from).unwrap_or_else(|_| {
-        let legacy = PathBuf::from("addons");
-        if legacy.is_dir() { legacy } else { PathBuf::from("data/addons") }
-    })
+    std::env::var("PELTY_ADDONS_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            let legacy = PathBuf::from("addons");
+            if legacy.is_dir() {
+                legacy
+            } else {
+                PathBuf::from("data/addons")
+            }
+        })
 }
 
 fn sha_hex(b: &[u8]) -> String {
@@ -133,8 +158,18 @@ fn hex_lower(b: &[u8]) -> String {
 /// Host-implemented addons that are not WASM (yet): see `make docs`.
 fn builtins(_s: &AppState) -> Vec<CatalogEntry> {
     let mut out = vec![];
-    for m in crate::captcha::builtin_manifests().into_iter().chain(crate::oauth::builtin_manifests()).chain(crate::saml::builtin_manifests()).chain(crate::whmcs_api::builtin_manifests()) {
-        out.push(CatalogEntry { manifest: m, source: "builtin", hash: "builtin".into(), dir: None });
+    for m in crate::captcha::builtin_manifests()
+        .into_iter()
+        .chain(crate::oauth::builtin_manifests())
+        .chain(crate::saml::builtin_manifests())
+        .chain(crate::whmcs_api::builtin_manifests())
+    {
+        out.push(CatalogEntry {
+            manifest: m,
+            source: "builtin",
+            hash: "builtin".into(),
+            dir: None,
+        });
     }
     out
 }
@@ -142,24 +177,42 @@ fn builtins(_s: &AppState) -> Vec<CatalogEntry> {
 /// Parse and structurally validate a manifest (no file access).
 pub fn validate_manifest(s: &AppState, m: &Manifest) -> AppResult<()> {
     let bad = AppError::Validation("error.addon_manifest");
-    if !id_ok(&m.id) || m.name.trim().is_empty() || m.version.trim().is_empty() || !KINDS.contains(&m.kind.as_str()) {
+    if !id_ok(&m.id)
+        || m.name.trim().is_empty()
+        || m.version.trim().is_empty()
+        || !KINDS.contains(&m.kind.as_str())
+    {
         return Err(bad);
     }
-    if m.permissions.iter().any(|p| !PERMISSIONS.contains(&p.as_str())) {
+    if m.permissions
+        .iter()
+        .any(|p| !PERMISSIONS.contains(&p.as_str()))
+    {
         return Err(AppError::Validation("error.addon_permission"));
     }
     if m.is_wasm() {
         let provides = m.provides.as_deref().unwrap_or_default();
-        let abi_ok = m.abi.as_deref().is_some_and(pelty_wasm::runtime::abi_supported);
-        if !pelty_wasm::runtime::KINDS.contains(&m.kind.as_str()) || !id_ok(&provides.replace('_', "-")) || !abi_ok {
+        let abi_ok = m
+            .abi
+            .as_deref()
+            .is_some_and(pelty_wasm::runtime::abi_supported);
+        if !pelty_wasm::runtime::KINDS.contains(&m.kind.as_str())
+            || !id_ok(&provides.replace('_', "-"))
+            || !abi_ok
+        {
             return Err(AppError::Validation("error.addon_engine"));
         }
-        let Some(w) = m.wasm.as_deref() else { return Err(bad) };
+        let Some(w) = m.wasm.as_deref() else {
+            return Err(bad);
+        };
         if !m.files.contains_key(w) {
             return Err(AppError::Validation("error.addon_integrity"));
         }
         if let Some(c) = &m.capabilities {
-            let Ok(caps) = serde_json::from_value::<pelty_wasm::AddonCapabilities>(c.clone()) else { return Err(bad) };
+            let Ok(caps) = serde_json::from_value::<pelty_wasm::AddonCapabilities>(c.clone())
+            else {
+                return Err(bad);
+            };
             crate::addon_ext::validate_caps(&caps)?;
         }
         if pelty_wasm::Sandbox::from_manifest(&m.kind, m.limits.as_ref()).is_err() {
@@ -174,20 +227,28 @@ pub fn validate_manifest(s: &AppState, m: &Manifest) -> AppResult<()> {
             crate::addon_ext::validate_i18n(i)?;
         }
     }
-    let engine_known = m.is_wasm() || match m.kind.as_str() {
-        "provisioning" => s.provisioning.get(&m.engine).is_some(),
-        "gateway" => s.gateways.descriptor(&m.engine).is_some(),
-        "registrar" => s.registrars.get(&m.engine).is_some(),
-        "captcha" => crate::captcha::ENGINES.contains(&m.engine.as_str()),
-        "sso" => crate::oauth::ENGINES.contains(&m.engine.as_str()) || m.engine == crate::saml::ENGINE,
-        "integration" => crate::whmcs_api::ENGINES.contains(&m.engine.as_str()),
-        _ => id_ok(&m.engine.replace('_', "-")),
-    };
+    let engine_known = m.is_wasm()
+        || match m.kind.as_str() {
+            "provisioning" => s.provisioning.get(&m.engine).is_some(),
+            "gateway" => s.gateways.descriptor(&m.engine).is_some(),
+            "registrar" => s.registrars.get(&m.engine).is_some(),
+            "captcha" => crate::captcha::ENGINES.contains(&m.engine.as_str()),
+            "sso" => {
+                crate::oauth::ENGINES.contains(&m.engine.as_str())
+                    || m.engine == crate::saml::ENGINE
+            }
+            "integration" => crate::whmcs_api::ENGINES.contains(&m.engine.as_str()),
+            _ => id_ok(&m.engine.replace('_', "-")),
+        };
     if !engine_known {
         return Err(AppError::Validation("error.addon_engine"));
     }
     for st in &m.settings {
-        if st.key.is_empty() || !["text", "number", "bool", "select", "textarea", "secret"].contains(&st.kind.as_str()) || (st.kind == "select" && st.choices.is_empty()) {
+        if st.key.is_empty()
+            || !["text", "number", "bool", "select", "textarea", "secret"]
+                .contains(&st.kind.as_str())
+            || (st.kind == "select" && st.choices.is_empty())
+        {
             return Err(bad);
         }
     }
@@ -202,14 +263,18 @@ pub fn validate_manifest(s: &AppState, m: &Manifest) -> AppResult<()> {
 
 fn disk(s: &AppState) -> Vec<CatalogEntry> {
     let mut out = vec![];
-    let Ok(rd) = std::fs::read_dir(addons_dir()) else { return out };
+    let Ok(rd) = std::fs::read_dir(addons_dir()) else {
+        return out;
+    };
     for e in rd.flatten() {
         let dir = e.path();
         // `extensions/addons/<src>/` source crates (dev checkouts) are not installs.
         if dir.join("Cargo.toml").exists() {
             continue;
         }
-        let Ok(raw) = std::fs::read(dir.join("addon.json")) else { continue };
+        let Ok(raw) = std::fs::read(dir.join("addon.json")) else {
+            continue;
+        };
         let Ok(m) = serde_json::from_slice::<Manifest>(&raw) else {
             tracing::warn!(dir = %dir.display(), "invalid addon.json");
             continue;
@@ -218,7 +283,12 @@ fn disk(s: &AppState) -> Vec<CatalogEntry> {
             tracing::warn!(id = %m.id, "addon manifest rejected");
             continue;
         }
-        out.push(CatalogEntry { hash: sha_hex(&raw), manifest: m, source: "disk", dir: Some(dir) });
+        out.push(CatalogEntry {
+            hash: sha_hex(&raw),
+            manifest: m,
+            source: "disk",
+            dir: Some(dir),
+        });
     }
     out
 }
@@ -242,7 +312,8 @@ pub fn verify(e: &CatalogEntry) -> AppResult<Vec<(String, String, String)>> {
         if !addon_pkg::safe_rel(rel) || rel == "addon.json" || rel == "addon.sig" {
             return Err(integrity);
         }
-        let b = std::fs::read(dir.join(rel)).map_err(|_| AppError::Validation("error.addon_integrity"))?;
+        let b = std::fs::read(dir.join(rel))
+            .map_err(|_| AppError::Validation("error.addon_integrity"))?;
         if !sha_hex(&b).eq_ignore_ascii_case(want) {
             return Err(integrity);
         }
@@ -250,7 +321,8 @@ pub fn verify(e: &CatalogEntry) -> AppResult<Vec<(String, String, String)>> {
     let prefix = format!("addon_{}_", e.manifest.id.replace('-', "_"));
     let mut out = vec![];
     for name in &e.manifest.migrations {
-        let sql = std::fs::read_to_string(dir.join(name)).map_err(|_| AppError::Validation("error.addon_integrity"))?;
+        let sql = std::fs::read_to_string(dir.join(name))
+            .map_err(|_| AppError::Validation("error.addon_integrity"))?;
         if !migration_safe(&sql, &prefix) {
             return Err(AppError::Validation("error.addon_migration"));
         }
@@ -267,13 +339,19 @@ pub fn migration_safe(sql: &str, prefix: &str) -> bool {
 /// Validate settings against the schema; fills defaults, rejects unknown keys.
 pub fn validate_settings(spec: &[SettingSpec], v: &Value) -> AppResult<Value> {
     let bad = AppError::Validation("error.addon_settings");
-    let obj = v.as_object().ok_or(AppError::Validation("error.addon_settings"))?;
+    let obj = v
+        .as_object()
+        .ok_or(AppError::Validation("error.addon_settings"))?;
     if obj.keys().any(|k| !spec.iter().any(|s| &s.key == k)) {
         return Err(bad);
     }
     let mut out = Map::new();
     for s in spec {
-        let val = obj.get(&s.key).filter(|x| !x.is_null() && *x != "").cloned().or_else(|| s.default.clone());
+        let val = obj
+            .get(&s.key)
+            .filter(|x| !x.is_null() && *x != "")
+            .cloned()
+            .or_else(|| s.default.clone());
         let Some(val) = val else {
             if s.required {
                 return Err(AppError::Validation("error.addon_settings"));
@@ -282,8 +360,15 @@ pub fn validate_settings(spec: &[SettingSpec], v: &Value) -> AppResult<Value> {
         };
         let ok = match s.kind.as_str() {
             "bool" => val.is_boolean(),
-            "number" => val.is_number() || val.as_str().is_some_and(|x| x.trim().parse::<f64>().is_ok()),
-            "select" => val.as_str().is_some_and(|x| s.choices.iter().any(|c| c == x)),
+            "number" => {
+                val.is_number()
+                    || val
+                        .as_str()
+                        .is_some_and(|x| x.trim().parse::<f64>().is_ok())
+            }
+            "select" => val
+                .as_str()
+                .is_some_and(|x| s.choices.iter().any(|c| c == x)),
             _ => val.as_str().is_some_and(|x| x.len() <= 10_000),
         };
         if !ok {
@@ -305,21 +390,32 @@ pub async fn provisioning_enabled(s: &AppState, module: &str) -> AppResult<bool>
 
 /// Registrar module `id`, configured with its addon settings, when the
 /// registrar addon is installed and enabled; `None` otherwise.
-pub async fn registrar(s: &AppState, id: &str) -> AppResult<Option<std::sync::Arc<dyn pelty_provisioning::registrar::RegistrarModule>>> {
-    let Some(m) = s.registrars.get(id) else { return Ok(None) };
-    let Some(settings) = reg::engine_settings(&s.pool, "registrar", id).await? else { return Ok(None) };
+pub async fn registrar(
+    s: &AppState,
+    id: &str,
+) -> AppResult<Option<std::sync::Arc<dyn pelty_provisioning::registrar::RegistrarModule>>> {
+    let Some(m) = s.registrars.get(id) else {
+        return Ok(None);
+    };
+    let Some(settings) = reg::engine_settings(&s.pool, "registrar", id).await? else {
+        return Ok(None);
+    };
     let settings = crate::addon_secrets::open(s, &settings);
     Ok(Some(m.configure(&settings).unwrap_or(m)))
 }
 
 /// True when some catalog addon (installed or not) provides `engine` of `kind`.
 pub fn provided(s: &AppState, kind: &str, engine: &str) -> bool {
-    catalog(s).iter().any(|e| e.manifest.kind == kind && e.manifest.engine_id() == engine)
+    catalog(s)
+        .iter()
+        .any(|e| e.manifest.kind == kind && e.manifest.engine_id() == engine)
 }
 
 /// `id` is a payment_gateways row id (`stripe`, `custom-foo`).
 pub async fn gateway_enabled(s: &AppState, id: &str) -> AppResult<bool> {
-    let Some(d) = s.gateways.descriptor(id) else { return Ok(false) };
+    let Some(d) = s.gateways.descriptor(id) else {
+        return Ok(false);
+    };
     reg::engine_enabled(&s.pool, "gateway", d.id).await
 }
 
@@ -328,14 +424,28 @@ pub async fn gateway_enabled(s: &AppState, id: &str) -> AppResult<bool> {
 pub async fn install_builtins(s: &AppState) -> AppResult<()> {
     crate::wasm_addons::seed_bundled(s).await?;
     let bundled: Vec<String> = std::fs::read_dir(crate::wasm_addons::dist_dir())
-        .map(|rd| rd.flatten().filter_map(|e| e.path().file_stem().map(|x| x.to_string_lossy().into_owned())).collect())
+        .map(|rd| {
+            rd.flatten()
+                .filter_map(|e| {
+                    e.path()
+                        .file_stem()
+                        .map(|x| x.to_string_lossy().into_owned())
+                })
+                .collect()
+        })
         .unwrap_or_default();
     for e in catalog(s) {
         if e.source != "builtin" && !bundled.contains(&e.manifest.id) {
             continue;
         }
         if reg::get(&s.pool, &e.manifest.id).await?.is_none() {
-            install_entry(s, &e).await.or_else(|err| if matches!(err, AppError::Conflict(_)) { Ok(()) } else { Err(err) })?;
+            install_entry(s, &e).await.or_else(|err| {
+                if matches!(err, AppError::Conflict(_)) {
+                    Ok(())
+                } else {
+                    Err(err)
+                }
+            })?;
         }
         reg::set_enabled(&s.pool, &e.manifest.id, true).await?;
         crate::wasm_addons::activate(s, &e).await?;
@@ -373,23 +483,44 @@ pub fn router() -> Router<AppState> {
         .route("/admin/addons/{id}/install", post(install))
         .route("/admin/addons/{id}/enable", post(enable))
         .route("/admin/addons/{id}/disable", post(disable))
-        .route("/admin/addons/{id}/settings", get(get_settings).put(put_settings))
+        .route(
+            "/admin/addons/{id}/settings",
+            get(get_settings).put(put_settings),
+        )
         .route("/admin/addons/mixins", get(mixins_list))
         .route("/admin/addons/{id}/mixins", post(mixins_toggle))
         .route("/admin/addons/health", get(health_all))
         .route("/admin/addons/{id}/health", get(health_one))
         .route("/admin/addons/{id}/health/reset", post(health_reset))
-        .route("/admin/addons/upload", post(upload).layer(DefaultBodyLimit::max(pelty_core::config::upload_limits().addon.min(PKG_LIMITS.max_zip_bytes) + 1024)))
+        .route(
+            "/admin/addons/upload",
+            post(upload).layer(DefaultBodyLimit::max(
+                pelty_core::config::upload_limits()
+                    .addon
+                    .min(PKG_LIMITS.max_zip_bytes)
+                    + 1024,
+            )),
+        )
         .route("/admin/addons/registry", get(registry_index))
-        .route("/admin/addons/registry/settings", get(registry_settings).put(put_registry_settings))
-        .route("/admin/addons/registry/{id}/install", post(registry_install))
+        .route(
+            "/admin/addons/registry/settings",
+            get(registry_settings).put(put_registry_settings),
+        )
+        .route(
+            "/admin/addons/registry/{id}/install",
+            post(registry_install),
+        )
 }
 
 // ----- zip upload & registry (marketplace) -----
 
 /// Upload limits: WASM packages may be up to 64 MiB; others stay at 10 MiB
 /// (checked after the manifest is read, see [`accept_package`]).
-pub const PKG_LIMITS: Limits = Limits { max_zip_bytes: 64 * 1024 * 1024, max_unpacked_bytes: 128 * 1024 * 1024, max_entries: 1000 };
+pub const PKG_LIMITS: Limits = Limits {
+    max_zip_bytes: 64 * 1024 * 1024,
+    max_unpacked_bytes: 128 * 1024 * 1024,
+    max_entries: 1000,
+};
 pub const NON_WASM_MAX_ZIP: usize = 10 * 1024 * 1024;
 const REGISTRY_KEY: &str = "addons.registry";
 const INDEX_MAX: usize = 2 * 1024 * 1024;
@@ -401,7 +532,9 @@ fn pkg_err(e: PkgError) -> AppError {
         PkgError::UnsafePath(_) => AppError::Validation("error.addon_unsafe_path"),
         PkgError::BadManifest => AppError::Validation("error.addon_manifest"),
         PkgError::Signature(_) => AppError::Validation("error.addon_signature"),
-        PkgError::Integrity(_) | PkgError::Undeclared(_) => AppError::Validation("error.addon_integrity"),
+        PkgError::Integrity(_) | PkgError::Undeclared(_) => {
+            AppError::Validation("error.addon_integrity")
+        }
         PkgError::Io(m) => AppError::Internal(format!("addon extract: {m}")),
     }
 }
@@ -420,10 +553,16 @@ pub async fn accept_package(s: &AppState, bytes: &[u8], replace: bool) -> AppRes
 
 /// `restore`: bundled first-party package (startup seeding), may replace an
 /// enabled install in place; migration checks still apply.
-pub(crate) async fn accept_package_with(s: &AppState, bytes: &[u8], replace: bool, restore: bool) -> AppResult<CatalogEntry> {
+pub(crate) async fn accept_package_with(
+    s: &AppState,
+    bytes: &[u8],
+    replace: bool,
+    restore: bool,
+) -> AppResult<CatalogEntry> {
     let pkg = addon_pkg::inspect(bytes, PKG_LIMITS).map_err(pkg_err)?;
     crate::addon_trust::verify_package(s, &pkg)?;
-    let m: Manifest = serde_json::from_slice(&pkg.manifest_raw).map_err(|_| AppError::Validation("error.addon_manifest"))?;
+    let m: Manifest = serde_json::from_slice(&pkg.manifest_raw)
+        .map_err(|_| AppError::Validation("error.addon_manifest"))?;
     validate_manifest(s, &m)?;
     let _lock = crate::addon_upgrade::lock(&s.pool, &m.id).await?;
     if !m.is_wasm() && bytes.len() > NON_WASM_MAX_ZIP {
@@ -434,12 +573,19 @@ pub(crate) async fn accept_package_with(s: &AppState, bytes: &[u8], replace: boo
     }
     let prefix = format!("addon_{}_", m.id.replace('-', "_"));
     for name in &m.migrations {
-        let sql = pkg.files.get(name).and_then(|b| std::str::from_utf8(b).ok()).ok_or(AppError::Validation("error.addon_integrity"))?;
+        let sql = pkg
+            .files
+            .get(name)
+            .and_then(|b| std::str::from_utf8(b).ok())
+            .ok_or(AppError::Validation("error.addon_integrity"))?;
         if !migration_safe(sql, &prefix) {
             return Err(AppError::Validation("error.addon_migration"));
         }
     }
-    if let Some(row) = reg::get(&s.pool, &m.id).await?.filter(|r| r.source != "builtin") {
+    if let Some(row) = reg::get(&s.pool, &m.id)
+        .await?
+        .filter(|r| r.source != "builtin")
+    {
         if !replace {
             return Err(AppError::Conflict("error.addon_installed"));
         }
@@ -463,8 +609,19 @@ pub(crate) async fn accept_package_with(s: &AppState, bytes: &[u8], replace: boo
         tracing::warn!(id = %m.id, dir = %root.display(), "addons dir holds source crates; set PELTY_ADDONS_DIR");
         return Err(AppError::Conflict("error.addon_dir_source"));
     }
-    let dir = tokio::task::spawn_blocking(move || addon_pkg::extract(&pkg, &root, true)).await.map_err(|e| AppError::Internal(e.to_string()))?.map_err(pkg_err)?;
-    let e = CatalogEntry { hash: sha_hex(&std::fs::read(dir.join("addon.json")).map_err(|e| AppError::Internal(e.to_string()))?), manifest: m, source: "disk", dir: Some(dir) };
+    let dir = tokio::task::spawn_blocking(move || addon_pkg::extract(&pkg, &root, true))
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .map_err(pkg_err)?;
+    let e = CatalogEntry {
+        hash: sha_hex(
+            &std::fs::read(dir.join("addon.json"))
+                .map_err(|e| AppError::Internal(e.to_string()))?,
+        ),
+        manifest: m,
+        source: "disk",
+        dir: Some(dir),
+    };
     verify(&e)?;
     if reg::get(&s.pool, &e.manifest.id).await?.is_some() {
         reg::set_package(&s.pool, &e.manifest.id, &e.manifest.version, &e.hash).await?;
@@ -481,12 +638,18 @@ pub struct Actor<'a> {
 }
 
 impl Actor<'static> {
-    pub const CONSOLE: Actor<'static> = Actor { user_id: None, ip: None };
+    pub const CONSOLE: Actor<'static> = Actor {
+        user_id: None,
+        ip: None,
+    };
 }
 
 impl<'a> From<&'a crate::extract::CurrentUser> for Actor<'a> {
     fn from(u: &'a crate::extract::CurrentUser) -> Self {
-        Actor { user_id: Some(u.user_id), ip: u.ip.as_deref() }
+        Actor {
+            user_id: Some(u.user_id),
+            ip: u.ip.as_deref(),
+        }
     }
 }
 
@@ -500,9 +663,21 @@ impl Actor<'_> {
 }
 
 /// [`accept_package`] + audit (`addon.uploaded`).
-pub async fn upload_package(s: &AppState, bytes: &[u8], replace: bool, actor: Actor<'_>) -> AppResult<CatalogEntry> {
+pub async fn upload_package(
+    s: &AppState,
+    bytes: &[u8],
+    replace: bool,
+    actor: Actor<'_>,
+) -> AppResult<CatalogEntry> {
     let e = accept_package(s, bytes, replace).await?;
-    actor.record(s, "addon.uploaded", &e.manifest.id, json!({ "version": e.manifest.version, "sha256": sha_hex(bytes) })).await?;
+    actor
+        .record(
+            s,
+            "addon.uploaded",
+            &e.manifest.id,
+            json!({ "version": e.manifest.version, "sha256": sha_hex(bytes) }),
+        )
+        .await?;
     Ok(e)
 }
 
@@ -524,25 +699,50 @@ struct RegistrySettings {
 }
 
 async fn load_registry(s: &AppState) -> AppResult<RegistrySettings> {
-    Ok(pelty_database::settings::get(&s.pool, REGISTRY_KEY).await?.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default())
+    Ok(pelty_database::settings::get(&s.pool, REGISTRY_KEY)
+        .await?
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default())
 }
 
-async fn registry_settings(State(s): State<AppState>, _p: RequirePermission<perms::PluginsManage>) -> ApiResult<Json<Value>> {
+async fn registry_settings(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::PluginsManage>,
+) -> ApiResult<Json<Value>> {
     Ok(Json(json!(load_registry(&s).await?)))
 }
 
-async fn put_registry_settings(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::PluginsManage>, Json(v): Json<RegistrySettings>) -> ApiResult<Json<Value>> {
+async fn put_registry_settings(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::PluginsManage>,
+    Json(v): Json<RegistrySettings>,
+) -> ApiResult<Json<Value>> {
     let url = v.url.trim().to_string();
-    if !url.is_empty() && (!(url.starts_with("https://") || url.starts_with("http://")) || url.len() > 500 || reqwest_like_has_creds(&url)) {
+    if !url.is_empty()
+        && (!(url.starts_with("https://") || url.starts_with("http://"))
+            || url.len() > 500
+            || reqwest_like_has_creds(&url))
+    {
         return Err(AppError::Validation("error.invalid_url").into());
     }
     pelty_database::settings::set(&s.pool, REGISTRY_KEY, json!({ "url": url })).await?;
-    pelty_database::audit::record(&s.pool, Some(u.user_id), "addon.registry_updated", None, u.ip.as_deref(), json!({ "url": url })).await?;
+    pelty_database::audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "addon.registry_updated",
+        None,
+        u.ip.as_deref(),
+        json!({ "url": url }),
+    )
+    .await?;
     Ok(Json(json!({ "url": url })))
 }
 
 fn reqwest_like_has_creds(url: &str) -> bool {
-    url.split("://").nth(1).and_then(|r| r.split('/').next()).is_some_and(|auth| auth.contains('@'))
+    url.split("://")
+        .nth(1)
+        .and_then(|r| r.split('/').next())
+        .is_some_and(|auth| auth.contains('@'))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -566,17 +766,36 @@ async fn fetch_index(s: &AppState) -> AppResult<Vec<RegistryItem>> {
     if cfg.url.is_empty() {
         return Err(AppError::Conflict("error.addon_registry_unset"));
     }
-    let raw = pelty_provisioning::http::get_bytes(&cfg.url, INDEX_MAX).await.map_err(|e| {
-        tracing::warn!(error = %e, "addon registry fetch failed");
-        AppError::Validation("error.addon_registry_fetch")
-    })?;
-    let v: Value = serde_json::from_slice(&raw).map_err(|_| AppError::Validation("error.addon_registry_format"))?;
-    let arr = v.get("addons").cloned().ok_or(AppError::Validation("error.addon_registry_format"))?;
-    let items: Vec<RegistryItem> = serde_json::from_value(arr).map_err(|_| AppError::Validation("error.addon_registry_format"))?;
-    Ok(items.into_iter().filter(|i| addon_pkg::id_ok(&i.id) && i.sha256.len() == 64 && i.sha256.bytes().all(|b| b.is_ascii_hexdigit()) && KINDS.contains(&i.kind.as_str())).take(1000).collect())
+    let raw = pelty_provisioning::http::get_bytes(&cfg.url, INDEX_MAX)
+        .await
+        .map_err(|e| {
+            tracing::warn!(error = %e, "addon registry fetch failed");
+            AppError::Validation("error.addon_registry_fetch")
+        })?;
+    let v: Value = serde_json::from_slice(&raw)
+        .map_err(|_| AppError::Validation("error.addon_registry_format"))?;
+    let arr = v
+        .get("addons")
+        .cloned()
+        .ok_or(AppError::Validation("error.addon_registry_format"))?;
+    let items: Vec<RegistryItem> = serde_json::from_value(arr)
+        .map_err(|_| AppError::Validation("error.addon_registry_format"))?;
+    Ok(items
+        .into_iter()
+        .filter(|i| {
+            addon_pkg::id_ok(&i.id)
+                && i.sha256.len() == 64
+                && i.sha256.bytes().all(|b| b.is_ascii_hexdigit())
+                && KINDS.contains(&i.kind.as_str())
+        })
+        .take(1000)
+        .collect())
 }
 
-async fn registry_index(State(s): State<AppState>, _p: RequirePermission<perms::PluginsManage>) -> ApiResult<Json<Value>> {
+async fn registry_index(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::PluginsManage>,
+) -> ApiResult<Json<Value>> {
     let items = fetch_index(&s).await?;
     let cat = catalog(&s);
     let rows = reg::list(&s.pool).await?;
@@ -602,11 +821,17 @@ async fn registry_install(
     Path(id): Path<String>,
     Query(q): Query<UploadQuery>,
 ) -> ApiResult<Json<Value>> {
-    let item = fetch_index(&s).await?.into_iter().find(|i| i.id == id).ok_or(AppError::NotFound)?;
-    let bytes = pelty_provisioning::http::get_bytes(&item.download_url, PKG_LIMITS.max_zip_bytes).await.map_err(|e| {
-        tracing::warn!(error = %e, id = %id, "addon download failed");
-        AppError::Validation("error.addon_registry_fetch")
-    })?;
+    let item = fetch_index(&s)
+        .await?
+        .into_iter()
+        .find(|i| i.id == id)
+        .ok_or(AppError::NotFound)?;
+    let bytes = pelty_provisioning::http::get_bytes(&item.download_url, PKG_LIMITS.max_zip_bytes)
+        .await
+        .map_err(|e| {
+            tracing::warn!(error = %e, id = %id, "addon download failed");
+            AppError::Validation("error.addon_registry_fetch")
+        })?;
     if !sha_hex(&bytes).eq_ignore_ascii_case(&item.sha256) {
         return Err(AppError::Validation("error.addon_integrity").into());
     }
@@ -614,7 +839,15 @@ async fn registry_install(
     if e.manifest.id != item.id {
         return Err(AppError::Validation("error.addon_manifest").into());
     }
-    pelty_database::audit::record(&s.pool, Some(u.user_id), "addon.downloaded", Some(&id), u.ip.as_deref(), json!({ "version": e.manifest.version, "sha256": item.sha256 })).await?;
+    pelty_database::audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "addon.downloaded",
+        Some(&id),
+        u.ip.as_deref(),
+        json!({ "version": e.manifest.version, "sha256": item.sha256 }),
+    )
+    .await?;
     let row = reg::get(&s.pool, &id).await?;
     Ok(Json(entry_json(&e, row.as_ref())))
 }
@@ -649,46 +882,81 @@ fn entry_json(e: &CatalogEntry, row: Option<&reg::InstalledAddon>) -> Value {
 }
 
 pub(crate) fn find(s: &AppState, id: &str) -> AppResult<CatalogEntry> {
-    catalog(s).into_iter().find(|e| e.manifest.id == id).ok_or(AppError::NotFound)
+    catalog(s)
+        .into_iter()
+        .find(|e| e.manifest.id == id)
+        .ok_or(AppError::NotFound)
 }
 
 /// The catalog as shown by `GET /admin/addons` (one JSON object per addon, with `status`).
 pub async fn list_entries(s: &AppState) -> AppResult<Vec<Value>> {
     let rows = reg::list(&s.pool).await?;
-    Ok(catalog(s).iter().map(|e| entry_json(e, rows.iter().find(|r| r.id == e.manifest.id))).collect())
+    Ok(catalog(s)
+        .iter()
+        .map(|e| entry_json(e, rows.iter().find(|r| r.id == e.manifest.id)))
+        .collect())
 }
 
-async fn list(State(s): State<AppState>, _p: RequirePermission<perms::PluginsManage>) -> ApiResult<Json<Value>> {
+async fn list(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::PluginsManage>,
+) -> ApiResult<Json<Value>> {
     Ok(Json(json!({ "items": list_entries(&s).await? })))
 }
 
-async fn detail(State(s): State<AppState>, _p: RequirePermission<perms::PluginsManage>, Path(id): Path<String>) -> ApiResult<Json<Value>> {
+async fn detail(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::PluginsManage>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<Value>> {
     let e = find(&s, &id)?;
     let row = reg::get(&s.pool, &id).await?;
     Ok(Json(entry_json(&e, row.as_ref())))
 }
 
-
 /// Does the manifest ask for sandboxed iframes (`capabilities.ui: ["iframe"]`)?
 pub fn wants_iframe(m: &Manifest) -> bool {
-    m.capabilities.as_ref().and_then(|c| serde_json::from_value::<pelty_wasm::AddonCapabilities>(c.clone()).ok()).is_some_and(|c| c.iframe())
+    m.capabilities
+        .as_ref()
+        .and_then(|c| serde_json::from_value::<pelty_wasm::AddonCapabilities>(c.clone()).ok())
+        .is_some_and(|c| c.iframe())
 }
 
 /// Dangerous capabilities the request did not approve.
 /// Body: `{ "approve": ["ui.iframe", "db.read", ...] }` (`approve_iframe:
 /// true` is accepted for `ui.iframe`).
 pub fn unapproved(m: &Manifest, opts: &Value) -> Vec<&'static str> {
-    let caps: pelty_wasm::AddonCapabilities = m.capabilities.as_ref().and_then(|c| serde_json::from_value(c.clone()).ok()).unwrap_or_default();
-    let list: Vec<&str> = opts.get("approve").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    let caps: pelty_wasm::AddonCapabilities = m
+        .capabilities
+        .as_ref()
+        .and_then(|c| serde_json::from_value(c.clone()).ok())
+        .unwrap_or_default();
+    let list: Vec<&str> = opts
+        .get("approve")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
     let legacy = opts.get("approve_iframe") == Some(&Value::Bool(true));
-    caps.dangerous().into_iter().filter(|d| !(list.contains(d) || (legacy && *d == "ui.iframe"))).collect()
+    caps.dangerous()
+        .into_iter()
+        .filter(|d| !(list.contains(d) || (legacy && *d == "ui.iframe")))
+        .collect()
 }
 
 /// Every dangerous capability (red warning in the install dialog) must be
 /// ticked by the admin; otherwise 422 `error.addon_capability_approval`
 /// (`error.addon_iframe_approval` when only the iframe is missing).
-async fn install(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::PluginsManage>, Path(id): Path<String>, body: axum::body::Bytes) -> ApiResult<Json<Value>> {
-    let opts: Value = if body.is_empty() { json!({}) } else { serde_json::from_slice(&body).map_err(|_| AppError::BadRequest("error.invalid_json"))? };
+async fn install(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::PluginsManage>,
+    Path(id): Path<String>,
+    body: axum::body::Bytes,
+) -> ApiResult<Json<Value>> {
+    let opts: Value = if body.is_empty() {
+        json!({})
+    } else {
+        serde_json::from_slice(&body).map_err(|_| AppError::BadRequest("error.invalid_json"))?
+    };
     let e = install_addon(&s, &id, &opts, Actor::from(&u)).await?;
     let row = reg::get(&s.pool, &id).await?;
     Ok(Json(entry_json(&e, row.as_ref())))
@@ -696,11 +964,20 @@ async fn install(State(s): State<AppState>, RequirePermission(u, _): RequirePerm
 
 /// Dangerous capabilities of a manifest (each must be approved at install).
 pub fn dangerous_caps(m: &Manifest) -> Vec<&'static str> {
-    m.capabilities.as_ref().and_then(|c| serde_json::from_value::<pelty_wasm::AddonCapabilities>(c.clone()).ok()).map(|c| c.dangerous()).unwrap_or_default()
+    m.capabilities
+        .as_ref()
+        .and_then(|c| serde_json::from_value::<pelty_wasm::AddonCapabilities>(c.clone()).ok())
+        .map(|c| c.dangerous())
+        .unwrap_or_default()
 }
 
 /// Install a catalog addon. `opts` carries the capability approvals (see [`unapproved`]).
-pub async fn install_addon(s: &AppState, id: &str, opts: &Value, actor: Actor<'_>) -> AppResult<CatalogEntry> {
+pub async fn install_addon(
+    s: &AppState,
+    id: &str,
+    opts: &Value,
+    actor: Actor<'_>,
+) -> AppResult<CatalogEntry> {
     let _lock = crate::addon_upgrade::lock(&s.pool, id).await?;
     let e = find(s, id)?;
     if reg::get(&s.pool, id).await?.is_some() {
@@ -715,26 +992,50 @@ pub async fn install_addon(s: &AppState, id: &str, opts: &Value, actor: Actor<'_
     }
     install_entry(s, &e).await?;
     actor.record(s, "addon.installed", id, json!({})).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("addon.installed", json!({ "addon_id": id, "version": e.manifest.version, "kind": e.manifest.kind })));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "addon.installed",
+        json!({ "addon_id": id, "version": e.manifest.version, "kind": e.manifest.kind }),
+    ));
     let approved = dangerous_caps(&e.manifest);
     if !approved.is_empty() {
-        let _ = actor.record(s, "addon.capabilities_approved", id, json!({ "approved": approved })).await;
+        let _ = actor
+            .record(
+                s,
+                "addon.capabilities_approved",
+                id,
+                json!({ "approved": approved }),
+            )
+            .await;
     }
     Ok(e)
 }
 
-async fn toggle(s: &AppState, u: &crate::extract::CurrentUser, id: &str, on: bool) -> ApiResult<StatusCode> {
+async fn toggle(
+    s: &AppState,
+    u: &crate::extract::CurrentUser,
+    id: &str,
+    on: bool,
+) -> ApiResult<StatusCode> {
     set_addon_enabled(s, id, on, Actor::from(u)).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// Enable (after re-verifying integrity) or disable an installed addon.
-pub async fn set_addon_enabled(s: &AppState, id: &str, on: bool, actor: Actor<'_>) -> AppResult<()> {
+pub async fn set_addon_enabled(
+    s: &AppState,
+    id: &str,
+    on: bool,
+    actor: Actor<'_>,
+) -> AppResult<()> {
     let _lock = crate::addon_upgrade::lock(&s.pool, id).await?;
-    let row = reg::get(&s.pool, id).await?.ok_or(AppError::Conflict("error.addon_not_installed"))?;
+    let row = reg::get(&s.pool, id)
+        .await?
+        .ok_or(AppError::Conflict("error.addon_not_installed"))?;
     if on {
         // Re-verify integrity before letting it run.
-        let e = catalog(s).into_iter().find(|e| e.manifest.id == id)
+        let e = catalog(s)
+            .into_iter()
+            .find(|e| e.manifest.id == id)
             .ok_or(AppError::Validation("error.addon_integrity"))?;
         {
             if e.hash != row.manifest_hash {
@@ -751,30 +1052,60 @@ pub async fn set_addon_enabled(s: &AppState, id: &str, on: bool, actor: Actor<'_
         crate::wasm_addons::deactivate_row(s, &row).await?;
     }
     reg::set_enabled(&s.pool, id, on).await?;
-    actor.record(s, if on { "addon.enabled" } else { "addon.disabled" }, id, json!({})).await?;
+    actor
+        .record(
+            s,
+            if on {
+                "addon.enabled"
+            } else {
+                "addon.disabled"
+            },
+            id,
+            json!({}),
+        )
+        .await?;
     if on {
-        s.emit(pelty_extensions::events::DomainEvent::new("addon.enabled", json!({ "addon_id": id })));
+        s.emit(pelty_extensions::events::DomainEvent::new(
+            "addon.enabled",
+            json!({ "addon_id": id }),
+        ));
     } else {
-        s.emit(pelty_extensions::events::DomainEvent::new("addon.disabled", json!({ "addon_id": id })));
+        s.emit(pelty_extensions::events::DomainEvent::new(
+            "addon.disabled",
+            json!({ "addon_id": id }),
+        ));
     }
     Ok(())
 }
 
-async fn enable(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::PluginsManage>, Path(id): Path<String>) -> ApiResult<StatusCode> {
+async fn enable(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::PluginsManage>,
+    Path(id): Path<String>,
+) -> ApiResult<StatusCode> {
     toggle(&s, &u, &id, true).await
 }
-async fn disable(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::PluginsManage>, Path(id): Path<String>) -> ApiResult<StatusCode> {
+async fn disable(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::PluginsManage>,
+    Path(id): Path<String>,
+) -> ApiResult<StatusCode> {
     toggle(&s, &u, &id, false).await
 }
 
 /// Mixins of loaded addons, their kill-switch state and conflicts.
-async fn mixins_list(State(s): State<AppState>, _p: RequirePermission<perms::PluginsManage>) -> ApiResult<Json<Value>> {
+async fn mixins_list(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::PluginsManage>,
+) -> ApiResult<Json<Value>> {
     let items: Vec<Value> = s
         .wasm_addons
         .read()
         .map(|m| m.values().filter(|a| !a.caps.mixins.is_empty()).map(|a| json!({ "addon": a.id, "enabled": crate::addon_events::mixins_enabled(&s, &a.id), "mixins": a.caps.mixins })).collect())
         .unwrap_or_default();
-    Ok(Json(json!({ "items": items, "conflicts": crate::addon_events::conflicts(&s) })))
+    Ok(Json(
+        json!({ "items": items, "conflicts": crate::addon_events::conflicts(&s) }),
+    ))
 }
 
 #[derive(serde::Deserialize)]
@@ -784,30 +1115,77 @@ struct MixinToggle {
 
 /// Call statistics and circuit-breaker state of every addon that ran a
 /// hook, mixin or filter since start.
-async fn health_all(State(s): State<AppState>, _p: RequirePermission<perms::PluginsManage>) -> ApiResult<Json<Value>> {
-    let items: Vec<Value> = s.addon_health.all().into_iter().map(|(id, st)| json!({ "addon": id, "stats": st })).collect();
+async fn health_all(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::PluginsManage>,
+) -> ApiResult<Json<Value>> {
+    let items: Vec<Value> = s
+        .addon_health
+        .all()
+        .into_iter()
+        .map(|(id, st)| json!({ "addon": id, "stats": st }))
+        .collect();
     Ok(Json(json!({ "items": items })))
 }
 
-async fn health_one(State(s): State<AppState>, _p: RequirePermission<perms::PluginsManage>, Path(id): Path<String>) -> ApiResult<Json<Value>> {
-    Ok(Json(json!({ "addon": id, "stats": s.addon_health.get(&id) })))
+async fn health_one(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::PluginsManage>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<Value>> {
+    Ok(Json(
+        json!({ "addon": id, "stats": s.addon_health.get(&id) }),
+    ))
 }
 
 /// Close the breaker and clear the counters.
-async fn health_reset(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::PluginsManage>, Path(id): Path<String>) -> ApiResult<StatusCode> {
+async fn health_reset(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::PluginsManage>,
+    Path(id): Path<String>,
+) -> ApiResult<StatusCode> {
     s.addon_health.reset(&id);
-    pelty_database::audit::record(&s.pool, Some(u.user_id), "addon.health_reset", Some(&id), u.ip.as_deref(), json!({})).await?;
+    pelty_database::audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "addon.health_reset",
+        Some(&id),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// Kill switch: `{"enabled": false}` stops every mixin of the addon at once.
-async fn mixins_toggle(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::PluginsManage>, Path(id): Path<String>, Json(b): Json<MixinToggle>) -> ApiResult<StatusCode> {
+async fn mixins_toggle(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::PluginsManage>,
+    Path(id): Path<String>,
+    Json(b): Json<MixinToggle>,
+) -> ApiResult<StatusCode> {
     crate::addon_events::set_mixins_enabled(&s, &id, b.enabled).await?;
-    pelty_database::audit::record(&s.pool, Some(u.user_id), if b.enabled { "addon.mixins_enabled" } else { "addon.mixins_disabled" }, Some(&id), u.ip.as_deref(), json!({})).await?;
+    pelty_database::audit::record(
+        &s.pool,
+        Some(u.user_id),
+        if b.enabled {
+            "addon.mixins_enabled"
+        } else {
+            "addon.mixins_disabled"
+        },
+        Some(&id),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn uninstall(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::PluginsManage>, Path(id): Path<String>) -> ApiResult<StatusCode> {
+async fn uninstall(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::PluginsManage>,
+    Path(id): Path<String>,
+) -> ApiResult<StatusCode> {
     uninstall_addon(&s, &id, Actor::from(&u)).await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -817,11 +1195,17 @@ pub async fn uninstall_addon(s: &AppState, id: &str, actor: Actor<'_>) -> AppRes
     let _lock = crate::addon_upgrade::lock(&s.pool, id).await?;
     let row = reg::get(&s.pool, id).await?.ok_or(AppError::NotFound)?;
     // Another installed addon providing the same engine keeps it available.
-    let others = reg::list(&s.pool).await?.iter().any(|r| r.id != row.id && r.kind == row.kind && r.engine == row.engine);
+    let others = reg::list(&s.pool)
+        .await?
+        .iter()
+        .any(|r| r.id != row.id && r.kind == row.kind && r.engine == row.engine);
     if others {
         reg::remove(&s.pool, id).await?;
         actor.record(s, "addon.uninstalled", id, json!({})).await?;
-        s.emit(pelty_extensions::events::DomainEvent::new("addon.uninstalled", json!({ "addon_id": id })));
+        s.emit(pelty_extensions::events::DomainEvent::new(
+            "addon.uninstalled",
+            json!({ "addon_id": id }),
+        ));
         return Ok(());
     }
     if row.kind == "provisioning" && reg::products_using_module(&s.pool, &row.engine).await? > 0 {
@@ -836,19 +1220,41 @@ pub async fn uninstall_addon(s: &AppState, id: &str, actor: Actor<'_>) -> AppRes
     crate::wasm_addons::deactivate_row(s, &row).await?;
     pelty_database::addon_kv::clear(&s.pool, id).await?;
     // Its cron jobs: runtime registrations and edited schedules.
-    sqlx::query("DELETE FROM addon_cron_jobs WHERE addon_id = $1").bind(id).execute(&s.pool).await.map_err(|e| AppError::Internal(e.to_string()))?;
-    sqlx::query("DELETE FROM automation_settings WHERE kind LIKE $1").bind(format!("{}:%", id.replace('%', "\\%").replace('_', "\\_"))).execute(&s.pool).await.map_err(|e| AppError::Internal(e.to_string()))?;
+    sqlx::query("DELETE FROM addon_cron_jobs WHERE addon_id = $1")
+        .bind(id)
+        .execute(&s.pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    sqlx::query("DELETE FROM automation_settings WHERE kind LIKE $1")
+        .bind(format!("{}:%", id.replace('%', "\\%").replace('_', "\\_")))
+        .execute(&s.pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     reg::remove(&s.pool, id).await?;
     actor.record(s, "addon.uninstalled", id, json!({})).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("addon.uninstalled", json!({ "addon_id": id })));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "addon.uninstalled",
+        json!({ "addon_id": id }),
+    ));
     Ok(())
 }
 
-async fn get_settings(State(s): State<AppState>, _p: RequirePermission<perms::PluginsManage>, Path(id): Path<String>) -> ApiResult<Json<Value>> {
+async fn get_settings(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::PluginsManage>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<Value>> {
     let e = find(&s, &id)?;
-    let row = reg::get(&s.pool, &id).await?.ok_or(AppError::Conflict("error.addon_not_installed"))?;
-    let values = crate::addon_secrets::mask(&e.manifest.settings, &crate::addon_secrets::open(&s, &row.settings));
-    Ok(Json(json!({ "schema": e.manifest.settings, "values": values })))
+    let row = reg::get(&s.pool, &id)
+        .await?
+        .ok_or(AppError::Conflict("error.addon_not_installed"))?;
+    let values = crate::addon_secrets::mask(
+        &e.manifest.settings,
+        &crate::addon_secrets::open(&s, &row.settings),
+    );
+    Ok(Json(
+        json!({ "schema": e.manifest.settings, "values": values }),
+    ))
 }
 
 async fn put_settings(
@@ -858,13 +1264,27 @@ async fn put_settings(
     Json(v): Json<Value>,
 ) -> ApiResult<Json<Value>> {
     let e = find(&s, &id)?;
-    let row = reg::get(&s.pool, &id).await?.ok_or(AppError::Conflict("error.addon_not_installed"))?;
+    let row = reg::get(&s.pool, &id)
+        .await?
+        .ok_or(AppError::Conflict("error.addon_not_installed"))?;
     let clean = validate_settings(&e.manifest.settings, &v)?;
-    let stored = crate::addon_secrets::seal(&s, &e.manifest.settings, &clean, &crate::addon_secrets::open(&s, &row.settings));
+    let stored = crate::addon_secrets::seal(
+        &s,
+        &e.manifest.settings,
+        &clean,
+        &crate::addon_secrets::open(&s, &row.settings),
+    );
     reg::set_settings(&s.pool, &id, &stored).await?;
-    Actor::from(&u).record(&s, "addon.settings_updated", &id, json!({})).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("addon.settings_updated", json!({ "addon_id": id })));
-    Ok(Json(json!({ "values": crate::addon_secrets::mask(&e.manifest.settings, &clean) })))
+    Actor::from(&u)
+        .record(&s, "addon.settings_updated", &id, json!({}))
+        .await?;
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "addon.settings_updated",
+        json!({ "addon_id": id }),
+    ));
+    Ok(Json(
+        json!({ "values": crate::addon_secrets::mask(&e.manifest.settings, &clean) }),
+    ))
 }
 
 #[cfg(test)]
@@ -877,20 +1297,53 @@ mod tests {
         assert!(migration_safe("CREATE TABLE addon_hello_log (id int);\n-- c\nCREATE INDEX addon_hello_ix ON addon_hello_log (id);", p));
         assert!(!migration_safe("CREATE TABLE users2 (id int);", p));
         assert!(!migration_safe("DROP TABLE users;", p));
-        assert!(!migration_safe("CREATE TABLE addon_hello_x (id int); DELETE FROM users", p));
-        assert!(!migration_safe("CREATE INDEX addon_hello_ix ON users (id)", p));
-        assert!(!migration_safe("CREATE TABLE addon_hello_x (u uuid references users(id))", p));
+        assert!(!migration_safe(
+            "CREATE TABLE addon_hello_x (id int); DELETE FROM users",
+            p
+        ));
+        assert!(!migration_safe(
+            "CREATE INDEX addon_hello_ix ON users (id)",
+            p
+        ));
+        assert!(!migration_safe(
+            "CREATE TABLE addon_hello_x (u uuid references users(id))",
+            p
+        ));
         assert!(!migration_safe("", p));
     }
 
     #[test]
     fn settings_validated() {
         let spec = vec![
-            SettingSpec { key: "url".into(), label: String::new(), kind: "text".into(), required: true, choices: vec![], default: None },
-            SettingSpec { key: "mode".into(), label: String::new(), kind: "select".into(), required: false, choices: vec!["a".into(), "b".into()], default: Some(json!("a")) },
-            SettingSpec { key: "on".into(), label: String::new(), kind: "bool".into(), required: false, choices: vec![], default: None },
+            SettingSpec {
+                key: "url".into(),
+                label: String::new(),
+                kind: "text".into(),
+                required: true,
+                choices: vec![],
+                default: None,
+            },
+            SettingSpec {
+                key: "mode".into(),
+                label: String::new(),
+                kind: "select".into(),
+                required: false,
+                choices: vec!["a".into(), "b".into()],
+                default: Some(json!("a")),
+            },
+            SettingSpec {
+                key: "on".into(),
+                label: String::new(),
+                kind: "bool".into(),
+                required: false,
+                choices: vec![],
+                default: None,
+            },
         ];
-        assert_eq!(validate_settings(&spec, &json!({"url": "x"})).unwrap(), json!({"url": "x", "mode": "a"}));
+        assert_eq!(
+            validate_settings(&spec, &json!({"url": "x"})).unwrap(),
+            json!({"url": "x", "mode": "a"})
+        );
         assert!(validate_settings(&spec, &json!({})).is_err());
         assert!(validate_settings(&spec, &json!({"url": "x", "mode": "c"})).is_err());
         assert!(validate_settings(&spec, &json!({"url": "x", "on": "yes"})).is_err());
@@ -899,7 +1352,10 @@ mod tests {
 
     #[test]
     fn builtin_ids() {
-        assert_eq!(builtin_id("provisioning", "https_agent"), "provisioning-https-agent");
+        assert_eq!(
+            builtin_id("provisioning", "https_agent"),
+            "provisioning-https-agent"
+        );
         assert_eq!(builtin_id("gateway", "custom_http"), "gateway-custom-http");
     }
 }

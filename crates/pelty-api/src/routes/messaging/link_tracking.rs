@@ -21,7 +21,10 @@ pub fn router() -> Router<AppState> {
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/tracked-links", responses((status = 200), (status = 403)))]
-pub async fn list(State(s): State<AppState>, _p: RequirePermission<perms::SettingsManage>) -> ApiResult<Json<Value>> {
+pub async fn list(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::SettingsManage>,
+) -> ApiResult<Json<Value>> {
     Ok(Json(json!({ "items": lt::list(&s.pool).await? })))
 }
 
@@ -34,16 +37,40 @@ pub struct NewLink {
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/tracked-links", request_body = NewLink, responses((status = 200), (status = 409), (status = 422)))]
-pub async fn create(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::SettingsManage>, Json(b): Json<NewLink>) -> ApiResult<Json<Value>> {
+pub async fn create(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::SettingsManage>,
+    Json(b): Json<NewLink>,
+) -> ApiResult<Json<Value>> {
     let id = lt::create(&s.pool, &b.slug, &b.name, &b.target_url).await?;
-    audit::record(&s.pool, Some(u.user_id), "tracked_link.created", Some(&id.to_string()), u.ip.as_deref(), json!({ "slug": b.slug.trim().to_ascii_lowercase() })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "tracked_link.created",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "slug": b.slug.trim().to_ascii_lowercase() }),
+    )
+    .await?;
     Ok(Json(json!({ "id": id })))
 }
 
 #[utoipa::path(delete, path = "/api/v1/admin/tracked-links/{id}", responses((status = 200), (status = 404)))]
-pub async fn remove(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::SettingsManage>, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
+pub async fn remove(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::SettingsManage>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
     lt::delete(&s.pool, id).await?;
-    audit::record(&s.pool, Some(u.user_id), "tracked_link.deleted", Some(&id.to_string()), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "tracked_link.deleted",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(Json(json!({ "ok": true })))
 }
 

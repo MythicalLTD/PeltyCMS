@@ -265,7 +265,14 @@ pub async fn apply(tx: &mut Tx<'_>, invoice_id: Uuid) -> AppResult<()> {
     let reverse = cfg.enabled
         && cfg.reverse_charge
         && !c.tax_exempt
-        && engine::reverse_charge(&cfg.home_country, &c.country, &c.vat_number, &Verified(!cfg.require_vies || (c.vat_status == "valid" && c.vat_checked_num == c.vat_number)));
+        && engine::reverse_charge(
+            &cfg.home_country,
+            &c.country,
+            &c.vat_number,
+            &Verified(
+                !cfg.require_vies || (c.vat_status == "valid" && c.vat_checked_num == c.vat_number),
+            ),
+        );
     let rules: Vec<Rule> = if cfg.enabled && !c.tax_exempt {
         let all: Vec<TaxRule> =
             sqlx::query_as(&format!("SELECT {RCOLS} FROM tax_rules WHERE enabled"))
@@ -358,7 +365,13 @@ pub async fn vat_number_of(pool: &PgPool, customer: Uuid) -> AppResult<Option<St
 }
 
 /// Persist a VIES verdict for the number that was checked.
-pub async fn set_vat_result(pool: &PgPool, customer: Uuid, number: &str, valid: bool, name: &str) -> AppResult<()> {
+pub async fn set_vat_result(
+    pool: &PgPool,
+    customer: Uuid,
+    number: &str,
+    valid: bool,
+    name: &str,
+) -> AppResult<()> {
     sqlx::query("UPDATE customers SET vat_status = $2, vat_checked_num = $3, vat_checked_at = now(), vat_name = $4 WHERE id = $1")
         .bind(customer)
         .bind(if valid { "valid" } else { "invalid" })

@@ -243,7 +243,11 @@ pub async fn rules(pool: &PgPool) -> AppResult<Vec<EscalationRule>> {
     .map_err(db_err)
 }
 
-pub async fn upsert_rule(pool: &PgPool, id: Option<Uuid>, r: &EscalationRule) -> AppResult<EscalationRule> {
+pub async fn upsert_rule(
+    pool: &PgPool,
+    id: Option<Uuid>,
+    r: &EscalationRule,
+) -> AppResult<EscalationRule> {
     let q = match id {
         Some(_) => format!("UPDATE ticket_escalation_rules SET name=$2, department_id=$3, statuses=$4, priority=$5, after_minutes=$6, set_priority=$7, set_department=$8, assign_to=$9, add_tag=$10, is_active=$11 WHERE id=$1 RETURNING {RULE_COLS}"),
         None => format!("INSERT INTO ticket_escalation_rules (id, name, department_id, statuses, priority, after_minutes, set_priority, set_department, assign_to, add_tag, is_active) VALUES (COALESCE($1, gen_random_uuid()),$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING {RULE_COLS}"),
@@ -367,7 +371,12 @@ pub async fn sla(pool: &PgPool, since: OffsetDateTime) -> AppResult<Vec<SlaRow>>
 }
 
 /// Record an inbound message id; `false` if it was already processed.
-pub async fn pipe_claim(pool: &PgPool, message_id: &str, sender: &str, subject: &str) -> AppResult<bool> {
+pub async fn pipe_claim(
+    pool: &PgPool,
+    message_id: &str,
+    sender: &str,
+    subject: &str,
+) -> AppResult<bool> {
     let r = sqlx::query(
         "INSERT INTO ticket_pipe_log (message_id, sender, subject, outcome) VALUES ($1,$2,$3,'rejected') ON CONFLICT DO NOTHING",
     )
@@ -380,7 +389,12 @@ pub async fn pipe_claim(pool: &PgPool, message_id: &str, sender: &str, subject: 
     Ok(r.rows_affected() == 1)
 }
 
-pub async fn pipe_outcome(pool: &PgPool, message_id: &str, outcome: &str, ticket: Option<Uuid>) -> AppResult<()> {
+pub async fn pipe_outcome(
+    pool: &PgPool,
+    message_id: &str,
+    outcome: &str,
+    ticket: Option<Uuid>,
+) -> AppResult<()> {
     sqlx::query("UPDATE ticket_pipe_log SET outcome = $2, ticket_id = $3 WHERE message_id = $1")
         .bind(message_id)
         .bind(outcome)
@@ -403,13 +417,19 @@ pub async fn customer_by_email(pool: &PgPool, email: &str) -> AppResult<Option<(
     .map_err(db_err)
 }
 
-pub async fn ticket_by_number(pool: &PgPool, number: i64, customer: Uuid) -> AppResult<Option<Uuid>> {
-    sqlx::query_scalar("SELECT COALESCE(merged_into, id) FROM tickets WHERE number = $1 AND customer_id = $2")
-        .bind(number)
-        .bind(customer)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+pub async fn ticket_by_number(
+    pool: &PgPool,
+    number: i64,
+    customer: Uuid,
+) -> AppResult<Option<Uuid>> {
+    sqlx::query_scalar(
+        "SELECT COALESCE(merged_into, id) FROM tickets WHERE number = $1 AND customer_id = $2",
+    )
+    .bind(number)
+    .bind(customer)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Department whose piping address matches (case-insensitive).
@@ -454,14 +474,21 @@ pub async fn staff(pool: &PgPool) -> AppResult<Vec<Staff>> {
     .map_err(db_err)
 }
 
-pub async fn set_department_sla(pool: &PgPool, id: Uuid, email: &str, sla_minutes: Option<i32>) -> AppResult<()> {
-    let r = sqlx::query("UPDATE ticket_departments SET email = $2, sla_first_response_minutes = $3 WHERE id = $1")
-        .bind(id)
-        .bind(email)
-        .bind(sla_minutes)
-        .execute(pool)
-        .await
-        .map_err(db_err)?;
+pub async fn set_department_sla(
+    pool: &PgPool,
+    id: Uuid,
+    email: &str,
+    sla_minutes: Option<i32>,
+) -> AppResult<()> {
+    let r = sqlx::query(
+        "UPDATE ticket_departments SET email = $2, sla_first_response_minutes = $3 WHERE id = $1",
+    )
+    .bind(id)
+    .bind(email)
+    .bind(sla_minutes)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
@@ -496,13 +523,22 @@ pub struct AutoCloseSettings {
 
 impl Default for AutoCloseSettings {
     fn default() -> Self {
-        Self { hours: 0, statuses: vec!["answered".into(), "customer_reply".into()] }
+        Self {
+            hours: 0,
+            statuses: vec!["answered".into(), "customer_reply".into()],
+        }
     }
 }
 
 impl AutoCloseSettings {
     pub fn validate(&self) -> Result<(), &'static str> {
-        if !(0..=24 * 365).contains(&self.hours) || self.statuses.len() > 20 || self.statuses.iter().any(|x| x.is_empty() || x.len() > 32 || x == "closed") {
+        if !(0..=24 * 365).contains(&self.hours)
+            || self.statuses.len() > 20
+            || self
+                .statuses
+                .iter()
+                .any(|x| x.is_empty() || x.len() > 32 || x == "closed")
+        {
             return Err("error.validation");
         }
         Ok(())
@@ -510,15 +546,27 @@ impl AutoCloseSettings {
 }
 
 pub async fn get_auto_close(pool: &PgPool) -> AppResult<AutoCloseSettings> {
-    Ok(crate::settings::get(pool, AUTO_CLOSE_KEY).await?.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default())
+    Ok(crate::settings::get(pool, AUTO_CLOSE_KEY)
+        .await?
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default())
 }
 
 pub async fn put_auto_close(pool: &PgPool, s: &AutoCloseSettings) -> AppResult<()> {
-    crate::settings::set(pool, AUTO_CLOSE_KEY, serde_json::to_value(s).map_err(|e| AppError::Internal(e.to_string()))?).await
+    crate::settings::set(
+        pool,
+        AUTO_CLOSE_KEY,
+        serde_json::to_value(s).map_err(|e| AppError::Internal(e.to_string()))?,
+    )
+    .await
 }
 
 /// Close tickets idle for `hours` in one of `statuses`; returns their ids.
-pub async fn close_inactive(pool: &PgPool, hours: i32, statuses: &[String]) -> AppResult<Vec<Uuid>> {
+pub async fn close_inactive(
+    pool: &PgPool,
+    hours: i32,
+    statuses: &[String],
+) -> AppResult<Vec<Uuid>> {
     if hours <= 0 || statuses.is_empty() {
         return Ok(vec![]);
     }

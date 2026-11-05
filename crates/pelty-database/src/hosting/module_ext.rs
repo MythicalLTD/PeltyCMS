@@ -47,7 +47,10 @@ pub async fn health(pool: &PgPool) -> AppResult<Vec<ServerHealth>> {
 }
 
 pub async fn server_ids(pool: &PgPool) -> AppResult<Vec<Uuid>> {
-    sqlx::query_scalar("SELECT id FROM servers WHERE enabled ORDER BY name").fetch_all(pool).await.map_err(db_err)
+    sqlx::query_scalar("SELECT id FROM servers WHERE enabled ORDER BY name")
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 // ---- module log -----------------------------------------------------------
@@ -67,11 +70,34 @@ pub struct LogEntry<'a> {
 }
 
 /// Keys never written to the log.
-const SECRET_KEYS: &[&str] = &["password", "initial_password", "ticket", "root_password", "root_pass", "certificate", "token", "api_key", "secret"];
+const SECRET_KEYS: &[&str] = &[
+    "password",
+    "initial_password",
+    "ticket",
+    "root_password",
+    "root_pass",
+    "certificate",
+    "token",
+    "api_key",
+    "secret",
+];
 
 pub fn redact(v: &Value) -> Value {
     match v {
-        Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.clone(), if SECRET_KEYS.contains(&k.to_ascii_lowercase().as_str()) && !x.is_null() { Value::String("[redacted]".into()) } else { redact(x) })).collect()),
+        Value::Object(m) => Value::Object(
+            m.iter()
+                .map(|(k, x)| {
+                    (
+                        k.clone(),
+                        if SECRET_KEYS.contains(&k.to_ascii_lowercase().as_str()) && !x.is_null() {
+                            Value::String("[redacted]".into())
+                        } else {
+                            redact(x)
+                        },
+                    )
+                })
+                .collect(),
+        ),
         Value::Array(a) => Value::Array(a.iter().map(redact).collect()),
         other => other.clone(),
     }
@@ -113,7 +139,13 @@ pub struct LogRow {
     pub created_at: OffsetDateTime,
 }
 
-pub async fn list_log(pool: &PgPool, service: Option<Uuid>, only_errors: bool, limit: i64, before: Option<i64>) -> AppResult<Vec<LogRow>> {
+pub async fn list_log(
+    pool: &PgPool,
+    service: Option<Uuid>,
+    only_errors: bool,
+    limit: i64,
+    before: Option<i64>,
+) -> AppResult<Vec<LogRow>> {
     sqlx::query_as(
         "SELECT id, service_id, server_id, module, action, actor_id, source, ok, error, output, duration_ms, created_at FROM module_log
           WHERE ($1::uuid IS NULL OR service_id = $1) AND (NOT $2 OR NOT ok) AND ($4::bigint IS NULL OR id < $4)
@@ -157,22 +189,46 @@ pub async fn last_dead_job(pool: &PgPool, service: Uuid) -> AppResult<Option<i64
 }
 
 pub async fn set_pending(pool: &PgPool, service: Uuid) -> AppResult<()> {
-    sqlx::query("UPDATE services SET provision_status = 'pending' WHERE id = $1").bind(service).execute(pool).await.map_err(db_err)?;
+    sqlx::query("UPDATE services SET provision_status = 'pending' WHERE id = $1")
+        .bind(service)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(())
 }
 
 pub async fn provision_status(pool: &PgPool, service: Uuid) -> AppResult<Option<String>> {
-    sqlx::query_scalar("SELECT provision_status FROM services WHERE id = $1").bind(service).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_scalar("SELECT provision_status FROM services WHERE id = $1")
+        .bind(service)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 // ---- module data ----------------------------------------------------------
 
 /// Shallow-merge `patch` into `services.module_data` (null values delete).
 pub async fn patch_module_data(pool: &PgPool, service: Uuid, patch: &Value) -> AppResult<()> {
-    let Some(obj) = patch.as_object() else { return Ok(()) };
-    let set: serde_json::Map<String, Value> = obj.iter().filter(|(_, v)| !v.is_null()).map(|(k, v)| (k.clone(), v.clone())).collect();
-    let del: Vec<String> = obj.iter().filter(|(_, v)| v.is_null()).map(|(k, _)| k.clone()).collect();
-    sqlx::query("UPDATE services SET module_data = (module_data - $3::text[]) || $2 WHERE id = $1").bind(service).bind(Value::Object(set)).bind(&del).execute(pool).await.map_err(db_err)?;
+    let Some(obj) = patch.as_object() else {
+        return Ok(());
+    };
+    let set: serde_json::Map<String, Value> = obj
+        .iter()
+        .filter(|(_, v)| !v.is_null())
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    let del: Vec<String> = obj
+        .iter()
+        .filter(|(_, v)| v.is_null())
+        .map(|(k, _)| k.clone())
+        .collect();
+    sqlx::query("UPDATE services SET module_data = (module_data - $3::text[]) || $2 WHERE id = $1")
+        .bind(service)
+        .bind(Value::Object(set))
+        .bind(&del)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(())
 }
 

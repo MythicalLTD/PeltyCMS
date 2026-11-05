@@ -368,7 +368,12 @@ pub struct ModuleInfo {
 /// Every `.rs` file under `crates/*/src`, with its `//!` summary (empty when missing).
 pub fn modules() -> Vec<ModuleInfo> {
     let root = repo().join("crates");
-    let mut crates: Vec<_> = std::fs::read_dir(&root).unwrap().flatten().map(|e| e.path()).filter(|p| p.join("src").is_dir()).collect();
+    let mut crates: Vec<_> = std::fs::read_dir(&root)
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.join("src").is_dir())
+        .collect();
     crates.sort();
     // Rustdoc intra-doc links do not resolve in the HTML docs; keep only their text.
     let link = regex::Regex::new(r"\[([^\]]*)\]\([^)]*\)").unwrap();
@@ -399,7 +404,11 @@ mod tests {
     fn every_module_has_a_doc() {
         let mods = modules();
         assert!(mods.len() > 300, "module scan found only {}", mods.len());
-        let missing: Vec<_> = mods.iter().filter(|m| m.summary.is_empty()).map(|m| m.path.as_str()).collect();
+        let missing: Vec<_> = mods
+            .iter()
+            .filter(|m| m.summary.is_empty())
+            .map(|m| m.path.as_str())
+            .collect();
         assert!(missing.is_empty(), "add a `//!` doc to: {missing:?}");
     }
     #[test]

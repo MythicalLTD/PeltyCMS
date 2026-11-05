@@ -75,38 +75,78 @@ impl Default for FraudSettings {
 pub fn valid_domain(d: &str) -> bool {
     d.len() <= 253
         && d.contains('.')
-        && d.split('.').all(|l| !l.is_empty() && l.len() <= 63 && !l.starts_with('-') && !l.ends_with('-') && l.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-'))
+        && d.split('.').all(|l| {
+            !l.is_empty()
+                && l.len() <= 63
+                && !l.starts_with('-')
+                && !l.ends_with('-')
+                && l.bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+        })
 }
 
 impl FraudSettings {
     /// Validates and tidies the settings. `vpn_ranges` are syntax-checked by
     /// the caller (CIDR parsing lives in the API crate).
     pub fn normalized(mut self) -> Result<Self, &'static str> {
-        if self.review_score > 100 || self.reject_score > 100 || self.review_score == 0 || self.reject_score < self.review_score {
+        if self.review_score > 100
+            || self.reject_score > 100
+            || self.review_score == 0
+            || self.reject_score < self.review_score
+        {
             return Err("error.fraud_thresholds");
         }
-        let scores = [self.disposable_email_score, self.country_mismatch_score, self.tor_score, self.proxy_score, self.vpn_score, self.shared_ip_score];
+        let scores = [
+            self.disposable_email_score,
+            self.country_mismatch_score,
+            self.tor_score,
+            self.proxy_score,
+            self.vpn_score,
+            self.shared_ip_score,
+        ];
         if scores.iter().any(|s| *s > 100) {
             return Err("error.fraud_thresholds");
         }
-        if self.max_first_order_total < Decimal::ZERO || self.max_orders_per_ip_day > 10_000 || self.max_orders_per_customer_day > 10_000 || self.max_customers_per_ip > 10_000 {
+        if self.max_first_order_total < Decimal::ZERO
+            || self.max_orders_per_ip_day > 10_000
+            || self.max_orders_per_customer_day > 10_000
+            || self.max_customers_per_ip > 10_000
+        {
             return Err("error.validation");
         }
-        let mut c: Vec<String> = self.blocked_countries.iter().map(|x| x.trim().to_ascii_uppercase()).filter(|x| !x.is_empty()).collect();
-        if c.iter().any(|x| x.len() != 2 || !x.bytes().all(|b| b.is_ascii_uppercase())) || c.len() > 250 {
+        let mut c: Vec<String> = self
+            .blocked_countries
+            .iter()
+            .map(|x| x.trim().to_ascii_uppercase())
+            .filter(|x| !x.is_empty())
+            .collect();
+        if c.iter()
+            .any(|x| x.len() != 2 || !x.bytes().all(|b| b.is_ascii_uppercase()))
+            || c.len() > 250
+        {
             return Err("error.invalid_country");
         }
         c.sort();
         c.dedup();
         self.blocked_countries = c;
-        let mut d: Vec<String> = self.disposable_domains.iter().map(|x| x.trim().trim_start_matches('@').to_ascii_lowercase()).filter(|x| !x.is_empty()).collect();
+        let mut d: Vec<String> = self
+            .disposable_domains
+            .iter()
+            .map(|x| x.trim().trim_start_matches('@').to_ascii_lowercase())
+            .filter(|x| !x.is_empty())
+            .collect();
         if d.len() > 5000 || d.iter().any(|x| !valid_domain(x)) {
             return Err("error.invalid_domain");
         }
         d.sort();
         d.dedup();
         self.disposable_domains = d;
-        let mut r: Vec<String> = self.vpn_ranges.iter().map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect();
+        let mut r: Vec<String> = self
+            .vpn_ranges
+            .iter()
+            .map(|x| x.trim().to_string())
+            .filter(|x| !x.is_empty())
+            .collect();
         if r.len() > 1000 {
             return Err("error.validation");
         }
@@ -117,11 +157,19 @@ impl FraudSettings {
 }
 
 pub async fn get_settings(pool: &PgPool) -> AppResult<FraudSettings> {
-    Ok(settings::get(pool, KEY).await?.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default())
+    Ok(settings::get(pool, KEY)
+        .await?
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default())
 }
 
 pub async fn put_settings(pool: &PgPool, s: &FraudSettings) -> AppResult<()> {
-    settings::set(pool, KEY, serde_json::to_value(s).map_err(|e| AppError::Internal(e.to_string()))?).await
+    settings::set(
+        pool,
+        KEY,
+        serde_json::to_value(s).map_err(|e| AppError::Internal(e.to_string()))?,
+    )
+    .await
 }
 
 /// Facts the built-in rules need about an order that was just placed.
@@ -136,7 +184,12 @@ pub struct Facts {
     pub customers_from_ip_30d: i64,
 }
 
-pub async fn facts(pool: &PgPool, customer_id: Uuid, order_id: Uuid, ip: Option<&str>) -> AppResult<Facts> {
+pub async fn facts(
+    pool: &PgPool,
+    customer_id: Uuid,
+    order_id: Uuid,
+    ip: Option<&str>,
+) -> AppResult<Facts> {
     let (country, email, ip_day, cust_day, prior, shared): (String, String, i64, i64, i64, i64) = sqlx::query_as(
         "SELECT c.country, c.email::text,
                 (SELECT count(*) FROM fraud_checks f WHERE $3::text IS NOT NULL AND f.ip = $3 AND f.created_at > now() - interval '1 day'),
@@ -146,7 +199,14 @@ pub async fn facts(pool: &PgPool, customer_id: Uuid, order_id: Uuid, ip: Option<
          FROM customers c WHERE c.id = $1",
     )
     .bind(customer_id).bind(order_id).bind(ip).fetch_one(pool).await.map_err(db_err)?;
-    Ok(Facts { country, email, orders_from_ip_day: ip_day, orders_by_customer_day: cust_day, prior_orders: prior, customers_from_ip_30d: shared })
+    Ok(Facts {
+        country,
+        email,
+        orders_from_ip_day: ip_day,
+        orders_by_customer_day: cust_day,
+        prior_orders: prior,
+        customers_from_ip_30d: shared,
+    })
 }
 
 #[derive(Debug, Clone, Serialize, FromRow, utoipa::ToSchema)]
@@ -177,7 +237,16 @@ const CHECK_COLS: &str = "f.id, f.order_id, o.number AS order_number, o.status A
     FROM fraud_checks f JOIN customers c ON c.id = f.customer_id LEFT JOIN orders o ON o.id = f.order_id LEFT JOIN users r ON r.id = f.reviewed_by";
 
 #[allow(clippy::too_many_arguments)]
-pub async fn record(pool: &PgPool, order_id: Uuid, customer_id: Uuid, ip: Option<&str>, score: u8, verdict: &str, reasons: &Value, signals: &Value) -> AppResult<Uuid> {
+pub async fn record(
+    pool: &PgPool,
+    order_id: Uuid,
+    customer_id: Uuid,
+    ip: Option<&str>,
+    score: u8,
+    verdict: &str,
+    reasons: &Value,
+    signals: &Value,
+) -> AppResult<Uuid> {
     let id = Uuid::new_v4();
     sqlx::query("INSERT INTO fraud_checks (id, order_id, customer_id, ip, score, verdict, reasons, signals) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)")
         .bind(id).bind(order_id).bind(customer_id).bind(ip).bind(i16::from(score)).bind(verdict).bind(reasons).bind(signals)
@@ -197,18 +266,44 @@ pub struct ListFilter<'a> {
 const WHERE: &str = "($1::text IS NULL OR f.verdict = $1) AND (NOT $2 OR (f.verdict = 'review' AND f.decision IS NULL AND o.status = 'pending')) \
     AND ($3::uuid IS NULL OR f.customer_id = $3) AND ($4::uuid IS NULL OR f.order_id = $4)";
 
-pub async fn list(pool: &PgPool, q: &ListFilter<'_>, limit: i64, offset: i64) -> AppResult<(Vec<Check>, i64)> {
-    let items = sqlx::query_as(&format!("SELECT {CHECK_COLS} WHERE {WHERE} ORDER BY f.created_at DESC, f.id LIMIT $5 OFFSET $6"))
-        .bind(q.verdict).bind(q.open).bind(q.customer_id).bind(q.order_id).bind(limit).bind(offset)
-        .fetch_all(pool).await.map_err(db_err)?;
-    let total = sqlx::query_scalar(&format!("SELECT count(*) FROM fraud_checks f LEFT JOIN orders o ON o.id = f.order_id WHERE {WHERE}"))
-        .bind(q.verdict).bind(q.open).bind(q.customer_id).bind(q.order_id)
-        .fetch_one(pool).await.map_err(db_err)?;
+pub async fn list(
+    pool: &PgPool,
+    q: &ListFilter<'_>,
+    limit: i64,
+    offset: i64,
+) -> AppResult<(Vec<Check>, i64)> {
+    let items = sqlx::query_as(&format!(
+        "SELECT {CHECK_COLS} WHERE {WHERE} ORDER BY f.created_at DESC, f.id LIMIT $5 OFFSET $6"
+    ))
+    .bind(q.verdict)
+    .bind(q.open)
+    .bind(q.customer_id)
+    .bind(q.order_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    let total = sqlx::query_scalar(&format!(
+        "SELECT count(*) FROM fraud_checks f LEFT JOIN orders o ON o.id = f.order_id WHERE {WHERE}"
+    ))
+    .bind(q.verdict)
+    .bind(q.open)
+    .bind(q.customer_id)
+    .bind(q.order_id)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
     Ok((items, total))
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Check> {
-    sqlx::query_as(&format!("SELECT {CHECK_COLS} WHERE f.id = $1")).bind(id).fetch_optional(pool).await.map_err(db_err)?.ok_or(AppError::NotFound)
+    sqlx::query_as(&format!("SELECT {CHECK_COLS} WHERE f.id = $1"))
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?
+        .ok_or(AppError::NotFound)
 }
 
 /// Reviews awaiting a decision whose order is still pending.
@@ -219,7 +314,13 @@ pub async fn open_reviews(pool: &PgPool) -> AppResult<i64> {
 
 /// Record a staff decision on an open review. Conflict when already decided
 /// or not a review.
-pub async fn decide(pool: &PgPool, id: Uuid, decision: &str, actor: Uuid, note: &str) -> AppResult<Check> {
+pub async fn decide(
+    pool: &PgPool,
+    id: Uuid,
+    decision: &str,
+    actor: Uuid,
+    note: &str,
+) -> AppResult<Check> {
     let n = sqlx::query("UPDATE fraud_checks SET decision = $2, reviewed_by = $3, reviewed_at = now(), review_note = $4 WHERE id = $1 AND verdict = 'review' AND decision IS NULL")
         .bind(id).bind(decision).bind(actor).bind(note)
         .execute(pool).await.map_err(db_err)?.rows_affected();

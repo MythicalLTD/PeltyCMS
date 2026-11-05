@@ -35,7 +35,10 @@ const ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 /// Uppercase, strip spaces/dashes.
 pub fn normalize(code: &str) -> String {
-    code.chars().filter(|c| c.is_ascii_alphanumeric()).collect::<String>().to_ascii_uppercase()
+    code.chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_ascii_uppercase()
 }
 
 pub fn hash(code: &str) -> String {
@@ -46,7 +49,11 @@ pub fn hash(code: &str) -> String {
 pub fn generate() -> String {
     let mut r = rand::thread_rng();
     (0..4)
-        .map(|_| (0..4).map(|_| ALPHABET[r.gen_range(0..ALPHABET.len())] as char).collect::<String>())
+        .map(|_| {
+            (0..4)
+                .map(|_| ALPHABET[r.gen_range(0..ALPHABET.len())] as char)
+                .collect::<String>()
+        })
         .collect::<Vec<_>>()
         .join("-")
 }
@@ -67,7 +74,10 @@ pub async fn create(
     let currency = currency.trim().to_ascii_uppercase();
     let mut tx = pool.begin().await.map_err(db_err)?;
     let exp = invoices::exponent(&mut tx, &currency).await?;
-    if amount <= Decimal::ZERO || amount.normalize().scale() > exp || amount > Decimal::from(1_000_000) {
+    if amount <= Decimal::ZERO
+        || amount.normalize().scale() > exp
+        || amount > Decimal::from(1_000_000)
+    {
         return Err(AppError::Validation("error.invalid_amount"));
     }
     let mut out = Vec::new();
@@ -96,19 +106,23 @@ pub async fn create(
 }
 
 pub async fn list(pool: &PgPool, limit: i64) -> AppResult<Vec<GiftCard>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM gift_cards ORDER BY created_at DESC, id LIMIT $1"))
-        .bind(limit.clamp(1, 1000))
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {COLS} FROM gift_cards ORDER BY created_at DESC, id LIMIT $1"
+    ))
+    .bind(limit.clamp(1, 1000))
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn disable(pool: &PgPool, id: Uuid) -> AppResult<()> {
-    let r = sqlx::query("UPDATE gift_cards SET status = 'disabled' WHERE id = $1 AND status = 'active'")
-        .bind(id)
-        .execute(pool)
-        .await
-        .map_err(db_err)?;
+    let r = sqlx::query(
+        "UPDATE gift_cards SET status = 'disabled' WHERE id = $1 AND status = 'active'",
+    )
+    .bind(id)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::Conflict("error.gift_card_not_active"));
     }

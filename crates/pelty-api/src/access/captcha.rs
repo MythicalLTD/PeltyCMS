@@ -28,23 +28,56 @@ use time::OffsetDateTime;
 
 pub const SETTING_KEY: &str = "security.captcha";
 pub const HEADER: &str = "x-captcha-token";
-pub const FORMS: &[&str] = &["login", "register", "contact", "ticket", "checkout", "password_reset", "domain_lookup"];
-pub const ENGINES: &[&str] = &["turnstile", "hcaptcha", "recaptcha_v2", "recaptcha_v3", "internal"];
+pub const FORMS: &[&str] = &[
+    "login",
+    "register",
+    "contact",
+    "ticket",
+    "checkout",
+    "password_reset",
+    "domain_lookup",
+];
+pub const ENGINES: &[&str] = &[
+    "turnstile",
+    "hcaptcha",
+    "recaptcha_v2",
+    "recaptcha_v3",
+    "internal",
+];
 
 /// (engine, display name, default verify URL, has score)
 fn engine_info(e: &str) -> Option<(&'static str, &'static str, bool)> {
     Some(match e {
-        "turnstile" => ("Cloudflare Turnstile", "https://challenges.cloudflare.com/turnstile/v0/siteverify", false),
+        "turnstile" => (
+            "Cloudflare Turnstile",
+            "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+            false,
+        ),
         "hcaptcha" => ("hCaptcha", "https://api.hcaptcha.com/siteverify", true),
-        "recaptcha_v2" => ("Google reCAPTCHA v2", "https://www.google.com/recaptcha/api/siteverify", false),
-        "recaptcha_v3" => ("Google reCAPTCHA v3", "https://www.google.com/recaptcha/api/siteverify", true),
+        "recaptcha_v2" => (
+            "Google reCAPTCHA v2",
+            "https://www.google.com/recaptcha/api/siteverify",
+            false,
+        ),
+        "recaptcha_v3" => (
+            "Google reCAPTCHA v3",
+            "https://www.google.com/recaptcha/api/siteverify",
+            true,
+        ),
         "internal" => ("Built-in challenge", "", false),
         _ => return None,
     })
 }
 
 fn spec(key: &str, kind: &str, required: bool, default: Option<Value>) -> SettingSpec {
-    SettingSpec { key: key.into(), label: format!("addons.captcha.setting.{key}"), kind: kind.into(), required, choices: vec![], default }
+    SettingSpec {
+        key: key.into(),
+        label: format!("addons.captcha.setting.{key}"),
+        kind: kind.into(),
+        required,
+        choices: vec![],
+        default,
+    }
 }
 
 /// Built-in captcha addon manifests (merged into the addon catalog).
@@ -72,7 +105,11 @@ pub fn builtin_manifests() -> Vec<Manifest> {
                 engine: (*e).into(),
                 description: format!("addons.desc.captcha.{e}"),
                 author: "MythicalSystems".into(),
-                permissions: if *e == "internal" { vec![] } else { vec!["network.outbound".into()] },
+                permissions: if *e == "internal" {
+                    vec![]
+                } else {
+                    vec!["network.outbound".into()]
+                },
                 settings,
                 migrations: vec![],
                 files: BTreeMap::new(),
@@ -94,7 +131,11 @@ pub struct CaptchaPolicy {
 }
 impl Default for CaptchaPolicy {
     fn default() -> Self {
-        CaptchaPolicy { mode: "never".into(), provider: String::new(), forms: vec![] }
+        CaptchaPolicy {
+            mode: "never".into(),
+            provider: String::new(),
+            forms: vec![],
+        }
     }
 }
 
@@ -105,7 +146,12 @@ pub const SETUP_FORMS: &[&str] = &["login", "register", "password_reset", "conta
 /// when needed (as the console would; bundled zips are unpacked first), store
 /// the keys sealed like the admin UI does, and switch the policy to `guests`
 /// on [`SETUP_FORMS`]. An empty `provider` turns captcha off.
-pub async fn configure_from_setup(s: &AppState, provider: &str, site_key: &str, secret_key: &str) -> AppResult<()> {
+pub async fn configure_from_setup(
+    s: &AppState,
+    provider: &str,
+    site_key: &str,
+    secret_key: &str,
+) -> AppResult<()> {
     let policy = if provider.is_empty() {
         CaptchaPolicy::default()
     } else {
@@ -115,14 +161,17 @@ pub async fn configure_from_setup(s: &AppState, provider: &str, site_key: &str, 
             if crate::addons::find(s, provider)?.manifest.kind != "captcha" {
                 return Err(AppError::Validation("error.addon_not_installed"));
             }
-            crate::addons::install_addon(s, provider, &json!({}), crate::addons::Actor::CONSOLE).await?;
+            crate::addons::install_addon(s, provider, &json!({}), crate::addons::Actor::CONSOLE)
+                .await?;
         }
         let e = crate::addons::find(s, provider)?;
         if e.manifest.kind != "captcha" {
             return Err(AppError::Validation("error.addon_not_installed"));
         }
         crate::addons::set_addon_enabled(s, provider, true, actor).await?;
-        let row = reg::get(&s.pool, provider).await?.ok_or(AppError::Conflict("error.addon_not_installed"))?;
+        let row = reg::get(&s.pool, provider)
+            .await?
+            .ok_or(AppError::Conflict("error.addon_not_installed"))?;
         if row.engine != "internal" {
             if secret_key.is_empty() {
                 return Err(AppError::Validation("error.captcha_misconfigured"));
@@ -134,18 +183,35 @@ pub async fn configure_from_setup(s: &AppState, provider: &str, site_key: &str, 
             v["site_key"] = json!(site_key);
             v["secret_key"] = json!(secret_key);
             let clean = crate::addons::validate_settings(&e.manifest.settings, &v)?;
-            let stored = crate::addon_secrets::seal(s, &e.manifest.settings, &clean, &crate::addon_secrets::open(s, &row.settings));
+            let stored = crate::addon_secrets::seal(
+                s,
+                &e.manifest.settings,
+                &clean,
+                &crate::addon_secrets::open(s, &row.settings),
+            );
             reg::set_settings(&s.pool, provider, &stored).await?;
         }
-        CaptchaPolicy { mode: "guests".into(), provider: provider.into(), forms: SETUP_FORMS.iter().map(|f| f.to_string()).collect() }
+        CaptchaPolicy {
+            mode: "guests".into(),
+            provider: provider.into(),
+            forms: SETUP_FORMS.iter().map(|f| f.to_string()).collect(),
+        }
     };
-    settings::set(&s.pool, SETTING_KEY, serde_json::to_value(&policy).map_err(AppError::internal)?).await?;
+    settings::set(
+        &s.pool,
+        SETTING_KEY,
+        serde_json::to_value(&policy).map_err(AppError::internal)?,
+    )
+    .await?;
     audit::record(&s.pool, None, "security.captcha_updated", None, None, json!({ "mode": policy.mode, "provider": policy.provider, "forms": policy.forms, "via": "setup" })).await?;
     Ok(())
 }
 
 pub async fn policy(pool: &pelty_database::Pool) -> AppResult<CaptchaPolicy> {
-    Ok(settings::get(pool, SETTING_KEY).await?.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default())
+    Ok(settings::get(pool, SETTING_KEY)
+        .await?
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default())
 }
 
 /// Active provider: (engine, settings) when the policy's addon is installed+enabled.
@@ -154,7 +220,9 @@ async fn active(s: &AppState, p: &CaptchaPolicy) -> AppResult<Option<(String, Va
         return Ok(None);
     }
     match reg::get(&s.pool, &p.provider).await? {
-        Some(a) if a.enabled && a.kind == "captcha" => Ok(Some((a.engine, crate::addon_secrets::open(s, &a.settings)))),
+        Some(a) if a.enabled && a.kind == "captcha" => {
+            Ok(Some((a.engine, crate::addon_secrets::open(s, &a.settings))))
+        }
         _ => Ok(None),
     }
 }
@@ -170,7 +238,8 @@ fn key() -> &'static [u8; 32] {
 }
 
 fn sign(payload: &str) -> String {
-    let mut m = <Hmac<Sha256> as Mac>::new_from_slice(key()).unwrap_or_else(|_| unreachable!("hmac accepts any key length"));
+    let mut m = <Hmac<Sha256> as Mac>::new_from_slice(key())
+        .unwrap_or_else(|_| unreachable!("hmac accepts any key length"));
     m.update(payload.as_bytes());
     URL_SAFE_NO_PAD.encode(m.finalize().into_bytes())
 }
@@ -182,20 +251,36 @@ pub fn new_challenge() -> (String, String) {
     let exp = OffsetDateTime::now_utc().unix_timestamp() + 600;
     let nonce = URL_SAFE_NO_PAD.encode(&r[2..18]);
     let payload = URL_SAFE_NO_PAD.encode(json!({"s": a + b, "e": exp, "n": nonce}).to_string());
-    (format!("{payload}.{}", sign(&payload)), format!("{a} + {b}"))
+    (
+        format!("{payload}.{}", sign(&payload)),
+        format!("{a} + {b}"),
+    )
 }
 
 /// Verify `<token>:<answer>` of the internal challenge (one-time).
 pub async fn verify_internal(pool: &pelty_database::Pool, value: &str) -> AppResult<bool> {
-    let Some((tok, answer)) = value.rsplit_once(':') else { return Ok(false) };
-    let Some((payload, sig)) = tok.split_once('.') else { return Ok(false) };
+    let Some((tok, answer)) = value.rsplit_once(':') else {
+        return Ok(false);
+    };
+    let Some((payload, sig)) = tok.split_once('.') else {
+        return Ok(false);
+    };
     if !pelty_auth::token::constant_eq(&sign(payload), sig) {
         return Ok(false);
     }
-    let Ok(raw) = URL_SAFE_NO_PAD.decode(payload) else { return Ok(false) };
-    let Ok(v) = serde_json::from_slice::<Value>(&raw) else { return Ok(false) };
-    let (Some(sum), Some(exp), Some(nonce)) = (v["s"].as_u64(), v["e"].as_i64(), v["n"].as_str()) else { return Ok(false) };
-    if exp < OffsetDateTime::now_utc().unix_timestamp() || answer.trim().parse::<u64>().ok() != Some(sum) {
+    let Ok(raw) = URL_SAFE_NO_PAD.decode(payload) else {
+        return Ok(false);
+    };
+    let Ok(v) = serde_json::from_slice::<Value>(&raw) else {
+        return Ok(false);
+    };
+    let (Some(sum), Some(exp), Some(nonce)) = (v["s"].as_u64(), v["e"].as_i64(), v["n"].as_str())
+    else {
+        return Ok(false);
+    };
+    if exp < OffsetDateTime::now_utc().unix_timestamp()
+        || answer.trim().parse::<u64>().ok() != Some(sum)
+    {
         return Ok(false);
     }
     let exp = OffsetDateTime::from_unix_timestamp(exp).map_err(AppError::internal)?;
@@ -204,35 +289,62 @@ pub async fn verify_internal(pool: &pelty_database::Pool, value: &str) -> AppRes
 
 /// Remote siteverify through the provider's WASM addon. Returns Ok(false)
 /// on a negative answer; Err on misconfiguration or transport failure.
-async fn verify_remote(s: &AppState, engine: &str, cfg: &Value, token: &str, ip: Option<&str>) -> AppResult<bool> {
+async fn verify_remote(
+    s: &AppState,
+    engine: &str,
+    cfg: &Value,
+    token: &str,
+    ip: Option<&str>,
+) -> AppResult<bool> {
     if cfg["secret_key"].as_str().unwrap_or("").is_empty() {
         return Err(AppError::Validation("error.captcha_misconfigured"));
     }
-    let addon = crate::wasm_addons::loaded(s, "captcha", engine).ok_or(AppError::Validation("error.captcha_unavailable"))?;
-    let ctx = pelty_wasm::CallCtx { settings: cfg.clone(), ..Default::default() };
-    let out = addon.call_async(ctx, "verify".into(), json!({ "token": token, "ip": ip, "settings": cfg })).await.map_err(|e| {
-        let m = e.to_string();
-        if m.contains("misconfigured") {
-            return AppError::Validation("error.captcha_misconfigured");
-        }
-        tracing::warn!(error = %m, "captcha verify failed");
-        AppError::Validation("error.captcha_unavailable")
-    })?;
+    let addon = crate::wasm_addons::loaded(s, "captcha", engine)
+        .ok_or(AppError::Validation("error.captcha_unavailable"))?;
+    let ctx = pelty_wasm::CallCtx {
+        settings: cfg.clone(),
+        ..Default::default()
+    };
+    let out = addon
+        .call_async(
+            ctx,
+            "verify".into(),
+            json!({ "token": token, "ip": ip, "settings": cfg }),
+        )
+        .await
+        .map_err(|e| {
+            let m = e.to_string();
+            if m.contains("misconfigured") {
+                return AppError::Validation("error.captcha_misconfigured");
+            }
+            tracing::warn!(error = %m, "captcha verify failed");
+            AppError::Validation("error.captcha_unavailable")
+        })?;
     Ok(out["ok"].as_bool() == Some(true))
 }
 
 /// Throttle `form` per IP, then enforce captcha if the policy protects it.
-pub async fn require(s: &AppState, headers: &HeaderMap, form: &str, ip: Option<&str>) -> AppResult<()> {
+pub async fn require(
+    s: &AppState,
+    headers: &HeaderMap,
+    form: &str,
+    ip: Option<&str>,
+) -> AppResult<()> {
     // Per-form, per-IP throttle on every protected form, captcha or not
     // (budget = the login rate from the security policy).
-    if !s.auth_limiter.check(&format!("form:{form}:{}", ip.unwrap_or("unknown"))) {
+    if !s
+        .auth_limiter
+        .check(&format!("form:{form}:{}", ip.unwrap_or("unknown")))
+    {
         return Err(AppError::RateLimited);
     }
     let p = policy(&s.pool).await?;
     if !p.forms.iter().any(|f| f == form) {
         return Ok(());
     }
-    let Some((engine, cfg)) = active(s, &p).await? else { return Ok(()) };
+    let Some((engine, cfg)) = active(s, &p).await? else {
+        return Ok(());
+    };
     if p.mode == "guests" {
         if let Some(tok) = crate::extract::cookie(headers, SESSION_COOKIE) {
             if s.auth.authenticate(&tok).await?.is_some() {
@@ -240,11 +352,19 @@ pub async fn require(s: &AppState, headers: &HeaderMap, form: &str, ip: Option<&
             }
         }
     }
-    let token = headers.get(HEADER).and_then(|v| v.to_str().ok()).unwrap_or("").trim();
+    let token = headers
+        .get(HEADER)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .trim();
     if token.is_empty() || token.len() > 4096 {
         return Err(AppError::Validation("error.captcha_required"));
     }
-    let ok = if engine == "internal" { verify_internal(&s.pool, token).await? } else { verify_remote(s, &engine, &cfg, token, ip).await? };
+    let ok = if engine == "internal" {
+        verify_internal(&s.pool, token).await?
+    } else {
+        verify_remote(s, &engine, &cfg, token, ip).await?
+    };
     if ok {
         Ok(())
     } else {
@@ -286,9 +406,14 @@ pub async fn challenge() -> Json<Value> {
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/security/captcha", responses((status = 200, body = CaptchaPolicy), (status = 403)))]
-pub async fn get_policy(State(s): State<AppState>, _p: RequirePermission<perms::SettingsManage>) -> ApiResult<Json<Value>> {
+pub async fn get_policy(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::SettingsManage>,
+) -> ApiResult<Json<Value>> {
     let p = policy(&s.pool).await?;
-    Ok(Json(json!({ "policy": p, "forms": FORMS, "modes": ["never", "guests", "always"] })))
+    Ok(Json(
+        json!({ "policy": p, "forms": FORMS, "modes": ["never", "guests", "always"] }),
+    ))
 }
 
 #[utoipa::path(put, path = "/api/v1/admin/security/captcha", request_body = CaptchaPolicy, responses((status = 200, body = CaptchaPolicy), (status = 422)))]
@@ -297,7 +422,9 @@ pub async fn put_policy(
     RequirePermission(u, _): RequirePermission<perms::SettingsManage>,
     Json(mut b): Json<CaptchaPolicy>,
 ) -> ApiResult<Json<CaptchaPolicy>> {
-    if !["never", "guests", "always"].contains(&b.mode.as_str()) || b.forms.iter().any(|f| !FORMS.contains(&f.as_str())) {
+    if !["never", "guests", "always"].contains(&b.mode.as_str())
+        || b.forms.iter().any(|f| !FORMS.contains(&f.as_str()))
+    {
         return Err(AppError::Validation("error.captcha_policy").into());
     }
     b.forms.sort();
@@ -305,15 +432,29 @@ pub async fn put_policy(
     if b.mode != "never" {
         match reg::get(&s.pool, &b.provider).await? {
             Some(a) if a.kind == "captcha" && a.enabled => {
-                if a.engine != "internal" && a.settings["secret_key"].as_str().unwrap_or("").is_empty() {
+                if a.engine != "internal"
+                    && a.settings["secret_key"].as_str().unwrap_or("").is_empty()
+                {
                     return Err(AppError::Validation("error.captcha_misconfigured").into());
                 }
             }
             _ => return Err(AppError::Validation("error.addon_not_installed").into()),
         }
     }
-    settings::set(&s.pool, SETTING_KEY, serde_json::to_value(&b).map_err(AppError::internal)?).await?;
-    audit::record(&s.pool, Some(u.user_id), "security.captcha_updated", None, u.ip.as_deref(), json!({ "mode": b.mode, "provider": b.provider, "forms": b.forms })).await?;
+    settings::set(
+        &s.pool,
+        SETTING_KEY,
+        serde_json::to_value(&b).map_err(AppError::internal)?,
+    )
+    .await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "security.captcha_updated",
+        None,
+        u.ip.as_deref(),
+        json!({ "mode": b.mode, "provider": b.provider, "forms": b.forms }),
+    )
+    .await?;
     Ok(Json(b))
 }
-

@@ -1,8 +1,8 @@
 //! Invoice merge / split / duplicate / notes (staff), client mass-pay merge,
 //! and gift cards (staff issue, client redeem).
-use crate::routes::customers::customer_of;
 use crate::error::ApiResult;
 use crate::extract::{perms, CurrentUser, RequirePermission};
+use crate::routes::customers::customer_of;
 use crate::AppState;
 use axum::extract::{Path, State};
 use axum::routing::{get, post};
@@ -18,16 +18,25 @@ use uuid::Uuid;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/admin/invoices/merge", post(admin_merge))
-        .route("/admin/customers/{id}/mergeable-invoices", get(admin_mergeable))
+        .route(
+            "/admin/customers/{id}/mergeable-invoices",
+            get(admin_mergeable),
+        )
         .route("/admin/invoices/{id}/split", post(admin_split))
         .route("/admin/invoices/{id}/duplicate", post(admin_duplicate))
-        .route("/admin/invoices/{id}/notes", get(admin_notes).put(admin_set_notes))
+        .route(
+            "/admin/invoices/{id}/notes",
+            get(admin_notes).put(admin_set_notes),
+        )
         .route("/client/invoices/merge", post(client_merge))
         .route("/admin/gift-cards", get(gift_list).post(gift_create))
         .route("/admin/gift-cards/{id}/disable", post(gift_disable))
         .route("/client/gift-cards/redeem", post(gift_redeem))
         .route("/admin/transactions", get(admin_transactions))
-        .route("/admin/transactions/{id}", axum::routing::patch(admin_update_transaction))
+        .route(
+            "/admin/transactions/{id}",
+            axum::routing::patch(admin_update_transaction),
+        )
 }
 
 type Im = RequirePermission<perms::InvoicesManage>;
@@ -39,17 +48,36 @@ pub struct MergeBody {
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/invoices/merge", request_body = MergeBody, responses((status = 200), (status = 404), (status = 409), (status = 422)))]
-pub async fn admin_merge(State(s): State<AppState>, RequirePermission(u, _): Im, Json(b): Json<MergeBody>) -> ApiResult<Json<Value>> {
+pub async fn admin_merge(
+    State(s): State<AppState>,
+    RequirePermission(u, _): Im,
+    Json(b): Json<MergeBody>,
+) -> ApiResult<Json<Value>> {
     let inv = invoice_ops::merge(&s.pool, &b.invoice_ids).await?;
-    audit::record(&s.pool, Some(u.user_id), "invoice.merged", Some(&inv.id.to_string()), u.ip.as_deref(), json!({ "sources": b.invoice_ids })).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("invoice.merged", json!({ "invoice_id": inv.id, "sources": b.invoice_ids, "by_staff": true })));
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "invoice.merged",
+        Some(&inv.id.to_string()),
+        u.ip.as_deref(),
+        json!({ "sources": b.invoice_ids }),
+    )
+    .await?;
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "invoice.merged",
+        json!({ "invoice_id": inv.id, "sources": b.invoice_ids, "by_staff": true }),
+    ));
     Ok(Json(json!({ "invoice": inv })))
 }
 
 /// Client-side merge (WHMCS "mass payment"): combine own unpaid invoices into
 /// one so a single gateway payment (and one affiliate commission) covers all.
 #[utoipa::path(post, path = "/api/v1/client/invoices/merge", request_body = MergeBody, responses((status = 200), (status = 404), (status = 409), (status = 422)))]
-pub async fn client_merge(State(s): State<AppState>, u: CurrentUser, Json(b): Json<MergeBody>) -> ApiResult<Json<Value>> {
+pub async fn client_merge(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Json(b): Json<MergeBody>,
+) -> ApiResult<Json<Value>> {
     let cid = customer_of(&s, &u).await?;
     for id in &b.invoice_ids {
         if s.invoices().get_owned(*id, cid).await?.is_none() {
@@ -57,13 +85,28 @@ pub async fn client_merge(State(s): State<AppState>, u: CurrentUser, Json(b): Js
         }
     }
     let inv = invoice_ops::merge(&s.pool, &b.invoice_ids).await?;
-    audit::record(&s.pool, Some(u.user_id), "invoice.merged", Some(&inv.id.to_string()), u.ip.as_deref(), json!({ "sources": b.invoice_ids, "by": "client" })).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("invoice.merged", json!({ "invoice_id": inv.id, "sources": b.invoice_ids, "by_staff": false })));
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "invoice.merged",
+        Some(&inv.id.to_string()),
+        u.ip.as_deref(),
+        json!({ "sources": b.invoice_ids, "by": "client" }),
+    )
+    .await?;
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "invoice.merged",
+        json!({ "invoice_id": inv.id, "sources": b.invoice_ids, "by_staff": false }),
+    ));
     Ok(Json(json!({ "invoice": inv })))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/customers/{id}/mergeable-invoices", responses((status = 200), (status = 403)))]
-pub async fn admin_mergeable(State(s): State<AppState>, _p: Im, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
+pub async fn admin_mergeable(
+    State(s): State<AppState>,
+    _p: Im,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
     let rows = invoice_ops::list_mergeable(&s.pool, id).await?;
     let items: Vec<Value> = rows
         .into_iter()
@@ -79,18 +122,49 @@ pub struct SplitBody {
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/invoices/{id}/split", request_body = SplitBody, responses((status = 200), (status = 404), (status = 409), (status = 422)))]
-pub async fn admin_split(State(s): State<AppState>, RequirePermission(u, _): Im, Path(id): Path<Uuid>, Json(b): Json<SplitBody>) -> ApiResult<Json<Value>> {
+pub async fn admin_split(
+    State(s): State<AppState>,
+    RequirePermission(u, _): Im,
+    Path(id): Path<Uuid>,
+    Json(b): Json<SplitBody>,
+) -> ApiResult<Json<Value>> {
     let (a, c) = invoice_ops::split(&s.pool, id, &b.item_ids).await?;
-    audit::record(&s.pool, Some(u.user_id), "invoice.split", Some(&id.to_string()), u.ip.as_deref(), json!({ "into": [a.id, c.id] })).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("invoice.split", json!({ "invoice_id": id, "into": [a.id, c.id] })));
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "invoice.split",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "into": [a.id, c.id] }),
+    )
+    .await?;
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "invoice.split",
+        json!({ "invoice_id": id, "into": [a.id, c.id] }),
+    ));
     Ok(Json(json!({ "invoices": [a, c] })))
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/invoices/{id}/duplicate", responses((status = 200), (status = 404), (status = 409)))]
-pub async fn admin_duplicate(State(s): State<AppState>, RequirePermission(u, _): Im, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
+pub async fn admin_duplicate(
+    State(s): State<AppState>,
+    RequirePermission(u, _): Im,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
     let n = invoice_ops::duplicate(&s.pool, id).await?;
-    audit::record(&s.pool, Some(u.user_id), "invoice.duplicated", Some(&n.to_string()), u.ip.as_deref(), json!({ "from": id })).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("invoice.duplicated", json!({ "invoice_id": n, "from": id })));
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "invoice.duplicated",
+        Some(&n.to_string()),
+        u.ip.as_deref(),
+        json!({ "from": id }),
+    )
+    .await?;
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "invoice.duplicated",
+        json!({ "invoice_id": n, "from": id }),
+    ));
     Ok(Json(json!({ "id": n })))
 }
 
@@ -104,21 +178,42 @@ pub struct NotesBody {
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/invoices/{id}/notes", responses((status = 200), (status = 404)))]
-pub async fn admin_notes(State(s): State<AppState>, _p: Im, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
+pub async fn admin_notes(
+    State(s): State<AppState>,
+    _p: Im,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
     let (a, c, m, sp) = invoice_ops::notes(&s.pool, id).await?;
-    Ok(Json(json!({ "admin_notes": a, "client_notes": c, "merged_into": m, "split_from": sp })))
+    Ok(Json(
+        json!({ "admin_notes": a, "client_notes": c, "merged_into": m, "split_from": sp }),
+    ))
 }
 
 #[utoipa::path(put, path = "/api/v1/admin/invoices/{id}/notes", request_body = NotesBody, responses((status = 200), (status = 404), (status = 422)))]
-pub async fn admin_set_notes(State(s): State<AppState>, RequirePermission(u, _): Im, Path(id): Path<Uuid>, Json(b): Json<NotesBody>) -> ApiResult<Json<Value>> {
+pub async fn admin_set_notes(
+    State(s): State<AppState>,
+    RequirePermission(u, _): Im,
+    Path(id): Path<Uuid>,
+    Json(b): Json<NotesBody>,
+) -> ApiResult<Json<Value>> {
     invoice_ops::set_notes(&s.pool, id, &b.admin_notes, &b.client_notes).await?;
-    audit::record(&s.pool, Some(u.user_id), "invoice.notes_updated", Some(&id.to_string()), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "invoice.notes_updated",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(Json(json!({ "ok": true })))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/gift-cards", responses((status = 200), (status = 403)))]
 pub async fn gift_list(State(s): State<AppState>, _p: Im) -> ApiResult<Json<Value>> {
-    Ok(Json(json!({ "items": gift_cards::list(&s.pool, 500).await? })))
+    Ok(Json(
+        json!({ "items": gift_cards::list(&s.pool, 500).await? }),
+    ))
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -140,17 +235,53 @@ fn one() -> u32 {
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/gift-cards", request_body = GiftBody, responses((status = 200), (status = 422)))]
-pub async fn gift_create(State(s): State<AppState>, RequirePermission(u, _): Im, Json(b): Json<GiftBody>) -> ApiResult<Json<Value>> {
-    let made = gift_cards::create(&s.pool, b.count, &b.currency, b.amount, &b.note, b.expires_at, Some(u.user_id)).await?;
-    audit::record(&s.pool, Some(u.user_id), "gift_card.created", None, u.ip.as_deref(), json!({ "count": made.len(), "currency": b.currency, "amount": b.amount.to_string() })).await?;
-    let items: Vec<Value> = made.into_iter().map(|(c, code)| json!({ "card": c, "code": code })).collect();
+pub async fn gift_create(
+    State(s): State<AppState>,
+    RequirePermission(u, _): Im,
+    Json(b): Json<GiftBody>,
+) -> ApiResult<Json<Value>> {
+    let made = gift_cards::create(
+        &s.pool,
+        b.count,
+        &b.currency,
+        b.amount,
+        &b.note,
+        b.expires_at,
+        Some(u.user_id),
+    )
+    .await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "gift_card.created",
+        None,
+        u.ip.as_deref(),
+        json!({ "count": made.len(), "currency": b.currency, "amount": b.amount.to_string() }),
+    )
+    .await?;
+    let items: Vec<Value> = made
+        .into_iter()
+        .map(|(c, code)| json!({ "card": c, "code": code }))
+        .collect();
     Ok(Json(json!({ "items": items })))
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/gift-cards/{id}/disable", responses((status = 200), (status = 409)))]
-pub async fn gift_disable(State(s): State<AppState>, RequirePermission(u, _): Im, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
+pub async fn gift_disable(
+    State(s): State<AppState>,
+    RequirePermission(u, _): Im,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
     gift_cards::disable(&s.pool, id).await?;
-    audit::record(&s.pool, Some(u.user_id), "gift_card.disabled", Some(&id.to_string()), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "gift_card.disabled",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -161,11 +292,26 @@ pub struct RedeemBody {
 }
 
 #[utoipa::path(post, path = "/api/v1/client/gift-cards/redeem", request_body = RedeemBody, responses((status = 200), (status = 422)))]
-pub async fn gift_redeem(State(s): State<AppState>, u: CurrentUser, Json(b): Json<RedeemBody>) -> ApiResult<Json<Value>> {
+pub async fn gift_redeem(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Json(b): Json<RedeemBody>,
+) -> ApiResult<Json<Value>> {
     let cid = customer_of(&s, &u).await?;
     let (currency, amount) = gift_cards::redeem(&s.pool, cid, &b.code).await?;
-    audit::record(&s.pool, Some(u.user_id), "gift_card.redeemed", Some(&cid.to_string()), u.ip.as_deref(), json!({ "currency": currency, "amount": amount.to_string() })).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("gift_card.redeemed", json!({ "customer_id": cid, "currency": currency, "amount": amount })));
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "gift_card.redeemed",
+        Some(&cid.to_string()),
+        u.ip.as_deref(),
+        json!({ "currency": currency, "amount": amount.to_string() }),
+    )
+    .await?;
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "gift_card.redeemed",
+        json!({ "customer_id": cid, "currency": currency, "amount": amount }),
+    ));
     Ok(Json(json!({ "currency": currency, "amount": amount })))
 }
 
@@ -185,9 +331,14 @@ pub struct TxQuery {
 }
 
 fn day(v: &Option<String>, plus: i64) -> ApiResult<Option<OffsetDateTime>> {
-    let Some(v) = v.as_deref().filter(|v| !v.is_empty()) else { return Ok(None) };
-    let d = time::Date::parse(v, time::macros::format_description!("[year]-[month]-[day]")).map_err(|_| AppError::Validation("error.invalid_date"))?;
-    Ok(Some((d + time::Duration::days(plus)).midnight().assume_utc()))
+    let Some(v) = v.as_deref().filter(|v| !v.is_empty()) else {
+        return Ok(None);
+    };
+    let d = time::Date::parse(v, time::macros::format_description!("[year]-[month]-[day]"))
+        .map_err(|_| AppError::Validation("error.invalid_date"))?;
+    Ok(Some(
+        (d + time::Duration::days(plus)).midnight().assume_utc(),
+    ))
 }
 
 const TX_STATUSES: &[&str] = &["pending", "succeeded", "failed", "refunded"];
@@ -198,17 +349,39 @@ pub struct TxNote {
 }
 
 #[utoipa::path(patch, path = "/api/v1/admin/transactions/{id}", request_body = TxNote, responses((status = 200), (status = 404), (status = 422)))]
-pub async fn admin_update_transaction(State(s): State<AppState>, p: Im, Path(id): Path<Uuid>, Json(b): Json<TxNote>) -> ApiResult<Json<Value>> {
+pub async fn admin_update_transaction(
+    State(s): State<AppState>,
+    p: Im,
+    Path(id): Path<Uuid>,
+    Json(b): Json<TxNote>,
+) -> ApiResult<Json<Value>> {
     pelty_database::transactions::set_note(&s.pool, id, b.note.as_deref()).await?;
-    audit::record(&s.pool, Some(p.0.user_id), "transaction.updated", Some(&id.to_string()), p.0.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(p.0.user_id),
+        "transaction.updated",
+        Some(&id.to_string()),
+        p.0.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(Json(json!({ "ok": true })))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/transactions", params(TxQuery), responses((status = 200), (status = 403), (status = 422)))]
-pub async fn admin_transactions(State(s): State<AppState>, _p: Im, axum::extract::Query(q): axum::extract::Query<TxQuery>) -> ApiResult<Json<Value>> {
+pub async fn admin_transactions(
+    State(s): State<AppState>,
+    _p: Im,
+    axum::extract::Query(q): axum::extract::Query<TxQuery>,
+) -> ApiResult<Json<Value>> {
     let per = q.per_page.unwrap_or(50).clamp(1, 200);
     let page = q.page.unwrap_or(1).max(1);
-    let nz = |v: &Option<String>| v.as_deref().map(str::trim).filter(|v| !v.is_empty()).map(str::to_string);
+    let nz = |v: &Option<String>| {
+        v.as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(str::to_string)
+    };
     let status = nz(&q.status);
     if let Some(st) = &status {
         if !TX_STATUSES.contains(&st.as_str()) {
@@ -224,6 +397,9 @@ pub async fn admin_transactions(State(s): State<AppState>, _p: Im, axum::extract
         to: day(&q.to, 1)?,
         q: nz(&q.q).map(|v| v.chars().take(100).collect()),
     };
-    let (items, total, totals) = pelty_database::transactions::list(&s.pool, &f, per, (page - 1) * per).await?;
-    Ok(Json(json!({ "items": items, "page": page, "per_page": per, "total": total, "totals": totals })))
+    let (items, total, totals) =
+        pelty_database::transactions::list(&s.pool, &f, per, (page - 1) * per).await?;
+    Ok(Json(
+        json!({ "items": items, "page": page, "per_page": per, "total": total, "totals": totals }),
+    ))
 }

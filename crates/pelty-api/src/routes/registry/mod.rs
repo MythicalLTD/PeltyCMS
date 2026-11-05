@@ -4,5 +4,5 @@
 //! `crate::routes::<module>` keep working through re-exports in `routes/mod.rs`.
 //! Covered by the pelty-api integration tests for these domains and by pelty-docs route inventory tests.
 
-pub mod domains;
 pub mod domain_pricing;
+pub mod domains;

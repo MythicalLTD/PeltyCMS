@@ -42,7 +42,13 @@ fn hook(input: &Value) -> Value {
     bump(&format!("hook:{event}"));
     match event {
         // Cancel: refuse sign-in for one domain.
-        "login.before" if p["email"].as_str().is_some_and(|e| e.ends_with("@denied.test")) => reply::cancel("domain not allowed"),
+        "login.before"
+            if p["email"]
+                .as_str()
+                .is_some_and(|e| e.ends_with("@denied.test")) =>
+        {
+            reply::cancel("domain not allowed")
+        }
         // Modify: tidy up the display name before the account is created.
         "client.before_register" => {
             p["display_name"] = json!(p["display_name"].as_str().unwrap_or("").trim().to_string());
@@ -50,7 +56,9 @@ fn hook(input: &Value) -> Value {
         }
         // Own custom event (declared as `before:integration-guide:greeted`,
         // delivered with `event` = the bare name and `phase` = "before").
-        "integration-guide:greeted" if p["name"] == "nobody" => reply::cancel("no greeting for nobody"),
+        "integration-guide:greeted" if p["name"] == "nobody" => {
+            reply::cancel("no greeting for nobody")
+        }
         "order.before_place" => order_hook(input, p),
         _ => reply::proceed(),
     }
@@ -66,7 +74,11 @@ fn hook(input: &Value) -> Value {
 fn order_hook(input: &Value, mut p: Value) -> Value {
     let coupon = p["coupon"].as_str().unwrap_or("").trim().to_uppercase();
     if input["cancelled"] == true {
-        return if coupon == "GUIDE-VIP" { reply::uncancel() } else { reply::proceed() };
+        return if coupon == "GUIDE-VIP" {
+            reply::uncancel()
+        } else {
+            reply::proceed()
+        };
     }
     if coupon.is_empty() {
         return reply::proceed();
@@ -82,7 +94,10 @@ fn order_hook(input: &Value, mut p: Value) -> Value {
 fn mixin(input: &Value) -> Value {
     let mut resp = input["response"].clone();
     // Opt-in per request so this example never changes other callers.
-    let wanted = input["request"]["query"].as_str().unwrap_or("").contains("guide=1");
+    let wanted = input["request"]["query"]
+        .as_str()
+        .unwrap_or("")
+        .contains("guide=1");
     if input["at"] == "after" && wanted {
         if let Some(c) = resp["city"].as_str() {
             resp["city"] = json!(c.to_uppercase());
@@ -110,7 +125,9 @@ fn greet(name: &str) -> Result<Value, String> {
 /// Admin settings (addon.json `settings`) and secrets (`capabilities.secrets`).
 fn greeting() -> String {
     let _token_present = host::secret("api_token").is_some();
-    pelty_addon_sdk::setting("greeting").and_then(|v| v.as_str().map(str::to_string)).unwrap_or_else(|| "Hello".into())
+    pelty_addon_sdk::setting("greeting")
+        .and_then(|v| v.as_str().map(str::to_string))
+        .unwrap_or_else(|| "Hello".into())
 }
 // docs:end:settings
 
@@ -118,7 +135,8 @@ fn greeting() -> String {
 /// Outbound HTTP to hosts in `capabilities.http` only.
 #[allow(dead_code)]
 fn ping_example() -> Result<u16, String> {
-    let (status, _body) = pelty_addon_sdk::fetch("GET", "https://example.com/", vec![], String::new())?;
+    let (status, _body) =
+        pelty_addon_sdk::fetch("GET", "https://example.com/", vec![], String::new())?;
     Ok(status)
 }
 // docs:end:http
@@ -130,10 +148,21 @@ fn http(input: &Value) -> Result<Value, String> {
     let m = input["method"].as_str().unwrap_or("");
     let path = input["path"].as_str().unwrap_or("");
     Ok(match (m, path) {
-        ("GET", "/hello") => json!({ "status": 200, "body": { "message": format!("{}, world", greeting()) } }),
+        ("GET", "/hello") => {
+            json!({ "status": 200, "body": { "message": format!("{}, world", greeting()) } })
+        }
         ("POST", "/greet") => greet(input["body"]["name"].as_str().unwrap_or(""))?,
         ("GET", "/stats") => {
-            let rows: Vec<Value> = ["paid", "registered", "greeted", "cleanups", "hook:client.before_register"].iter().map(|k| json!({ "key": k, "value": counter(k) })).collect();
+            let rows: Vec<Value> = [
+                "paid",
+                "registered",
+                "greeted",
+                "cleanups",
+                "hook:client.before_register",
+            ]
+            .iter()
+            .map(|k| json!({ "key": k, "value": counter(k) }))
+            .collect();
             json!({ "status": 200, "body": { "rows": rows } })
         }
         _ => json!({ "status": 404, "body": null }),

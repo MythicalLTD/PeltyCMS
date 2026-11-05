@@ -40,7 +40,10 @@ pub struct StaffMember {
 /// Role names follow the DB check: lowercase, 2..41 chars.
 pub fn valid_name(n: &str) -> bool {
     let b = n.as_bytes();
-    (2..=41).contains(&b.len()) && b[0].is_ascii_lowercase() && b.iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'_')
+    (2..=41).contains(&b.len())
+        && b[0].is_ascii_lowercase()
+        && b.iter()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'_')
 }
 
 const ROLE_SQL: &str = "SELECT r.id, r.name, r.description, r.builtin, \
@@ -48,26 +51,49 @@ const ROLE_SQL: &str = "SELECT r.id, r.name, r.description, r.builtin, \
     (SELECT count(*) FROM user_roles ur WHERE ur.role_id = r.id) AS members FROM roles r";
 
 pub async fn permissions(pool: &PgPool) -> AppResult<Vec<String>> {
-    sqlx::query_scalar("SELECT name FROM permissions ORDER BY name").fetch_all(pool).await.map_err(db_err)
+    sqlx::query_scalar("SELECT name FROM permissions ORDER BY name")
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn roles(pool: &PgPool) -> AppResult<Vec<Role>> {
-    sqlx::query_as(&format!("{ROLE_SQL} ORDER BY r.builtin DESC, r.name")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(&format!("{ROLE_SQL} ORDER BY r.builtin DESC, r.name"))
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn role(pool: &PgPool, id: Uuid) -> AppResult<Role> {
-    sqlx::query_as(&format!("{ROLE_SQL} WHERE r.id = $1")).bind(id).fetch_optional(pool).await.map_err(db_err)?.ok_or(AppError::NotFound)
+    sqlx::query_as(&format!("{ROLE_SQL} WHERE r.id = $1"))
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?
+        .ok_or(AppError::NotFound)
 }
 
-async fn set_perms(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, id: Uuid, perms: &[String]) -> AppResult<()> {
-    let known: i64 = sqlx::query_scalar("SELECT count(*) FROM permissions WHERE name = ANY($1)").bind(perms).fetch_one(&mut **tx).await.map_err(db_err)?;
+async fn set_perms(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    id: Uuid,
+    perms: &[String],
+) -> AppResult<()> {
+    let known: i64 = sqlx::query_scalar("SELECT count(*) FROM permissions WHERE name = ANY($1)")
+        .bind(perms)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_err)?;
     let mut uniq = perms.to_vec();
     uniq.sort();
     uniq.dedup();
     if known != uniq.len() as i64 {
         return Err(AppError::Validation("error.unknown_permission"));
     }
-    sqlx::query("DELETE FROM role_permissions WHERE role_id = $1").bind(id).execute(&mut **tx).await.map_err(db_err)?;
+    sqlx::query("DELETE FROM role_permissions WHERE role_id = $1")
+        .bind(id)
+        .execute(&mut **tx)
+        .await
+        .map_err(db_err)?;
     sqlx::query("INSERT INTO role_permissions (role_id, permission_id) SELECT $1, id FROM permissions WHERE name = ANY($2)")
         .bind(id)
         .bind(&uniq)
@@ -84,13 +110,15 @@ pub async fn create_role(pool: &PgPool, i: &RoleInput) -> AppResult<Uuid> {
     }
     let mut tx = pool.begin().await.map_err(db_err)?;
     let id = Uuid::new_v4();
-    let r = sqlx::query("INSERT INTO roles (id, name, description) VALUES ($1,$2,$3) ON CONFLICT (name) DO NOTHING")
-        .bind(id)
-        .bind(name)
-        .bind(i.description.trim())
-        .execute(&mut *tx)
-        .await
-        .map_err(db_err)?;
+    let r = sqlx::query(
+        "INSERT INTO roles (id, name, description) VALUES ($1,$2,$3) ON CONFLICT (name) DO NOTHING",
+    )
+    .bind(id)
+    .bind(name)
+    .bind(i.description.trim())
+    .execute(&mut *tx)
+    .await
+    .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::Conflict("error.role_exists"));
     }
@@ -132,7 +160,11 @@ pub async fn delete_role(pool: &PgPool, id: Uuid) -> AppResult<()> {
     if cur.members > 0 {
         return Err(AppError::Conflict("error.role_in_use"));
     }
-    sqlx::query("DELETE FROM roles WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?;
+    sqlx::query("DELETE FROM roles WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(())
 }
 
@@ -154,7 +186,12 @@ pub async fn staff(pool: &PgPool) -> AppResult<Vec<StaffMember>> {
 
 /// Replace a user's roles. An actor can't drop their own admin role and the
 /// last admin can't be demoted (lock-out guards).
-pub async fn set_user_roles(pool: &PgPool, actor: Uuid, user: Uuid, names: &[String]) -> AppResult<()> {
+pub async fn set_user_roles(
+    pool: &PgPool,
+    actor: Uuid,
+    user: Uuid,
+    names: &[String],
+) -> AppResult<()> {
     let mut want = names.to_vec();
     want.sort();
     want.dedup();
@@ -162,11 +199,19 @@ pub async fn set_user_roles(pool: &PgPool, actor: Uuid, user: Uuid, names: &[Str
         return Err(AppError::Validation("error.roles_required"));
     }
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)").bind(user).fetch_one(&mut *tx).await.map_err(db_err)?;
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)")
+        .bind(user)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_err)?;
     if !exists {
         return Err(AppError::NotFound);
     }
-    let ids: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM roles WHERE name = ANY($1)").bind(&want).fetch_all(&mut *tx).await.map_err(db_err)?;
+    let ids: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM roles WHERE name = ANY($1)")
+        .bind(&want)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(db_err)?;
     if ids.len() != want.len() {
         return Err(AppError::Validation("error.unknown_role"));
     }
@@ -175,7 +220,10 @@ pub async fn set_user_roles(pool: &PgPool, actor: Uuid, user: Uuid, names: &[Str
         if actor == user {
             return Err(AppError::Conflict("error.cannot_demote_self"));
         }
-        sqlx::query("SELECT 1 FROM roles WHERE name = 'admin' FOR UPDATE").execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query("SELECT 1 FROM roles WHERE name = 'admin' FOR UPDATE")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
         let others: i64 = sqlx::query_scalar("SELECT count(*) FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE r.name = 'admin' AND ur.user_id <> $1")
             .bind(user)
             .fetch_one(&mut *tx)
@@ -185,13 +233,25 @@ pub async fn set_user_roles(pool: &PgPool, actor: Uuid, user: Uuid, names: &[Str
             return Err(AppError::Conflict("error.last_admin"));
         }
     }
-    sqlx::query("DELETE FROM user_roles WHERE user_id = $1").bind(user).execute(&mut *tx).await.map_err(db_err)?;
-    sqlx::query("INSERT INTO user_roles (user_id, role_id) SELECT $1, unnest($2::uuid[])").bind(user).bind(&ids).execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("DELETE FROM user_roles WHERE user_id = $1")
+        .bind(user)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
+    sqlx::query("INSERT INTO user_roles (user_id, role_id) SELECT $1, unnest($2::uuid[])")
+        .bind(user)
+        .bind(&ids)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     tx.commit().await.map_err(db_err)
 }
 
 pub async fn require_2fa(pool: &PgPool) -> AppResult<bool> {
-    Ok(crate::settings::get(pool, REQUIRE_2FA_KEY).await?.and_then(|v| v.as_bool()).unwrap_or(false))
+    Ok(crate::settings::get(pool, REQUIRE_2FA_KEY)
+        .await?
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false))
 }
 
 /// True when the policy is on and this staff user has no 2FA yet.

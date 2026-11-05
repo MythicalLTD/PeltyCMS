@@ -12,14 +12,21 @@ impl pelty_addon_sdk::Addon for Cron {
         let b = &r.body;
         let name = b["name"].as_str().unwrap_or_default().to_string();
         let res = match b["action"].as_str() {
-            Some("register") => power::cron_register(&name, b["schedule"].as_str().unwrap_or_default(), "runtime job"),
+            Some("register") => power::cron_register(
+                &name,
+                b["schedule"].as_str().unwrap_or_default(),
+                "runtime job",
+            ),
             Some("unregister") => power::cron_unregister(&name),
             _ => Err("unknown action".into()),
         };
-        Ok(reply::http(200, match res {
-            Ok(()) => json!({ "ok": true }),
-            Err(e) => json!({ "err": e }),
-        }))
+        Ok(reply::http(
+            200,
+            match res {
+                Ok(()) => json!({ "ok": true }),
+                Err(e) => json!({ "err": e }),
+            },
+        ))
     }
     fn cron(job: &str) -> Result<Value, String> {
         match job {

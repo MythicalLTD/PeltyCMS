@@ -24,13 +24,24 @@ pub struct KycSettings {
 
 impl Default for KycSettings {
     fn default() -> Self {
-        Self { enabled: false, required_kinds: vec!["identity".into()], gate_orders: true, max_mb: 5 }
+        Self {
+            enabled: false,
+            required_kinds: vec!["identity".into()],
+            gate_orders: true,
+            max_mb: 5,
+        }
     }
 }
 
 impl KycSettings {
     pub fn validate(&self) -> AppResult<()> {
-        if self.required_kinds.is_empty() || self.required_kinds.iter().any(|k| !KINDS.contains(&k.as_str())) || !(1..=20).contains(&self.max_mb) {
+        if self.required_kinds.is_empty()
+            || self
+                .required_kinds
+                .iter()
+                .any(|k| !KINDS.contains(&k.as_str()))
+            || !(1..=20).contains(&self.max_mb)
+        {
             return Err(AppError::Validation("error.validation"));
         }
         Ok(())
@@ -38,7 +49,10 @@ impl KycSettings {
 }
 
 pub async fn settings(pool: &PgPool) -> AppResult<KycSettings> {
-    Ok(crate::settings::get(pool, SETTINGS_KEY).await?.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default())
+    Ok(crate::settings::get(pool, SETTINGS_KEY)
+        .await?
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default())
 }
 
 pub async fn set_settings(pool: &PgPool, s: &KycSettings) -> AppResult<()> {
@@ -46,7 +60,12 @@ pub async fn set_settings(pool: &PgPool, s: &KycSettings) -> AppResult<()> {
     let mut s = s.clone();
     s.required_kinds.sort();
     s.required_kinds.dedup();
-    crate::settings::set(pool, SETTINGS_KEY, serde_json::to_value(&s).map_err(|_| AppError::Validation("error.validation"))?).await
+    crate::settings::set(
+        pool,
+        SETTINGS_KEY,
+        serde_json::to_value(&s).map_err(|_| AppError::Validation("error.validation"))?,
+    )
+    .await
 }
 
 #[derive(Debug, Clone, FromRow, Serialize, utoipa::ToSchema)]
@@ -73,11 +92,22 @@ pub struct Status {
 }
 
 pub async fn status(pool: &PgPool, customer: Uuid) -> AppResult<Status> {
-    sqlx::query_as("SELECT kyc_status, kyc_note, kyc_reviewed_at FROM customers WHERE id = $1").bind(customer).fetch_optional(pool).await.map_err(db_err)?.ok_or(AppError::NotFound)
+    sqlx::query_as("SELECT kyc_status, kyc_note, kyc_reviewed_at FROM customers WHERE id = $1")
+        .bind(customer)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?
+        .ok_or(AppError::NotFound)
 }
 
 pub async fn documents(pool: &PgPool, customer: Uuid) -> AppResult<Vec<Document>> {
-    sqlx::query_as(&format!("SELECT {DCOLS} FROM kyc_documents WHERE customer_id = $1 ORDER BY created_at DESC")).bind(customer).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {DCOLS} FROM kyc_documents WHERE customer_id = $1 ORDER BY created_at DESC"
+    ))
+    .bind(customer)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Pure status rule: verified when every required kind has an approved doc;
@@ -99,18 +129,34 @@ pub fn derive(required: &[String], docs: &[(String, String)]) -> &'static str {
 /// Recompute and store the customer's status from its documents.
 pub async fn refresh(pool: &PgPool, customer: Uuid) -> AppResult<String> {
     let cfg = settings(pool).await?;
-    let docs: Vec<(String, String)> = sqlx::query_as("SELECT kind, status FROM kyc_documents WHERE customer_id = $1").bind(customer).fetch_all(pool).await.map_err(db_err)?;
+    let docs: Vec<(String, String)> =
+        sqlx::query_as("SELECT kind, status FROM kyc_documents WHERE customer_id = $1")
+            .bind(customer)
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?;
     let st = derive(&cfg.required_kinds, &docs);
     sqlx::query("UPDATE customers SET kyc_status = $2, kyc_reviewed_at = CASE WHEN $2 IN ('verified','rejected') THEN now() ELSE kyc_reviewed_at END WHERE id = $1")
         .bind(customer).bind(st).execute(pool).await.map_err(db_err)?;
     Ok(st.to_string())
 }
 
-pub async fn upload(pool: &PgPool, customer: Uuid, kind: &str, filename: &str, content_type: &str, data: &[u8]) -> AppResult<Document> {
+pub async fn upload(
+    pool: &PgPool,
+    customer: Uuid,
+    kind: &str,
+    filename: &str,
+    content_type: &str,
+    data: &[u8],
+) -> AppResult<Document> {
     if !KINDS.contains(&kind) {
         return Err(AppError::Validation("error.validation"));
     }
-    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM kyc_documents WHERE customer_id = $1").bind(customer).fetch_one(pool).await.map_err(db_err)?;
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM kyc_documents WHERE customer_id = $1")
+        .bind(customer)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
     if n >= MAX_DOCS {
         return Err(AppError::Validation("error.kyc_too_many"));
     }
@@ -127,7 +173,14 @@ pub async fn upload(pool: &PgPool, customer: Uuid, kind: &str, filename: &str, c
 
 /// Customers may withdraw only documents not yet reviewed.
 pub async fn delete_pending(pool: &PgPool, customer: Uuid, id: Uuid) -> AppResult<()> {
-    let r = sqlx::query("DELETE FROM kyc_documents WHERE id = $1 AND customer_id = $2 AND status = 'pending'").bind(id).bind(customer).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query(
+        "DELETE FROM kyc_documents WHERE id = $1 AND customer_id = $2 AND status = 'pending'",
+    )
+    .bind(id)
+    .bind(customer)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
@@ -139,11 +192,23 @@ pub async fn delete_pending(pool: &PgPool, customer: Uuid, id: Uuid) -> AppResul
 }
 
 pub async fn file(pool: &PgPool, id: Uuid) -> AppResult<Option<(Uuid, String, String, Vec<u8>)>> {
-    sqlx::query_as("SELECT customer_id, filename, content_type, data FROM kyc_documents WHERE id = $1").bind(id).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as(
+        "SELECT customer_id, filename, content_type, data FROM kyc_documents WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Approve/reject one document; returns (customer, new status).
-pub async fn review(pool: &PgPool, id: Uuid, approve: bool, note: &str, by: Uuid) -> AppResult<(Uuid, String)> {
+pub async fn review(
+    pool: &PgPool,
+    id: Uuid,
+    approve: bool,
+    note: &str,
+    by: Uuid,
+) -> AppResult<(Uuid, String)> {
     if note.len() > 1000 || (!approve && note.trim().is_empty()) {
         return Err(AppError::Validation("error.kyc_note_required"));
     }
@@ -151,7 +216,12 @@ pub async fn review(pool: &PgPool, id: Uuid, approve: bool, note: &str, by: Uuid
         .bind(id).bind(if approve { "approved" } else { "rejected" }).bind(note.trim()).bind(by)
         .fetch_optional(pool).await.map_err(db_err)?.ok_or(AppError::NotFound)?;
     if !approve {
-        sqlx::query("UPDATE customers SET kyc_note = $2 WHERE id = $1").bind(cid).bind(note.trim()).execute(pool).await.map_err(db_err)?;
+        sqlx::query("UPDATE customers SET kyc_note = $2 WHERE id = $1")
+            .bind(cid)
+            .bind(note.trim())
+            .execute(pool)
+            .await
+            .map_err(db_err)?;
     }
     let st = refresh(pool, cid).await?;
     Ok((cid, st))
@@ -218,10 +288,38 @@ mod tests {
         assert_eq!(derive(&req, &[]), "none");
         assert_eq!(derive(&req, &[d("identity", "pending")]), "pending");
         assert_eq!(derive(&req, &[d("identity", "approved")]), "none");
-        assert_eq!(derive(&req, &[d("identity", "approved"), d("address", "rejected")]), "rejected");
-        assert_eq!(derive(&req, &[d("identity", "approved"), d("address", "rejected"), d("address", "pending")]), "pending");
-        assert_eq!(derive(&req, &[d("identity", "approved"), d("address", "approved"), d("other", "rejected")]), "verified");
-        assert!(KycSettings { required_kinds: vec!["passport".into()], ..Default::default() }.validate().is_err());
+        assert_eq!(
+            derive(&req, &[d("identity", "approved"), d("address", "rejected")]),
+            "rejected"
+        );
+        assert_eq!(
+            derive(
+                &req,
+                &[
+                    d("identity", "approved"),
+                    d("address", "rejected"),
+                    d("address", "pending")
+                ]
+            ),
+            "pending"
+        );
+        assert_eq!(
+            derive(
+                &req,
+                &[
+                    d("identity", "approved"),
+                    d("address", "approved"),
+                    d("other", "rejected")
+                ]
+            ),
+            "verified"
+        );
+        assert!(KycSettings {
+            required_kinds: vec!["passport".into()],
+            ..Default::default()
+        }
+        .validate()
+        .is_err());
         assert!(KycSettings::default().validate().is_ok());
     }
 }

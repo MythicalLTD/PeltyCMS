@@ -18,8 +18,21 @@ pub struct FilterSpec {
     pub since: &'static str,
 }
 
-const fn spec(name: &'static str, description: &'static str, value: &'static str, context: &'static [&'static str], rules: &'static str) -> FilterSpec {
-    FilterSpec { name, description, value, context, rules, since: "0.4.0" }
+const fn spec(
+    name: &'static str,
+    description: &'static str,
+    value: &'static str,
+    context: &'static [&'static str],
+    rules: &'static str,
+) -> FilterSpec {
+    FilterSpec {
+        name,
+        description,
+        value,
+        context,
+        rules,
+        since: "0.4.0",
+    }
 }
 
 pub const FILTERS: &[FilterSpec] = &[

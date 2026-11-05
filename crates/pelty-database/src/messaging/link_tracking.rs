@@ -23,14 +23,18 @@ pub struct Link {
 pub fn validate(slug: &str, name: &str, url: &str) -> AppResult<(String, String, String)> {
     let slug = slug.trim().to_ascii_lowercase();
     let ok_slug = (2..=63).contains(&slug.len())
-        && slug.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        && slug
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
         && !slug.starts_with('-');
     let name = name.trim().to_string();
     let url = url.trim().to_string();
     let ok_url = (url.starts_with("https://") || url.starts_with("http://"))
         && url.len() <= 2000
         && !url.chars().any(|c| c.is_whitespace() || c.is_control())
-        && url.split_once("://").is_some_and(|(_, h)| !h.is_empty() && !h.starts_with('/'));
+        && url
+            .split_once("://")
+            .is_some_and(|(_, h)| !h.is_empty() && !h.starts_with('/'));
     if !ok_slug || name.is_empty() || name.chars().count() > 200 || !ok_url {
         return Err(AppError::Validation("error.validation"));
     }
@@ -54,7 +58,11 @@ pub async fn create(pool: &PgPool, slug: &str, name: &str, url: &str) -> AppResu
 }
 
 pub async fn delete(pool: &PgPool, id: Uuid) -> AppResult<()> {
-    let r = sqlx::query("DELETE FROM tracked_links WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("DELETE FROM tracked_links WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }

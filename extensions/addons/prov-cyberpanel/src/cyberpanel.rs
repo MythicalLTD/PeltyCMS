@@ -12,9 +12,12 @@
 //! * HestiaCP, `access_key:secret_key` hash, form API with `returncode`.
 //! * ISPConfig, remote user password; JSON remote API with session login.
 use pelty_provisioning::http::call_raw;
-use pelty_provisioning::util::{domain, gen_password, md, short_username, str_or};
-use pelty_provisioning::{cfg_str, fld, BoxFuture, Created, FieldSpec, ModuleInfo, ProvisionError, ProvisionResult, ProvisioningModule, ServerConn, ServiceCtx};
 use pelty_provisioning::http::Method;
+use pelty_provisioning::util::{domain, gen_password, md, short_username, str_or};
+use pelty_provisioning::{
+    cfg_str, fld, BoxFuture, Created, FieldSpec, ModuleInfo, ProvisionError, ProvisionResult,
+    ProvisioningModule, ServerConn, ServiceCtx,
+};
 use serde_json::{json, Value};
 
 #[derive(Debug, Clone, Copy)]
@@ -27,15 +30,34 @@ fn user(server: &ServerConn, default: &'static str) -> String {
 }
 
 fn err(msg: impl Into<String>) -> ProvisionError {
-    ProvisionError::Rejected { status: 422, message: msg.into() }
+    ProvisionError::Rejected {
+        status: 422,
+        message: msg.into(),
+    }
 }
 
-async fn cyber(server: &ServerConn, func: &str, mut body: Value, ok_key: &str) -> ProvisionResult<Value> {
+async fn cyber(
+    server: &ServerConn,
+    func: &str,
+    mut body: Value,
+    ok_key: &str,
+) -> ProvisionResult<Value> {
     body["adminUser"] = json!(user(server, "admin"));
     body["adminPass"] = json!(server.api_key);
-    let r = call_raw(server, Method::POST, &format!("/api/{func}"), &[("accept", JSON)], Some((JSON, body.to_string()))).await?;
+    let r = call_raw(
+        server,
+        Method::POST,
+        &format!("/api/{func}"),
+        &[("accept", JSON)],
+        Some((JSON, body.to_string())),
+    )
+    .await?;
     if r.get(ok_key).and_then(Value::as_i64) != Some(1) {
-        return Err(err(r.get("error_message").and_then(Value::as_str).unwrap_or("CyberPanel call failed").to_string()));
+        return Err(err(r
+            .get("error_message")
+            .and_then(Value::as_str)
+            .unwrap_or("CyberPanel call failed")
+            .to_string()));
     }
     Ok(r)
 }
@@ -45,14 +67,31 @@ impl CyberPanel {
         "cyberpanel"
     }
     fn account(&self, svc: &ServiceCtx) -> String {
-        svc.module_data.get("username").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| short_username(&svc.customer_email, &svc.service_id))
+        svc.module_data
+            .get("username")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .unwrap_or_else(|| short_username(&svc.customer_email, &svc.service_id))
     }
 }
 
 impl ProvisioningModule for CyberPanel {
     fn info(&self) -> ModuleInfo {
-        let (name, server_fields, product_fields): (&'static str, Vec<FieldSpec>, Vec<FieldSpec>) = ("CyberPanel", vec![fld!("username", "text", true, "admin")], vec![fld!("package", "text", true, "Default"), fld!("php", "text", false, "PHP 8.2")]);
-        ModuleInfo { id: self.id(), name, server_fields, product_fields, actions: vec![] }
+        let (name, server_fields, product_fields): (&'static str, Vec<FieldSpec>, Vec<FieldSpec>) = (
+            "CyberPanel",
+            vec![fld!("username", "text", true, "admin")],
+            vec![
+                fld!("package", "text", true, "Default"),
+                fld!("php", "text", false, "PHP 8.2"),
+            ],
+        );
+        ModuleInfo {
+            id: self.id(),
+            name,
+            server_fields,
+            product_fields,
+            actions: vec![],
+        }
     }
 
     fn custom_actions(&self) -> &'static [&'static str] {
@@ -61,14 +100,23 @@ impl ProvisioningModule for CyberPanel {
 
     fn test_connection<'a>(&'a self, server: &'a ServerConn) -> BoxFuture<'a, ProvisionResult<()>> {
         Box::pin(async move {
-            cyber(server, "verifyConn", json!({}), "verifyConn").await.map(|_| ())
+            cyber(server, "verifyConn", json!({}), "verifyConn")
+                .await
+                .map(|_| ())
         })
     }
 
-    fn create<'a>(&'a self, server: &'a ServerConn, svc: &'a ServiceCtx) -> BoxFuture<'a, ProvisionResult<Created>> {
+    fn create<'a>(
+        &'a self,
+        server: &'a ServerConn,
+        svc: &'a ServiceCtx,
+    ) -> BoxFuture<'a, ProvisionResult<Created>> {
         Box::pin(async move {
             if let Some(id) = &svc.remote_id {
-                return Ok(Created { remote_id: id.clone(), module_data: svc.module_data.clone() });
+                return Ok(Created {
+                    remote_id: id.clone(),
+                    module_data: svc.module_data.clone(),
+                });
             }
             let c = &svc.product_config;
             let dom = domain(svc)?;
@@ -77,39 +125,89 @@ impl ProvisioningModule for CyberPanel {
             let email = svc.customer_email.as_str();
             let data = json!({ "username": u, "domain": dom, "initial_password": pw });
             {
-                    cyber(server, "createWebsite", json!({ "domainName": dom, "ownerEmail": email, "packageName": str_or(c, "package", "Default"), "websiteOwner": u, "ownerPassword": pw, "phpSelection": str_or(c, "php", "PHP 8.2") }), "createWebSiteStatus").await?;
-                }
-            Ok(Created { remote_id: u, module_data: data })
+                cyber(server, "createWebsite", json!({ "domainName": dom, "ownerEmail": email, "packageName": str_or(c, "package", "Default"), "websiteOwner": u, "ownerPassword": pw, "phpSelection": str_or(c, "php", "PHP 8.2") }), "createWebSiteStatus").await?;
+            }
+            Ok(Created {
+                remote_id: u,
+                module_data: data,
+            })
         })
     }
 
-    fn suspend<'a>(&'a self, server: &'a ServerConn, svc: &'a ServiceCtx) -> BoxFuture<'a, ProvisionResult<()>> {
+    fn suspend<'a>(
+        &'a self,
+        server: &'a ServerConn,
+        svc: &'a ServiceCtx,
+    ) -> BoxFuture<'a, ProvisionResult<()>> {
         Box::pin(async move {
-            cyber(server, "submitWebsiteStatus", json!({ "websiteName": md(svc, "domain")?, "state": "Suspend" }), "websiteStatus").await.map(|_| ())
+            cyber(
+                server,
+                "submitWebsiteStatus",
+                json!({ "websiteName": md(svc, "domain")?, "state": "Suspend" }),
+                "websiteStatus",
+            )
+            .await
+            .map(|_| ())
         })
     }
 
-    fn unsuspend<'a>(&'a self, server: &'a ServerConn, svc: &'a ServiceCtx) -> BoxFuture<'a, ProvisionResult<()>> {
+    fn unsuspend<'a>(
+        &'a self,
+        server: &'a ServerConn,
+        svc: &'a ServiceCtx,
+    ) -> BoxFuture<'a, ProvisionResult<()>> {
         Box::pin(async move {
-            cyber(server, "submitWebsiteStatus", json!({ "websiteName": md(svc, "domain")?, "state": "Activate" }), "websiteStatus").await.map(|_| ())
+            cyber(
+                server,
+                "submitWebsiteStatus",
+                json!({ "websiteName": md(svc, "domain")?, "state": "Activate" }),
+                "websiteStatus",
+            )
+            .await
+            .map(|_| ())
         })
     }
 
-    fn terminate<'a>(&'a self, server: &'a ServerConn, svc: &'a ServiceCtx) -> BoxFuture<'a, ProvisionResult<()>> {
+    fn terminate<'a>(
+        &'a self,
+        server: &'a ServerConn,
+        svc: &'a ServiceCtx,
+    ) -> BoxFuture<'a, ProvisionResult<()>> {
         Box::pin(async move {
-            cyber(server, "deleteWebsite", json!({ "domainName": md(svc, "domain")? }), "websiteDeleteStatus").await.map(|_| ())
+            cyber(
+                server,
+                "deleteWebsite",
+                json!({ "domainName": md(svc, "domain")? }),
+                "websiteDeleteStatus",
+            )
+            .await
+            .map(|_| ())
         })
     }
 
-    fn change_package<'a>(&'a self, server: &'a ServerConn, svc: &'a ServiceCtx) -> BoxFuture<'a, ProvisionResult<()>> {
+    fn change_package<'a>(
+        &'a self,
+        server: &'a ServerConn,
+        svc: &'a ServiceCtx,
+    ) -> BoxFuture<'a, ProvisionResult<()>> {
         Box::pin(async move {
             let c = &svc.product_config;
-            cyber(server, "changePackageAPI", json!({ "websiteName": md(svc, "domain")?, "packageName": cfg_str(c, "package")? }), "changePackage").await.map(|_| ())
+            cyber(
+                server,
+                "changePackageAPI",
+                json!({ "websiteName": md(svc, "domain")?, "packageName": cfg_str(c, "package")? }),
+                "changePackage",
+            )
+            .await
+            .map(|_| ())
         })
     }
-    fn sso_url<'a>(&'a self, server: &'a ServerConn, svc: &'a ServiceCtx, token: &'a str) -> BoxFuture<'a, ProvisionResult<Option<String>>> {
-        Box::pin(async move {
-            Ok(pelty_provisioning::sso::template_url(server, svc, token))
-        })
+    fn sso_url<'a>(
+        &'a self,
+        server: &'a ServerConn,
+        svc: &'a ServiceCtx,
+        token: &'a str,
+    ) -> BoxFuture<'a, ProvisionResult<Option<String>>> {
+        Box::pin(async move { Ok(pelty_provisioning::sso::template_url(server, svc, token)) })
     }
 }

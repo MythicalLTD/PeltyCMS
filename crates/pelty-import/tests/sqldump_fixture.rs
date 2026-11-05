@@ -28,8 +28,15 @@ fn fixture_parses_and_decrypts() {
     assert_eq!(d.clients[1].lastname, "O'Brien");
     // tblusers (WHMCS 8) overrides the empty tblclients.password by email
     assert!(d.clients[0].password.starts_with("$2y$10$"));
-    assert_eq!(d.ticket_replies.iter().map(|r| r.id).collect::<Vec<_>>(), vec![1, 2, 3]);
-    assert_eq!(d.announcements.len(), 1, "translations (parentid>0) skipped");
+    assert_eq!(
+        d.ticket_replies.iter().map(|r| r.id).collect::<Vec<_>>(),
+        vec![1, 2, 3]
+    );
+    assert_eq!(
+        d.announcements.len(),
+        1,
+        "translations (parentid>0) skipped"
+    );
     assert_eq!(d.kb_articles.len(), 1);
     assert_eq!(d.servers.len(), 3);
     assert_eq!(d.promotions.len(), 4);
@@ -47,7 +54,10 @@ fn fixture_parses_and_decrypts() {
     // the model has no field that could hold card data
     let dbg = format!("{d:?}");
     for card in ["4242", "DEADBEEF", "9F2C11AB", "5555"] {
-        assert!(!dbg.contains(card), "card data {card} leaked into the import model");
+        assert!(
+            !dbg.contains(card),
+            "card data {card} leaked into the import model"
+        );
     }
 }
 
@@ -60,37 +70,80 @@ async fn sql_export_imports_exactly_once() {
     let tag = uuid::Uuid::new_v4().simple().to_string()[..8].to_string();
     // Tests in other binaries run sequentially; start from an empty map so
     // the fixture's WHMCS ids are new (rows are unique through the tag).
-    sqlx::query("DELETE FROM import_map WHERE source='whmcs'").execute(&pool).await.unwrap();
+    sqlx::query("DELETE FROM import_map WHERE source='whmcs'")
+        .execute(&pool)
+        .await
+        .unwrap();
     let source = "whmcs";
     let mut data = load(&tag);
     assert!(data.decrypt_server_passwords(CC).is_empty());
 
-    let dry = pelty_import::run_with(&pool, &data, true, source, Some(&fake_seal)).await.expect("dry run");
+    let dry = pelty_import::run_with(&pool, &data, true, source, Some(&fake_seal))
+        .await
+        .expect("dry run");
     println!("{}", dry.render());
-    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM import_map WHERE source=$1").bind(source).fetch_one(&pool).await.unwrap();
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM import_map WHERE source=$1")
+        .bind(source)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(n, 0, "dry run must roll back");
-    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM customers WHERE email LIKE $1").bind(format!("%-{tag}@%")).fetch_one(&pool).await.unwrap();
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM customers WHERE email LIKE $1")
+        .bind(format!("%-{tag}@%"))
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(n, 0);
 
-    let rep = pelty_import::run_with(&pool, &data, false, source, Some(&fake_seal)).await.expect("import");
+    let rep = pelty_import::run_with(&pool, &data, false, source, Some(&fake_seal))
+        .await
+        .expect("import");
     println!("{}", rep.render());
     let body = |r: &pelty_import::Report| r.render().split_once('\n').unwrap().1.to_string();
-    assert_eq!(body(&rep), body(&dry), "dry run must report exactly what the real run does");
+    assert_eq!(
+        body(&rep),
+        body(&dry),
+        "dry run must report exactly what the real run does"
+    );
     let created = |k: &str| rep.entities.get(k).map(|c| c.created).unwrap_or_default();
     for (k, n) in [
-        ("customers", 3), ("users", 3), ("password_hashes_kept", 2), ("contacts", 2), ("client_groups", 1),
-        ("product_groups", 2), ("products", 4), ("product_prices", 11), ("addons", 1), ("addon_prices", 2),
-        ("config_options", 1), ("config_choices", 2), ("servers", 2), ("services", 4), ("service_addons", 1),
-        ("domains", 2), ("payments", 2), ("credit", 1),
-        ("ticket_departments", 2), ("tickets", 2), ("ticket_replies", 3), ("announcements", 1),
-        ("kb_categories", 1), ("kb_articles", 1), ("custom_fields", 1), ("custom_values", 1),
-        ("coupons", 2), ("tax_rules", 3),
+        ("customers", 3),
+        ("users", 3),
+        ("password_hashes_kept", 2),
+        ("contacts", 2),
+        ("client_groups", 1),
+        ("product_groups", 2),
+        ("products", 4),
+        ("product_prices", 11),
+        ("addons", 1),
+        ("addon_prices", 2),
+        ("config_options", 1),
+        ("config_choices", 2),
+        ("servers", 2),
+        ("services", 4),
+        ("service_addons", 1),
+        ("domains", 2),
+        ("payments", 2),
+        ("credit", 1),
+        ("ticket_departments", 2),
+        ("tickets", 2),
+        ("ticket_replies", 3),
+        ("announcements", 1),
+        ("kb_categories", 1),
+        ("kb_articles", 1),
+        ("custom_fields", 1),
+        ("custom_values", 1),
+        ("coupons", 2),
+        ("tax_rules", 3),
     ] {
         assert_eq!(created(k), n, "{k}");
     }
     // invoice 1003 has no invoicenum, so it is numbered "1003": on a DB
     // that already holds an earlier run it is skipped with a warning.
-    let clash = rep.warnings.iter().any(|w| w.contains("invoice 1003 number"));
+    let clash = rep
+        .warnings
+        .iter()
+        .any(|w| w.contains("invoice 1003 number"));
     assert_eq!(created("invoices"), if clash { 2 } else { 3 });
     assert_eq!(created("invoice_items"), if clash { 4 } else { 5 });
     assert!(rep.warnings.iter().any(|w| w.contains("Free Setup")));
@@ -99,14 +152,31 @@ async fn sql_export_imports_exactly_once() {
     // login hashes: bcrypt (from tblusers) and legacy md5 kept, unknown -> reset
     let hash = |e: String| {
         let pool = pool.clone();
-        async move { sqlx::query_scalar::<_, String>("SELECT password_hash FROM users WHERE lower(email)=lower($1)").bind(e).fetch_one(&pool).await.unwrap() }
+        async move {
+            sqlx::query_scalar::<_, String>(
+                "SELECT password_hash FROM users WHERE lower(email)=lower($1)",
+            )
+            .bind(e)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+        }
     };
     let ana = hash(format!("ana-{tag}@example.com")).await;
     assert!(ana.starts_with("whmcs:$2y$"), "{ana}");
-    assert!(pelty_auth::password::verify("Ana-Pass-2024", &ana) && !pelty_auth::password::verify("wrong", &ana));
+    assert!(
+        pelty_auth::password::verify("Ana-Pass-2024", &ana)
+            && !pelty_auth::password::verify("wrong", &ana)
+    );
     let bob = hash(format!("bob-{tag}@example.org")).await;
-    assert!(pelty_auth::password::verify("Bob-Old-Pass", &bob) && pelty_auth::password::needs_rehash(&bob));
-    assert_eq!(hash(format!("carla-{tag}@example.de")).await, pelty_import::import::LOCKED_PASSWORD);
+    assert!(
+        pelty_auth::password::verify("Bob-Old-Pass", &bob)
+            && pelty_auth::password::needs_rehash(&bob)
+    );
+    assert_eq!(
+        hash(format!("carla-{tag}@example.de")).await,
+        pelty_import::import::LOCKED_PASSWORD
+    );
 
     // servers: decrypted password sealed, accesshash preferred, linked to services
     let (url, sealed, enabled, user, maxs): (String, Vec<u8>, bool, String, Option<i32>) = sqlx::query_as(
@@ -118,7 +188,10 @@ async fn sql_export_imports_exactly_once() {
     assert_eq!(user, "root");
     assert_eq!(maxs, Some(200));
     let sealed: Vec<u8> = sqlx::query_scalar("SELECT api_key_sealed FROM servers WHERE name=$1")
-        .bind(format!("Virt-01 {tag}")).fetch_one(&pool).await.unwrap();
+        .bind(format!("Virt-01 {tag}"))
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(sealed, fake_seal(b"VIRT-ACCESS-HASH-123"));
     let n: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM services sv JOIN servers s ON s.id=sv.server_id WHERE s.name=$1 AND sv.module_data->>'username' IN ('anapop','obrienw')",
@@ -126,13 +199,26 @@ async fn sql_export_imports_exactly_once() {
     assert_eq!(n, 2);
 
     // promotions -> coupons, tbltax -> tax rules, contacts
-    let (kind, max, uses): (String, Option<i32>, i32) = sqlx::query_as("SELECT kind::text, max_uses, uses FROM coupons WHERE upper(code)=upper($1)")
-        .bind(format!("SPRING{tag}")).fetch_one(&pool).await.unwrap();
+    let (kind, max, uses): (String, Option<i32>, i32) = sqlx::query_as(
+        "SELECT kind::text, max_uses, uses FROM coupons WHERE upper(code)=upper($1)",
+    )
+    .bind(format!("SPRING{tag}"))
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     assert_eq!((kind.as_str(), max, uses), ("percent", Some(100), 7));
-    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM tax_rules WHERE name LIKE $1").bind(format!("% {tag}")).fetch_one(&pool).await.unwrap();
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM tax_rules WHERE name LIKE $1")
+        .bind(format!("% {tag}"))
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(n, 3);
-    let billing: bool = sqlx::query_scalar("SELECT is_billing FROM customer_contacts WHERE email=$1")
-        .bind(format!("billing-{tag}@example.com")).fetch_one(&pool).await.unwrap();
+    let billing: bool =
+        sqlx::query_scalar("SELECT is_billing FROM customer_contacts WHERE email=$1")
+            .bind(format!("billing-{tag}@example.com"))
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert!(billing);
 
     // no card data anywhere in the imported customers / users
@@ -142,7 +228,13 @@ async fn sql_export_imports_exactly_once() {
     assert_eq!(leaked, 0);
 
     // idempotent: a second run creates nothing
-    let again = pelty_import::run_with(&pool, &data, false, source, Some(&fake_seal)).await.expect("rerun");
-    assert!(again.entities.values().all(|c| c.created == 0), "{}", again.render());
+    let again = pelty_import::run_with(&pool, &data, false, source, Some(&fake_seal))
+        .await
+        .expect("rerun");
+    assert!(
+        again.entities.values().all(|c| c.created == 0),
+        "{}",
+        again.render()
+    );
     assert_eq!(again.entities["customers"].skipped_existing, 3);
 }

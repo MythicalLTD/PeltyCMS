@@ -2,10 +2,10 @@
 //! the caller's customer from the session and filters by it in SQL, so a
 //! customer can never read another customer's records (404, not 403, to
 //! avoid leaking existence).
-use crate::routes::customers::{customer_for, customer_of};
-use crate::routes::{paged, ListQuery};
 use crate::error::ApiResult;
 use crate::extract::{perms, CurrentUser, RequirePermission};
+use crate::routes::customers::{customer_for, customer_of};
+use crate::routes::{paged, ListQuery};
 use crate::AppState;
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
@@ -34,19 +34,34 @@ pub fn router() -> Router<AppState> {
         .route("/client/invoices/{id}", get(client_invoice))
         .route("/client/invoices/{id}/pay", post(client_pay))
         .route("/client/invoices/pay-many", post(client_pay_many))
-        .route("/client/invoices/pay-many/gateways", get(client_pay_many_gateways))
+        .route(
+            "/client/invoices/pay-many/gateways",
+            get(client_pay_many_gateways),
+        )
         .route("/client/gateways", get(client_gateways))
         .route("/client/services", get(client_services))
         .route("/client/services/{id}", get(client_service))
         .route("/client/dashboard", get(client_dashboard))
         .route("/admin/dashboard", get(admin_dashboard))
-        .route("/admin/orders", get(admin_orders).post(crate::routes::store::admin_create_order))
-        .route("/admin/orders/{id}", get(admin_order).delete(admin_delete_order))
+        .route(
+            "/admin/orders",
+            get(admin_orders).post(crate::routes::store::admin_create_order),
+        )
+        .route(
+            "/admin/orders/{id}",
+            get(admin_order).delete(admin_delete_order),
+        )
         .route("/admin/orders/{id}/pending", post(admin_pending_order))
         .route("/admin/orders/{id}/approve", post(admin_approve))
         .route("/admin/orders/{id}/cancel", post(admin_cancel))
-        .route("/admin/orders/{id}/refund", post(crate::routes::store::admin_refund_order))
-        .route("/admin/orders/{id}/notes", post(crate::routes::store::admin_add_note))
+        .route(
+            "/admin/orders/{id}/refund",
+            post(crate::routes::store::admin_refund_order),
+        )
+        .route(
+            "/admin/orders/{id}/notes",
+            post(crate::routes::store::admin_add_note),
+        )
         .route(
             "/admin/invoices",
             get(admin_invoices).post(admin_create_invoice),
@@ -80,16 +95,31 @@ const ORDER_STATUSES: &[&str] = &["pending", "active", "cancelled", "fraud"];
 async fn invoice_detail(s: &AppState, inv: invoices::Invoice) -> ApiResult<Value> {
     let items = s.invoices().items(inv.id).await?;
     let payments = s.invoices().payments(inv.id).await?;
-    let debit_notes = if inv.kind == "invoice" { s.invoices().debit_notes_for(inv.id).await? } else { Vec::new() };
+    let debit_notes = if inv.kind == "invoice" {
+        s.invoices().debit_notes_for(inv.id).await?
+    } else {
+        Vec::new()
+    };
     let related = match inv.credit_for {
-        Some(r) => s.invoices().get(r).await?.map(|o| json!({ "id": o.id, "number": o.number, "kind": o.kind })),
+        Some(r) => s
+            .invoices()
+            .get(r)
+            .await?
+            .map(|o| json!({ "id": o.id, "number": o.number, "kind": o.kind })),
         None => None,
     };
-    let reason = if inv.kind == "invoice" { String::new() } else { s.invoices().note_reason(inv.id).await? };
-    let (_, client_notes, merged_into, split_from) = pelty_database::invoice_ops::notes(&s.pool, inv.id).await?;
-    Ok(json!({ "invoice": inv, "items": items, "payments": payments, "balance": inv.balance(),
+    let reason = if inv.kind == "invoice" {
+        String::new()
+    } else {
+        s.invoices().note_reason(inv.id).await?
+    };
+    let (_, client_notes, merged_into, split_from) =
+        pelty_database::invoice_ops::notes(&s.pool, inv.id).await?;
+    Ok(
+        json!({ "invoice": inv, "items": items, "payments": payments, "balance": inv.balance(),
         "debit_notes": debit_notes, "related": related, "note_reason": reason,
-        "client_notes": client_notes, "merged_into": merged_into, "split_from": split_from }))
+        "client_notes": client_notes, "merged_into": merged_into, "split_from": split_from }),
+    )
 }
 
 // client
@@ -124,7 +154,8 @@ pub async fn client_place_order(
     let currency = match b.currency {
         Some(c) => c,
         None => {
-            s.clients().get(cid)
+            s.clients()
+                .get(cid)
                 .await?
                 .ok_or(AppError::NotFound)?
                 .currency
@@ -136,7 +167,10 @@ pub async fn client_place_order(
     };
     let form = match b.order_form_id {
         Some(id) => {
-            let f = pelty_database::order_forms::get(&s.pool, id).await?.filter(|f| f.active).ok_or(AppError::NotFound)?;
+            let f = pelty_database::order_forms::get(&s.pool, id)
+                .await?
+                .filter(|f| f.active)
+                .ok_or(AppError::NotFound)?;
             let ids: Vec<Uuid> = b.items.iter().map(|i| i.product_id).collect();
             if !pelty_database::order_forms::allows(&s.pool, &f, &ids).await? {
                 return Err(AppError::Validation("error.order_form_product").into());
@@ -146,7 +180,16 @@ pub async fn client_place_order(
         }
         None => None,
     };
-    let (order, invoice) = place_order(&s, &u, cid, &currency, &b.items, b.coupon.as_deref(), bundle.as_ref()).await?;
+    let (order, invoice) = place_order(
+        &s,
+        &u,
+        cid,
+        &currency,
+        &b.items,
+        b.coupon.as_deref(),
+        bundle.as_ref(),
+    )
+    .await?;
     let redirect = match &form {
         Some((f, answers)) => {
             pelty_database::order_forms::attach(&s.pool, order.id, f.id, answers).await?;
@@ -154,7 +197,9 @@ pub async fn client_place_order(
         }
         None => None,
     };
-    Ok(Json(json!({ "order": order, "invoice": invoice, "redirect_url": redirect })))
+    Ok(Json(
+        json!({ "order": order, "invoice": invoice, "redirect_url": redirect }),
+    ))
 }
 
 /// Place an order for `cid` (order + finalized invoice), run fraud
@@ -164,25 +209,51 @@ pub async fn client_place_order(
 /// Filter `checkout.discounts`: addon discounts priced before the order
 /// transaction (money changes need `money.modify` and are audited by the
 /// filter runner). `place_full` re-quotes and clamps them.
-async fn addon_discounts(s: &AppState, cid: Uuid, currency: &str, items: &[CartItem]) -> ApiResult<Vec<orders::AddonDiscount>> {
+async fn addon_discounts(
+    s: &AppState,
+    cid: Uuid,
+    currency: &str,
+    items: &[CartItem],
+) -> ApiResult<Vec<orders::AddonDiscount>> {
     if !crate::addon_filters::has(s, "checkout.discounts") || items.is_empty() {
         return Ok(vec![]);
     }
-    let Ok(quotes) = s.orders().line_amounts(currency, items).await else { return Ok(vec![]) };
+    let Ok(quotes) = s.orders().line_amounts(currency, items).await else {
+        return Ok(vec![]);
+    };
     let lines: Vec<Value> = quotes
         .iter()
         .enumerate()
         .map(|(i, q)| json!({ "id": i, "product_id": q.product_id, "cycle": q.cycle, "amount": q.amount.to_string(), "discount": "0", "label": "" }))
         .collect();
-    let out = crate::addon_filters::apply(s, "checkout.discounts", json!({ "lines": lines }), json!({ "customer_id": cid, "currency": currency })).await;
+    let out = crate::addon_filters::apply(
+        s,
+        "checkout.discounts",
+        json!({ "lines": lines }),
+        json!({ "customer_id": cid, "currency": currency }),
+    )
+    .await;
     let mut v = vec![];
     for l in out["lines"].as_array().into_iter().flatten() {
-        let (Some(item), Some(amount)) = (l["id"].as_u64().map(|i| i as usize), l.get("discount").and_then(crate::addon_ext::exact_money)) else { continue };
+        let (Some(item), Some(amount)) = (
+            l["id"].as_u64().map(|i| i as usize),
+            l.get("discount").and_then(crate::addon_ext::exact_money),
+        ) else {
+            continue;
+        };
         if item >= quotes.len() || amount <= rust_decimal::Decimal::ZERO {
             continue;
         }
-        let label = l["label"].as_str().map(str::trim).filter(|t| !t.is_empty()).unwrap_or("Addon discount");
-        v.push(orders::AddonDiscount { item, amount, label: label.chars().take(120).collect() });
+        let label = l["label"]
+            .as_str()
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .unwrap_or("Addon discount");
+        v.push(orders::AddonDiscount {
+            item,
+            amount,
+            label: label.chars().take(120).collect(),
+        });
     }
     Ok(v.into_iter().take(50).collect())
 }
@@ -198,7 +269,12 @@ pub(crate) async fn place_order(
 ) -> ApiResult<(orders::Order, invoices::Invoice)> {
     pelty_database::kyc::ensure_can_order(&s.pool, cid).await?;
     // Pre-event: addons may cancel, or set/clear the coupon code.
-    let pre = crate::addon_ext::pre_event(s, "order.before_place", json!({ "customer_id": cid, "currency": currency, "items": items, "coupon": coupon })).await?;
+    let pre = crate::addon_ext::pre_event(
+        s,
+        "order.before_place",
+        json!({ "customer_id": cid, "currency": currency, "items": items, "coupon": coupon }),
+    )
+    .await?;
     let coupon_owned: Option<String> = match pre.get("coupon") {
         Some(Value::String(c)) if !c.trim().is_empty() && c.len() <= 64 => Some(c.clone()),
         Some(Value::Null) => None,
@@ -206,10 +282,24 @@ pub(crate) async fn place_order(
     };
     let coupon = coupon_owned.as_deref();
     let discounts = addon_discounts(s, cid, currency, items).await?;
-    let (order, invoice) = s.orders().place_full(cid, currency, items, coupon, DUE_DAYS, bundle, &discounts).await?;
+    let (order, invoice) = s
+        .orders()
+        .place_full(cid, currency, items, coupon, DUE_DAYS, bundle, &discounts)
+        .await?;
     if !discounts.is_empty() {
-        let applied: Vec<Value> = discounts.iter().map(|d| json!({ "item": d.item, "amount": d.amount.to_string(), "label": d.label })).collect();
-        audit::record(&s.pool, Some(u.user_id), "order.addon_discounts", Some(&order.id.to_string()), u.ip.as_deref(), json!({ "requested": applied })).await?;
+        let applied: Vec<Value> = discounts
+            .iter()
+            .map(|d| json!({ "item": d.item, "amount": d.amount.to_string(), "label": d.label }))
+            .collect();
+        audit::record(
+            &s.pool,
+            Some(u.user_id),
+            "order.addon_discounts",
+            Some(&order.id.to_string()),
+            u.ip.as_deref(),
+            json!({ "requested": applied }),
+        )
+        .await?;
     }
     audit::record(
         &s.pool,
@@ -220,16 +310,45 @@ pub(crate) async fn place_order(
         json!({ "number": order.number, "total": order.total }),
     )
     .await?;
-    if let Some(f) = crate::fraud::screen(s, order.id, cid, u.ip.as_deref(), &u.signals, order.total, &order.currency).await? {
+    if let Some(f) = crate::fraud::screen(
+        s,
+        order.id,
+        cid,
+        u.ip.as_deref(),
+        &u.signals,
+        order.total,
+        &order.currency,
+    )
+    .await?
+    {
         match f.verdict {
             "reject" => {
                 s.orders().cancel(order.id, true).await?;
-                audit::record(&s.pool, None, "order.fraud_rejected", Some(&order.id.to_string()), u.ip.as_deref(), json!(f)).await?;
-                s.emit(DomainEvent::new("order.fraud_rejected", json!({ "order_id": order.id, "customer_id": cid, "score": f.score })));
+                audit::record(
+                    &s.pool,
+                    None,
+                    "order.fraud_rejected",
+                    Some(&order.id.to_string()),
+                    u.ip.as_deref(),
+                    json!(f),
+                )
+                .await?;
+                s.emit(DomainEvent::new(
+                    "order.fraud_rejected",
+                    json!({ "order_id": order.id, "customer_id": cid, "score": f.score }),
+                ));
                 return Err(AppError::Validation("error.order_rejected").into());
             }
             "review" => {
-                audit::record(&s.pool, None, "order.fraud_review", Some(&order.id.to_string()), u.ip.as_deref(), json!(f)).await?;
+                audit::record(
+                    &s.pool,
+                    None,
+                    "order.fraud_review",
+                    Some(&order.id.to_string()),
+                    u.ip.as_deref(),
+                    json!(f),
+                )
+                .await?;
                 s.emit(DomainEvent::new("order.fraud_review", json!({ "order_id": order.id, "customer_id": cid, "score": f.score, "check_id": f.check_id })));
             }
             _ => {}
@@ -294,7 +413,9 @@ pub async fn client_invoice(
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<Value>> {
     let cid = customer_for(&s, &u, "invoices").await?;
-    let inv = s.invoices().get_owned(id, cid)
+    let inv = s
+        .invoices()
+        .get_owned(id, cid)
         .await?
         .ok_or(AppError::NotFound)?;
     let detail = invoice_detail(&s, inv).await?;
@@ -302,7 +423,16 @@ pub async fn client_invoice(
         return Ok(Json(detail));
     }
     // Display-only filter: money keys always stay as stored.
-    Ok(Json(crate::addon_filters::apply_with(&s, "invoice.view", detail, json!({ "customer_id": cid, "invoice_id": id }), false).await))
+    Ok(Json(
+        crate::addon_filters::apply_with(
+            &s,
+            "invoice.view",
+            detail,
+            json!({ "customer_id": cid, "invoice_id": id }),
+            false,
+        )
+        .await,
+    ))
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -333,7 +463,11 @@ async fn load_pay_many(s: &AppState, cid: Uuid, ids: &[Uuid]) -> ApiResult<Vec<i
     }
     let mut invs = Vec::with_capacity(uniq.len());
     for id in &uniq {
-        let inv = s.invoices().get_owned(*id, cid).await?.ok_or(AppError::NotFound)?;
+        let inv = s
+            .invoices()
+            .get_owned(*id, cid)
+            .await?
+            .ok_or(AppError::NotFound)?;
         invs.push(inv);
     }
     Ok(invs)
@@ -356,18 +490,29 @@ pub struct GatewaysQuery {
 /// `invoice_id`, gateways whose limits/currencies exclude the invoice are
 /// left out and `fees` shows each gateway's processing fee.
 #[utoipa::path(get, path = "/api/v1/client/gateways", params(GatewaysQuery), responses((status = 200)))]
-pub async fn client_gateways(State(s): State<AppState>, u: CurrentUser, Query(q): Query<GatewaysQuery>) -> ApiResult<Json<Value>> {
+pub async fn client_gateways(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Query(q): Query<GatewaysQuery>,
+) -> ApiResult<Json<Value>> {
     let ids: Vec<String> = pelty_database::extensions::gateways(&s.pool)
         .await?
         .into_iter()
         .filter(|g| g.enabled)
         .map(|g| g.id)
         .collect();
-    let Some(iid) = q.invoice_id else { return Ok(Json(json!({ "items": ids }))) };
+    let Some(iid) = q.invoice_id else {
+        return Ok(Json(json!({ "items": ids })));
+    };
     let cid = customer_for(&s, &u, "invoices").await?;
-    let inv = s.invoices().get_owned(iid, cid).await?.ok_or(AppError::NotFound)?;
+    let inv = s
+        .invoices()
+        .get_owned(iid, cid)
+        .await?
+        .ok_or(AppError::NotFound)?;
     let exp = pelty_database::branding::exponent(&s.pool, &inv.currency).await?;
-    let (mut items, mut fees, mut excluded) = (vec![], serde_json::Map::new(), serde_json::Map::new());
+    let (mut items, mut fees, mut excluded) =
+        (vec![], serde_json::Map::new(), serde_json::Map::new());
     for id in ids {
         let r = pelty_database::gateway_rules::get(&s.pool, &id).await?;
         match r.check(&inv.currency, inv.balance()) {
@@ -380,7 +525,9 @@ pub async fn client_gateways(State(s): State<AppState>, u: CurrentUser, Query(q)
             }
         }
     }
-    Ok(Json(json!({ "items": items, "fees": fees, "excluded": excluded })))
+    Ok(Json(
+        json!({ "items": items, "fees": fees, "excluded": excluded }),
+    ))
 }
 
 /// Gateways that can take the combined balance of several unpaid invoices.
@@ -426,7 +573,10 @@ pub async fn client_pay_many(
         .await?
         .filter(|r| r.enabled)
         .ok_or(AppError::Validation("error.unknown_gateway"))?;
-    let desc = s.gateways.descriptor(&b.gateway).ok_or(AppError::Validation("error.unknown_gateway"))?;
+    let desc = s
+        .gateways
+        .descriptor(&b.gateway)
+        .ok_or(AppError::Validation("error.unknown_gateway"))?;
     if !crate::addons::gateway_enabled(&s, &b.gateway).await? {
         return Err(AppError::Validation("error.unknown_gateway").into());
     }
@@ -449,10 +599,20 @@ pub async fn client_pay_many(
         amount.normalize()
     );
     let rules = pelty_database::gateway_rules::get(&s.pool, &b.gateway).await?;
-    rules.check(currency, amount).map_err(AppError::Validation)?;
-    let pay = s.invoices().create_pending_multi(&invs, &b.gateway, Some(u.user_id), &key).await?;
+    rules
+        .check(currency, amount)
+        .map_err(AppError::Validation)?;
+    let pay = s
+        .invoices()
+        .create_pending_multi(&invs, &b.gateway, Some(u.user_id), &key)
+        .await?;
     let exp = pelty_database::branding::exponent(&s.pool, currency).await?;
-    pelty_database::gateway_rules::record_fee(&s.pool, pay.id, rules.fee(currency, pay.amount, exp)).await?;
+    pelty_database::gateway_rules::record_fee(
+        &s.pool,
+        pay.id,
+        rules.fee(currency, pay.amount, exp),
+    )
+    .await?;
     let cur = Currency::parse(currency).ok_or(AppError::Validation("error.invalid_currency"))?;
     let email = s.clients().get(cid).await?.map(|c| c.email);
     let base = public_url();
@@ -463,7 +623,10 @@ pub async fn client_pay_many(
         amount: Money::new(pay.amount, cur),
         description: format!("Invoices ({})", invs.len()),
         customer_email: email,
-        success_url: format!("{base}/invoices/pay-many?ids={ids_q}&payment={}&return=1", pay.id),
+        success_url: format!(
+            "{base}/invoices/pay-many?ids={ids_q}&payment={}&return=1",
+            pay.id
+        ),
         cancel_url: format!("{base}/invoices/pay-many?ids={ids_q}&cancelled=1"),
         webhook_url: format!("{base}/api/v1/webhooks/{}", b.gateway),
         idempotency_key: key,
@@ -480,7 +643,9 @@ pub async fn client_pay_many(
     } else {
         None
     };
-    Ok(Json(json!({ "payment_id": pay.id, "init": init, "bank": bank, "invoice_ids": invs.iter().map(|i| i.id).collect::<Vec<_>>() })))
+    Ok(Json(
+        json!({ "payment_id": pay.id, "init": init, "bank": bank, "invoice_ids": invs.iter().map(|i| i.id).collect::<Vec<_>>() }),
+    ))
 }
 
 /// Start paying an invoice with a gateway: redirect (Stripe) or manual
@@ -493,14 +658,19 @@ pub async fn client_pay(
     Json(b): Json<PayBody>,
 ) -> ApiResult<Json<Value>> {
     let cid = customer_for(&s, &u, "invoices").await?;
-    let inv = s.invoices().get_owned(id, cid)
+    let inv = s
+        .invoices()
+        .get_owned(id, cid)
         .await?
         .ok_or(AppError::NotFound)?;
     let row = pelty_database::extensions::gateway(&s.pool, &b.gateway)
         .await?
         .filter(|r| r.enabled)
         .ok_or(AppError::Validation("error.unknown_gateway"))?;
-    let desc = s.gateways.descriptor(&b.gateway).ok_or(AppError::Validation("error.unknown_gateway"))?;
+    let desc = s
+        .gateways
+        .descriptor(&b.gateway)
+        .ok_or(AppError::Validation("error.unknown_gateway"))?;
     if !crate::addons::gateway_enabled(&s, &b.gateway).await? {
         return Err(AppError::Validation("error.unknown_gateway").into());
     }
@@ -521,10 +691,20 @@ pub async fn client_pay(
         inv.amount_paid.normalize()
     );
     let rules = pelty_database::gateway_rules::get(&s.pool, &b.gateway).await?;
-    rules.check(&inv.currency, inv.balance()).map_err(AppError::Validation)?;
-    let pay = s.invoices().create_pending(&inv, &b.gateway, Some(u.user_id), &key).await?;
+    rules
+        .check(&inv.currency, inv.balance())
+        .map_err(AppError::Validation)?;
+    let pay = s
+        .invoices()
+        .create_pending(&inv, &b.gateway, Some(u.user_id), &key)
+        .await?;
     let exp = pelty_database::branding::exponent(&s.pool, &inv.currency).await?;
-    pelty_database::gateway_rules::record_fee(&s.pool, pay.id, rules.fee(&inv.currency, pay.amount, exp)).await?;
+    pelty_database::gateway_rules::record_fee(
+        &s.pool,
+        pay.id,
+        rules.fee(&inv.currency, pay.amount, exp),
+    )
+    .await?;
     let currency =
         Currency::parse(&inv.currency).ok_or(AppError::Validation("error.invalid_currency"))?;
     let email = s.clients().get(cid).await?.map(|c| c.email);
@@ -585,14 +765,25 @@ pub async fn client_service(
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<Value>> {
     let cid = customer_for(&s, &u, "services").await?;
-    let svc = s.hosting().get_owned(id, cid)
+    let svc = s
+        .hosting()
+        .get_owned(id, cid)
         .await?
         .ok_or(AppError::NotFound)?;
     let Json(v) = service_json(&s, svc).await?;
     if !crate::addon_filters::has(&s, "service.view") {
         return Ok(Json(v));
     }
-    Ok(Json(crate::addon_filters::apply_with(&s, "service.view", v, json!({ "customer_id": cid, "service_id": id }), false).await))
+    Ok(Json(
+        crate::addon_filters::apply_with(
+            &s,
+            "service.view",
+            v,
+            json!({ "customer_id": cid, "service_id": id }),
+            false,
+        )
+        .await,
+    ))
 }
 
 /// A service with its addons attached.
@@ -647,7 +838,12 @@ pub async fn admin_approve(
     RequirePermission(u, _): RequirePermission<perms::OrdersManage>,
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<Value>> {
-    crate::addon_ext::pre_event(&s, "order.before_approve", json!({ "order_id": id, "by": u.user_id })).await?;
+    crate::addon_ext::pre_event(
+        &s,
+        "order.before_approve",
+        json!({ "order_id": id, "by": u.user_id }),
+    )
+    .await?;
     let ids = s.orders().approve(id, u.user_id).await?;
     audit::record(
         &s.pool,
@@ -685,7 +881,12 @@ pub async fn admin_cancel(
     Path(id): Path<Uuid>,
     Json(b): Json<CancelBody>,
 ) -> ApiResult<Json<Value>> {
-    crate::addon_ext::pre_event(&s, "order.before_cancel", json!({ "order_id": id, "fraud": b.fraud, "by": u.user_id })).await?;
+    crate::addon_ext::pre_event(
+        &s,
+        "order.before_cancel",
+        json!({ "order_id": id, "fraud": b.fraud, "by": u.user_id }),
+    )
+    .await?;
     let o = s.orders().cancel(id, b.fraud).await?;
     audit::record(
         &s.pool,
@@ -704,19 +905,54 @@ pub async fn admin_cancel(
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/orders/{id}/pending", responses((status = 200), (status = 409)))]
-pub async fn admin_pending_order(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::OrdersManage>, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
+pub async fn admin_pending_order(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::OrdersManage>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
     let o = s.orders().reopen(id).await?;
-    audit::record(&s.pool, Some(u.user_id), "order.reopened", Some(&id.to_string()), u.ip.as_deref(), json!({})).await?;
-    s.emit(DomainEvent::new("order.reopened", json!({ "order_id": id, "by": u.user_id })));
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "order.reopened",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
+    s.emit(DomainEvent::new(
+        "order.reopened",
+        json!({ "order_id": id, "by": u.user_id }),
+    ));
     Ok(Json(json!(o)))
 }
 
 #[utoipa::path(delete, path = "/api/v1/admin/orders/{id}", responses((status = 200), (status = 404), (status = 409)))]
-pub async fn admin_delete_order(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::OrdersManage>, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
-    crate::addon_ext::pre_event(&s, "order.before_delete", json!({ "order_id": id, "by": u.user_id })).await?;
+pub async fn admin_delete_order(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::OrdersManage>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
+    crate::addon_ext::pre_event(
+        &s,
+        "order.before_delete",
+        json!({ "order_id": id, "by": u.user_id }),
+    )
+    .await?;
     s.orders().delete(id).await?;
-    audit::record(&s.pool, Some(u.user_id), "order.deleted", Some(&id.to_string()), u.ip.as_deref(), json!({})).await?;
-    s.emit(DomainEvent::new("order.deleted", json!({ "order_id": id, "by": u.user_id })));
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "order.deleted",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
+    s.emit(DomainEvent::new(
+        "order.deleted",
+        json!({ "order_id": id, "by": u.user_id }),
+    ));
     Ok(Json(json!({ "deleted": true })))
 }
 
@@ -744,9 +980,7 @@ pub async fn admin_invoice(
     _p: RequirePermission<perms::InvoicesManage>,
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<Value>> {
-    let inv = s.invoices().get(id)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    let inv = s.invoices().get(id).await?.ok_or(AppError::NotFound)?;
     Ok(Json(invoice_detail(&s, inv).await?))
 }
 
@@ -803,8 +1037,29 @@ pub async fn admin_create_invoice(
                 "items": b.items.iter().map(|i| json!({ "description": i.description, "quantity": i.quantity.to_string(), "unit_price": i.unit_price.to_string() })).collect::<Vec<_>>() }),
     )
     .await?;
-    let descs: Vec<Option<String>> = pre.get("items").and_then(Value::as_array).map(|a| a.iter().map(|i| i.get("description").and_then(Value::as_str).filter(|d| !d.trim().is_empty() && d.len() <= 500).map(String::from)).collect()).unwrap_or_default();
-    let prices: Vec<Option<rust_decimal::Decimal>> = pre.get("items").and_then(Value::as_array).map(|a| a.iter().map(|i| i.get("unit_price").and_then(crate::addon_ext::exact_money)).collect()).unwrap_or_default();
+    let descs: Vec<Option<String>> = pre
+        .get("items")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .map(|i| {
+                    i.get("description")
+                        .and_then(Value::as_str)
+                        .filter(|d| !d.trim().is_empty() && d.len() <= 500)
+                        .map(String::from)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let prices: Vec<Option<rust_decimal::Decimal>> = pre
+        .get("items")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .map(|i| i.get("unit_price").and_then(crate::addon_ext::exact_money))
+                .collect()
+        })
+        .unwrap_or_default();
     let mut lines: Vec<NewItem> = b
         .items
         .iter()
@@ -856,9 +1111,7 @@ pub async fn admin_create_invoice(
             json!({ "invoice_id": id, "customer_id": b.customer_id }),
         ));
     }
-    let inv = s.invoices().get(id)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    let inv = s.invoices().get(id).await?.ok_or(AppError::NotFound)?;
     Ok(Json(invoice_detail(&s, inv).await?))
 }
 
@@ -951,8 +1204,19 @@ pub async fn admin_debit_note(
     Path(id): Path<Uuid>,
     Json(b): Json<DebitNoteBody>,
 ) -> ApiResult<Json<Value>> {
-    let dn = s.invoices().debit_note(id, &b.lines, &b.reason, DUE_DAYS).await?;
-    audit::record(&s.pool, Some(u.user_id), "invoice.debit_note", Some(&id.to_string()), u.ip.as_deref(), json!({ "debit_note": dn.id, "total": dn.total })).await?;
+    let dn = s
+        .invoices()
+        .debit_note(id, &b.lines, &b.reason, DUE_DAYS)
+        .await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "invoice.debit_note",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "debit_note": dn.id, "total": dn.total }),
+    )
+    .await?;
     s.emit(DomainEvent::new("invoice.created", json!({ "invoice_id": dn.id, "customer_id": dn.customer_id, "number": dn.number, "debit_for": id })));
     Ok(Json(json!(dn)))
 }
@@ -1013,12 +1277,11 @@ pub async fn admin_record_payment(
             s.emit(DomainEvent::new(
                 "invoice.paid",
                 json!({ "invoice_id": id }),
-            ));    crate::changes::after_payment(&s, id).await;
+            ));
+            crate::changes::after_payment(&s, id).await;
         }
     }
-    let inv = s.invoices().get(id)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    let inv = s.invoices().get(id).await?.ok_or(AppError::NotFound)?;
     Ok(Json(json!({ "applied": applied, "invoice": inv })))
 }
 
@@ -1031,7 +1294,9 @@ pub async fn admin_services(
     let (limit, offset, page, per) = q.bounds();
     let status = status_filter(&q, pelty_billing::lifecycle::STATUSES)?;
     if let Some(id) = q.q().and_then(|q| Uuid::parse_str(q).ok()) {
-        let service = s.hosting().get(id)
+        let service = s
+            .hosting()
+            .get(id)
             .await?
             .filter(|service| status.is_none_or(|status| service.status == status));
         let total = i64::from(service.is_some());
@@ -1042,7 +1307,10 @@ pub async fn admin_services(
             .collect();
         return Ok(Json(paged(items, page, per, total)));
     }
-    let (items, total) = s.hosting().list(q.customer_id, status, limit, offset).await?;
+    let (items, total) = s
+        .hosting()
+        .list(q.customer_id, status, limit, offset)
+        .await?;
     Ok(Json(paged(items, page, per, total)))
 }
 
@@ -1052,9 +1320,7 @@ pub async fn admin_service(
     _p: RequirePermission<perms::ServicesManage>,
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<Value>> {
-    let svc = s.hosting().get(id)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    let svc = s.hosting().get(id).await?.ok_or(AppError::NotFound)?;
     service_json(&s, svc).await
 }
 
@@ -1075,9 +1341,22 @@ pub async fn admin_service_action(
     Json(b): Json<ServiceAction>,
 ) -> ApiResult<Json<Value>> {
     // Pre-event: addons may veto the transition or rewrite the reason.
-    let pre = crate::addon_ext::pre_event(&s, "service.before_action", json!({ "service_id": id, "action": b.action, "reason": b.reason, "by": u.user_id })).await?;
-    let reason = pre.get("reason").and_then(Value::as_str).filter(|r| r.len() <= 500).map(str::to_string).unwrap_or_else(|| b.reason.clone());
-    let b = ServiceAction { action: b.action, reason };
+    let pre = crate::addon_ext::pre_event(
+        &s,
+        "service.before_action",
+        json!({ "service_id": id, "action": b.action, "reason": b.reason, "by": u.user_id }),
+    )
+    .await?;
+    let reason = pre
+        .get("reason")
+        .and_then(Value::as_str)
+        .filter(|r| r.len() <= 500)
+        .map(str::to_string)
+        .unwrap_or_else(|| b.reason.clone());
+    let b = ServiceAction {
+        action: b.action,
+        reason,
+    };
     let (from, svc) = s.hosting().transition(id, &b.action, &b.reason).await?;
     audit::record(
         &s.pool,
@@ -1097,7 +1376,10 @@ pub async fn admin_service_action(
         _ => None,
     };
     if svc.status == "active" && from != "active" && from != "suspended" {
-        s.emit(DomainEvent::new("service.activated", json!({ "service_id": id, "from": from, "reason": b.reason })));
+        s.emit(DomainEvent::new(
+            "service.activated",
+            json!({ "service_id": id, "from": from, "reason": b.reason }),
+        ));
     }
     if let Some(ev) = ev {
         s.emit(DomainEvent::new(
@@ -1169,16 +1451,16 @@ pub async fn admin_run_recurring(
 }
 
 #[utoipa::path(get, path = "/api/v1/client/dashboard", responses((status = 200, body = pelty_database::dashboard::ClientDashboard), (status = 401)))]
-pub async fn client_dashboard(
-    State(s): State<AppState>,
-    u: CurrentUser,
-) -> ApiResult<Json<Value>> {
+pub async fn client_dashboard(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Json<Value>> {
     let cid = customer_of(&s, &u).await?;
-    let d = serde_json::to_value(pelty_database::dashboard::client(&s.pool, cid).await?).map_err(|e| AppError::Internal(e.to_string()))?;
+    let d = serde_json::to_value(pelty_database::dashboard::client(&s.pool, cid).await?)
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     if !crate::addon_filters::has(&s, "client.dashboard") {
         return Ok(Json(d));
     }
-    Ok(Json(crate::addon_filters::apply(&s, "client.dashboard", d, json!({ "customer_id": cid })).await))
+    Ok(Json(
+        crate::addon_filters::apply(&s, "client.dashboard", d, json!({ "customer_id": cid })).await,
+    ))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/dashboard", responses((status = 200, body = pelty_database::dashboard::AdminDashboard), (status = 403)))]

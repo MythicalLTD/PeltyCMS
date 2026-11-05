@@ -22,5 +22,10 @@ fn call_latency() {
     }
     v.sort_unstable();
     let mean = v.iter().sum::<u128>() as f64 / n as f64;
-    println!("CALL_LATENCY n={n} mean={mean:.1}us p50={}us p95={}us p99={}us", v[n / 2], v[n * 95 / 100], v[n * 99 / 100]);
+    println!(
+        "CALL_LATENCY n={n} mean={mean:.1}us p50={}us p95={}us p99={}us",
+        v[n / 2],
+        v[n * 95 / 100],
+        v[n * 99 / 100]
+    );
 }

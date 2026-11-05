@@ -23,7 +23,12 @@ pub struct InvoiceBranding {
 
 impl InvoiceBranding {
     pub fn normalized(mut self) -> Result<Self, &'static str> {
-        for (v, max) in [(&mut self.company_name, 200), (&mut self.tax_id, 100), (&mut self.address, 1000), (&mut self.footer, 1000)] {
+        for (v, max) in [
+            (&mut self.company_name, 200),
+            (&mut self.tax_id, 100),
+            (&mut self.address, 1000),
+            (&mut self.footer, 1000),
+        ] {
             *v = v.trim().to_string();
             if v.chars().count() > max {
                 return Err("error.field_too_long");
@@ -42,17 +47,29 @@ impl InvoiceBranding {
         if h.len() != 6 || !h.bytes().all(|b| b.is_ascii_hexdigit()) {
             return None;
         }
-        let c = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).ok().map(|v| f32::from(v) / 255.0);
+        let c = |i: usize| {
+            u8::from_str_radix(&h[i..i + 2], 16)
+                .ok()
+                .map(|v| f32::from(v) / 255.0)
+        };
         Some((c(0)?, c(2)?, c(4)?))
     }
 }
 
 pub async fn get(pool: &PgPool) -> AppResult<InvoiceBranding> {
-    Ok(settings::get(pool, KEY).await?.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default())
+    Ok(settings::get(pool, KEY)
+        .await?
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default())
 }
 
 pub async fn put(pool: &PgPool, b: &InvoiceBranding) -> AppResult<()> {
-    settings::set(pool, KEY, serde_json::to_value(b).map_err(|e| AppError::Internal(e.to_string()))?).await
+    settings::set(
+        pool,
+        KEY,
+        serde_json::to_value(b).map_err(|e| AppError::Internal(e.to_string()))?,
+    )
+    .await
 }
 
 /// Display exponent of a currency (2 if unknown).
@@ -70,11 +87,31 @@ mod tests {
     use super::*;
     #[test]
     fn accent_validation() {
-        let b = InvoiceBranding { accent: " #1E40AF ".into(), ..Default::default() }.normalized().unwrap();
+        let b = InvoiceBranding {
+            accent: " #1E40AF ".into(),
+            ..Default::default()
+        }
+        .normalized()
+        .unwrap();
         assert_eq!(b.accent, "#1e40af");
         assert!(b.rgb().is_some());
-        assert!(InvoiceBranding { accent: "blue".into(), ..Default::default() }.normalized().is_err());
-        assert!(InvoiceBranding { accent: "#12345g".into(), ..Default::default() }.normalized().is_err());
-        assert!(InvoiceBranding { company_name: "x".repeat(201), ..Default::default() }.normalized().is_err());
+        assert!(InvoiceBranding {
+            accent: "blue".into(),
+            ..Default::default()
+        }
+        .normalized()
+        .is_err());
+        assert!(InvoiceBranding {
+            accent: "#12345g".into(),
+            ..Default::default()
+        }
+        .normalized()
+        .is_err());
+        assert!(InvoiceBranding {
+            company_name: "x".repeat(201),
+            ..Default::default()
+        }
+        .normalized()
+        .is_err());
     }
 }

@@ -15,13 +15,27 @@ pub struct BannedDomain {
 
 pub fn normalize(domain: &str) -> Result<String, AppError> {
     let d = domain.trim().trim_start_matches('@').to_ascii_lowercase();
-    let ok = !d.is_empty() && d.len() <= 253 && d.contains('.') && !d.starts_with('.') && !d.ends_with('.')
-        && d.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'.' || b == b'-');
-    if ok { Ok(d) } else { Err(AppError::Validation("error.invalid_domain")) }
+    let ok = !d.is_empty()
+        && d.len() <= 253
+        && d.contains('.')
+        && !d.starts_with('.')
+        && !d.ends_with('.')
+        && d.bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'.' || b == b'-');
+    if ok {
+        Ok(d)
+    } else {
+        Err(AppError::Validation("error.invalid_domain"))
+    }
 }
 
 pub async fn list(pool: &PgPool) -> AppResult<Vec<BannedDomain>> {
-    sqlx::query_as("SELECT domain, reason, hits, created_at FROM banned_email_domains ORDER BY domain").fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(
+        "SELECT domain, reason, hits, created_at FROM banned_email_domains ORDER BY domain",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn add(pool: &PgPool, domain: &str, reason: &str) -> AppResult<()> {
@@ -31,22 +45,39 @@ pub async fn add(pool: &PgPool, domain: &str, reason: &str) -> AppResult<()> {
 }
 
 pub async fn remove(pool: &PgPool, domain: &str) -> AppResult<()> {
-    let n = sqlx::query("DELETE FROM banned_email_domains WHERE domain = $1").bind(domain).execute(pool).await.map_err(db_err)?.rows_affected();
-    if n == 0 { Err(AppError::NotFound) } else { Ok(()) }
+    let n = sqlx::query("DELETE FROM banned_email_domains WHERE domain = $1")
+        .bind(domain)
+        .execute(pool)
+        .await
+        .map_err(db_err)?
+        .rows_affected();
+    if n == 0 {
+        Err(AppError::NotFound)
+    } else {
+        Ok(())
+    }
 }
 
 /// True when the address' domain (or a parent domain) is banned; counts a hit.
 pub async fn is_banned(pool: &PgPool, email: &str) -> AppResult<bool> {
-    let Some((_, host)) = email.trim().rsplit_once('@') else { return Ok(false) };
+    let Some((_, host)) = email.trim().rsplit_once('@') else {
+        return Ok(false);
+    };
     let host = host.to_ascii_lowercase();
     let mut cands = vec![host.clone()];
     let mut rest = host.as_str();
     while let Some((_, r)) = rest.split_once('.') {
-        if r.contains('.') { cands.push(r.to_string()); }
+        if r.contains('.') {
+            cands.push(r.to_string());
+        }
         rest = r;
     }
     let n = sqlx::query("UPDATE banned_email_domains SET hits = hits + 1 WHERE domain = ANY($1)")
-        .bind(&cands).execute(pool).await.map_err(db_err)?.rows_affected();
+        .bind(&cands)
+        .execute(pool)
+        .await
+        .map_err(db_err)?
+        .rows_affected();
     Ok(n > 0)
 }
 

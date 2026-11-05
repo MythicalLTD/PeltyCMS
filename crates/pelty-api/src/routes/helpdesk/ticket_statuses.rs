@@ -23,24 +23,61 @@ pub async fn list(State(s): State<AppState>, _u: CurrentUser) -> ApiResult<Json<
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/ticket-statuses", request_body = StatusInput, responses((status = 200), (status = 409), (status = 422)))]
-pub async fn create(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::TicketsManage>, Json(b): Json<StatusInput>) -> ApiResult<Json<Value>> {
+pub async fn create(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::TicketsManage>,
+    Json(b): Json<StatusInput>,
+) -> ApiResult<Json<Value>> {
     ts::validate(&b, true)?;
     ts::create(&s.pool, &b).await?;
-    audit::record(&s.pool, Some(u.user_id), "ticket.status_created", Some(&b.slug), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "ticket.status_created",
+        Some(&b.slug),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(Json(json!({ "slug": b.slug })))
 }
 
 #[utoipa::path(put, path = "/api/v1/admin/ticket-statuses/{slug}", request_body = StatusInput, responses((status = 200), (status = 404), (status = 422)))]
-pub async fn update(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::TicketsManage>, Path(slug): Path<String>, Json(b): Json<StatusInput>) -> ApiResult<Json<Value>> {
+pub async fn update(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::TicketsManage>,
+    Path(slug): Path<String>,
+    Json(b): Json<StatusInput>,
+) -> ApiResult<Json<Value>> {
     ts::validate(&b, false)?;
     ts::update(&s.pool, &slug, &b).await?;
-    audit::record(&s.pool, Some(u.user_id), "ticket.status_updated", Some(&slug), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "ticket.status_updated",
+        Some(&slug),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(Json(json!({ "slug": slug })))
 }
 
 #[utoipa::path(delete, path = "/api/v1/admin/ticket-statuses/{slug}", responses((status = 200), (status = 404), (status = 409)))]
-pub async fn delete(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::TicketsManage>, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
+pub async fn delete(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::TicketsManage>,
+    Path(slug): Path<String>,
+) -> ApiResult<Json<Value>> {
     ts::delete(&s.pool, &slug).await?;
-    audit::record(&s.pool, Some(u.user_id), "ticket.status_deleted", Some(&slug), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "ticket.status_deleted",
+        Some(&slug),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(Json(json!({ "ok": true })))
 }

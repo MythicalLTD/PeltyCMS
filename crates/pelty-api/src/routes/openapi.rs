@@ -977,13 +977,25 @@ pub struct SecurityAddon;
 
 impl utoipa::Modify for SecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-        use utoipa::openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme};
+        use utoipa::openapi::security::{
+            ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme,
+        };
         let c = openapi.components.get_or_insert_with(Default::default);
-        c.add_security_scheme("api_key", SecurityScheme::Http(HttpBuilder::new().scheme(HttpAuthScheme::Bearer).bearer_format("pelty_…").build()));
-        c.add_security_scheme("session", SecurityScheme::ApiKey(ApiKey::Cookie(ApiKeyValue::new("pelty_session"))));
+        c.add_security_scheme(
+            "api_key",
+            SecurityScheme::Http(
+                HttpBuilder::new()
+                    .scheme(HttpAuthScheme::Bearer)
+                    .bearer_format("pelty_…")
+                    .build(),
+            ),
+        );
+        c.add_security_scheme(
+            "session",
+            SecurityScheme::ApiKey(ApiKey::Cookie(ApiKeyValue::new("pelty_session"))),
+        );
     }
 }
-
 
 pub fn router() -> Router<AppState> {
     Router::new().route("/openapi.json", get(spec))
@@ -1015,7 +1027,9 @@ mod coverage {
             let start = from + i + ".route(".len();
             from = start;
             let rest = src[start..].trim_start();
-            let Some(rest) = rest.strip_prefix('"') else { continue };
+            let Some(rest) = rest.strip_prefix('"') else {
+                continue;
+            };
             let Some(end) = rest.find('"') else { continue };
             let path = rest[..end].to_string();
             // Walk the remaining arguments at depth 1, skipping strings.
@@ -1033,7 +1047,14 @@ mod coverage {
                     in_str = true;
                 } else if c == b'(' {
                     if depth == 1 {
-                        let ident: String = src[..j].chars().rev().take_while(|c| c.is_ascii_alphanumeric() || *c == '_').collect::<String>().chars().rev().collect();
+                        let ident: String = src[..j]
+                            .chars()
+                            .rev()
+                            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                            .collect::<String>()
+                            .chars()
+                            .rev()
+                            .collect();
                         if ["get", "post", "put", "patch", "delete"].contains(&ident.as_str()) {
                             out.push((ident, path.clone()));
                         }
@@ -1062,7 +1083,14 @@ mod coverage {
     #[test]
     fn parser_reads_multiline_and_chained_routes() {
         let r = routes_in("Router::new()\n.route(\n \"/a/{id}\",\n get(x).post(|y: P| async move { f(g(1)) }),\n).route(\"/b\", delete(z))");
-        assert_eq!(r, vec![("get".into(), "/a/{id}".into()), ("post".into(), "/a/{id}".into()), ("delete".into(), "/b".into())]);
+        assert_eq!(
+            r,
+            vec![
+                ("get".into(), "/a/{id}".into()),
+                ("post".into(), "/a/{id}".into()),
+                ("delete".into(), "/b".into())
+            ]
+        );
     }
 
     /// Every HTTP route under `src/routes` appears in the OpenAPI document.
@@ -1073,17 +1101,37 @@ mod coverage {
         let mut documented = BTreeSet::new();
         for (path, item) in &spec.paths.paths {
             let p = path.strip_prefix("/api/v1").unwrap_or(path).to_string();
-            for (m, op) in [("get", &item.get), ("post", &item.post), ("put", &item.put), ("patch", &item.patch), ("delete", &item.delete)] {
+            for (m, op) in [
+                ("get", &item.get),
+                ("post", &item.post),
+                ("put", &item.put),
+                ("patch", &item.patch),
+                ("delete", &item.delete),
+            ] {
                 if op.is_some() {
                     documented.insert((m.to_string(), p.clone()));
                 }
             }
         }
         let mut files = vec![];
-        sources(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/routes"), &mut files);
-        let all: Vec<_> = files.iter().flat_map(|s| routes_in(s)).filter(|(_, p)| !EXCLUDED.contains(&p.as_str())).collect();
-        assert!(all.len() > 600, "route scan found only {} routes", all.len());
-        let missing: BTreeSet<_> = all.into_iter().filter(|r| !documented.contains(r)).collect();
+        sources(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/routes"),
+            &mut files,
+        );
+        let all: Vec<_> = files
+            .iter()
+            .flat_map(|s| routes_in(s))
+            .filter(|(_, p)| !EXCLUDED.contains(&p.as_str()))
+            .collect();
+        assert!(
+            all.len() > 600,
+            "route scan found only {} routes",
+            all.len()
+        );
+        let missing: BTreeSet<_> = all
+            .into_iter()
+            .filter(|r| !documented.contains(r))
+            .collect();
         assert!(missing.is_empty(), "routes missing from the OpenAPI document (annotate with #[utoipa::path] and list in ApiDoc): {missing:#?}");
     }
 }

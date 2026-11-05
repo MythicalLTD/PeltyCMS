@@ -17,12 +17,10 @@ pub struct Language {
 }
 
 pub async fn list(pool: &PgPool) -> AppResult<Vec<Language>> {
-    sqlx::query_as(
-        "SELECT code, name, built_in, enabled, created_at FROM languages ORDER BY code",
-    )
-    .fetch_all(pool)
-    .await
-    .map_err(db_err)
+    sqlx::query_as("SELECT code, name, built_in, enabled, created_at FROM languages ORDER BY code")
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn list_enabled(pool: &PgPool) -> AppResult<Vec<Language>> {

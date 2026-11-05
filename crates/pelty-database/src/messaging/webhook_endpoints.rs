@@ -21,7 +21,8 @@ pub struct Endpoint {
     pub last_delivery_at: Option<OffsetDateTime>,
 }
 
-const ECOLS: &str = "id, name, url, events, enabled, failure_streak, disabled_reason, created_at, last_delivery_at";
+const ECOLS: &str =
+    "id, name, url, events, enabled, failure_streak, disabled_reason, created_at, last_delivery_at";
 
 #[derive(Debug, Clone, Serialize, FromRow)]
 pub struct Delivery {
@@ -46,29 +47,66 @@ const DCOLS: &str = "id, endpoint_id, event, payload, status, attempts, response
 /// Does an endpoint filter (`*`, `invoice.*`, `invoice.paid`) match `event`?
 pub fn matches(filters: &[String], event: &str) -> bool {
     filters.iter().any(|f| {
-        f == "*" || f == event || f.strip_suffix(".*").is_some_and(|p| event.strip_prefix(p).is_some_and(|rest| rest.starts_with('.')))
+        f == "*"
+            || f == event
+            || f.strip_suffix(".*").is_some_and(|p| {
+                event
+                    .strip_prefix(p)
+                    .is_some_and(|rest| rest.starts_with('.'))
+            })
     })
 }
 
 pub async fn list(pool: &PgPool) -> AppResult<Vec<Endpoint>> {
-    sqlx::query_as(&format!("SELECT {ECOLS} FROM webhook_endpoints ORDER BY created_at")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {ECOLS} FROM webhook_endpoints ORDER BY created_at"
+    ))
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Endpoint>> {
-    sqlx::query_as(&format!("SELECT {ECOLS} FROM webhook_endpoints WHERE id = $1")).bind(id).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {ECOLS} FROM webhook_endpoints WHERE id = $1"
+    ))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Enabled endpoints whose filter matches `event` (with their sealed secret).
 pub async fn targets(pool: &PgPool, event: &str) -> AppResult<Vec<Endpoint>> {
-    let all: Vec<Endpoint> = sqlx::query_as(&format!("SELECT {ECOLS} FROM webhook_endpoints WHERE enabled")).fetch_all(pool).await.map_err(db_err)?;
-    Ok(all.into_iter().filter(|e| matches(&e.events, event)).collect())
+    let all: Vec<Endpoint> = sqlx::query_as(&format!(
+        "SELECT {ECOLS} FROM webhook_endpoints WHERE enabled"
+    ))
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    Ok(all
+        .into_iter()
+        .filter(|e| matches(&e.events, event))
+        .collect())
 }
 
 pub async fn secret(pool: &PgPool, id: Uuid) -> AppResult<Option<Vec<u8>>> {
-    sqlx::query_scalar("SELECT secret_sealed FROM webhook_endpoints WHERE id = $1").bind(id).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_scalar("SELECT secret_sealed FROM webhook_endpoints WHERE id = $1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
-pub async fn create(pool: &PgPool, name: &str, url: &str, events: &[String], sealed: &[u8], enabled: bool, by: Uuid) -> AppResult<Endpoint> {
+pub async fn create(
+    pool: &PgPool,
+    name: &str,
+    url: &str,
+    events: &[String],
+    sealed: &[u8],
+    enabled: bool,
+    by: Uuid,
+) -> AppResult<Endpoint> {
     sqlx::query_as(&format!(
         "INSERT INTO webhook_endpoints (name, url, events, secret_sealed, enabled, created_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING {ECOLS}"
     ))
@@ -84,7 +122,14 @@ pub async fn create(pool: &PgPool, name: &str, url: &str, events: &[String], sea
 }
 
 /// Update; enabling clears the failure streak and the auto-disable reason.
-pub async fn update(pool: &PgPool, id: Uuid, name: &str, url: &str, events: &[String], enabled: bool) -> AppResult<Endpoint> {
+pub async fn update(
+    pool: &PgPool,
+    id: Uuid,
+    name: &str,
+    url: &str,
+    events: &[String],
+    enabled: bool,
+) -> AppResult<Endpoint> {
     sqlx::query_as(&format!(
         "UPDATE webhook_endpoints SET name = $2, url = $3, events = $4, enabled = $5, updated_at = now(),
                 failure_streak = CASE WHEN $5 AND NOT enabled THEN 0 ELSE failure_streak END,
@@ -103,7 +148,14 @@ pub async fn update(pool: &PgPool, id: Uuid, name: &str, url: &str, events: &[St
 }
 
 pub async fn set_secret(pool: &PgPool, id: Uuid, sealed: &[u8]) -> AppResult<()> {
-    let r = sqlx::query("UPDATE webhook_endpoints SET secret_sealed = $2, updated_at = now() WHERE id = $1").bind(id).bind(sealed).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query(
+        "UPDATE webhook_endpoints SET secret_sealed = $2, updated_at = now() WHERE id = $1",
+    )
+    .bind(id)
+    .bind(sealed)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
@@ -111,11 +163,21 @@ pub async fn set_secret(pool: &PgPool, id: Uuid, sealed: &[u8]) -> AppResult<()>
 }
 
 pub async fn delete(pool: &PgPool, id: Uuid) -> AppResult<bool> {
-    let r = sqlx::query("DELETE FROM webhook_endpoints WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("DELETE FROM webhook_endpoints WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(r.rows_affected() == 1)
 }
 
-pub async fn create_delivery(pool: &PgPool, endpoint: Uuid, event: &str, payload: &serde_json::Value, redelivery_of: Option<Uuid>) -> AppResult<Uuid> {
+pub async fn create_delivery(
+    pool: &PgPool,
+    endpoint: Uuid,
+    event: &str,
+    payload: &serde_json::Value,
+    redelivery_of: Option<Uuid>,
+) -> AppResult<Uuid> {
     let id = Uuid::new_v4();
     sqlx::query("INSERT INTO webhook_deliveries (id, endpoint_id, event, payload, redelivery_of) VALUES ($1,$2,$3,$4,$5)")
         .bind(id)
@@ -130,11 +192,24 @@ pub async fn create_delivery(pool: &PgPool, endpoint: Uuid, event: &str, payload
 }
 
 pub async fn delivery(pool: &PgPool, id: Uuid) -> AppResult<Option<Delivery>> {
-    sqlx::query_as(&format!("SELECT {DCOLS} FROM webhook_deliveries WHERE id = $1")).bind(id).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {DCOLS} FROM webhook_deliveries WHERE id = $1"
+    ))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Delivery log, newest first, optionally per endpoint / status / event.
-pub async fn deliveries(pool: &PgPool, endpoint: Option<Uuid>, status: Option<&str>, event: Option<&str>, limit: i64, offset: i64) -> AppResult<(Vec<Delivery>, i64)> {
+pub async fn deliveries(
+    pool: &PgPool,
+    endpoint: Option<Uuid>,
+    status: Option<&str>,
+    event: Option<&str>,
+    limit: i64,
+    offset: i64,
+) -> AppResult<(Vec<Delivery>, i64)> {
     let filter = "($1::uuid IS NULL OR endpoint_id = $1) AND ($2::text IS NULL OR status = $2) AND ($3::text IS NULL OR event = $3)";
     let items = sqlx::query_as(&format!("SELECT {DCOLS} FROM webhook_deliveries WHERE {filter} ORDER BY created_at DESC, id LIMIT $4 OFFSET $5"))
         .bind(endpoint)
@@ -145,21 +220,37 @@ pub async fn deliveries(pool: &PgPool, endpoint: Option<Uuid>, status: Option<&s
         .fetch_all(pool)
         .await
         .map_err(db_err)?;
-    let total = sqlx::query_scalar(&format!("SELECT count(*) FROM webhook_deliveries WHERE {filter}"))
-        .bind(endpoint)
-        .bind(status)
-        .bind(event)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+    let total = sqlx::query_scalar(&format!(
+        "SELECT count(*) FROM webhook_deliveries WHERE {filter}"
+    ))
+    .bind(endpoint)
+    .bind(status)
+    .bind(event)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
     Ok((items, total))
 }
 
 /// Record one attempt. `final_fail` marks the delivery failed (no more
 /// retries) and bumps the endpoint's failure streak; success resets it.
 /// Returns the endpoint's streak after the update.
-pub async fn record(pool: &PgPool, id: Uuid, status: Option<u16>, error: Option<&str>, ok: bool, final_fail: bool, duration_ms: i32) -> AppResult<i32> {
-    let st = if ok { "delivered" } else if final_fail { "failed" } else { "pending" };
+pub async fn record(
+    pool: &PgPool,
+    id: Uuid,
+    status: Option<u16>,
+    error: Option<&str>,
+    ok: bool,
+    final_fail: bool,
+    duration_ms: i32,
+) -> AppResult<i32> {
+    let st = if ok {
+        "delivered"
+    } else if final_fail {
+        "failed"
+    } else {
+        "pending"
+    };
     let endpoint: Option<Uuid> = sqlx::query_scalar(
         "UPDATE webhook_deliveries SET attempts = attempts + 1, response_status = $2, last_error = $3, status = $4, duration_ms = $5,
          delivered_at = CASE WHEN $4 = 'delivered' THEN now() ELSE delivered_at END WHERE id = $1 RETURNING endpoint_id",
@@ -172,7 +263,9 @@ pub async fn record(pool: &PgPool, id: Uuid, status: Option<u16>, error: Option<
     .fetch_optional(pool)
     .await
     .map_err(db_err)?;
-    let Some(endpoint) = endpoint else { return Ok(0) };
+    let Some(endpoint) = endpoint else {
+        return Ok(0);
+    };
     let streak: Option<i32> = sqlx::query_scalar(
         "UPDATE webhook_endpoints SET last_delivery_at = now(),
                 failure_streak = CASE WHEN $2 THEN 0 WHEN $3 THEN failure_streak + 1 ELSE failure_streak END
@@ -200,7 +293,11 @@ pub async fn disable(pool: &PgPool, id: Uuid, reason: &str) -> AppResult<bool> {
 
 /// Endpoint id of a delivery's endpoint (for disable after record).
 pub async fn endpoint_of(pool: &PgPool, delivery: Uuid) -> AppResult<Option<Uuid>> {
-    sqlx::query_scalar("SELECT endpoint_id FROM webhook_deliveries WHERE id = $1").bind(delivery).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_scalar("SELECT endpoint_id FROM webhook_deliveries WHERE id = $1")
+        .bind(delivery)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 #[cfg(test)]

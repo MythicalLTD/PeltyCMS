@@ -18,7 +18,13 @@ fn hook(input: Value) -> Result<Value, String> {
     let mut p = input["payload"].clone();
     bump(&format!("hook:{event}"));
     Ok(match event {
-        "login.before" if p["email"].as_str().is_some_and(|e| e.ends_with("@blocked.test")) => json!({ "action": "cancel", "reason": "blocked domain" }),
+        "login.before"
+            if p["email"]
+                .as_str()
+                .is_some_and(|e| e.ends_with("@blocked.test")) =>
+        {
+            json!({ "action": "cancel", "reason": "blocked domain" })
+        }
         "client.before_register" => {
             let d = p["display_name"].as_str().unwrap_or("").to_uppercase();
             p["display_name"] = json!(d);
@@ -47,8 +53,12 @@ fn http(input: Value) -> Result<Value, String> {
     let m = input["method"].as_str().unwrap_or("");
     let path = input["path"].as_str().unwrap_or("");
     Ok(match (m, path) {
-        ("GET", "/ping") => json!({ "status": 200, "body": { "pong": true, "q": input["query"]["q"] } }),
-        ("GET", p) if p.starts_with("/items/") => json!({ "status": 200, "body": { "id": input["params"]["id"] } }),
+        ("GET", "/ping") => {
+            json!({ "status": 200, "body": { "pong": true, "q": input["query"]["q"] } })
+        }
+        ("GET", p) if p.starts_with("/items/") => {
+            json!({ "status": 200, "body": { "id": input["params"]["id"] } })
+        }
         ("GET", "/stats") => json!({ "status": 200, "body": [
             { "label": "Logins checked", "value": counter("hook:login.before") },
             { "label": "Invoices", "value": counter("hook:invoice.before_create") }
@@ -60,14 +70,22 @@ fn http(input: Value) -> Result<Value, String> {
             }
             let user = input["user"]["id"].as_str().unwrap_or("").to_string();
             let key = format!("notes:{user}");
-            let mut notes: Vec<Value> = serde_json::from_str(&host::kv_get(&key).unwrap_or_else(|| "[]".into())).map_err(|e| e.to_string())?;
+            let mut notes: Vec<Value> =
+                serde_json::from_str(&host::kv_get(&key).unwrap_or_else(|| "[]".into()))
+                    .map_err(|e| e.to_string())?;
             notes.push(json!({ "text": text }));
-            host::kv_set(&key, &serde_json::to_string(&notes).map_err(|e| e.to_string())?)?;
+            host::kv_set(
+                &key,
+                &serde_json::to_string(&notes).map_err(|e| e.to_string())?,
+            )?;
             json!({ "status": 201, "body": { "ok": true } })
         }
         ("GET", "/notes") => {
             let user = input["user"]["id"].as_str().unwrap_or("");
-            let notes: Value = serde_json::from_str(&host::kv_get(&format!("notes:{user}")).unwrap_or_else(|| "[]".into())).map_err(|e| e.to_string())?;
+            let notes: Value = serde_json::from_str(
+                &host::kv_get(&format!("notes:{user}")).unwrap_or_else(|| "[]".into()),
+            )
+            .map_err(|e| e.to_string())?;
             json!({ "status": 200, "body": notes })
         }
         _ => json!({ "status": 404, "body": null }),

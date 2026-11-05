@@ -29,9 +29,21 @@ pub struct MarginRule {
 
 impl MarginRule {
     pub fn validate(&self) -> AppResult<()> {
-        let tld_ok = self.tld == "*" || (!self.tld.is_empty() && self.tld.len() <= 63 && self.tld.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '.' || c == '-'));
-        let neg = self.percent.is_sign_negative() || self.fixed.is_sign_negative() || self.min_margin.is_sign_negative();
-        if !tld_ok || neg || self.percent > Decimal::from(1000) || !["cent", "whole", "ninety_nine"].contains(&self.rounding.as_str()) {
+        let tld_ok = self.tld == "*"
+            || (!self.tld.is_empty()
+                && self.tld.len() <= 63
+                && self
+                    .tld
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '.' || c == '-'));
+        let neg = self.percent.is_sign_negative()
+            || self.fixed.is_sign_negative()
+            || self.min_margin.is_sign_negative();
+        if !tld_ok
+            || neg
+            || self.percent > Decimal::from(1000)
+            || !["cent", "whole", "ninety_nine"].contains(&self.rounding.as_str())
+        {
             return Err(AppError::Validation("error.margin_rule_invalid"));
         }
         Ok(())
@@ -68,7 +80,10 @@ pub async fn set_margin_rules(pool: &PgPool, rules: &[MarginRule]) -> AppResult<
         }
     }
     let mut tx = pool.begin().await.map_err(db_err)?;
-    sqlx::query("DELETE FROM tld_margin_rules").execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("DELETE FROM tld_margin_rules")
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     for r in rules {
         sqlx::query("INSERT INTO tld_margin_rules (tld, percent, fixed, min_margin, rounding) VALUES ($1,$2,$3,$4,$5)")
             .bind(&r.tld).bind(r.percent).bind(r.fixed).bind(r.min_margin).bind(&r.rounding)
@@ -79,7 +94,10 @@ pub async fn set_margin_rules(pool: &PgPool, rules: &[MarginRule]) -> AppResult<
 
 /// The rule for `tld`: exact match, else `*`.
 pub fn rule_for<'a>(rules: &'a [MarginRule], tld: &str) -> Option<&'a MarginRule> {
-    rules.iter().find(|r| r.tld == tld).or_else(|| rules.iter().find(|r| r.tld == "*"))
+    rules
+        .iter()
+        .find(|r| r.tld == tld)
+        .or_else(|| rules.iter().find(|r| r.tld == "*"))
 }
 
 // ----- cost sync -----
@@ -96,9 +114,25 @@ pub struct Cost {
 
 impl Cost {
     /// Parse strict non-negative decimals; `None` for anything malformed.
-    pub fn parse(tld: &str, currency: &str, register: &str, renew: &str, transfer: &str) -> Option<Cost> {
-        let p = |s: &str| Decimal::from_str(s.trim()).ok().filter(|d| !d.is_sign_negative());
-        Some(Cost { tld: tld.trim().trim_start_matches('.').to_ascii_lowercase(), currency: currency.trim().to_ascii_uppercase(), register: p(register)?, renew: p(renew)?, transfer: p(transfer)? })
+    pub fn parse(
+        tld: &str,
+        currency: &str,
+        register: &str,
+        renew: &str,
+        transfer: &str,
+    ) -> Option<Cost> {
+        let p = |s: &str| {
+            Decimal::from_str(s.trim())
+                .ok()
+                .filter(|d| !d.is_sign_negative())
+        };
+        Some(Cost {
+            tld: tld.trim().trim_start_matches('.').to_ascii_lowercase(),
+            currency: currency.trim().to_ascii_uppercase(),
+            register: p(register)?,
+            renew: p(renew)?,
+            transfer: p(transfer)?,
+        })
     }
 }
 
@@ -125,7 +159,12 @@ pub struct SyncLine {
 /// Apply registrar costs to `tld_pricing` rows of `registrar` (same TLD and
 /// currency). `dry_run` computes the report without writing. Rows without a
 /// matching margin rule only get their cost columns recorded.
-pub async fn apply_costs(pool: &PgPool, registrar: &str, costs: &[Cost], dry_run: bool) -> AppResult<Vec<SyncLine>> {
+pub async fn apply_costs(
+    pool: &PgPool,
+    registrar: &str,
+    costs: &[Cost],
+    dry_run: bool,
+) -> AppResult<Vec<SyncLine>> {
     let rules = margin_rules(pool).await?;
     let mut tx = pool.begin().await.map_err(db_err)?;
     let mut out = Vec::new();
@@ -133,13 +172,32 @@ pub async fn apply_costs(pool: &PgPool, registrar: &str, costs: &[Cost], dry_run
         let row: Option<(Decimal, Decimal, Decimal)> = sqlx::query_as("SELECT register_price, renew_price, transfer_price FROM tld_pricing WHERE tld = $1 AND currency = $2 AND registrar = $3 FOR UPDATE")
             .bind(&c.tld).bind(&c.currency).bind(registrar).fetch_optional(&mut *tx).await.map_err(db_err)?;
         let Some((or, on, ot)) = row else {
-            out.push(SyncLine { tld: c.tld.clone(), currency: c.currency.clone(), action: "not_listed".into(), old_register: None, new_register: None, old_renew: None, new_renew: None, old_transfer: None, new_transfer: None });
+            out.push(SyncLine {
+                tld: c.tld.clone(),
+                currency: c.currency.clone(),
+                action: "not_listed".into(),
+                old_register: None,
+                new_register: None,
+                old_renew: None,
+                new_renew: None,
+                old_transfer: None,
+                new_transfer: None,
+            });
             continue;
         };
         let (action, nr, nn, nt) = match rule_for(&rules, &c.tld) {
             Some(r) => {
                 let (nr, nn, nt) = (r.sell(c.register), r.sell(c.renew), r.sell(c.transfer));
-                (if (nr, nn, nt) == (or, on, ot) { "unchanged" } else { "updated" }, nr, nn, nt)
+                (
+                    if (nr, nn, nt) == (or, on, ot) {
+                        "unchanged"
+                    } else {
+                        "updated"
+                    },
+                    nr,
+                    nn,
+                    nt,
+                )
             }
             None => ("no_rule", or, on, ot),
         };
@@ -149,7 +207,17 @@ pub async fn apply_costs(pool: &PgPool, registrar: &str, costs: &[Cost], dry_run
                 .bind(&c.tld).bind(&c.currency).bind(registrar).bind(nr).bind(nn).bind(nt).bind(c.register).bind(c.renew).bind(c.transfer)
                 .execute(&mut *tx).await.map_err(db_err)?;
         }
-        out.push(SyncLine { tld: c.tld.clone(), currency: c.currency.clone(), action: action.into(), old_register: Some(or), new_register: Some(nr), old_renew: Some(on), new_renew: Some(nn), old_transfer: Some(ot), new_transfer: Some(nt) });
+        out.push(SyncLine {
+            tld: c.tld.clone(),
+            currency: c.currency.clone(),
+            action: action.into(),
+            old_register: Some(or),
+            new_register: Some(nr),
+            old_renew: Some(on),
+            new_renew: Some(nn),
+            old_transfer: Some(ot),
+            new_transfer: Some(nt),
+        });
     }
     if dry_run {
         tx.rollback().await.map_err(db_err)?;
@@ -193,44 +261,71 @@ pub struct PremiumSettings {
 
 impl Default for PremiumSettings {
     fn default() -> Self {
-        PremiumSettings { enabled: false, markup_percent: Decimal::ZERO, max_price: Decimal::ZERO }
+        PremiumSettings {
+            enabled: false,
+            markup_percent: Decimal::ZERO,
+            max_price: Decimal::ZERO,
+        }
     }
 }
 
 impl PremiumSettings {
     pub fn validate(&self) -> AppResult<()> {
-        if self.markup_percent.is_sign_negative() || self.markup_percent > Decimal::from(1000) || self.max_price.is_sign_negative() {
+        if self.markup_percent.is_sign_negative()
+            || self.markup_percent > Decimal::from(1000)
+            || self.max_price.is_sign_negative()
+        {
             return Err(AppError::Validation("error.validation"));
         }
         Ok(())
     }
     /// Sell price: cost × (1 + markup/100), half-up to 0.01.
     pub fn sell(&self, cost: Decimal) -> Decimal {
-        (cost * (Decimal::ONE + self.markup_percent / Decimal::from(100))).round_dp_with_strategy(2, RoundingStrategy::MidpointAwayFromZero)
+        (cost * (Decimal::ONE + self.markup_percent / Decimal::from(100)))
+            .round_dp_with_strategy(2, RoundingStrategy::MidpointAwayFromZero)
     }
 }
 
 pub async fn premium_settings(pool: &PgPool) -> AppResult<PremiumSettings> {
-    Ok(crate::settings::get(pool, PREMIUM_KEY).await?.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default())
+    Ok(crate::settings::get(pool, PREMIUM_KEY)
+        .await?
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default())
 }
 
 pub async fn set_premium_settings(pool: &PgPool, p: &PremiumSettings) -> AppResult<()> {
     p.validate()?;
-    crate::settings::set(pool, PREMIUM_KEY, serde_json::to_value(p).map_err(|_| AppError::Validation("error.validation"))?).await
+    crate::settings::set(
+        pool,
+        PREMIUM_KEY,
+        serde_json::to_value(p).map_err(|_| AppError::Validation("error.validation"))?,
+    )
+    .await
 }
 
 /// Decide premium pricing for an order: `Ok(None)` = standard name;
 /// `Ok(Some((register_sell, renew_sell)))` = premium; errors when premium
 /// names are disabled, the currency differs or the cap is exceeded.
-pub fn premium_quote(p: &PremiumSettings, currency: &str, q: Option<(&str, &str, &str)>) -> AppResult<Option<(Decimal, Decimal)>> {
-    let Some((qc, reg, ren)) = q else { return Ok(None) };
+pub fn premium_quote(
+    p: &PremiumSettings,
+    currency: &str,
+    q: Option<(&str, &str, &str)>,
+) -> AppResult<Option<(Decimal, Decimal)>> {
+    let Some((qc, reg, ren)) = q else {
+        return Ok(None);
+    };
     if !p.enabled {
         return Err(AppError::Validation("error.domain_premium_disabled"));
     }
     if !qc.eq_ignore_ascii_case(currency) {
         return Err(AppError::Validation("error.domain_premium_currency"));
     }
-    let parse = |s: &str| Decimal::from_str(s.trim()).ok().filter(|d| !d.is_sign_negative()).ok_or(AppError::Validation("error.registrar_unavailable"));
+    let parse = |s: &str| {
+        Decimal::from_str(s.trim())
+            .ok()
+            .filter(|d| !d.is_sign_negative())
+            .ok_or(AppError::Validation("error.registrar_unavailable"))
+    };
     let (r, n) = (p.sell(parse(reg)?), p.sell(parse(ren)?));
     if !p.max_price.is_zero() && r > p.max_price {
         return Err(AppError::Validation("error.domain_premium_too_expensive"));
@@ -266,14 +361,34 @@ fn d200() -> i32 {
 impl TldField {
     pub fn validate(&self) -> AppResult<()> {
         // Case is kept: registrar parameter names are case-sensitive.
-        let key_ok = self.key.len() <= 64 && self.key.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) && self.key.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'));
+        let key_ok = self.key.len() <= 64
+            && self
+                .key
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic())
+            && self
+                .key
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'));
         let kind_ok = match self.kind.as_str() {
-            "select" => !self.options.is_empty() && self.options.iter().all(|o| !o.trim().is_empty() && o.len() <= 120),
+            "select" => {
+                !self.options.is_empty()
+                    && self
+                        .options
+                        .iter()
+                        .all(|o| !o.trim().is_empty() && o.len() <= 120)
+            }
             "text" | "checkbox" => true,
             _ => false,
         };
         let label_ok = !self.label.trim().is_empty() && self.label.len() <= 120;
-        if !key_ok || !kind_ok || !label_ok || !(1..=1000).contains(&self.max_length) || self.tld.is_empty() {
+        if !key_ok
+            || !kind_ok
+            || !label_ok
+            || !(1..=1000).contains(&self.max_length)
+            || self.tld.is_empty()
+        {
             return Err(AppError::Validation("error.tld_field_invalid"));
         }
         Ok(())
@@ -290,7 +405,11 @@ pub async fn all_tld_fields(pool: &PgPool) -> AppResult<Vec<TldField>> {
 }
 
 /// Replace the field set of one TLD.
-pub async fn set_tld_fields(pool: &PgPool, tld: &str, fields: &[TldField]) -> AppResult<Vec<TldField>> {
+pub async fn set_tld_fields(
+    pool: &PgPool,
+    tld: &str,
+    fields: &[TldField],
+) -> AppResult<Vec<TldField>> {
     let mut keys = std::collections::HashSet::new();
     for f in fields {
         if f.tld != tld {
@@ -302,7 +421,11 @@ pub async fn set_tld_fields(pool: &PgPool, tld: &str, fields: &[TldField]) -> Ap
         }
     }
     let mut tx = pool.begin().await.map_err(db_err)?;
-    sqlx::query("DELETE FROM tld_fields WHERE tld = $1").bind(tld).execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("DELETE FROM tld_fields WHERE tld = $1")
+        .bind(tld)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     for f in fields {
         sqlx::query("INSERT INTO tld_fields (tld, key, label, kind, options, required, max_length, sort_order) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)")
             .bind(tld).bind(&f.key).bind(f.label.trim()).bind(&f.kind).bind(&f.options).bind(f.required).bind(f.max_length).bind(f.sort_order)
@@ -334,7 +457,9 @@ pub fn validate_extra(fields: &[TldField], input: &Value) -> AppResult<Value> {
                     }
                     continue;
                 }
-                if s.chars().count() > f.max_length as usize || (f.kind == "select" && !f.options.iter().any(|o| o == s)) {
+                if s.chars().count() > f.max_length as usize
+                    || (f.kind == "select" && !f.options.iter().any(|o| o == s))
+                {
                     return Err(AppError::Validation("error.domain_field_invalid"));
                 }
                 out.insert(f.key.clone(), Value::String(s.into()));
@@ -353,7 +478,13 @@ mod tests {
         Decimal::from_str(s).unwrap()
     }
     fn rule(p: &str, f: &str, m: &str, r: &str) -> MarginRule {
-        MarginRule { tld: "*".into(), percent: d(p), fixed: d(f), min_margin: d(m), rounding: r.into() }
+        MarginRule {
+            tld: "*".into(),
+            percent: d(p),
+            fixed: d(f),
+            min_margin: d(m),
+            rounding: r.into(),
+        }
     }
 
     #[test]
@@ -362,9 +493,18 @@ mod tests {
         assert_eq!(rule("10", "0.005", "0", "cent").sell(d("1.00")), d("1.11")); // 1.105 half-up
         assert_eq!(rule("0", "0", "2", "cent").sell(d("9.10")), d("11.10"));
         assert_eq!(rule("20", "0", "0", "whole").sell(d("8.50")), d("11"));
-        assert_eq!(rule("20", "0", "0", "ninety_nine").sell(d("8.50")), d("10.99"));
-        assert_eq!(rule("0", "0", "0", "ninety_nine").sell(d("10.99")), d("10.99"));
-        assert_eq!(rule("0", "0", "0", "ninety_nine").sell(d("11.00")), d("11.99"));
+        assert_eq!(
+            rule("20", "0", "0", "ninety_nine").sell(d("8.50")),
+            d("10.99")
+        );
+        assert_eq!(
+            rule("0", "0", "0", "ninety_nine").sell(d("10.99")),
+            d("10.99")
+        );
+        assert_eq!(
+            rule("0", "0", "0", "ninety_nine").sell(d("11.00")),
+            d("11.99")
+        );
     }
 
     #[test]
@@ -386,7 +526,10 @@ mod tests {
         assert!(premium_quote(&p, "EUR", Some(("EUR", "250", "30"))).is_err());
         p.enabled = true;
         p.markup_percent = d("10");
-        assert_eq!(premium_quote(&p, "EUR", Some(("EUR", "250.00", "30.00"))).unwrap(), Some((d("275.00"), d("33.00"))));
+        assert_eq!(
+            premium_quote(&p, "EUR", Some(("EUR", "250.00", "30.00"))).unwrap(),
+            Some((d("275.00"), d("33.00")))
+        );
         assert!(premium_quote(&p, "USD", Some(("EUR", "250", "30"))).is_err());
         p.max_price = d("100");
         assert!(premium_quote(&p, "EUR", Some(("EUR", "250", "30"))).is_err());
@@ -395,37 +538,112 @@ mod tests {
     #[test]
     fn extra_fields() {
         let f = vec![
-            TldField { id: None, tld: "ro".into(), key: "cnp".into(), label: "CNP".into(), kind: "text".into(), options: vec![], required: true, max_length: 13, sort_order: 0 },
-            TldField { id: None, tld: "ro".into(), key: "entity".into(), label: "Entity".into(), kind: "select".into(), options: vec!["person".into(), "company".into()], required: false, max_length: 200, sort_order: 1 },
-            TldField { id: None, tld: "ro".into(), key: "agree".into(), label: "Agree".into(), kind: "checkbox".into(), options: vec![], required: true, max_length: 200, sort_order: 2 },
+            TldField {
+                id: None,
+                tld: "ro".into(),
+                key: "cnp".into(),
+                label: "CNP".into(),
+                kind: "text".into(),
+                options: vec![],
+                required: true,
+                max_length: 13,
+                sort_order: 0,
+            },
+            TldField {
+                id: None,
+                tld: "ro".into(),
+                key: "entity".into(),
+                label: "Entity".into(),
+                kind: "select".into(),
+                options: vec!["person".into(), "company".into()],
+                required: false,
+                max_length: 200,
+                sort_order: 1,
+            },
+            TldField {
+                id: None,
+                tld: "ro".into(),
+                key: "agree".into(),
+                label: "Agree".into(),
+                kind: "checkbox".into(),
+                options: vec![],
+                required: true,
+                max_length: 200,
+                sort_order: 2,
+            },
         ];
         assert!(f.iter().all(|x| x.validate().is_ok()));
-        let ok = validate_extra(&f, &json!({"cnp": " 1234567890123 ", "entity": "person", "agree": true, "junk": 1})).unwrap();
-        assert_eq!(ok, json!({"cnp": "1234567890123", "entity": "person", "agree": true}));
+        let ok = validate_extra(
+            &f,
+            &json!({"cnp": " 1234567890123 ", "entity": "person", "agree": true, "junk": 1}),
+        )
+        .unwrap();
+        assert_eq!(
+            ok,
+            json!({"cnp": "1234567890123", "entity": "person", "agree": true})
+        );
         assert!(validate_extra(&f, &json!({"agree": true})).is_err());
         assert!(validate_extra(&f, &json!({"cnp": "12345678901234", "agree": true})).is_err());
-        assert!(validate_extra(&f, &json!({"cnp": "1", "entity": "alien", "agree": true})).is_err());
+        assert!(
+            validate_extra(&f, &json!({"cnp": "1", "entity": "alien", "agree": true})).is_err()
+        );
         assert!(validate_extra(&f, &json!({"cnp": "1"})).is_err());
     }
 
     #[test]
     fn field_keys_keep_case() {
-        let k = |key: &str| TldField { id: None, tld: "us".into(), key: key.into(), label: "L".into(), kind: "text".into(), options: vec![], required: false, max_length: 200, sort_order: 0 };
-        for ok in ["RegistrantNexus", "X-CA-LEGALTYPE", "contactRegistrant.nexusCategory", "us_purpose", &"a".repeat(64)] {
+        let k = |key: &str| TldField {
+            id: None,
+            tld: "us".into(),
+            key: key.into(),
+            label: "L".into(),
+            kind: "text".into(),
+            options: vec![],
+            required: false,
+            max_length: 200,
+            sort_order: 0,
+        };
+        for ok in [
+            "RegistrantNexus",
+            "X-CA-LEGALTYPE",
+            "contactRegistrant.nexusCategory",
+            "us_purpose",
+            &"a".repeat(64),
+        ] {
             assert!(k(ok).validate().is_ok(), "{ok}");
         }
-        for bad in ["", "1abc", "_x", "-x", "a b", "a=b", "a&b", "é", &"a".repeat(65)] {
+        for bad in [
+            "",
+            "1abc",
+            "_x",
+            "-x",
+            "a b",
+            "a=b",
+            "a&b",
+            "é",
+            &"a".repeat(65),
+        ] {
             assert!(k(bad).validate().is_err(), "{bad}");
         }
         // Values are looked up by the exact key.
         let f = vec![k("RegistrantNexus")];
-        assert_eq!(validate_extra(&f, &json!({"RegistrantNexus": "C11", "registrantnexus": "x"})).unwrap(), json!({"RegistrantNexus": "C11"}));
+        assert_eq!(
+            validate_extra(
+                &f,
+                &json!({"RegistrantNexus": "C11", "registrantnexus": "x"})
+            )
+            .unwrap(),
+            json!({"RegistrantNexus": "C11"})
+        );
     }
 
     #[test]
     fn cost_parse() {
         let c = Cost::parse(".COM", "eur", "8.50", "9.10", "8.5").unwrap();
-        assert_eq!((c.tld.as_str(), c.currency.as_str(), c.renew), ("com", "EUR", d("9.10")));
+        assert_eq!(
+            (c.tld.as_str(), c.currency.as_str(), c.renew),
+            ("com", "EUR", d("9.10"))
+        );
         assert!(Cost::parse("com", "EUR", "-1", "1", "1").is_none());
         assert!(Cost::parse("com", "EUR", "x", "1", "1").is_none());
     }

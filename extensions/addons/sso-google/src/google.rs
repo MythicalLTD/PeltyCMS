@@ -20,7 +20,13 @@ mod tests {
 
     #[test]
     fn maps_claims() {
-        let g = (PROVIDER.profile)(&json!({"sub": "1", "email": "a@x", "email_verified": true, "name": "A"})).unwrap();
-        assert_eq!(g, json!({"subject": "1", "email": "a@x", "email_verified": true, "name": "A"}));
+        let g = (PROVIDER.profile)(
+            &json!({"sub": "1", "email": "a@x", "email_verified": true, "name": "A"}),
+        )
+        .unwrap();
+        assert_eq!(
+            g,
+            json!({"subject": "1", "email": "a@x", "email_verified": true, "name": "A"})
+        );
     }
 }

@@ -54,7 +54,9 @@ impl AuthService {
         ip: Option<&str>,
     ) -> AppResult<users::User> {
         let email = normalize_email(i.email)?;
-        crate::policy::load(&self.pool).await?.check_password(i.password, &email)?;
+        crate::policy::load(&self.pool)
+            .await?
+            .check_password(i.password, &email)?;
         let name = i.display_name.trim();
         if name.chars().count() > 100 {
             return Err(AppError::Validation("error.name_too_long"));
@@ -92,7 +94,15 @@ impl AuthService {
             // enumeration) and don't extend the lock.
             Some(u) if users::is_locked(&self.pool, u.id).await? => {
                 password::dummy_verify(i.password);
-                audit::record(&self.pool, Some(u.id), "auth.login_locked", None, i.ip, json!({})).await?;
+                audit::record(
+                    &self.pool,
+                    Some(u.id),
+                    "auth.login_locked",
+                    None,
+                    i.ip,
+                    json!({}),
+                )
+                .await?;
                 return Err(AppError::InvalidCredentials);
             }
             Some(u) if password::verify(i.password, &u.password_hash) && u.is_active => {
@@ -115,9 +125,18 @@ impl AuthService {
                 )
                 .await?;
                 if let Some(minutes) = locked {
-                    audit::record(&self.pool, Some(u.id), "auth.account_locked", None, i.ip, json!({ "failures": failures, "minutes": minutes })).await?;
+                    audit::record(
+                        &self.pool,
+                        Some(u.id),
+                        "auth.account_locked",
+                        None,
+                        i.ip,
+                        json!({ "failures": failures, "minutes": minutes }),
+                    )
+                    .await?;
                     if failures == users::LOCK_AFTER {
-                        self.notify_admins_locked(&u.email, i.ip, failures, minutes).await;
+                        self.notify_admins_locked(&u.email, i.ip, failures, minutes)
+                            .await;
                     }
                 }
                 return Err(AppError::InvalidCredentials);
@@ -141,7 +160,13 @@ impl AuthService {
 
     /// Queue an `admin_account_locked` email to every admin (first lock of a
     /// streak only). Best effort: failures are logged, never block login flow.
-    async fn notify_admins_locked(&self, email: &str, ip: Option<&str>, failures: i32, minutes: i32) {
+    async fn notify_admins_locked(
+        &self,
+        email: &str,
+        ip: Option<&str>,
+        failures: i32,
+        minutes: i32,
+    ) {
         let admins = match users::admin_emails(&self.pool).await {
             Ok(a) => a,
             Err(e) => {
@@ -152,7 +177,10 @@ impl AuthService {
         for to in admins {
             let payload = json!({ "template": "admin_account_locked", "locale": "en", "to": to,
                 "vars": { "email": email, "ip": ip.unwrap_or("unknown"), "attempts": failures.to_string(), "minutes": minutes.to_string() } });
-            if let Err(e) = pelty_database::jobs::enqueue(&self.pool, "email.send", payload, None, None, 6).await {
+            if let Err(e) =
+                pelty_database::jobs::enqueue(&self.pool, "email.send", payload, None, None, 6)
+                    .await
+            {
                 tracing::error!(error = %e, "could not queue lockout notice");
             }
         }
@@ -172,8 +200,14 @@ impl AuthService {
             user_agent,
         };
         let pol = crate::policy::load(&self.pool).await?;
-        let idle = pol.session_idle_minutes.map(time::Duration::minutes).unwrap_or(self.idle);
-        let absolute = pol.session_absolute_hours.map(time::Duration::hours).unwrap_or(self.absolute);
+        let idle = pol
+            .session_idle_minutes
+            .map(time::Duration::minutes)
+            .unwrap_or(self.idle);
+        let absolute = pol
+            .session_absolute_hours
+            .map(time::Duration::hours)
+            .unwrap_or(self.absolute);
         // Always a fresh token on login (session rotation; no fixation).
         let tok = token::generate();
         let csrf = token::generate();
@@ -209,7 +243,11 @@ impl AuthService {
     }
 
     pub async fn authenticate(&self, tok: &str) -> AppResult<Option<sessions::Session>> {
-        let idle = crate::policy::load(&self.pool).await?.session_idle_minutes.map(time::Duration::minutes).unwrap_or(self.idle);
+        let idle = crate::policy::load(&self.pool)
+            .await?
+            .session_idle_minutes
+            .map(time::Duration::minutes)
+            .unwrap_or(self.idle);
         sessions::touch(&self.pool, &token::hash(tok), idle).await
     }
 

@@ -20,35 +20,71 @@ impl Prompt for Term {
         println!("{text}");
     }
     fn input(&mut self, q: &str, default: &str) -> io::Result<String> {
-        let mut i = Input::<String>::with_theme(&self.theme).with_prompt(q).allow_empty(true);
+        let mut i = Input::<String>::with_theme(&self.theme)
+            .with_prompt(q)
+            .allow_empty(true);
         if !default.is_empty() {
             i = i.default(default.to_string());
         }
         i.interact_text().map_err(io_err)
     }
     fn secret(&mut self, q: &str, confirm: bool) -> io::Result<String> {
-        let mut p = Password::with_theme(&self.theme).with_prompt(q).allow_empty_password(!confirm).report(false);
+        let mut p = Password::with_theme(&self.theme)
+            .with_prompt(q)
+            .allow_empty_password(!confirm)
+            .report(false);
         if confirm {
             p = p.with_confirmation("Repeat it", "The two entries differ, try again");
         }
         let v = p.interact().map_err(io_err)?;
         // Own report line: dialoguer would print ******** even for an empty entry.
         let shown = if v.is_empty() { "(none)" } else { "(hidden)" };
-        println!("{} {} {} {}", console::style("✔").green(), console::style(q).bold(), console::style("·").dim(), console::style(shown).dim());
+        println!(
+            "{} {} {} {}",
+            console::style("✔").green(),
+            console::style(q).bold(),
+            console::style("·").dim(),
+            console::style(shown).dim()
+        );
         Ok(v)
     }
     fn confirm(&mut self, q: &str, default: bool) -> io::Result<bool> {
-        Confirm::with_theme(&self.theme).with_prompt(q).default(default).interact().map_err(io_err)
+        Confirm::with_theme(&self.theme)
+            .with_prompt(q)
+            .default(default)
+            .interact()
+            .map_err(io_err)
     }
     fn select(&mut self, q: &str, items: &[&str], default: usize) -> io::Result<usize> {
         if items.len() > 12 {
-            FuzzySelect::with_theme(&self.theme).with_prompt(q).items(items).default(default).max_length(12).interact().map_err(io_err)
+            FuzzySelect::with_theme(&self.theme)
+                .with_prompt(q)
+                .items(items)
+                .default(default)
+                .max_length(12)
+                .interact()
+                .map_err(io_err)
         } else {
-            Select::with_theme(&self.theme).with_prompt(q).items(items).default(default).interact().map_err(io_err)
+            Select::with_theme(&self.theme)
+                .with_prompt(q)
+                .items(items)
+                .default(default)
+                .interact()
+                .map_err(io_err)
         }
     }
-    fn multi_select(&mut self, q: &str, items: &[&str], defaults: &[bool]) -> io::Result<Vec<usize>> {
-        dialoguer::MultiSelect::with_theme(&self.theme).with_prompt(q).items(items).defaults(defaults).interact().map_err(io_err)
+    fn multi_select(
+        &mut self,
+        q: &str,
+        items: &[&str],
+        defaults: &[bool],
+    ) -> io::Result<Vec<usize>> {
+        dialoguer::MultiSelect::with_theme(&self.theme)
+            .with_prompt(q)
+            .items(items)
+            .defaults(defaults)
+            .interact()
+            .map_err(io_err)
     }
 }
 
@@ -60,7 +96,11 @@ pub struct Live {
 
 impl Live {
     pub fn new() -> io::Result<Self> {
-        Ok(Live { rt: tokio::runtime::Builder::new_current_thread().enable_all().build()? })
+        Ok(Live {
+            rt: tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?,
+        })
     }
 }
 
@@ -83,7 +123,9 @@ impl Services for Live {
                     let _ = c.close().await;
                     DbCheck::Ok
                 }
-                Err(sqlx::Error::Database(e)) if e.code().as_deref() == Some("3D000") => DbCheck::MissingDatabase,
+                Err(sqlx::Error::Database(e)) if e.code().as_deref() == Some("3D000") => {
+                    DbCheck::MissingDatabase
+                }
                 Err(sqlx::Error::PoolTimedOut) => DbCheck::Failed("timed out connecting".into()),
                 Err(e) => DbCheck::Failed(e.to_string()),
             }
@@ -98,16 +140,24 @@ impl Services for Live {
         self.rt.block_on(async {
             use sqlx::Executor;
             let mut c = connect(admin.as_str()).await.map_err(|e| e.to_string())?;
-            c.execute(format!("CREATE DATABASE \"{}\"", name.replace('"', "\"\"")).as_str()).await.map_err(|e| e.to_string())?;
+            c.execute(format!("CREATE DATABASE \"{}\"", name.replace('"', "\"\"")).as_str())
+                .await
+                .map_err(|e| e.to_string())?;
             Ok(())
         })
     }
 
     fn currencies(&mut self, url: &str) -> Vec<String> {
         self.rt.block_on(async {
-            let Ok(mut c) = connect(url).await else { return vec![] };
+            let Ok(mut c) = connect(url).await else {
+                return vec![];
+            };
             // Before the first start the table does not exist yet: fall back to typing.
-            let rows: Vec<(String,)> = sqlx::query_as("SELECT code FROM currencies ORDER BY enabled DESC, code").fetch_all(&mut c).await.unwrap_or_default();
+            let rows: Vec<(String,)> =
+                sqlx::query_as("SELECT code FROM currencies ORDER BY enabled DESC, code")
+                    .fetch_all(&mut c)
+                    .await
+                    .unwrap_or_default();
             rows.into_iter().map(|r| r.0).collect()
         })
     }
@@ -126,6 +176,10 @@ impl Services for Live {
             html: "<p>This is a test email from the PeltyCMS setup wizard. SMTP works.</p>".into(),
             list_unsubscribe: None,
         };
-        self.rt.block_on(async { tokio::time::timeout(std::time::Duration::from_secs(30), m.send(&e)).await.map_err(|_| "timed out".to_string())? })
+        self.rt.block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(30), m.send(&e))
+                .await
+                .map_err(|_| "timed out".to_string())?
+        })
     }
 }

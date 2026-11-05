@@ -64,16 +64,53 @@ impl EventSpec {
 }
 
 const fn f(name: &'static str, ty: &'static str, description: &'static str) -> Field {
-    Field { name, ty, always: true, description }
+    Field {
+        name,
+        ty,
+        always: true,
+        description,
+    }
 }
 const fn o(name: &'static str, ty: &'static str, description: &'static str) -> Field {
-    Field { name, ty, always: false, description }
+    Field {
+        name,
+        ty,
+        always: false,
+        description,
+    }
 }
-const fn domain(name: &'static str, description: &'static str, payload: &'static [Field]) -> EventSpec {
-    EventSpec { name, kind: EventKind::Domain, description, payload, cancellable: false, modifiable: false, modify: &[], since: "0.1.0" }
+const fn domain(
+    name: &'static str,
+    description: &'static str,
+    payload: &'static [Field],
+) -> EventSpec {
+    EventSpec {
+        name,
+        kind: EventKind::Domain,
+        description,
+        payload,
+        cancellable: false,
+        modifiable: false,
+        modify: &[],
+        since: "0.1.0",
+    }
 }
-const fn pre(name: &'static str, description: &'static str, payload: &'static [Field], modify: &'static [(&'static str, &'static str)]) -> EventSpec {
-    EventSpec { name, kind: EventKind::Pre, description, payload, cancellable: true, modifiable: !modify.is_empty(), modify, since: "0.1.0" }
+const fn pre(
+    name: &'static str,
+    description: &'static str,
+    payload: &'static [Field],
+    modify: &'static [(&'static str, &'static str)],
+) -> EventSpec {
+    EventSpec {
+        name,
+        kind: EventKind::Pre,
+        description,
+        payload,
+        cancellable: true,
+        modifiable: !modify.is_empty(),
+        modify,
+        since: "0.1.0",
+    }
 }
 
 pub const REGISTRY: &[EventSpec] = &[
@@ -262,14 +299,28 @@ mod tests {
         names.dedup();
         assert_eq!(n, names.len(), "duplicate event names");
         for e in REGISTRY {
-            assert!(!e.description.is_empty() && !e.payload.is_empty(), "{}", e.name);
+            assert!(
+                !e.description.is_empty() && !e.payload.is_empty(),
+                "{}",
+                e.name
+            );
             assert_eq!(e.cancellable, e.kind == EventKind::Pre, "{}", e.name);
             assert_eq!(e.modifiable, !e.modify.is_empty(), "{}", e.name);
             for (k, rule) in e.modify {
                 let top = k.split(['[', '.']).next().unwrap();
-                assert!(e.payload.iter().any(|p| p.name == top) && !rule.is_empty(), "{}: modify key {k} not in payload", e.name);
+                assert!(
+                    e.payload.iter().any(|p| p.name == top) && !rule.is_empty(),
+                    "{}: modify key {k} not in payload",
+                    e.name
+                );
             }
-            assert!(e.name.bytes().all(|b| b.is_ascii_lowercase() || b == b'.' || b == b'_'), "{}", e.name);
+            assert!(
+                e.name
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b == b'.' || b == b'_'),
+                "{}",
+                e.name
+            );
         }
     }
 }

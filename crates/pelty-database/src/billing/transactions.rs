@@ -55,20 +55,42 @@ const WHERE: &str = "FROM payments p LEFT JOIN invoices i ON i.id = p.invoice_id
 
 macro_rules! bind_filter {
     ($q:expr, $f:expr) => {
-        $q.bind($f.gateway.as_deref()).bind($f.status.as_deref()).bind($f.currency.as_deref()).bind($f.customer).bind($f.from).bind($f.to).bind($f.q.as_deref().map(|s| s.replace(['%', '_'], "")))
+        $q.bind($f.gateway.as_deref())
+            .bind($f.status.as_deref())
+            .bind($f.currency.as_deref())
+            .bind($f.customer)
+            .bind($f.from)
+            .bind($f.to)
+            .bind($f.q.as_deref().map(|s| s.replace(['%', '_'], "")))
     };
 }
 
-pub async fn list(pool: &PgPool, f: &Filter, limit: i64, offset: i64) -> AppResult<(Vec<Transaction>, i64, Vec<Total>)> {
+pub async fn list(
+    pool: &PgPool,
+    f: &Filter,
+    limit: i64,
+    offset: i64,
+) -> AppResult<(Vec<Transaction>, i64, Vec<Total>)> {
     let sql = format!(
         "SELECT p.id, p.gateway, p.provider_ref, p.amount, p.fee, p.currency::text AS currency, p.status, p.invoice_id, i.number AS invoice_number,
                 p.customer_id, c.email AS customer_email, p.admin_note, p.created_at {WHERE} ORDER BY p.created_at DESC, p.id LIMIT $8 OFFSET $9"
     );
-    let items: Vec<Transaction> = bind_filter!(sqlx::query_as(&sql), f).bind(limit).bind(offset).fetch_all(pool).await.map_err(db_err)?;
+    let items: Vec<Transaction> = bind_filter!(sqlx::query_as(&sql), f)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?;
     let csql = format!("SELECT count(*) {WHERE}");
-    let (count,): (i64,) = bind_filter!(sqlx::query_as(&csql), f).fetch_one(pool).await.map_err(db_err)?;
+    let (count,): (i64,) = bind_filter!(sqlx::query_as(&csql), f)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
     let tsql = format!("SELECT p.currency::text AS currency, p.status, count(*) AS count, COALESCE(sum(p.amount), 0) AS amount {WHERE} GROUP BY 1, 2 ORDER BY 1, 2");
-    let totals: Vec<Total> = bind_filter!(sqlx::query_as(&tsql), f).fetch_all(pool).await.map_err(db_err)?;
+    let totals: Vec<Total> = bind_filter!(sqlx::query_as(&tsql), f)
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?;
     Ok((items, count, totals))
 }
 
@@ -79,7 +101,12 @@ pub async fn set_note(pool: &PgPool, id: Uuid, note: Option<&str>) -> AppResult<
     if note.is_some_and(|n| n.chars().count() > 2000) {
         return Err(pelty_core::AppError::Validation("error.too_long"));
     }
-    let r = sqlx::query("UPDATE payments SET admin_note = $2, updated_at = now() WHERE id = $1").bind(id).bind(note).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("UPDATE payments SET admin_note = $2, updated_at = now() WHERE id = $1")
+        .bind(id)
+        .bind(note)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(pelty_core::AppError::NotFound);
     }

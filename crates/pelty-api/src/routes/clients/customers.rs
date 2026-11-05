@@ -1,8 +1,8 @@
 //! Customer profiles. `/client/*` is always scoped to the caller's own
 //! customer record; `/admin/customers*` requires `customers.manage`.
-use crate::routes::{paged, ListQuery};
 use crate::error::ApiResult;
 use crate::extract::{perms, CurrentUser, RequirePermission};
+use crate::routes::{paged, ListQuery};
 use crate::AppState;
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, put};
@@ -60,9 +60,7 @@ pub async fn customer_for(s: &AppState, u: &CurrentUser, area: &str) -> ApiResul
 #[utoipa::path(get, path = "/api/v1/client/profile", responses((status = 200), (status = 401)))]
 pub async fn client_profile(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Json<Value>> {
     let id = customer_of(&s, &u).await?;
-    let c = s.clients().get(id)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    let c = s.clients().get(id).await?.ok_or(AppError::NotFound)?;
     Ok(Json(c.for_client()))
 }
 
@@ -102,7 +100,9 @@ pub async fn client_update(
     p.validate()?;
     let id = customer_of(&s, &u).await?;
     let p = pre_profile(&s, Some(id), p, false).await?;
-    let c = s.clients().update_profile(id, &p)
+    let c = s
+        .clients()
+        .update_profile(id, &p)
         .await?
         .ok_or(AppError::NotFound)?;
     pelty_database::audit::record(
@@ -135,9 +135,7 @@ pub struct ContactBody {
 #[utoipa::path(get, path = "/api/v1/client/contacts", responses((status = 200), (status = 401)))]
 pub async fn client_contacts(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Json<Value>> {
     let id = customer_of(&s, &u).await?;
-    Ok(Json(
-        json!({ "items": s.clients().contacts(id).await? }),
-    ))
+    Ok(Json(json!({ "items": s.clients().contacts(id).await? })))
 }
 
 #[utoipa::path(post, path = "/api/v1/client/contacts", request_body = ContactBody, responses((status = 200), (status = 422)))]
@@ -147,7 +145,10 @@ pub async fn client_add_contact(
     Json(b): Json<ContactBody>,
 ) -> ApiResult<Json<Value>> {
     let id = customer_of(&s, &u).await?;
-    let c = s.clients().add_contact(id, &b.name, &b.email, &b.phone, b.is_billing).await?;
+    let c = s
+        .clients()
+        .add_contact(id, &b.name, &b.email, &b.phone, b.is_billing)
+        .await?;
     audit::record(
         &s.pool,
         Some(u.user_id),
@@ -373,14 +374,16 @@ pub async fn admin_create(
             if let Some(l) = b.locale.as_deref() {
                 pelty_database::users::set_locale(&s.pool, usr.id, Some(l)).await?;
             }
-            s.clients().update_profile(id, &b.profile)
+            s.clients()
+                .update_profile(id, &b.profile)
                 .await?
                 .ok_or(AppError::NotFound)?
         }
         None => s.clients().create(&email, &b.profile).await?,
     };
     if b.status.is_some() || b.notes.is_some() {
-        s.clients().update_admin(c.id, b.status.as_deref(), b.notes.as_deref(), None)
+        s.clients()
+            .update_admin(c.id, b.status.as_deref(), b.notes.as_deref(), None)
             .await?;
     }
     if let Some(g) = b.group_id {
@@ -419,9 +422,7 @@ pub async fn admin_create(
         )
         .await?;
     }
-    let c = s.clients().get(c.id)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    let c = s.clients().get(c.id).await?.ok_or(AppError::NotFound)?;
     pelty_database::audit::record(
         &s.pool,
         Some(u.user_id),
@@ -444,9 +445,7 @@ pub async fn admin_get(
     _p: RequirePermission<perms::CustomersManage>,
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<Value>> {
-    let c = s.clients().get(id)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    let c = s.clients().get(id).await?.ok_or(AppError::NotFound)?;
     let contacts = s.clients().contacts(id).await?;
     Ok(Json(json!({ "customer": c, "contacts": contacts })))
 }
@@ -469,7 +468,8 @@ pub async fn admin_update(
 ) -> ApiResult<Json<Value>> {
     b.profile.validate()?;
     let profile = pre_profile(&s, Some(id), std::mem::take(&mut b.profile), true).await?;
-    s.clients().update_profile(id, &profile)
+    s.clients()
+        .update_profile(id, &profile)
         .await?
         .ok_or(AppError::NotFound)?;
     let c = customers::update_admin(

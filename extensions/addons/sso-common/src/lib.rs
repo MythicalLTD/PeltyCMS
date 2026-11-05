@@ -8,7 +8,8 @@ use serde_json::{json, Value};
 pub use pelty_addon_sdk as sdk;
 
 /// `(method, url, headers, body) -> (status, body)`.
-pub type Http<'a> = &'a dyn Fn(&str, &str, Vec<(String, String)>, String) -> Result<(u16, String), String>;
+pub type Http<'a> =
+    &'a dyn Fn(&str, &str, Vec<(String, String)>, String) -> Result<(u16, String), String>;
 
 /// Extra provider step after userinfo (e.g. GitHub's verified e-mail):
 /// `(profile, userinfo_url, auth_headers, http)`.
@@ -32,11 +33,18 @@ pub fn describe(p: &Provider) -> Value {
 }
 
 /// Build a profile; `None` when the subject is empty.
-pub fn profile(subject: String, email: String, email_verified: bool, name: String) -> Option<Value> {
+pub fn profile(
+    subject: String,
+    email: String,
+    email_verified: bool,
+    name: String,
+) -> Option<Value> {
     if subject.is_empty() {
         return None;
     }
-    Some(json!({ "subject": subject, "email": email, "email_verified": email_verified, "name": name }))
+    Some(
+        json!({ "subject": subject, "email": email, "email_verified": email_verified, "name": name }),
+    )
 }
 
 /// String field `k` of `v`.
@@ -46,18 +54,33 @@ pub fn s(v: &Value, k: &str) -> Option<String> {
 
 /// Numeric-or-string `id` (GitHub, Discord, Facebook).
 pub fn id(v: &Value) -> Option<String> {
-    v["id"].as_i64().map(|i| i.to_string()).or_else(|| s(v, "id"))
+    v["id"]
+        .as_i64()
+        .map(|i| i.to_string())
+        .or_else(|| s(v, "id"))
 }
 
 /// First present display name among the usual keys.
 pub fn name(v: &Value) -> String {
-    s(v, "name").or_else(|| s(v, "global_name")).or_else(|| s(v, "login")).or_else(|| s(v, "username")).unwrap_or_default()
+    s(v, "name")
+        .or_else(|| s(v, "global_name"))
+        .or_else(|| s(v, "login"))
+        .or_else(|| s(v, "username"))
+        .unwrap_or_default()
 }
 
 /// Standard OIDC claims (`sub`, `email`, `email_verified`).
 pub fn oidc_profile(v: &Value) -> Option<Value> {
-    let verified = v["email_verified"].as_bool().or_else(|| v["email_verified"].as_str().map(|x| x == "true")).unwrap_or(false);
-    profile(s(v, "sub")?, s(v, "email").unwrap_or_default(), verified, name(v))
+    let verified = v["email_verified"]
+        .as_bool()
+        .or_else(|| v["email_verified"].as_str().map(|x| x == "true"))
+        .unwrap_or(false);
+    profile(
+        s(v, "sub")?,
+        s(v, "email").unwrap_or_default(),
+        verified,
+        name(v),
+    )
 }
 
 /// Op `exchange`: `input` = `{code, redirect_uri, code_verifier, token_url,
@@ -74,10 +97,29 @@ pub fn exchange(p: &Provider, cfg: &Value, input: &Value, http: Http) -> Result<
         ("client_secret", cfg["client_secret"].as_str().unwrap_or("")),
         ("code_verifier", &g("code_verifier")),
     ]);
-    let (st, text) = http("POST", &g("token_url"), vec![("content-type".into(), "application/x-www-form-urlencoded".into()), ("accept".into(), "application/json".into())], body).map_err(|e| fail(&e))?;
+    let (st, text) = http(
+        "POST",
+        &g("token_url"),
+        vec![
+            (
+                "content-type".into(),
+                "application/x-www-form-urlencoded".into(),
+            ),
+            ("accept".into(), "application/json".into()),
+        ],
+        body,
+    )
+    .map_err(|e| fail(&e))?;
     let tok: Value = serde_json::from_str(&text).map_err(|_| fail("token response"))?;
-    let access = tok["access_token"].as_str().filter(|_| (200..300).contains(&st)).ok_or_else(|| fail("no access token"))?.to_string();
-    let auth: Vec<(String, String)> = vec![("authorization".to_string(), format!("Bearer {access}")), ("accept".to_string(), "application/json".to_string())];
+    let access = tok["access_token"]
+        .as_str()
+        .filter(|_| (200..300).contains(&st))
+        .ok_or_else(|| fail("no access token"))?
+        .to_string();
+    let auth: Vec<(String, String)> = vec![
+        ("authorization".to_string(), format!("Bearer {access}")),
+        ("accept".to_string(), "application/json".to_string()),
+    ];
     let userinfo = g("userinfo_url");
     let (st, text) = http("GET", &userinfo, auth.clone(), String::new()).map_err(|e| fail(&e))?;
     if !(200..300).contains(&st) {
@@ -101,7 +143,12 @@ pub fn call(p: &Provider, op: &str, input: &str, http: Http) -> Result<String, S
 }
 
 /// Host `http-fetch` as an [`Http`].
-pub fn host_http(m: &str, u: &str, h: Vec<(String, String)>, b: String) -> Result<(u16, String), String> {
+pub fn host_http(
+    m: &str,
+    u: &str,
+    h: Vec<(String, String)>,
+    b: String,
+) -> Result<(u16, String), String> {
     pelty_addon_sdk::fetch(m, u, h, b)
 }
 
@@ -110,7 +157,9 @@ pub fn form(pairs: &[(&str, &str)]) -> String {
     fn enc(s: &str, out: &mut String) {
         for b in s.bytes() {
             match b {
-                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'*' => out.push(b as char),
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'*' => {
+                    out.push(b as char)
+                }
                 b' ' => out.push('+'),
                 _ => out.push_str(&format!("%{b:02X}")),
             }
@@ -152,26 +201,52 @@ macro_rules! sso_addon {
 mod tests {
     use super::*;
 
-    const P: Provider = Provider { id: "oidc", name: "OIDC", authorize: "", token: "", userinfo: "", scope: "openid", profile: oidc_profile, enrich: None };
+    const P: Provider = Provider {
+        id: "oidc",
+        name: "OIDC",
+        authorize: "",
+        token: "",
+        userinfo: "",
+        scope: "openid",
+        profile: oidc_profile,
+        enrich: None,
+    };
 
     #[test]
     fn oidc_claims() {
-        let g = oidc_profile(&json!({"sub": "1", "email": "a@x", "email_verified": true, "name": "A"})).unwrap();
-        assert_eq!(g, json!({"subject": "1", "email": "a@x", "email_verified": true, "name": "A"}));
-        assert_eq!(oidc_profile(&json!({"sub": "1", "email_verified": "true"})).unwrap()["email_verified"], true);
+        let g =
+            oidc_profile(&json!({"sub": "1", "email": "a@x", "email_verified": true, "name": "A"}))
+                .unwrap();
+        assert_eq!(
+            g,
+            json!({"subject": "1", "email": "a@x", "email_verified": true, "name": "A"})
+        );
+        assert_eq!(
+            oidc_profile(&json!({"sub": "1", "email_verified": "true"})).unwrap()["email_verified"],
+            true
+        );
         assert!(oidc_profile(&json!({"email": "x"})).is_none());
     }
 
     #[test]
     fn exchange_errors() {
         let input = json!({"code": "c1", "token_url": "https://t/token", "userinfo_url": "https://api/user"});
-        let bad = |_m: &str, _u: &str, _h: Vec<(String, String)>, _b: String| Ok((400, r#"{"error":"x"}"#.to_string()));
-        assert!(exchange(&P, &json!({}), &input, &bad).unwrap_err().starts_with("failed:"));
-        assert!(call(&P, "nope", "{}", &bad).unwrap_err().starts_with("unsupported_op"));
+        let bad = |_m: &str, _u: &str, _h: Vec<(String, String)>, _b: String| {
+            Ok((400, r#"{"error":"x"}"#.to_string()))
+        };
+        assert!(exchange(&P, &json!({}), &input, &bad)
+            .unwrap_err()
+            .starts_with("failed:"));
+        assert!(call(&P, "nope", "{}", &bad)
+            .unwrap_err()
+            .starts_with("unsupported_op"));
     }
 
     #[test]
     fn form_encodes() {
-        assert_eq!(super::form(&[("a b", "x&y=z"), ("k", "ü")]), "a+b=x%26y%3Dz&k=%C3%BC");
+        assert_eq!(
+            super::form(&[("a b", "x&y=z"), ("k", "ü")]),
+            "a+b=x%26y%3Dz&k=%C3%BC"
+        );
     }
 }

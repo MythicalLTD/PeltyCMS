@@ -23,7 +23,10 @@ pub async fn app_with(rate: u32) -> (Router, AppState) {
         std::env::set_var("PELTY_ADDONS_DIST", root().join("extensions/addons/dist"));
     }
     if std::env::var_os("PELTY_ADDONS_DIR").is_none() {
-        std::env::set_var("PELTY_ADDONS_DIR", std::env::temp_dir().join("pelty-test-addons"));
+        std::env::set_var(
+            "PELTY_ADDONS_DIR",
+            std::env::temp_dir().join("pelty-test-addons"),
+        );
     }
     let mut cfg = Config::from_env().expect("config");
     cfg.cookie_secure = false;
@@ -52,7 +55,9 @@ pub async fn app_with(rate: u32) -> (Router, AppState) {
     {
         static SEED: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
         let _g = SEED.lock().await;
-        pelty_api::addons::install_builtins(&state).await.expect("addons");
+        pelty_api::addons::install_builtins(&state)
+            .await
+            .expect("addons");
     }
     (pelty_api::router(state.clone()), state)
 }
@@ -64,10 +69,18 @@ pub async fn app_with(rate: u32) -> (Router, AppState) {
 /// client fields left behind). Suites run one at a time (see below), so this
 /// is safe as long as two test binaries do not share the database at once.
 async fn scrub_leftovers(pool: &sqlx::PgPool) {
-    type Cells = std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<tokio::sync::OnceCell<()>>>>;
+    type Cells = std::sync::Mutex<
+        std::collections::HashMap<String, std::sync::Arc<tokio::sync::OnceCell<()>>>,
+    >;
     static DONE: std::sync::OnceLock<Cells> = std::sync::OnceLock::new();
     let key = current_suite().unwrap_or_default();
-    let cell = DONE.get_or_init(Default::default).lock().unwrap_or_else(|e| e.into_inner()).entry(key).or_default().clone();
+    let cell = DONE
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .entry(key)
+        .or_default()
+        .clone();
     cell.get_or_init(|| async {
         for sql in [
             // Global settings with a non-default value in some suite.
@@ -155,7 +168,10 @@ impl Drop for SuiteTicket {
 
 fn gate() -> &'static SuiteGate {
     static G: std::sync::OnceLock<SuiteGate> = std::sync::OnceLock::new();
-    G.get_or_init(|| SuiteGate { state: std::sync::Mutex::new((None, 0)), changed: tokio::sync::Notify::new() })
+    G.get_or_init(|| SuiteGate {
+        state: std::sync::Mutex::new((None, 0)),
+        changed: tokio::sync::Notify::new(),
+    })
 }
 
 async fn enter_suite() -> Option<SuiteTicket> {
@@ -435,25 +451,52 @@ pub async fn seed_product(app: &Router, admin: &Sess) -> (String, String, [Strin
 /// Build a fixture addon `extensions/addons/<dir>` (crate `crate_name`) to wasm and pack
 /// it with its addon.json. Cached per process.
 pub fn fixture_zip(dir: &str, crate_name: &str) -> Vec<u8> {
-    static CACHE: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>> = std::sync::OnceLock::new();
+    static CACHE: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>,
+    > = std::sync::OnceLock::new();
     let cache = CACHE.get_or_init(Default::default);
     if let Some(z) = cache.lock().unwrap().get(dir) {
         return z.clone();
     }
-    let target = std::env::var("PELTY_ADDONS_TARGET").map(PathBuf::from).unwrap_or_else(|_| std::env::temp_dir().join("pelty-addons-target"));
+    let target = std::env::var("PELTY_ADDONS_TARGET")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| std::env::temp_dir().join("pelty-addons-target"));
     let st = std::process::Command::new(env!("CARGO"))
-        .args(["build", "--release", "--target", "wasm32-wasip2", "-p", crate_name, "--target-dir"])
+        .args([
+            "build",
+            "--release",
+            "--target",
+            "wasm32-wasip2",
+            "-p",
+            crate_name,
+            "--target-dir",
+        ])
         .arg(&target)
         .current_dir(root().join("extensions/addons"))
         .status()
         .expect("run cargo");
     assert!(st.success(), "fixture build failed for {crate_name}");
-    let wasm = std::fs::read(target.join(format!("wasm32-wasip2/release/{}.wasm", crate_name.replace('-', "_")))).unwrap();
-    let pkg = std::env::temp_dir().join(format!("pelty-api-fixture-{}-{}", dir.replace(['/', '.'], "_"), std::process::id()));
+    let wasm = std::fs::read(target.join(format!(
+        "wasm32-wasip2/release/{}.wasm",
+        crate_name.replace('-', "_")
+    )))
+    .unwrap();
+    let pkg = std::env::temp_dir().join(format!(
+        "pelty-api-fixture-{}-{}",
+        dir.replace(['/', '.'], "_"),
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&pkg);
     std::fs::create_dir_all(&pkg).unwrap();
     std::fs::write(pkg.join("addon.wasm"), wasm).unwrap();
-    std::fs::copy(root().join("extensions/addons").join(dir).join("addon.json"), pkg.join("addon.json")).unwrap();
+    std::fs::copy(
+        root()
+            .join("extensions/addons")
+            .join(dir)
+            .join("addon.json"),
+        pkg.join("addon.json"),
+    )
+    .unwrap();
     let assets = root().join("extensions/addons").join(dir).join("assets");
     if assets.is_dir() {
         std::fs::create_dir_all(pkg.join("assets")).unwrap();
@@ -481,34 +524,81 @@ pub fn copy_disk_addon(id: &str) {
             }
         }
     }
-    cp(&root().join("extensions/addons").join(id), &pelty_api::addons::addons_dir().join(id));
+    cp(
+        &root().join("extensions/addons").join(id),
+        &pelty_api::addons::addons_dir().join(id),
+    );
 }
 
 /// Registers every HTTP registrar addon (natively linked, sharing the registry transport).
 #[allow(dead_code)]
 pub fn registrars(r: &pelty_provisioning::registrar::RegistrarRegistry) {
-    r.register_dyn(std::sync::Arc::new(pelty_addon_registrar_namecheap::namecheap::Namecheap::new(r.transport())));
-    r.register_dyn(std::sync::Arc::new(pelty_addon_registrar_resellerclub::resellerclub::ResellerClub::new(r.transport())));
-    r.register_dyn(std::sync::Arc::new(pelty_addon_registrar_enom::enom::Enom::new(r.transport())));
-    r.register_dyn(std::sync::Arc::new(pelty_addon_registrar_opensrs::opensrs::OpenSrs::new(r.transport())));
-    r.register_dyn(std::sync::Arc::new(pelty_addon_registrar_godaddy::godaddy::GoDaddy::new(r.transport())));
-    r.register_dyn(std::sync::Arc::new(pelty_addon_registrar_centralnic::centralnic::CentralNic::new(r.transport())));
-    r.register_dyn(std::sync::Arc::new(pelty_addon_registrar_generic::generic::Generic::new(r.transport())));
+    r.register_dyn(std::sync::Arc::new(
+        pelty_addon_registrar_namecheap::namecheap::Namecheap::new(r.transport()),
+    ));
+    r.register_dyn(std::sync::Arc::new(
+        pelty_addon_registrar_resellerclub::resellerclub::ResellerClub::new(r.transport()),
+    ));
+    r.register_dyn(std::sync::Arc::new(
+        pelty_addon_registrar_enom::enom::Enom::new(r.transport()),
+    ));
+    r.register_dyn(std::sync::Arc::new(
+        pelty_addon_registrar_opensrs::opensrs::OpenSrs::new(r.transport()),
+    ));
+    r.register_dyn(std::sync::Arc::new(
+        pelty_addon_registrar_godaddy::godaddy::GoDaddy::new(r.transport()),
+    ));
+    r.register_dyn(std::sync::Arc::new(
+        pelty_addon_registrar_centralnic::centralnic::CentralNic::new(r.transport()),
+    ));
+    r.register_dyn(std::sync::Arc::new(
+        pelty_addon_registrar_generic::generic::Generic::new(r.transport()),
+    ));
 }
 
 /// Registers every gateway addon (natively linked) like the host does after loading them.
 #[allow(dead_code)]
 pub fn gateways(mut r: pelty_payments::GatewayRegistry) -> pelty_payments::GatewayRegistry {
-    r.register(pelty_addon_gateway_stripe::stripe::descriptor(), pelty_addon_gateway_stripe::stripe::factory);
-    r.register(pelty_addon_gateway_paypal::paypal::descriptor(), pelty_addon_gateway_paypal::paypal::factory);
-    r.register(pelty_addon_gateway_mollie::mollie::descriptor(), pelty_addon_gateway_mollie::mollie::factory);
-    r.register(pelty_addon_gateway_razorpay::razorpay::descriptor(), pelty_addon_gateway_razorpay::razorpay::factory);
-    r.register(pelty_addon_gateway_gocardless::gocardless::descriptor(), pelty_addon_gateway_gocardless::gocardless::factory);
-    r.register(pelty_addon_gateway_crypto::crypto::descriptor(), pelty_addon_gateway_crypto::crypto::factory);
-    r.register(pelty_addon_gateway_paddle::paddle::descriptor(), pelty_addon_gateway_paddle::paddle::factory);
-    r.register(pelty_addon_gateway_adyen::adyen::descriptor(), pelty_addon_gateway_adyen::adyen::factory);
-    r.register(pelty_addon_gateway_manual::manual::descriptor(), pelty_addon_gateway_manual::manual::factory);
-    r.register(pelty_addon_gateway_custom::custom::descriptor(), pelty_addon_gateway_custom::custom::factory);
+    r.register(
+        pelty_addon_gateway_stripe::stripe::descriptor(),
+        pelty_addon_gateway_stripe::stripe::factory,
+    );
+    r.register(
+        pelty_addon_gateway_paypal::paypal::descriptor(),
+        pelty_addon_gateway_paypal::paypal::factory,
+    );
+    r.register(
+        pelty_addon_gateway_mollie::mollie::descriptor(),
+        pelty_addon_gateway_mollie::mollie::factory,
+    );
+    r.register(
+        pelty_addon_gateway_razorpay::razorpay::descriptor(),
+        pelty_addon_gateway_razorpay::razorpay::factory,
+    );
+    r.register(
+        pelty_addon_gateway_gocardless::gocardless::descriptor(),
+        pelty_addon_gateway_gocardless::gocardless::factory,
+    );
+    r.register(
+        pelty_addon_gateway_crypto::crypto::descriptor(),
+        pelty_addon_gateway_crypto::crypto::factory,
+    );
+    r.register(
+        pelty_addon_gateway_paddle::paddle::descriptor(),
+        pelty_addon_gateway_paddle::paddle::factory,
+    );
+    r.register(
+        pelty_addon_gateway_adyen::adyen::descriptor(),
+        pelty_addon_gateway_adyen::adyen::factory,
+    );
+    r.register(
+        pelty_addon_gateway_manual::manual::descriptor(),
+        pelty_addon_gateway_manual::manual::factory,
+    );
+    r.register(
+        pelty_addon_gateway_custom::custom::descriptor(),
+        pelty_addon_gateway_custom::custom::factory,
+    );
     r
 }
 
@@ -516,10 +606,17 @@ pub fn gateways(mut r: pelty_payments::GatewayRegistry) -> pelty_payments::Gatew
 /// runs on the same database leave their codes behind (676 per prefix).
 #[allow(dead_code)]
 pub async fn fresh_currency_code(app: &axum::Router, admin: &Sess, prefix: char) -> String {
-    let existing = call(app, "GET", "/api/v1/admin/currencies", None, &admin.h()).await.body.to_string();
+    let existing = call(app, "GET", "/api/v1/admin/currencies", None, &admin.h())
+        .await
+        .body
+        .to_string();
     for _ in 0..2000 {
         let b = *uuid::Uuid::new_v4().as_bytes();
-        let c = format!("{prefix}{}{}", (b'A' + b[0] % 26) as char, (b'A' + b[1] % 26) as char);
+        let c = format!(
+            "{prefix}{}{}",
+            (b'A' + b[0] % 26) as char,
+            (b'A' + b[1] % 26) as char
+        );
         if !existing.contains(&format!("\"{c}\"")) {
             return c;
         }
@@ -561,21 +658,46 @@ pub async fn drain_jobs(s: &AppState, kind: &str, needle: &str) -> usize {
 }
 
 /// Like [`call`] but from a given client IP (sets `ConnectInfo`).
-pub async fn call_from(app: &Router, ip: &str, method: &str, uri: &str, body: Option<Value>, headers: &[(&str, &str)]) -> Resp {
+pub async fn call_from(
+    app: &Router,
+    ip: &str,
+    method: &str,
+    uri: &str,
+    body: Option<Value>,
+    headers: &[(&str, &str)],
+) -> Resp {
     let mut b = Request::builder().method(method).uri(uri);
     for (k, v) in headers {
         b = b.header(*k, *v);
     }
     let mut req = match body {
-        Some(v) => b.header("content-type", "application/json").body(Body::from(v.to_string())),
+        Some(v) => b
+            .header("content-type", "application/json")
+            .body(Body::from(v.to_string())),
         None => b.body(Body::empty()),
     }
     .expect("request");
-    let addr: std::net::SocketAddr = if ip.contains(':') { format!("[{ip}]:5000") } else { format!("{ip}:5000") }.parse().expect("ip");
-    req.extensions_mut().insert(axum::extract::ConnectInfo(addr));
+    let addr: std::net::SocketAddr = if ip.contains(':') {
+        format!("[{ip}]:5000")
+    } else {
+        format!("{ip}:5000")
+    }
+    .parse()
+    .expect("ip");
+    req.extensions_mut()
+        .insert(axum::extract::ConnectInfo(addr));
     let res = app.clone().oneshot(req).await.expect("response");
     let status = res.status();
-    let cookies = res.headers().get_all("set-cookie").iter().filter_map(|v| v.to_str().ok().map(str::to_string)).collect();
+    let cookies = res
+        .headers()
+        .get_all("set-cookie")
+        .iter()
+        .filter_map(|v| v.to_str().ok().map(str::to_string))
+        .collect();
     let bytes = res.into_body().collect().await.expect("body").to_bytes();
-    Resp { status, body: serde_json::from_slice(&bytes).unwrap_or(Value::Null), cookies }
+    Resp {
+        status,
+        body: serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+        cookies,
+    }
 }

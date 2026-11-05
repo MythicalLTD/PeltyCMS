@@ -27,7 +27,9 @@ pub enum PublicKey {
 
 pub fn b64(s: &str) -> Result<Vec<u8>, Error> {
     let clean: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-    STANDARD.decode(clean).map_err(|_| Error::Signature("base64"))
+    STANDARD
+        .decode(clean)
+        .map_err(|_| Error::Signature("base64"))
 }
 
 /// Normalize a certificate given as PEM or bare base64 into DER.
@@ -45,8 +47,15 @@ pub fn cert_der(input: &str) -> Result<Vec<u8>, Error> {
 /// PEM-wrap a DER certificate.
 pub fn cert_pem(der: &[u8]) -> String {
     let b = STANDARD.encode(der);
-    let lines: Vec<&str> = b.as_bytes().chunks(64).map(|c| std::str::from_utf8(c).unwrap_or("")).collect();
-    format!("-----BEGIN CERTIFICATE-----\n{}\n-----END CERTIFICATE-----\n", lines.join("\n"))
+    let lines: Vec<&str> = b
+        .as_bytes()
+        .chunks(64)
+        .map(|c| std::str::from_utf8(c).unwrap_or(""))
+        .collect();
+    format!(
+        "-----BEGIN CERTIFICATE-----\n{}\n-----END CERTIFICATE-----\n",
+        lines.join("\n")
+    )
 }
 
 impl PublicKey {
@@ -88,12 +97,16 @@ impl PublicKey {
             (PublicKey::Rsa(k), RSA_SHA256) => {
                 use rsa::signature::Verifier;
                 let vk = rsa::pkcs1v15::VerifyingKey::<Sha256>::new(k.clone());
-                let s = rsa::pkcs1v15::Signature::try_from(sig).map_err(|_| Error::Signature("value"))?;
+                let s = rsa::pkcs1v15::Signature::try_from(sig)
+                    .map_err(|_| Error::Signature("value"))?;
                 vk.verify(msg, &s).map_err(|_| Error::Signature("invalid"))
             }
-            (PublicKey::EcP256(p), ECDSA_SHA256) => ring::signature::UnparsedPublicKey::new(&ring::signature::ECDSA_P256_SHA256_FIXED, p)
-                .verify(msg, sig)
-                .map_err(|_| Error::Signature("invalid")),
+            (PublicKey::EcP256(p), ECDSA_SHA256) => ring::signature::UnparsedPublicKey::new(
+                &ring::signature::ECDSA_P256_SHA256_FIXED,
+                p,
+            )
+            .verify(msg, sig)
+            .map_err(|_| Error::Signature("invalid")),
             _ => Err(Error::Signature("algorithm")),
         }
     }
@@ -130,9 +143,14 @@ pub fn verify_enveloped(doc: &Doc, sig: usize, keys: &[PublicKey]) -> Result<usi
         return Err(bad("not_signature"));
     }
     let signed = doc.e(sig).parent.ok_or(bad("no_parent"))?;
-    let id = doc.attr(signed, "ID").filter(|v| !v.is_empty()).ok_or(bad("no_id"))?;
+    let id = doc
+        .attr(signed, "ID")
+        .filter(|v| !v.is_empty())
+        .ok_or(bad("no_id"))?;
     let si = doc.only(sig, DS, "SignedInfo").ok_or(bad("signed_info"))?;
-    let cm = doc.only(si, DS, "CanonicalizationMethod").ok_or(bad("c14n"))?;
+    let cm = doc
+        .only(si, DS, "CanonicalizationMethod")
+        .ok_or(bad("c14n"))?;
     if doc.attr(cm, "Algorithm") != Some(EXC_C14N) {
         return Err(bad("c14n_algorithm"));
     }
@@ -141,7 +159,9 @@ pub fn verify_enveloped(doc: &Doc, sig: usize, keys: &[PublicKey]) -> Result<usi
     if alg != RSA_SHA256 && alg != ECDSA_SHA256 {
         return Err(bad("algorithm"));
     }
-    let r = doc.only(si, DS, "Reference").ok_or(bad("reference_count"))?;
+    let r = doc
+        .only(si, DS, "Reference")
+        .ok_or(bad("reference_count"))?;
     if doc.attr(r, "URI") != Some(&format!("#{id}")) {
         return Err(bad("reference_uri"));
     }
@@ -179,7 +199,10 @@ pub fn verify_enveloped(doc: &Doc, sig: usize, keys: &[PublicKey]) -> Result<usi
     let sv = doc.only(sig, DS, "SignatureValue").ok_or(bad("value"))?;
     let value = b64(&doc.text(sv))?;
     let si_canon = canonicalize(doc, si, None, &prefix_list(doc, cm));
-    if keys.iter().any(|k| k.verify(alg, si_canon.as_bytes(), &value).is_ok()) {
+    if keys
+        .iter()
+        .any(|k| k.verify(alg, si_canon.as_bytes(), &value).is_ok())
+    {
         Ok(signed)
     } else {
         Err(bad("invalid"))

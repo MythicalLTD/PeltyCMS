@@ -57,7 +57,10 @@ impl Assertion {
         if name.is_empty() {
             return None;
         }
-        self.attributes.get(name).and_then(|v| v.first()).map(String::as_str)
+        self.attributes
+            .get(name)
+            .and_then(|v| v.first())
+            .map(String::as_str)
     }
     pub fn all(&self, name: &str) -> &[String] {
         self.attributes.get(name).map(Vec::as_slice).unwrap_or(&[])
@@ -69,7 +72,10 @@ fn ts(s: &str) -> Result<OffsetDateTime, Error> {
 }
 
 pub fn now_str(t: OffsetDateTime) -> String {
-    let t = t.to_offset(time::UtcOffset::UTC).replace_nanosecond(0).unwrap_or(t);
+    let t = t
+        .to_offset(time::UtcOffset::UTC)
+        .replace_nanosecond(0)
+        .unwrap_or(t);
     t.format(&Rfc3339).unwrap_or_default()
 }
 
@@ -112,7 +118,9 @@ pub fn validate_response(xml: &str, sp: &Sp, idp: &Idp, ex: &Expect) -> Result<A
     // Exactly one assertion in the whole document, as a direct child of the
     // Response: nothing hidden elsewhere for a confused consumer to pick up.
     let assertions: Vec<usize> = d.all().filter(|&i| d.is(i, ASSERT, "Assertion")).collect();
-    let [a] = assertions[..] else { return Err(inv("assertion_count")) };
+    let [a] = assertions[..] else {
+        return Err(inv("assertion_count"));
+    };
     if d.e(a).parent != Some(root) || d.attr(a, "Version") != Some("2.0") {
         return Err(inv("assertion_position"));
     }
@@ -142,7 +150,10 @@ pub fn validate_response(xml: &str, sp: &Sp, idp: &Idp, ex: &Expect) -> Result<A
             return Err(inv("destination"));
         }
     }
-    let status = d.only(root, PROTO, "Status").and_then(|s| d.only(s, PROTO, "StatusCode")).ok_or(inv("status"))?;
+    let status = d
+        .only(root, PROTO, "Status")
+        .and_then(|s| d.only(s, PROTO, "StatusCode"))
+        .ok_or(inv("status"))?;
     if d.attr(status, "Value") != Some(SUCCESS) {
         return Err(inv("status_not_success"));
     }
@@ -165,7 +176,10 @@ pub fn validate_response(xml: &str, sp: &Sp, idp: &Idp, ex: &Expect) -> Result<A
     }
 
     // Everything below reads only from `a`, the verified node.
-    let issuer = d.only(a, ASSERT, "Issuer").map(|i| d.text(i).trim().to_string()).ok_or(inv("issuer"))?;
+    let issuer = d
+        .only(a, ASSERT, "Issuer")
+        .map(|i| d.text(i).trim().to_string())
+        .ok_or(inv("issuer"))?;
     if issuer != idp.entity_id {
         return Err(inv("issuer"));
     }
@@ -182,8 +196,12 @@ pub fn validate_response(xml: &str, sp: &Sp, idp: &Idp, ex: &Expect) -> Result<A
         if d.attr(sc, "Method") != Some(BEARER) {
             continue;
         }
-        let Some(scd) = d.only(sc, ASSERT, "SubjectConfirmationData") else { continue };
-        let Some(noa) = d.attr(scd, "NotOnOrAfter") else { continue };
+        let Some(scd) = d.only(sc, ASSERT, "SubjectConfirmationData") else {
+            continue;
+        };
+        let Some(noa) = d.attr(scd, "NotOnOrAfter") else {
+            continue;
+        };
         let noa = ts(noa)?;
         if now >= noa + skew {
             continue;
@@ -221,7 +239,10 @@ pub fn validate_response(xml: &str, sp: &Sp, idp: &Idp, ex: &Expect) -> Result<A
     let mut restrictions = 0;
     for ar in d.kids_named(cond, ASSERT, "AudienceRestriction") {
         restrictions += 1;
-        if !d.kids_named(ar, ASSERT, "Audience").any(|x| d.text(x).trim() == sp.entity_id) {
+        if !d
+            .kids_named(ar, ASSERT, "Audience")
+            .any(|x| d.text(x).trim() == sp.entity_id)
+        {
             return Err(inv("audience"));
         }
     }
@@ -240,9 +261,19 @@ pub fn validate_response(xml: &str, sp: &Sp, idp: &Idp, ex: &Expect) -> Result<A
     let mut attributes: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for st in d.kids_named(a, ASSERT, "AttributeStatement") {
         for at in d.kids_named(st, ASSERT, "Attribute") {
-            let vals: Vec<String> = d.kids_named(at, ASSERT, "AttributeValue").map(|v| d.text(v).trim().to_string()).filter(|v| !v.is_empty()).collect();
-            for key in [d.attr(at, "Name"), d.attr(at, "FriendlyName")].into_iter().flatten() {
-                attributes.entry(key.to_string()).or_default().extend(vals.iter().cloned());
+            let vals: Vec<String> = d
+                .kids_named(at, ASSERT, "AttributeValue")
+                .map(|v| d.text(v).trim().to_string())
+                .filter(|v| !v.is_empty())
+                .collect();
+            for key in [d.attr(at, "Name"), d.attr(at, "FriendlyName")]
+                .into_iter()
+                .flatten()
+            {
+                attributes
+                    .entry(key.to_string())
+                    .or_default()
+                    .extend(vals.iter().cloned());
             }
         }
     }
@@ -260,7 +291,8 @@ pub fn validate_response(xml: &str, sp: &Sp, idp: &Idp, ex: &Expect) -> Result<A
 
 fn deflate(xml: &str) -> Result<String, Error> {
     let mut e = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
-    e.write_all(xml.as_bytes()).map_err(|_| Error::Invalid("deflate"))?;
+    e.write_all(xml.as_bytes())
+        .map_err(|_| Error::Invalid("deflate"))?;
     Ok(STANDARD.encode(e.finish().map_err(|_| Error::Invalid("deflate"))?))
 }
 
@@ -292,7 +324,13 @@ fn enc(s: &str) -> String {
 
 /// Build an HTTP-Redirect URL: `param` is `SAMLRequest` or `SAMLResponse`.
 /// With a key, the query is signed per the binding spec (section 3.4.4.1).
-pub fn redirect_url(endpoint: &str, param: &str, xml: &str, relay: Option<&str>, key: Option<&SigningKey>) -> Result<String, Error> {
+pub fn redirect_url(
+    endpoint: &str,
+    param: &str,
+    xml: &str,
+    relay: Option<&str>,
+    key: Option<&SigningKey>,
+) -> Result<String, Error> {
     let mut q = format!("{param}={}", enc(&deflate(xml)?));
     if let Some(r) = relay {
         q.push_str(&format!("&RelayState={}", enc(r)));
@@ -349,23 +387,38 @@ pub fn parse_redirect(raw_query: &str, keys: &[PublicKey]) -> Result<RedirectMsg
     let (param, val) = if let Some(v) = parts.get("SAMLRequest") {
         ("SAMLRequest", *v)
     } else {
-        ("SAMLResponse", *parts.get("SAMLResponse").ok_or(Error::Invalid("missing_message"))?)
+        (
+            "SAMLResponse",
+            *parts
+                .get("SAMLResponse")
+                .ok_or(Error::Invalid("missing_message"))?,
+        )
     };
     let mut signed = false;
     if !keys.is_empty() {
         let alg = pct_decode(parts.get("SigAlg").ok_or(Error::Signature("missing"))?);
-        let sig = dsig::b64(&pct_decode(parts.get("Signature").ok_or(Error::Signature("missing"))?))?;
+        let sig = dsig::b64(&pct_decode(
+            parts.get("Signature").ok_or(Error::Signature("missing"))?,
+        ))?;
         let mut msg = format!("{param}={val}");
         if let Some(r) = parts.get("RelayState") {
             msg.push_str(&format!("&RelayState={r}"));
         }
         msg.push_str(&format!("&SigAlg={}", parts["SigAlg"]));
-        if !keys.iter().any(|k| k.verify(&alg, msg.as_bytes(), &sig).is_ok()) {
+        if !keys
+            .iter()
+            .any(|k| k.verify(&alg, msg.as_bytes(), &sig).is_ok())
+        {
             return Err(Error::Signature("invalid"));
         }
         signed = true;
     }
-    Ok(RedirectMsg { param: param.into(), xml: inflate(&pct_decode(val))?, relay: parts.get("RelayState").map(|r| pct_decode(r)), signed })
+    Ok(RedirectMsg {
+        param: param.into(),
+        xml: inflate(&pct_decode(val))?,
+        relay: parts.get("RelayState").map(|r| pct_decode(r)),
+        signed,
+    })
 }
 
 pub fn authn_request(id: &str, sp: &Sp, destination: &str, now: OffsetDateTime) -> String {
@@ -375,15 +428,29 @@ pub fn authn_request(id: &str, sp: &Sp, destination: &str, now: OffsetDateTime) 
     )
 }
 
-pub fn logout_request(id: &str, sp: &Sp, destination: &str, name_id: &str, session_index: Option<&str>, now: OffsetDateTime) -> String {
-    let si = session_index.map(|s| format!("<samlp:SessionIndex>{}</samlp:SessionIndex>", esc(s))).unwrap_or_default();
+pub fn logout_request(
+    id: &str,
+    sp: &Sp,
+    destination: &str,
+    name_id: &str,
+    session_index: Option<&str>,
+    now: OffsetDateTime,
+) -> String {
+    let si = session_index
+        .map(|s| format!("<samlp:SessionIndex>{}</samlp:SessionIndex>", esc(s)))
+        .unwrap_or_default();
     format!(
         "<samlp:LogoutRequest xmlns:samlp=\"{PROTO}\" xmlns:saml=\"{ASSERT}\" ID=\"{}\" Version=\"2.0\" IssueInstant=\"{}\" Destination=\"{}\"><saml:Issuer>{}</saml:Issuer><saml:NameID>{}</saml:NameID>{si}</samlp:LogoutRequest>",
         esc(id), now_str(now), esc(destination), esc(sp.entity_id), esc(name_id)
     )
 }
 
-pub fn logout_response(in_response_to: &str, sp: &Sp, destination: &str, now: OffsetDateTime) -> String {
+pub fn logout_response(
+    in_response_to: &str,
+    sp: &Sp,
+    destination: &str,
+    now: OffsetDateTime,
+) -> String {
     format!(
         "<samlp:LogoutResponse xmlns:samlp=\"{PROTO}\" xmlns:saml=\"{ASSERT}\" ID=\"{}\" Version=\"2.0\" IssueInstant=\"{}\" Destination=\"{}\" InResponseTo=\"{}\"><saml:Issuer>{}</saml:Issuer><samlp:Status><samlp:StatusCode Value=\"{SUCCESS}\"/></samlp:Status></samlp:LogoutResponse>",
         new_id(), now_str(now), esc(destination), esc(in_response_to), esc(sp.entity_id)
@@ -397,13 +464,21 @@ pub struct LogoutReq {
 }
 
 /// Parse an IdP `LogoutRequest` (signature already checked on the binding).
-pub fn parse_logout_request(xml: &str, idp_entity: &str, now: OffsetDateTime, skew: Duration) -> Result<LogoutReq, Error> {
+pub fn parse_logout_request(
+    xml: &str,
+    idp_entity: &str,
+    now: OffsetDateTime,
+    skew: Duration,
+) -> Result<LogoutReq, Error> {
     let d = Doc::parse(xml)?;
     let r = d.root;
     if !d.is(r, PROTO, "LogoutRequest") {
         return Err(Error::Invalid("not_logout_request"));
     }
-    let issuer = d.only(r, ASSERT, "Issuer").map(|i| d.text(i).trim().to_string()).unwrap_or_default();
+    let issuer = d
+        .only(r, ASSERT, "Issuer")
+        .map(|i| d.text(i).trim().to_string())
+        .unwrap_or_default();
     if issuer != idp_entity {
         return Err(Error::Invalid("issuer"));
     }
@@ -412,11 +487,22 @@ pub fn parse_logout_request(xml: &str, idp_entity: &str, now: OffsetDateTime, sk
             return Err(Error::Invalid("expired"));
         }
     }
-    let name_id = d.only(r, ASSERT, "NameID").map(|n| d.text(n).trim().to_string()).ok_or(Error::Invalid("name_id"))?;
-    Ok(LogoutReq { id: d.attr(r, "ID").unwrap_or("").to_string(), issuer, name_id })
+    let name_id = d
+        .only(r, ASSERT, "NameID")
+        .map(|n| d.text(n).trim().to_string())
+        .ok_or(Error::Invalid("name_id"))?;
+    Ok(LogoutReq {
+        id: d.attr(r, "ID").unwrap_or("").to_string(),
+        issuer,
+        name_id,
+    })
 }
 
-pub fn sp_metadata(sp: &Sp, signing_cert_pem: Option<&str>, want_assertions_signed: bool) -> String {
+pub fn sp_metadata(
+    sp: &Sp,
+    signing_cert_pem: Option<&str>,
+    want_assertions_signed: bool,
+) -> String {
     let kd = signing_cert_pem
         .map(|pem| {
             let b: String = pem.lines().filter(|l| !l.starts_with("-----")).collect();
@@ -447,9 +533,15 @@ pub fn parse_idp_metadata(xml: &str) -> Result<IdpMetadata, Error> {
     let d = Doc::parse(xml)?;
     let ed = d
         .all()
-        .find(|&i| d.is(i, MD, "EntityDescriptor") && d.kids_named(i, MD, "IDPSSODescriptor").next().is_some())
+        .find(|&i| {
+            d.is(i, MD, "EntityDescriptor")
+                && d.kids_named(i, MD, "IDPSSODescriptor").next().is_some()
+        })
         .ok_or(Error::Invalid("no_idp"))?;
-    let idp = d.kids_named(ed, MD, "IDPSSODescriptor").next().ok_or(Error::Invalid("no_idp"))?;
+    let idp = d
+        .kids_named(ed, MD, "IDPSSODescriptor")
+        .next()
+        .ok_or(Error::Invalid("no_idp"))?;
     let loc = |name: &str| {
         d.kids_named(idp, MD, name)
             .find(|&s| d.attr(s, "Binding") == Some(BIND_REDIRECT))
@@ -462,12 +554,20 @@ pub fn parse_idp_metadata(xml: &str) -> Result<IdpMetadata, Error> {
         if matches!(d.attr(kd, "use"), Some(u) if u != "signing") {
             continue;
         }
-        for c in d.all().filter(|&c| d.is(c, DS, "X509Certificate") && d.is_descendant(c, kd)) {
+        for c in d
+            .all()
+            .filter(|&c| d.is(c, DS, "X509Certificate") && d.is_descendant(c, kd))
+        {
             let t: String = d.text(c).chars().filter(|c| !c.is_whitespace()).collect();
             if !t.is_empty() && !certs.contains(&t) {
                 certs.push(t);
             }
         }
     }
-    Ok(IdpMetadata { entity_id: d.attr(ed, "entityID").unwrap_or("").to_string(), sso_url: loc("SingleSignOnService"), slo_url: loc("SingleLogoutService"), certs })
+    Ok(IdpMetadata {
+        entity_id: d.attr(ed, "entityID").unwrap_or("").to_string(),
+        sso_url: loc("SingleSignOnService"),
+        slo_url: loc("SingleLogoutService"),
+        certs,
+    })
 }

@@ -111,7 +111,11 @@ fn from_header(st: &Stored) -> String {
     if st.from_name.trim().is_empty() {
         st.from_address.clone()
     } else {
-        format!("\"{}\" <{}>", st.from_name.replace(['"', '\\'], ""), st.from_address)
+        format!(
+            "\"{}\" <{}>",
+            st.from_name.replace(['"', '\\'], ""),
+            st.from_address
+        )
     }
 }
 
@@ -123,7 +127,10 @@ fn build(s: &AppState, st: &Stored, timeout: u64) -> Result<SmtpMailer, String> 
         let pw = match &st.password_sealed {
             Some(b) => {
                 let sealed = STANDARD.decode(b).map_err(|_| "corrupt password")?;
-                let sb = s.secret_box.as_ref().ok_or("PELTY_ENCRYPTION_KEY not set")?;
+                let sb = s
+                    .secret_box
+                    .as_ref()
+                    .ok_or("PELTY_ENCRYPTION_KEY not set")?;
                 String::from_utf8(sb.open(&sealed).ok_or("cannot decrypt password")?)
                     .map_err(|_| "corrupt password")?
             }
@@ -209,10 +216,15 @@ pub async fn put_smtp(
     if (i.enabled || !host.is_empty()) && (!valid_host(&host) || i.port == 0) {
         return Err(AppError::Validation("error.smtp_invalid").into());
     }
-    if i.enabled && from_address.parse::<pelty_notifications::mailer::Address>().is_err() {
+    if i.enabled
+        && from_address
+            .parse::<pelty_notifications::mailer::Address>()
+            .is_err()
+    {
         return Err(AppError::Validation("error.invalid_email").into());
     }
-    if i.from_name.chars().any(char::is_control) || i.from_name.len() > 100 || username.len() > 255 {
+    if i.from_name.chars().any(char::is_control) || i.from_name.len() > 100 || username.len() > 255
+    {
         return Err(AppError::Validation("error.smtp_invalid").into());
     }
     if i.clear_password {

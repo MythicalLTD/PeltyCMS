@@ -1,9 +1,9 @@
 //! Support tickets: client area (own tickets only, no internal notes) and
 //! staff desk (`tickets.manage`).
-use crate::routes::customers::customer_for;
-use crate::routes::{paged, ListQuery};
 use crate::error::ApiResult;
 use crate::extract::{perms, CurrentUser, RequirePermission};
+use crate::routes::customers::customer_for;
+use crate::routes::{paged, ListQuery};
 use crate::{mail, AppState};
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post, put};
@@ -33,7 +33,10 @@ pub fn router() -> Router<AppState> {
         .route("/admin/tickets", get(admin_list).post(admin_open))
         .route("/admin/tickets/{id}", get(admin_get).patch(admin_update))
         .route("/admin/tickets/{id}/reply", post(admin_reply))
-        .route("/admin/tickets/{id}/messages/{mid}", put(admin_edit_message).delete(admin_delete_message))
+        .route(
+            "/admin/tickets/{id}/messages/{mid}",
+            put(admin_edit_message).delete(admin_delete_message),
+        )
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -50,7 +53,15 @@ pub async fn admin_edit_message(
     Json(b): Json<EditMessage>,
 ) -> ApiResult<Json<Value>> {
     let old = s.tickets().edit_message(id, mid, &b.body).await?;
-    audit::record(&s.pool, Some(u.user_id), "ticket.message_edited", Some(&id.to_string()), u.ip.as_deref(), json!({ "message_id": mid, "previous_length": old.chars().count() })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "ticket.message_edited",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "message_id": mid, "previous_length": old.chars().count() }),
+    )
+    .await?;
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -61,7 +72,15 @@ pub async fn admin_delete_message(
     Path((id, mid)): Path<(Uuid, Uuid)>,
 ) -> ApiResult<Json<Value>> {
     s.tickets().delete_message(id, mid).await?;
-    audit::record(&s.pool, Some(u.user_id), "ticket.message_deleted", Some(&id.to_string()), u.ip.as_deref(), json!({ "message_id": mid })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "ticket.message_deleted",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "message_id": mid }),
+    )
+    .await?;
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -138,21 +157,45 @@ fn priority(p: Option<&str>) -> ApiResult<&'static str> {
 
 /// `ticket.before_open`: addons may cancel, or rewrite subject, body,
 /// priority and department. Returns `(subject, body, priority, department)`.
-async fn pre_open(s: &AppState, cid: Uuid, b: &OpenBody, subject: String, body: String, by_staff: bool) -> ApiResult<(String, String, &'static str, Uuid)> {
+async fn pre_open(
+    s: &AppState,
+    cid: Uuid,
+    b: &OpenBody,
+    subject: String,
+    body: String,
+    by_staff: bool,
+) -> ApiResult<(String, String, &'static str, Uuid)> {
     let pr = priority(b.priority.as_deref())?;
     let pre = crate::addon_ext::pre_event(s, "ticket.before_open", json!({ "customer_id": cid, "subject": subject, "body": body, "priority": pr, "department_id": b.department_id, "service_id": b.service_id, "by_staff": by_staff })).await?;
-    let pr = pre.get("priority").and_then(Value::as_str).and_then(|p| PRIORITIES.iter().find(|x| **x == p)).copied().unwrap_or(pr);
+    let pr = pre
+        .get("priority")
+        .and_then(Value::as_str)
+        .and_then(|p| PRIORITIES.iter().find(|x| **x == p))
+        .copied()
+        .unwrap_or(pr);
     Ok((
         crate::addon_ext::pre_str(&pre, "subject", 200, &subject),
         crate::addon_ext::pre_str(&pre, "body", 20000, &body),
         pr,
-        crate::addon_ext::pre_uuid(&pre, "department_id", Some(b.department_id)).unwrap_or(b.department_id),
+        crate::addon_ext::pre_uuid(&pre, "department_id", Some(b.department_id))
+            .unwrap_or(b.department_id),
     ))
 }
 
 /// `ticket.before_reply`: addons may cancel or rewrite the message.
-async fn pre_reply(s: &AppState, id: Uuid, body: String, by_staff: bool, internal: bool) -> ApiResult<String> {
-    let pre = crate::addon_ext::pre_event(s, "ticket.before_reply", json!({ "ticket_id": id, "body": body, "by_staff": by_staff, "internal": internal })).await?;
+async fn pre_reply(
+    s: &AppState,
+    id: Uuid,
+    body: String,
+    by_staff: bool,
+    internal: bool,
+) -> ApiResult<String> {
+    let pre = crate::addon_ext::pre_event(
+        s,
+        "ticket.before_reply",
+        json!({ "ticket_id": id, "body": body, "by_staff": by_staff, "internal": internal }),
+    )
+    .await?;
     Ok(crate::addon_ext::pre_str(&pre, "body", 20000, &body))
 }
 
@@ -171,8 +214,14 @@ async fn detail(s: &AppState, t: tickets::Ticket, staff: bool) -> ApiResult<Json
             v
         })
         .collect();
-    let tags = if staff { pelty_database::support::tags(&s.pool, t.id).await? } else { Vec::new() };
-    Ok(Json(json!({ "ticket": t, "messages": messages, "tags": tags })))
+    let tags = if staff {
+        pelty_database::support::tags(&s.pool, t.id).await?
+    } else {
+        Vec::new()
+    };
+    Ok(Json(
+        json!({ "ticket": t, "messages": messages, "tags": tags }),
+    ))
 }
 
 /// Most recipients for one staff notification (unassigned tickets go to every
@@ -181,21 +230,40 @@ const STAFF_NOTIFY_CAP: usize = 25;
 
 /// Mail staff about a new ticket or a customer reply: the assignee if any,
 /// otherwise everyone who can manage tickets.
-pub(crate) async fn notify_staff(s: &AppState, t: &tickets::Ticket, message: &str) -> ApiResult<()> {
+pub(crate) async fn notify_staff(
+    s: &AppState,
+    t: &tickets::Ticket,
+    message: &str,
+) -> ApiResult<()> {
     let staff = pelty_database::support::staff(&s.pool).await?;
     let watching = pelty_database::support_ext::watchers(&s.pool, t.id).await?;
     let to: Vec<_> = match t.assigned_to {
-        Some(a) => staff.iter().filter(|x| x.id == a || watching.contains(&x.id)).collect(),
-        None => staff.iter().take(STAFF_NOTIFY_CAP).chain(staff.iter().filter(|x| watching.contains(&x.id))).collect(),
+        Some(a) => staff
+            .iter()
+            .filter(|x| x.id == a || watching.contains(&x.id))
+            .collect(),
+        None => staff
+            .iter()
+            .take(STAFF_NOTIFY_CAP)
+            .chain(staff.iter().filter(|x| watching.contains(&x.id)))
+            .collect(),
     };
     let mut seen = std::collections::HashSet::new();
     let to: Vec<_> = to.into_iter().filter(|x| seen.insert(x.id)).collect();
     let link = format!("{}/admin/tickets/{}", s.cfg.public_url, t.id);
     let num = t.number.to_string();
     let excerpt: String = message.chars().take(500).collect();
-    let customer = if t.customer_name.trim().is_empty() { t.customer_email.clone() } else { t.customer_name.clone() };
+    let customer = if t.customer_name.trim().is_empty() {
+        t.customer_email.clone()
+    } else {
+        t.customer_name.clone()
+    };
     for x in to {
-        let name = if x.display_name.is_empty() { x.email.clone() } else { x.display_name.clone() };
+        let name = if x.display_name.is_empty() {
+            x.email.clone()
+        } else {
+            x.display_name.clone()
+        };
         mail::enqueue(
             s,
             "ticket_staff_notify",
@@ -222,7 +290,11 @@ async fn notify_customer(s: &AppState, t: &tickets::Ticket) -> ApiResult<()> {
 }
 
 /// Mail the ticket's customer with a ticket template (`name`, `ticket_number`, `subject`, `link`).
-pub async fn notify_customer_with(s: &AppState, t: &tickets::Ticket, template: &str) -> ApiResult<()> {
+pub async fn notify_customer_with(
+    s: &AppState,
+    t: &tickets::Ticket,
+    template: &str,
+) -> ApiResult<()> {
     let Some(customer) = t.customer_id else {
         let num = t.number.to_string();
         return mail::enqueue(
@@ -238,11 +310,10 @@ pub async fn notify_customer_with(s: &AppState, t: &tickets::Ticket, template: &
             ]),
         )
         .await
-        .map(|_| ()).map_err(Into::into);
+        .map(|_| ())
+        .map_err(Into::into);
     };
-    let c = s.clients().get(customer)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    let c = s.clients().get(customer).await?.ok_or(AppError::NotFound)?;
     let (to, locale, name) = match c.owner_user_id {
         Some(uid) => match users::find(&s.pool, uid).await? {
             Some(u) => (
@@ -302,7 +373,10 @@ pub async fn client_list(
 ) -> ApiResult<Json<Value>> {
     let cid = customer_for(&s, &u, "tickets").await?;
     let (limit, offset, page, per) = q.bounds();
-    let (items, total) = s.tickets().list(Some(cid), q.status(), None, limit, offset).await?;
+    let (items, total) = s
+        .tickets()
+        .list(Some(cid), q.status(), None, limit, offset)
+        .await?;
     Ok(Json(paged(items, page, per, total)))
 }
 
@@ -315,12 +389,32 @@ pub async fn client_open(
 ) -> ApiResult<Json<Value>> {
     crate::captcha::require(&s, &headers, "ticket", u.ip.as_deref()).await?;
     let cid = customer_for(&s, &u, "tickets").await?;
-    let input = TicketInput { department_id: b.department_id, subject: b.subject.clone(), body: b.body.clone(), priority: b.priority.clone() };
+    let input = TicketInput {
+        department_id: b.department_id,
+        subject: b.subject.clone(),
+        body: b.body.clone(),
+        priority: b.priority.clone(),
+    };
     let (su, uu) = (&s, &u);
-    let v = crate::addon_functions::run(&s, "ticket.open", json!({ "customer_id": cid }), input, |i: TicketInput| async move {
-        let b = OpenBody { department_id: i.department_id, subject: i.subject, body: i.body, priority: i.priority, ..b };
-        client_open_core(su, uu, cid, b).await.map(|Json(v)| v).map_err(|e| e.0)
-    })
+    let v = crate::addon_functions::run(
+        &s,
+        "ticket.open",
+        json!({ "customer_id": cid }),
+        input,
+        |i: TicketInput| async move {
+            let b = OpenBody {
+                department_id: i.department_id,
+                subject: i.subject,
+                body: i.body,
+                priority: i.priority,
+                ..b
+            };
+            client_open_core(su, uu, cid, b)
+                .await
+                .map(|Json(v)| v)
+                .map_err(|e| e.0)
+        },
+    )
     .await?;
     Ok(Json(v))
 }
@@ -334,7 +428,12 @@ struct TicketInput {
     priority: Option<String>,
 }
 
-async fn client_open_core(s: &AppState, u: &CurrentUser, cid: Uuid, b: OpenBody) -> ApiResult<Json<Value>> {
+async fn client_open_core(
+    s: &AppState,
+    u: &CurrentUser,
+    cid: Uuid,
+    b: OpenBody,
+) -> ApiResult<Json<Value>> {
     let subject = text(&b.subject, 200, "error.invalid_subject")?;
     let body = text(&b.body, 20000, "error.invalid_message")?;
     let (subject, body, pr, department_id) = pre_open(s, cid, &b, subject, body, false).await?;
@@ -378,7 +477,9 @@ pub async fn client_get(
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<Value>> {
     let cid = customer_for(&s, &u, "tickets").await?;
-    let t = s.tickets().get(id, Some(cid))
+    let t = s
+        .tickets()
+        .get(id, Some(cid))
         .await?
         .ok_or(AppError::NotFound)?;
     detail(&s, t, false).await
@@ -392,7 +493,8 @@ pub async fn client_reply(
     Json(b): Json<ReplyBody>,
 ) -> ApiResult<Json<Value>> {
     let cid = customer_for(&s, &u, "tickets").await?;
-    s.tickets().get(id, Some(cid))
+    s.tickets()
+        .get(id, Some(cid))
         .await?
         .ok_or(AppError::NotFound)?;
     let body = text(&b.body, 20000, "error.invalid_message")?;
@@ -411,7 +513,9 @@ pub async fn client_reply(
         "ticket.replied",
         json!({ "ticket_id": id, "by_staff": false }),
     ));
-    let t = s.tickets().get(id, Some(cid))
+    let t = s
+        .tickets()
+        .get(id, Some(cid))
         .await?
         .ok_or(AppError::NotFound)?;
     notify_staff(&s, &t, &body).await?;
@@ -425,12 +529,20 @@ pub async fn client_close(
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<Value>> {
     let cid = customer_for(&s, &u, "tickets").await?;
-    s.tickets().get(id, Some(cid))
+    s.tickets()
+        .get(id, Some(cid))
         .await?
         .ok_or(AppError::NotFound)?;
-    s.tickets().update(id, Some("closed"), None, None, None).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("ticket.closed", json!({ "ticket_id": id, "reason": "client", "by_staff": false })));
-    let t = s.tickets().get(id, Some(cid))
+    s.tickets()
+        .update(id, Some("closed"), None, None, None)
+        .await?;
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "ticket.closed",
+        json!({ "ticket_id": id, "reason": "client", "by_staff": false }),
+    ));
+    let t = s
+        .tickets()
+        .get(id, Some(cid))
         .await?
         .ok_or(AppError::NotFound)?;
     detail(&s, t, false).await
@@ -515,7 +627,10 @@ pub async fn admin_list(
             return Err(AppError::Validation("error.invalid_status").into());
         }
     }
-    let (items, total) = s.tickets().list(None, q.status(), q.q(), limit, offset).await?;
+    let (items, total) = s
+        .tickets()
+        .list(None, q.status(), q.q(), limit, offset)
+        .await?;
     Ok(Json(paged(items, page, per, total)))
 }
 
@@ -528,7 +643,8 @@ pub async fn admin_open(
     let cid = b
         .customer_id
         .ok_or(AppError::Validation("error.invalid_customer"))?;
-    s.clients().get(cid)
+    s.clients()
+        .get(cid)
         .await?
         .ok_or(AppError::Validation("error.invalid_customer"))?;
     let subject = text(&b.subject, 200, "error.invalid_subject")?;
@@ -572,9 +688,7 @@ pub async fn admin_get(
     _p: RequirePermission<perms::TicketsManage>,
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<Value>> {
-    let t = s.tickets().get(id, None)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    let t = s.tickets().get(id, None).await?.ok_or(AppError::NotFound)?;
     detail(&s, t, true).await
 }
 
@@ -626,14 +740,18 @@ pub async fn admin_update(
         json!({ "ticket_id": id, "status": b.status, "priority": b.priority, "department_id": b.department_id, "assigned_to": b.assigned_to.flatten(), "by": u.user_id }),
     ));
     if let Some(Some(a)) = b.assigned_to {
-        s.emit(pelty_extensions::events::DomainEvent::new("ticket.assigned", json!({ "ticket_id": id, "assigned_to": a, "by": u.user_id })));
+        s.emit(pelty_extensions::events::DomainEvent::new(
+            "ticket.assigned",
+            json!({ "ticket_id": id, "assigned_to": a, "by": u.user_id }),
+        ));
     }
     if b.status.as_deref() == Some("closed") {
-        s.emit(pelty_extensions::events::DomainEvent::new("ticket.closed", json!({ "ticket_id": id, "reason": "staff", "by_staff": true })));
+        s.emit(pelty_extensions::events::DomainEvent::new(
+            "ticket.closed",
+            json!({ "ticket_id": id, "reason": "staff", "by_staff": true }),
+        ));
     }
-    let t = s.tickets().get(id, None)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    let t = s.tickets().get(id, None).await?.ok_or(AppError::NotFound)?;
     detail(&s, t, true).await
 }
 
@@ -644,9 +762,7 @@ pub async fn admin_reply(
     Path(id): Path<Uuid>,
     Json(b): Json<ReplyBody>,
 ) -> ApiResult<Json<Value>> {
-    s.tickets().get(id, None)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    s.tickets().get(id, None).await?.ok_or(AppError::NotFound)?;
     let body = text(&b.body, 20000, "error.invalid_message")?;
     let body = pre_reply(&s, id, body, true, b.internal).await?;
     tickets::reply(
@@ -665,11 +781,12 @@ pub async fn admin_reply(
             json!({ "ticket_id": id, "by_staff": true }),
         ));
     } else {
-        s.emit(pelty_extensions::events::DomainEvent::new("ticket.note_added", json!({ "ticket_id": id, "by": u.user_id })));
+        s.emit(pelty_extensions::events::DomainEvent::new(
+            "ticket.note_added",
+            json!({ "ticket_id": id, "by": u.user_id }),
+        ));
     }
-    let t = s.tickets().get(id, None)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    let t = s.tickets().get(id, None).await?.ok_or(AppError::NotFound)?;
     if !b.internal {
         notify_customer(&s, &t).await?;
     }
@@ -692,7 +809,11 @@ pub async fn admin_reply(
 /// Enforces the configurable per-message attachment count.
 async fn att_ok<'a>(s: &AppState, ids: &'a [Uuid]) -> Result<&'a [Uuid], AppError> {
     if !ids.is_empty() {
-        let max = pelty_database::general_settings::load(&s.pool).await?.support.attachments_per_message.max(1) as usize;
+        let max = pelty_database::general_settings::load(&s.pool)
+            .await?
+            .support
+            .attachments_per_message
+            .max(1) as usize;
         if ids.len() > max {
             return Err(AppError::Validation("error.attachment_count"));
         }

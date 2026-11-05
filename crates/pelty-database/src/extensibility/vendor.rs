@@ -51,7 +51,10 @@ pub fn sale_price(cost: Decimal, markup_percent: Decimal, exponent: u32) -> AppR
         return Err(AppError::Validation("error.invalid_markup"));
     }
     let p = cost * (Decimal::ONE + markup_percent / Decimal::from(100));
-    Ok(p.round_dp_with_strategy(exponent, RoundingStrategy::MidpointAwayFromZero).max(Decimal::ZERO))
+    Ok(
+        p.round_dp_with_strategy(exponent, RoundingStrategy::MidpointAwayFromZero)
+            .max(Decimal::ZERO),
+    )
 }
 
 /// Upsert the vendor's catalog; SKUs no longer offered become unavailable
@@ -99,25 +102,44 @@ const SELECT: &str = "SELECT v.id, v.server_id, s.name AS server_name, s.module,
    LEFT JOIN product_prices pp ON pp.product_id = v.product_id AND pp.currency = v.currency AND pp.cycle = v.cycle";
 
 pub async fn list(pool: &PgPool, server: Option<Uuid>) -> AppResult<Vec<Item>> {
-    sqlx::query_as(&format!("{SELECT} WHERE ($1::uuid IS NULL OR v.server_id = $1) ORDER BY s.name, v.name, v.sku"))
-        .bind(server)
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(&format!(
+        "{SELECT} WHERE ($1::uuid IS NULL OR v.server_id = $1) ORDER BY s.name, v.name, v.sku"
+    ))
+    .bind(server)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Item> {
-    sqlx::query_as(&format!("{SELECT} WHERE v.id = $1")).bind(id).fetch_optional(pool).await.map_err(db_err)?.ok_or(AppError::NotFound)
+    sqlx::query_as(&format!("{SELECT} WHERE v.id = $1"))
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?
+        .ok_or(AppError::NotFound)
 }
 
 async fn exponent(pool: &PgPool, currency: &str) -> AppResult<u32> {
-    let e: Option<i16> = sqlx::query_scalar("SELECT exponent FROM currencies WHERE code = $1 AND enabled").bind(currency).fetch_optional(pool).await.map_err(db_err)?;
-    e.map(|e| e as u32).ok_or(AppError::Validation("error.currency_disabled"))
+    let e: Option<i16> =
+        sqlx::query_scalar("SELECT exponent FROM currencies WHERE code = $1 AND enabled")
+            .bind(currency)
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?;
+    e.map(|e| e as u32)
+        .ok_or(AppError::Validation("error.currency_disabled"))
 }
 
 /// Create a product for a catalog item: module + server + config copied,
 /// one price (cost + markup) in the vendor's currency/cycle.
-pub async fn import(pool: &PgPool, id: Uuid, group: Uuid, markup: Decimal, name: Option<&str>) -> AppResult<Uuid> {
+pub async fn import(
+    pool: &PgPool,
+    id: Uuid,
+    group: Uuid,
+    markup: Decimal,
+    name: Option<&str>,
+) -> AppResult<Uuid> {
     let it = get(pool, id).await?;
     if it.product_id.is_some() {
         return Err(AppError::Conflict("error.vendor_already_imported"));
@@ -126,12 +148,31 @@ pub async fn import(pool: &PgPool, id: Uuid, group: Uuid, markup: Decimal, name:
         return Err(AppError::Conflict("error.vendor_unavailable"));
     }
     let price = sale_price(it.cost, markup, exponent(pool, &it.currency).await?)?;
-    let config: serde_json::Value = sqlx::query_scalar("SELECT config FROM vendor_catalog WHERE id = $1").bind(id).fetch_one(pool).await.map_err(db_err)?;
-    let slug_base: String = it.sku.to_ascii_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
-    let slug = format!("{}-{}", slug_base.trim_matches('-'), &Uuid::new_v4().simple().to_string()[..6]);
+    let config: serde_json::Value =
+        sqlx::query_scalar("SELECT config FROM vendor_catalog WHERE id = $1")
+            .bind(id)
+            .fetch_one(pool)
+            .await
+            .map_err(db_err)?;
+    let slug_base: String = it
+        .sku
+        .to_ascii_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    let slug = format!(
+        "{}-{}",
+        slug_base.trim_matches('-'),
+        &Uuid::new_v4().simple().to_string()[..6]
+    );
     let input = crate::catalog::ProductInput {
         group_id: Some(group),
-        name: Some(name.map(str::trim).filter(|n| !n.is_empty()).unwrap_or(&it.name).to_string()),
+        name: Some(
+            name.map(str::trim)
+                .filter(|n| !n.is_empty())
+                .unwrap_or(&it.name)
+                .to_string(),
+        ),
         slug: Some(slug),
         description: Some(it.description.clone()),
         status: Some("active".into()),
@@ -140,8 +181,26 @@ pub async fn import(pool: &PgPool, id: Uuid, group: Uuid, markup: Decimal, name:
         sort_order: None,
     };
     let p = crate::catalog::create_product(pool, &input).await?;
-    crate::provisioning::set_product_module(pool, p.id, Some(&it.module), Some(it.server_id), &config).await?;
-    crate::catalog::set_prices(pool, p.id, &[crate::catalog::Price { product_id: Some(p.id), currency: it.currency.clone(), cycle: it.cycle.clone(), amount: price, setup_fee: Decimal::ZERO }]).await?;
+    crate::provisioning::set_product_module(
+        pool,
+        p.id,
+        Some(&it.module),
+        Some(it.server_id),
+        &config,
+    )
+    .await?;
+    crate::catalog::set_prices(
+        pool,
+        p.id,
+        &[crate::catalog::Price {
+            product_id: Some(p.id),
+            currency: it.currency.clone(),
+            cycle: it.cycle.clone(),
+            amount: price,
+            setup_fee: Decimal::ZERO,
+        }],
+    )
+    .await?;
     let r = sqlx::query("UPDATE vendor_catalog SET product_id = $2, markup_percent = $3 WHERE id = $1 AND product_id IS NULL").bind(id).bind(p.id).bind(markup).execute(pool).await.map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::Conflict("error.vendor_already_imported"));
@@ -153,7 +212,9 @@ pub async fn import(pool: &PgPool, id: Uuid, group: Uuid, markup: Decimal, name:
 /// prices staff added by hand are left alone). Returns the new price.
 pub async fn reprice(pool: &PgPool, id: Uuid, markup: Decimal) -> AppResult<Decimal> {
     let it = get(pool, id).await?;
-    let pid = it.product_id.ok_or(AppError::Conflict("error.vendor_not_imported"))?;
+    let pid = it
+        .product_id
+        .ok_or(AppError::Conflict("error.vendor_not_imported"))?;
     let price = sale_price(it.cost, markup, exponent(pool, &it.currency).await?)?;
     let mut tx = pool.begin().await.map_err(db_err)?;
     sqlx::query(
@@ -168,7 +229,12 @@ pub async fn reprice(pool: &PgPool, id: Uuid, markup: Decimal) -> AppResult<Deci
     .execute(&mut *tx)
     .await
     .map_err(db_err)?;
-    sqlx::query("UPDATE vendor_catalog SET markup_percent = $2 WHERE id = $1").bind(id).bind(markup).execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("UPDATE vendor_catalog SET markup_percent = $2 WHERE id = $1")
+        .bind(id)
+        .bind(markup)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
     Ok(price)
 }

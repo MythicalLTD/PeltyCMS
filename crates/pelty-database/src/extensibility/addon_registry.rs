@@ -24,11 +24,20 @@ pub struct InstalledAddon {
 const COLS: &str = "id, kind, engine, version, source, enabled, settings, permissions, manifest_hash, installed_at";
 
 pub async fn list(pool: &PgPool) -> AppResult<Vec<InstalledAddon>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM installed_addons ORDER BY id")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(&format!("SELECT {COLS} FROM installed_addons ORDER BY id"))
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn get(pool: &PgPool, id: &str) -> AppResult<Option<InstalledAddon>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM installed_addons WHERE id = $1")).bind(id).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {COLS} FROM installed_addons WHERE id = $1"
+    ))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// True when an addon of `kind` providing `engine` is installed and enabled.
@@ -64,7 +73,11 @@ pub struct NewAddon<'a> {
 
 /// Insert the registry row and run the addon's SQL migrations atomically.
 /// `migrations` = (name, checksum, sql).
-pub async fn install(pool: &PgPool, a: &NewAddon<'_>, migrations: &[(String, String, String)]) -> AppResult<()> {
+pub async fn install(
+    pool: &PgPool,
+    a: &NewAddon<'_>,
+    migrations: &[(String, String, String)],
+) -> AppResult<()> {
     let mut tx = pool.begin().await.map_err(db_err)?;
     sqlx::query(
         "INSERT INTO installed_addons (id, kind, engine, version, source, enabled, settings, permissions, manifest_hash)
@@ -82,16 +95,20 @@ pub async fn install(pool: &PgPool, a: &NewAddon<'_>, migrations: &[(String, Str
     .await
     .map_err(db_err)?;
     for (name, sum, sql) in migrations {
-        let done: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM addon_migrations WHERE addon_id = $1 AND name = $2)")
-            .bind(a.id)
-            .bind(name)
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(db_err)?;
+        let done: bool = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM addon_migrations WHERE addon_id = $1 AND name = $2)",
+        )
+        .bind(a.id)
+        .bind(name)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_err)?;
         if done {
             continue;
         }
-        sqlx::Executor::execute(&mut *tx, sql.as_str()).await.map_err(db_err)?;
+        sqlx::Executor::execute(&mut *tx, sql.as_str())
+            .await
+            .map_err(db_err)?;
         sqlx::query("INSERT INTO addon_migrations (addon_id, name, checksum) VALUES ($1,$2,$3)")
             .bind(a.id)
             .bind(name)
@@ -104,33 +121,43 @@ pub async fn install(pool: &PgPool, a: &NewAddon<'_>, migrations: &[(String, Str
 }
 
 pub async fn set_enabled(pool: &PgPool, id: &str, enabled: bool) -> AppResult<bool> {
-    let r = sqlx::query("UPDATE installed_addons SET enabled = $2, updated_at = now() WHERE id = $1")
-        .bind(id)
-        .bind(enabled)
-        .execute(pool)
-        .await
-        .map_err(db_err)?;
+    let r =
+        sqlx::query("UPDATE installed_addons SET enabled = $2, updated_at = now() WHERE id = $1")
+            .bind(id)
+            .bind(enabled)
+            .execute(pool)
+            .await
+            .map_err(db_err)?;
     Ok(r.rows_affected() == 1)
 }
 
 pub async fn set_settings(pool: &PgPool, id: &str, settings: &Value) -> AppResult<bool> {
-    let r = sqlx::query("UPDATE installed_addons SET settings = $2, updated_at = now() WHERE id = $1")
-        .bind(id)
-        .bind(settings)
-        .execute(pool)
-        .await
-        .map_err(db_err)?;
+    let r =
+        sqlx::query("UPDATE installed_addons SET settings = $2, updated_at = now() WHERE id = $1")
+            .bind(id)
+            .bind(settings)
+            .execute(pool)
+            .await
+            .map_err(db_err)?;
     Ok(r.rows_affected() == 1)
 }
 
 pub async fn remove(pool: &PgPool, id: &str) -> AppResult<bool> {
-    let r = sqlx::query("DELETE FROM installed_addons WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("DELETE FROM installed_addons WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(r.rows_affected() == 1)
 }
 
 /// Products whose provisioning module is `engine`.
 pub async fn products_using_module(pool: &PgPool, engine: &str) -> AppResult<i64> {
-    sqlx::query_scalar("SELECT count(*) FROM products WHERE module = $1").bind(engine).fetch_one(pool).await.map_err(db_err)
+    sqlx::query_scalar("SELECT count(*) FROM products WHERE module = $1")
+        .bind(engine)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)
 }
 
 /// TLDs priced with, plus live domains held at, registrar `engine`.
@@ -146,7 +173,11 @@ pub async fn registrar_in_use(pool: &PgPool, engine: &str) -> AppResult<i64> {
 }
 
 /// Disable every payment_gateways row served by `engine` (custom-* for custom_http).
-pub async fn disable_gateway_rows(pool: &PgPool, engine: &str, custom_prefix: &str) -> AppResult<()> {
+pub async fn disable_gateway_rows(
+    pool: &PgPool,
+    engine: &str,
+    custom_prefix: &str,
+) -> AppResult<()> {
     sqlx::query("UPDATE payment_gateways SET enabled = false WHERE id = $1 OR ($1 = 'custom_http' AND starts_with(id, $2))")
         .bind(engine)
         .bind(custom_prefix)
@@ -158,25 +189,56 @@ pub async fn disable_gateway_rows(pool: &PgPool, engine: &str, custom_prefix: &s
 
 /// Names of migrations already applied for an addon.
 pub async fn applied_migrations(pool: &PgPool, id: &str) -> AppResult<Vec<String>> {
-    sqlx::query_scalar("SELECT name FROM addon_migrations WHERE addon_id = $1 ORDER BY name").bind(id).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_scalar("SELECT name FROM addon_migrations WHERE addon_id = $1 ORDER BY name")
+        .bind(id)
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 /// Recorded checksums of migrations already applied; no SQL is executed.
-pub async fn applied_migration_checksums(pool: &PgPool, id: &str) -> AppResult<std::collections::BTreeMap<String, String>> {
-    let rows: Vec<(String, String)> = sqlx::query_as("SELECT name, checksum FROM addon_migrations WHERE addon_id = $1 ORDER BY name")
-        .bind(id).fetch_all(pool).await.map_err(db_err)?;
+pub async fn applied_migration_checksums(
+    pool: &PgPool,
+    id: &str,
+) -> AppResult<std::collections::BTreeMap<String, String>> {
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT name, checksum FROM addon_migrations WHERE addon_id = $1 ORDER BY name",
+    )
+    .bind(id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
     Ok(rows.into_iter().collect())
 }
 
 /// Record an in-place package upgrade (new version + manifest hash).
-pub async fn set_package(pool: &PgPool, id: &str, version: &str, manifest_hash: &str) -> AppResult<bool> {
-    let r = sqlx::query("UPDATE installed_addons SET version = $2, manifest_hash = $3 WHERE id = $1").bind(id).bind(version).bind(manifest_hash).execute(pool).await.map_err(db_err)?;
+pub async fn set_package(
+    pool: &PgPool,
+    id: &str,
+    version: &str,
+    manifest_hash: &str,
+) -> AppResult<bool> {
+    let r =
+        sqlx::query("UPDATE installed_addons SET version = $2, manifest_hash = $3 WHERE id = $1")
+            .bind(id)
+            .bind(version)
+            .bind(manifest_hash)
+            .execute(pool)
+            .await
+            .map_err(db_err)?;
     Ok(r.rows_affected() == 1)
 }
 
 /// Map a row installed by an older release (source `builtin`) to the addon
 /// package that now provides it; enabled state and settings are kept.
-pub async fn adopt_package(pool: &PgPool, id: &str, version: &str, manifest_hash: &str, source: &str, permissions: &[String]) -> AppResult<bool> {
+pub async fn adopt_package(
+    pool: &PgPool,
+    id: &str,
+    version: &str,
+    manifest_hash: &str,
+    source: &str,
+    permissions: &[String],
+) -> AppResult<bool> {
     let r = sqlx::query("UPDATE installed_addons SET version = $2, manifest_hash = $3, source = $4, permissions = $5 WHERE id = $1")
         .bind(id)
         .bind(version)

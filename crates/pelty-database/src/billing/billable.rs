@@ -2,8 +2,8 @@
 //! renewal invoice, or invoiced immediately) and recurring charges invoiced
 //! by the daily billing job.
 use crate::db_err;
-use crate::invoices::{self, NewItem};
 use crate::invoices::Tx;
+use crate::invoices::{self, NewItem};
 use pelty_billing::cycle;
 use pelty_core::{AppError, AppResult};
 use rust_decimal::Decimal;
@@ -58,7 +58,11 @@ pub fn check(b: &BillableInput) -> AppResult<()> {
     }
     if b.invoice_action == "recurring" {
         let c = b.recur_cycle.as_deref().unwrap_or("");
-        if !cycle::is_valid(c) || c == "one_time" || b.next_due_date.is_none() || b.recur_times.is_some_and(|t| !(1..=1000).contains(&t)) {
+        if !cycle::is_valid(c)
+            || c == "one_time"
+            || b.next_due_date.is_none()
+            || b.recur_times.is_some_and(|t| !(1..=1000).contains(&t))
+        {
             return Err(v());
         }
     }
@@ -94,14 +98,20 @@ fn line(desc: &str, qty: Decimal, price: Decimal) -> NewItem {
 }
 
 /// Create an item; `invoice_now` also issues its invoice (returned).
-pub async fn create(pool: &PgPool, by: Uuid, b: &BillableInput, due_days: i64) -> AppResult<(Uuid, Option<Uuid>)> {
+pub async fn create(
+    pool: &PgPool,
+    by: Uuid,
+    b: &BillableInput,
+    due_days: i64,
+) -> AppResult<(Uuid, Option<Uuid>)> {
     check(b)?;
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let cur: Option<String> = sqlx::query_scalar("SELECT currency::text FROM customers WHERE id = $1")
-        .bind(b.customer_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db_err)?;
+    let cur: Option<String> =
+        sqlx::query_scalar("SELECT currency::text FROM customers WHERE id = $1")
+            .bind(b.customer_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_err)?;
     let cur = cur.ok_or(AppError::NotFound)?;
     let id = Uuid::new_v4();
     let recurring = b.invoice_action == "recurring";
@@ -127,7 +137,13 @@ pub async fn create(pool: &PgPool, by: Uuid, b: &BillableInput, due_days: i64) -
     let mut inv = None;
     if b.invoice_action == "invoice_now" {
         let i = invoices::create_draft(&mut tx, b.customer_id, &cur, None).await?;
-        invoices::add_items(&mut tx, i, &cur, &[line(b.description.trim(), b.quantity, b.unit_price)]).await?;
+        invoices::add_items(
+            &mut tx,
+            i,
+            &cur,
+            &[line(b.description.trim(), b.quantity, b.unit_price)],
+        )
+        .await?;
         invoices::finalize(&mut tx, i, due_days).await?;
         mark(&mut tx, &[id], i).await?;
         inv = Some(i);
@@ -137,12 +153,14 @@ pub async fn create(pool: &PgPool, by: Uuid, b: &BillableInput, due_days: i64) -
 }
 
 async fn mark(tx: &mut Tx<'_>, ids: &[Uuid], invoice: Uuid) -> AppResult<()> {
-    sqlx::query("UPDATE billable_items SET invoice_id = $2, invoiced_at = now() WHERE id = ANY($1)")
-        .bind(ids)
-        .bind(invoice)
-        .execute(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    sqlx::query(
+        "UPDATE billable_items SET invoice_id = $2, invoiced_at = now() WHERE id = ANY($1)",
+    )
+    .bind(ids)
+    .bind(invoice)
+    .execute(&mut **tx)
+    .await
+    .map_err(db_err)?;
     Ok(())
 }
 
@@ -162,7 +180,12 @@ pub async fn delete(pool: &PgPool, id: Uuid) -> AppResult<()> {
 
 type Pending = (Uuid, String, Decimal, Decimal);
 
-async fn pending(tx: &mut Tx<'_>, customer: Uuid, currency: &str, actions: &[&str]) -> AppResult<Vec<Pending>> {
+async fn pending(
+    tx: &mut Tx<'_>,
+    customer: Uuid,
+    currency: &str,
+    actions: &[&str],
+) -> AppResult<Vec<Pending>> {
     let acts: Vec<String> = actions.iter().map(|s| s.to_string()).collect();
     sqlx::query_as(
         "SELECT id, description, quantity, unit_price FROM billable_items
@@ -178,7 +201,12 @@ async fn pending(tx: &mut Tx<'_>, customer: Uuid, currency: &str, actions: &[&st
 }
 
 /// Add the client's `next_invoice` items to a draft (renewal) invoice.
-pub async fn attach_next(tx: &mut Tx<'_>, customer: Uuid, currency: &str, invoice: Uuid) -> AppResult<usize> {
+pub async fn attach_next(
+    tx: &mut Tx<'_>,
+    customer: Uuid,
+    currency: &str,
+    invoice: Uuid,
+) -> AppResult<usize> {
     let rows = pending(tx, customer, currency, &["next_invoice"]).await?;
     if rows.is_empty() {
         return Ok(0);
@@ -191,13 +219,18 @@ pub async fn attach_next(tx: &mut Tx<'_>, customer: Uuid, currency: &str, invoic
 }
 
 /// Invoice all of a client's held / next-invoice items now (one invoice).
-pub async fn invoice_pending(pool: &PgPool, customer: Uuid, due_days: i64) -> AppResult<Option<Uuid>> {
+pub async fn invoice_pending(
+    pool: &PgPool,
+    customer: Uuid,
+    due_days: i64,
+) -> AppResult<Option<Uuid>> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let cur: Option<String> = sqlx::query_scalar("SELECT currency::text FROM customers WHERE id = $1")
-        .bind(customer)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db_err)?;
+    let cur: Option<String> =
+        sqlx::query_scalar("SELECT currency::text FROM customers WHERE id = $1")
+            .bind(customer)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_err)?;
     let cur = cur.ok_or(AppError::NotFound)?;
     let rows = pending(&mut tx, customer, &cur, &["hold", "next_invoice"]).await?;
     if rows.is_empty() {
@@ -215,8 +248,23 @@ pub async fn invoice_pending(pool: &PgPool, customer: Uuid, due_days: i64) -> Ap
 
 /// Invoice recurring items due on/before `horizon`, one period each, then
 /// advance them (idempotent under concurrent workers).
-pub async fn bill_recurring(pool: &PgPool, horizon: Date, due_days: i64, batch: i64) -> AppResult<Vec<(Uuid, Uuid)>> {
-    type Row = (Uuid, Uuid, String, Decimal, Decimal, String, String, Date, Option<i32>);
+pub async fn bill_recurring(
+    pool: &PgPool,
+    horizon: Date,
+    due_days: i64,
+    batch: i64,
+) -> AppResult<Vec<(Uuid, Uuid)>> {
+    type Row = (
+        Uuid,
+        Uuid,
+        String,
+        Decimal,
+        Decimal,
+        String,
+        String,
+        Date,
+        Option<i32>,
+    );
     let due: Vec<Row> = sqlx::query_as(
         "SELECT id, customer_id, description, quantity, unit_price, currency::text, recur_cycle, next_due_date, recur_remaining
          FROM billable_items WHERE invoice_action = 'recurring' AND next_due_date <= $1
@@ -230,18 +278,28 @@ pub async fn bill_recurring(pool: &PgPool, horizon: Date, due_days: i64, batch: 
     .map_err(db_err)?;
     let mut out = Vec::new();
     for (id, cust, desc, qty, price, cur, cyc, next, left) in due {
-        let Some((start, end)) = cycle::period(next, &cyc) else { continue };
+        let Some((start, end)) = cycle::period(next, &cyc) else {
+            continue;
+        };
         let mut tx = pool.begin().await.map_err(db_err)?;
-        let still: Option<Option<Date>> = sqlx::query_scalar("SELECT next_due_date FROM billable_items WHERE id = $1 FOR UPDATE SKIP LOCKED")
-            .bind(id)
-            .fetch_optional(&mut *tx)
-            .await
-            .map_err(db_err)?;
+        let still: Option<Option<Date>> = sqlx::query_scalar(
+            "SELECT next_due_date FROM billable_items WHERE id = $1 FOR UPDATE SKIP LOCKED",
+        )
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(db_err)?;
         if still.flatten() != Some(next) {
             continue;
         }
         let inv = invoices::create_draft(&mut tx, cust, &cur, None).await?;
-        invoices::add_items(&mut tx, inv, &cur, &[line(&format!("{desc} ({start}, {end})"), qty, price)]).await?;
+        invoices::add_items(
+            &mut tx,
+            inv,
+            &cur,
+            &[line(&format!("{desc} ({start}, {end})"), qty, price)],
+        )
+        .await?;
         invoices::finalize(&mut tx, inv, due_days).await?;
         let left = left.map(|l| l - 1);
         sqlx::query("UPDATE billable_items SET next_due_date = CASE WHEN $3::int = 0 THEN NULL ELSE $2 END, recur_remaining = $3, invoice_id = $4, invoiced_at = now() WHERE id = $1")
@@ -264,11 +322,13 @@ pub async fn add_draft_lines(pool: &PgPool, invoice: Uuid, lines: &[NewItem]) ->
         return Err(v());
     }
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let row: Option<(String, bool)> = sqlx::query_as("SELECT currency::text, finalized_at IS NOT NULL FROM invoices WHERE id = $1 FOR UPDATE")
-        .bind(invoice)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db_err)?;
+    let row: Option<(String, bool)> = sqlx::query_as(
+        "SELECT currency::text, finalized_at IS NOT NULL FROM invoices WHERE id = $1 FOR UPDATE",
+    )
+    .bind(invoice)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_err)?;
     let (cur, fin) = row.ok_or(AppError::NotFound)?;
     if fin {
         return Err(AppError::Conflict("error.invoice_finalized"));
@@ -280,11 +340,12 @@ pub async fn add_draft_lines(pool: &PgPool, invoice: Uuid, lines: &[NewItem]) ->
 
 /// Per-product invoice lead time (days before due), `None` = global default.
 pub async fn product_days(pool: &PgPool, product: Uuid) -> AppResult<Option<i32>> {
-    let r: Option<Option<i32>> = sqlx::query_scalar("SELECT invoice_days_before FROM products WHERE id = $1")
-        .bind(product)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?;
+    let r: Option<Option<i32>> =
+        sqlx::query_scalar("SELECT invoice_days_before FROM products WHERE id = $1")
+            .bind(product)
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?;
     r.ok_or(AppError::NotFound)
 }
 
@@ -306,15 +367,20 @@ pub async fn set_product_days(pool: &PgPool, product: Uuid, days: Option<i32>) -
 
 /// Fixed-term length in days for a product (null = not fixed-term).
 pub async fn product_fixed_term(pool: &PgPool, product: Uuid) -> AppResult<Option<i32>> {
-    let r: Option<Option<i32>> = sqlx::query_scalar("SELECT auto_terminate_days FROM products WHERE id = $1")
-        .bind(product)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?;
+    let r: Option<Option<i32>> =
+        sqlx::query_scalar("SELECT auto_terminate_days FROM products WHERE id = $1")
+            .bind(product)
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?;
     r.ok_or(AppError::NotFound)
 }
 
-pub async fn set_product_fixed_term(pool: &PgPool, product: Uuid, days: Option<i32>) -> AppResult<()> {
+pub async fn set_product_fixed_term(
+    pool: &PgPool,
+    product: Uuid,
+    days: Option<i32>,
+) -> AppResult<()> {
     if days.is_some_and(|d| !(1..=3650).contains(&d)) {
         return Err(v());
     }
@@ -367,15 +433,39 @@ mod tests {
     fn validates_items() {
         assert!(check(&input("hold")).is_ok());
         assert!(check(&input("bogus")).is_err());
-        assert!(check(&BillableInput { description: " ".into(), ..input("hold") }).is_err());
-        assert!(check(&BillableInput { quantity: Decimal::ZERO, ..input("hold") }).is_err());
-        assert!(check(&BillableInput { unit_price: Decimal::from(-1), ..input("hold") }).is_err());
+        assert!(check(&BillableInput {
+            description: " ".into(),
+            ..input("hold")
+        })
+        .is_err());
+        assert!(check(&BillableInput {
+            quantity: Decimal::ZERO,
+            ..input("hold")
+        })
+        .is_err());
+        assert!(check(&BillableInput {
+            unit_price: Decimal::from(-1),
+            ..input("hold")
+        })
+        .is_err());
         // recurring needs a real cycle and a start date
         assert!(check(&input("recurring")).is_err());
         let d = Date::from_calendar_date(2030, time::Month::January, 1).unwrap();
-        let r = BillableInput { recur_cycle: Some("monthly".into()), next_due_date: Some(d), ..input("recurring") };
+        let r = BillableInput {
+            recur_cycle: Some("monthly".into()),
+            next_due_date: Some(d),
+            ..input("recurring")
+        };
         assert!(check(&r).is_ok());
-        assert!(check(&BillableInput { recur_cycle: Some("one_time".into()), ..r.clone() }).is_err());
-        assert!(check(&BillableInput { recur_times: Some(0), ..r }).is_err());
+        assert!(check(&BillableInput {
+            recur_cycle: Some("one_time".into()),
+            ..r.clone()
+        })
+        .is_err());
+        assert!(check(&BillableInput {
+            recur_times: Some(0),
+            ..r
+        })
+        .is_err());
     }
 }

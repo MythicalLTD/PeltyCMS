@@ -64,7 +64,11 @@ pub struct AnnouncementInput<'a> {
 const ART: &str = "id, category_id, slug, title, body, locale, is_published, views, helpful_yes, helpful_no, updated_at";
 const ANN: &str = "id, title, body, locale, is_published, published_at";
 
-pub async fn categories(pool: &PgPool, published_only: bool, locale: Option<&str>) -> AppResult<Vec<Category>> {
+pub async fn categories(
+    pool: &PgPool,
+    published_only: bool,
+    locale: Option<&str>,
+) -> AppResult<Vec<Category>> {
     sqlx::query_as(
         "SELECT c.id, c.slug, c.name, c.description, c.sort_order,
                 count(a.id) FILTER (WHERE (NOT $1 OR a.is_published) AND ($2::text IS NULL OR a.locale IS NULL OR a.locale = $2)) AS article_count
@@ -78,7 +82,13 @@ pub async fn categories(pool: &PgPool, published_only: bool, locale: Option<&str
     .map_err(db_err)
 }
 
-pub async fn create_category(pool: &PgPool, slug: &str, name: &str, description: &str, sort_order: i32) -> AppResult<Uuid> {
+pub async fn create_category(
+    pool: &PgPool,
+    slug: &str,
+    name: &str,
+    description: &str,
+    sort_order: i32,
+) -> AppResult<Uuid> {
     sqlx::query_scalar("INSERT INTO kb_categories (slug, name, description, sort_order) VALUES ($1,$2,$3,$4) RETURNING id")
         .bind(slug)
         .bind(name)
@@ -89,35 +99,57 @@ pub async fn create_category(pool: &PgPool, slug: &str, name: &str, description:
         .map_err(db_err)
 }
 
-pub async fn update_category(pool: &PgPool, id: Uuid, slug: &str, name: &str, description: &str, sort_order: i32) -> AppResult<bool> {
-    let r = sqlx::query("UPDATE kb_categories SET slug=$2, name=$3, description=$4, sort_order=$5 WHERE id=$1")
+pub async fn update_category(
+    pool: &PgPool,
+    id: Uuid,
+    slug: &str,
+    name: &str,
+    description: &str,
+    sort_order: i32,
+) -> AppResult<bool> {
+    let r = sqlx::query(
+        "UPDATE kb_categories SET slug=$2, name=$3, description=$4, sort_order=$5 WHERE id=$1",
+    )
+    .bind(id)
+    .bind(slug)
+    .bind(name)
+    .bind(description)
+    .bind(sort_order)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
+    Ok(r.rows_affected() == 1)
+}
+
+/// Fails with a FK violation (mapped by `db_err`) while articles remain.
+pub async fn delete_category(pool: &PgPool, id: Uuid) -> AppResult<bool> {
+    let r = sqlx::query("DELETE FROM kb_categories WHERE id=$1")
         .bind(id)
-        .bind(slug)
-        .bind(name)
-        .bind(description)
-        .bind(sort_order)
         .execute(pool)
         .await
         .map_err(db_err)?;
     Ok(r.rows_affected() == 1)
 }
 
-/// Fails with a FK violation (mapped by `db_err`) while articles remain.
-pub async fn delete_category(pool: &PgPool, id: Uuid) -> AppResult<bool> {
-    let r = sqlx::query("DELETE FROM kb_categories WHERE id=$1").bind(id).execute(pool).await.map_err(db_err)?;
-    Ok(r.rows_affected() == 1)
-}
-
 /// Article list. `q` uses Postgres full-text search (simple config, prefix match).
-pub async fn articles(pool: &PgPool, published_only: bool, locale: Option<&str>, category: Option<Uuid>, q: Option<&str>, limit: i64) -> AppResult<Vec<Article>> {
-    let tsq = q.map(|q| {
-        q.split(|c: char| !c.is_alphanumeric())
-            .filter(|w| !w.is_empty())
-            .take(8)
-            .map(|w| format!("{w}:*"))
-            .collect::<Vec<_>>()
-            .join(" & ")
-    }).filter(|s| !s.is_empty());
+pub async fn articles(
+    pool: &PgPool,
+    published_only: bool,
+    locale: Option<&str>,
+    category: Option<Uuid>,
+    q: Option<&str>,
+    limit: i64,
+) -> AppResult<Vec<Article>> {
+    let tsq = q
+        .map(|q| {
+            q.split(|c: char| !c.is_alphanumeric())
+                .filter(|w| !w.is_empty())
+                .take(8)
+                .map(|w| format!("{w}:*"))
+                .collect::<Vec<_>>()
+                .join(" & ")
+        })
+        .filter(|s| !s.is_empty());
     sqlx::query_as(&format!(
         "SELECT {ART} FROM kb_articles
          WHERE (NOT $1 OR is_published) AND ($2::text IS NULL OR locale IS NULL OR locale = $2)
@@ -151,8 +183,15 @@ pub fn suggest_query(text: &str) -> Option<String> {
 }
 
 /// Published articles most relevant to free text (e.g. a new ticket's subject).
-pub async fn suggest(pool: &PgPool, locale: Option<&str>, text: &str, limit: i64) -> AppResult<Vec<Article>> {
-    let Some(q) = suggest_query(text) else { return Ok(Vec::new()) };
+pub async fn suggest(
+    pool: &PgPool,
+    locale: Option<&str>,
+    text: &str,
+    limit: i64,
+) -> AppResult<Vec<Article>> {
+    let Some(q) = suggest_query(text) else {
+        return Ok(Vec::new());
+    };
     sqlx::query_as(&format!(
         "SELECT {ART} FROM kb_articles
          WHERE is_published AND ($1::text IS NULL OR locale IS NULL OR locale = $1) AND search @@ to_tsquery('simple', $2)
@@ -167,16 +206,22 @@ pub async fn suggest(pool: &PgPool, locale: Option<&str>, text: &str, limit: i64
 }
 
 pub async fn article(pool: &PgPool, id: Uuid) -> AppResult<Option<Article>> {
-    sqlx::query_as(&format!("SELECT {ART} FROM kb_articles WHERE id=$1")).bind(id).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as(&format!("SELECT {ART} FROM kb_articles WHERE id=$1"))
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 /// Published article by slug; increments the view counter.
 pub async fn view_article(pool: &PgPool, slug: &str) -> AppResult<Option<Article>> {
-    sqlx::query_as(&format!("UPDATE kb_articles SET views = views + 1 WHERE slug=$1 AND is_published RETURNING {ART}"))
-        .bind(slug)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(&format!(
+        "UPDATE kb_articles SET views = views + 1 WHERE slug=$1 AND is_published RETURNING {ART}"
+    ))
+    .bind(slug)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn vote(pool: &PgPool, slug: &str, helpful: bool) -> AppResult<bool> {
@@ -208,7 +253,11 @@ pub async fn create_article(pool: &PgPool, a: &ArticleInput<'_>) -> AppResult<Ar
     .map_err(db_err)
 }
 
-pub async fn update_article(pool: &PgPool, id: Uuid, a: &ArticleInput<'_>) -> AppResult<Option<Article>> {
+pub async fn update_article(
+    pool: &PgPool,
+    id: Uuid,
+    a: &ArticleInput<'_>,
+) -> AppResult<Option<Article>> {
     sqlx::query_as(&format!(
         "UPDATE kb_articles SET category_id=$2, slug=$3, title=$4, body=$5, locale=$6, is_published=$7, updated_at=now()
          WHERE id=$1 RETURNING {ART}"
@@ -226,11 +275,21 @@ pub async fn update_article(pool: &PgPool, id: Uuid, a: &ArticleInput<'_>) -> Ap
 }
 
 pub async fn delete_article(pool: &PgPool, id: Uuid) -> AppResult<bool> {
-    let r = sqlx::query("DELETE FROM kb_articles WHERE id=$1").bind(id).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("DELETE FROM kb_articles WHERE id=$1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(r.rows_affected() == 1)
 }
 
-pub async fn announcements(pool: &PgPool, published_only: bool, locale: Option<&str>, limit: i64, offset: i64) -> AppResult<(Vec<Announcement>, i64)> {
+pub async fn announcements(
+    pool: &PgPool,
+    published_only: bool,
+    locale: Option<&str>,
+    limit: i64,
+    offset: i64,
+) -> AppResult<(Vec<Announcement>, i64)> {
     let filter = "(NOT $1 OR (is_published AND published_at <= now())) AND ($2::text IS NULL OR locale IS NULL OR locale = $2)";
     let items = sqlx::query_as(&format!("SELECT {ANN} FROM announcements WHERE {filter} ORDER BY published_at DESC LIMIT $3 OFFSET $4"))
         .bind(published_only)
@@ -240,16 +299,22 @@ pub async fn announcements(pool: &PgPool, published_only: bool, locale: Option<&
         .fetch_all(pool)
         .await
         .map_err(db_err)?;
-    let total = sqlx::query_scalar(&format!("SELECT count(*) FROM announcements WHERE {filter}"))
-        .bind(published_only)
-        .bind(locale)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+    let total = sqlx::query_scalar(&format!(
+        "SELECT count(*) FROM announcements WHERE {filter}"
+    ))
+    .bind(published_only)
+    .bind(locale)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
     Ok((items, total))
 }
 
-pub async fn announcement(pool: &PgPool, id: Uuid, published_only: bool) -> AppResult<Option<Announcement>> {
+pub async fn announcement(
+    pool: &PgPool,
+    id: Uuid,
+    published_only: bool,
+) -> AppResult<Option<Announcement>> {
     sqlx::query_as(&format!("SELECT {ANN} FROM announcements WHERE id=$1 AND (NOT $2 OR (is_published AND published_at <= now()))"))
         .bind(id)
         .bind(published_only)
@@ -258,7 +323,10 @@ pub async fn announcement(pool: &PgPool, id: Uuid, published_only: bool) -> AppR
         .map_err(db_err)
 }
 
-pub async fn create_announcement(pool: &PgPool, a: &AnnouncementInput<'_>) -> AppResult<Announcement> {
+pub async fn create_announcement(
+    pool: &PgPool,
+    a: &AnnouncementInput<'_>,
+) -> AppResult<Announcement> {
     sqlx::query_as(&format!(
         "INSERT INTO announcements (title, body, locale, is_published, published_at) VALUES ($1,$2,$3,$4,COALESCE($5, now())) RETURNING {ANN}"
     ))
@@ -272,7 +340,11 @@ pub async fn create_announcement(pool: &PgPool, a: &AnnouncementInput<'_>) -> Ap
     .map_err(db_err)
 }
 
-pub async fn update_announcement(pool: &PgPool, id: Uuid, a: &AnnouncementInput<'_>) -> AppResult<Option<Announcement>> {
+pub async fn update_announcement(
+    pool: &PgPool,
+    id: Uuid,
+    a: &AnnouncementInput<'_>,
+) -> AppResult<Option<Announcement>> {
     sqlx::query_as(&format!(
         "UPDATE announcements SET title=$2, body=$3, locale=$4, is_published=$5, published_at=COALESCE($6, published_at), updated_at=now()
          WHERE id=$1 RETURNING {ANN}"
@@ -289,7 +361,11 @@ pub async fn update_announcement(pool: &PgPool, id: Uuid, a: &AnnouncementInput<
 }
 
 pub async fn delete_announcement(pool: &PgPool, id: Uuid) -> AppResult<bool> {
-    let r = sqlx::query("DELETE FROM announcements WHERE id=$1").bind(id).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("DELETE FROM announcements WHERE id=$1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(r.rows_affected() == 1)
 }
 
@@ -297,8 +373,14 @@ pub async fn delete_announcement(pool: &PgPool, id: Uuid) -> AppResult<bool> {
 mod suggest_tests {
     #[test]
     fn query() {
-        assert_eq!(super::suggest_query("My VPS is DOWN, vps down!").as_deref(), Some("vps:* | down:*"));
+        assert_eq!(
+            super::suggest_query("My VPS is DOWN, vps down!").as_deref(),
+            Some("vps:* | down:*")
+        );
         assert_eq!(super::suggest_query("a b !!"), None);
-        assert_eq!(super::suggest_query("o'reilly & co"), Some("reilly:*".into()));
+        assert_eq!(
+            super::suggest_query("o'reilly & co"),
+            Some("reilly:*".into())
+        );
     }
 }

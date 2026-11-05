@@ -56,30 +56,60 @@ fn yes() -> bool {
 
 pub fn valid_base_url(u: &str) -> bool {
     let u = u.trim();
-    (u.starts_with("https://") || u.starts_with("http://")) && u.len() <= 500 && !u.contains(char::is_whitespace) && u.len() > "http://".len() + 1
+    (u.starts_with("https://") || u.starts_with("http://"))
+        && u.len() <= 500
+        && !u.contains(char::is_whitespace)
+        && u.len() > "http://".len() + 1
 }
 
 pub async fn list_servers(pool: &PgPool) -> AppResult<Vec<Server>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM servers v ORDER BY v.name, v.id")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(&format!(
+        "SELECT {COLS} FROM servers v ORDER BY v.name, v.id"
+    ))
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn get_server(pool: &PgPool, id: Uuid) -> AppResult<Option<Server>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM servers v WHERE v.id = $1")).bind(id).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as(&format!("SELECT {COLS} FROM servers v WHERE v.id = $1"))
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 /// Sealed key + base url + module + config, for the worker only.
-pub async fn server_secret(pool: &PgPool, id: Uuid) -> AppResult<Option<(String, String, Vec<u8>, Value, bool)>> {
-    sqlx::query_as("SELECT module, base_url, api_key_sealed, config, enabled FROM servers WHERE id = $1").bind(id).fetch_optional(pool).await.map_err(db_err)
+pub async fn server_secret(
+    pool: &PgPool,
+    id: Uuid,
+) -> AppResult<Option<(String, String, Vec<u8>, Value, bool)>> {
+    sqlx::query_as(
+        "SELECT module, base_url, api_key_sealed, config, enabled FROM servers WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 fn check(i: &ServerInput) -> AppResult<()> {
-    if i.name.trim().is_empty() || i.name.len() > 120 || !valid_base_url(&i.base_url) || !i.config.is_object() || i.max_services.is_some_and(|m| m <= 0) {
+    if i.name.trim().is_empty()
+        || i.name.len() > 120
+        || !valid_base_url(&i.base_url)
+        || !i.config.is_object()
+        || i.max_services.is_some_and(|m| m <= 0)
+    {
         return Err(AppError::Validation("error.invalid_server"));
     }
     Ok(())
 }
 
-pub async fn create_server(pool: &PgPool, i: &ServerInput, sealed_key: Vec<u8>) -> AppResult<Server> {
+pub async fn create_server(
+    pool: &PgPool,
+    i: &ServerInput,
+    sealed_key: Vec<u8>,
+) -> AppResult<Server> {
     check(i)?;
     let id = Uuid::new_v4();
     sqlx::query("INSERT INTO servers (id, name, module, base_url, api_key_sealed, config, enabled, max_services) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)")
@@ -88,7 +118,12 @@ pub async fn create_server(pool: &PgPool, i: &ServerInput, sealed_key: Vec<u8>) 
     get_server(pool, id).await?.ok_or(AppError::NotFound)
 }
 
-pub async fn update_server(pool: &PgPool, id: Uuid, i: &ServerInput, sealed_key: Option<Vec<u8>>) -> AppResult<Server> {
+pub async fn update_server(
+    pool: &PgPool,
+    id: Uuid,
+    i: &ServerInput,
+    sealed_key: Option<Vec<u8>>,
+) -> AppResult<Server> {
     check(i)?;
     let n = sqlx::query(
         "UPDATE servers SET name=$2, module=$3, base_url=$4, api_key_sealed=COALESCE($5, api_key_sealed), config=$6, enabled=$7, max_services=$8 WHERE id=$1",
@@ -107,7 +142,11 @@ pub async fn delete_server(pool: &PgPool, id: Uuid) -> AppResult<()> {
     if used {
         return Err(AppError::Conflict("error.server_in_use"));
     }
-    let n = sqlx::query("DELETE FROM servers WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?;
+    let n = sqlx::query("DELETE FROM servers WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     if n.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
@@ -115,12 +154,26 @@ pub async fn delete_server(pool: &PgPool, id: Uuid) -> AppResult<()> {
 }
 
 /// Bind a product to a module (+ optional default server and module config).
-pub async fn set_product_module(pool: &PgPool, product: Uuid, module: Option<&str>, server: Option<Uuid>, config: &Value) -> AppResult<()> {
+pub async fn set_product_module(
+    pool: &PgPool,
+    product: Uuid,
+    module: Option<&str>,
+    server: Option<Uuid>,
+    config: &Value,
+) -> AppResult<()> {
     if !config.is_object() {
         return Err(AppError::Validation("error.invalid_server"));
     }
-    let n = sqlx::query("UPDATE products SET module = $2, server_id = $3, module_config = $4 WHERE id = $1")
-        .bind(product).bind(module).bind(server).bind(config).execute(pool).await.map_err(db_err)?;
+    let n = sqlx::query(
+        "UPDATE products SET module = $2, server_id = $3, module_config = $4 WHERE id = $1",
+    )
+    .bind(product)
+    .bind(module)
+    .bind(server)
+    .bind(config)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
     if n.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
@@ -141,7 +194,11 @@ pub struct ModuleField<'a> {
 /// Make the product's module-tagged custom fields match `fields` exactly:
 /// upsert by key, drop keys the (new) module no longer declares. Values of
 /// admin-made fields are untouched.
-pub async fn sync_module_fields(pool: &PgPool, product: Uuid, fields: &[ModuleField<'_>]) -> AppResult<()> {
+pub async fn sync_module_fields(
+    pool: &PgPool,
+    product: Uuid,
+    fields: &[ModuleField<'_>],
+) -> AppResult<()> {
     let mut tx = pool.begin().await.map_err(db_err)?;
     let keys: Vec<&str> = fields.iter().map(|f| f.key).collect();
     sqlx::query("DELETE FROM product_custom_fields WHERE product_id = $1 AND module_key IS NOT NULL AND NOT (module_key = ANY($2))")
@@ -161,8 +218,15 @@ pub async fn sync_module_fields(pool: &PgPool, product: Uuid, fields: &[ModuleFi
     Ok(())
 }
 
-pub async fn product_module(pool: &PgPool, product: Uuid) -> AppResult<Option<(Option<String>, Option<Uuid>, Value)>> {
-    sqlx::query_as("SELECT module, server_id, module_config FROM products WHERE id = $1").bind(product).fetch_optional(pool).await.map_err(db_err)
+pub async fn product_module(
+    pool: &PgPool,
+    product: Uuid,
+) -> AppResult<Option<(Option<String>, Option<Uuid>, Value)>> {
+    sqlx::query_as("SELECT module, server_id, module_config FROM products WHERE id = $1")
+        .bind(product)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 /// Everything the worker needs for one service.
@@ -201,18 +265,42 @@ pub async fn target(pool: &PgPool, service: Uuid) -> AppResult<Option<ServiceTar
 /// Queue a module action for a service if its product uses a module.
 /// Returns the job id (None when the product has no module or a duplicate
 /// job with the same key exists).
-pub async fn enqueue(pool: &PgPool, service: Uuid, action: &str, key_suffix: &str) -> AppResult<Option<i64>> {
+pub async fn enqueue(
+    pool: &PgPool,
+    service: Uuid,
+    action: &str,
+    key_suffix: &str,
+) -> AppResult<Option<i64>> {
     let has_module: bool = sqlx::query_scalar("SELECT p.module IS NOT NULL FROM services s JOIN products p ON p.id = s.product_id WHERE s.id = $1")
         .bind(service).fetch_optional(pool).await.map_err(db_err)?.ok_or(AppError::NotFound)?;
     if !has_module {
         return Ok(None);
     }
-    sqlx::query("UPDATE services SET provision_status = 'pending', provision_error = '' WHERE id = $1").bind(service).execute(pool).await.map_err(db_err)?;
+    sqlx::query(
+        "UPDATE services SET provision_status = 'pending', provision_error = '' WHERE id = $1",
+    )
+    .bind(service)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
     let key = format!("provision:{service}:{action}:{key_suffix}");
-    jobs::enqueue(pool, JOB_KIND, json!({ "service_id": service, "action": action }), None, Some(&key), MAX_ATTEMPTS).await
+    jobs::enqueue(
+        pool,
+        JOB_KIND,
+        json!({ "service_id": service, "action": action }),
+        None,
+        Some(&key),
+        MAX_ATTEMPTS,
+    )
+    .await
 }
 
-pub async fn record_success(pool: &PgPool, service: Uuid, server: Option<Uuid>, created: Option<(&str, &Value)>) -> AppResult<()> {
+pub async fn record_success(
+    pool: &PgPool,
+    service: Uuid,
+    server: Option<Uuid>,
+    created: Option<(&str, &Value)>,
+) -> AppResult<()> {
     match created {
         Some((rid, data)) => sqlx::query(
             "UPDATE services SET provision_status='ok', provision_error='', remote_id=$2, module_data=$3, server_id=COALESCE(server_id,$4), provisioned_at=COALESCE(provisioned_at, now()) WHERE id=$1",
@@ -228,7 +316,12 @@ pub async fn record_success(pool: &PgPool, service: Uuid, server: Option<Uuid>, 
 
 pub async fn record_failure(pool: &PgPool, service: Uuid, error: &str) -> AppResult<()> {
     let e: String = error.chars().take(2000).collect();
-    sqlx::query("UPDATE services SET provision_status='failed', provision_error=$2 WHERE id=$1").bind(service).bind(e).execute(pool).await.map_err(db_err)?;
+    sqlx::query("UPDATE services SET provision_status='failed', provision_error=$2 WHERE id=$1")
+        .bind(service)
+        .bind(e)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(())
 }
 
@@ -270,7 +363,12 @@ pub async fn jobs_for(pool: &PgPool, service: Uuid) -> AppResult<Vec<Value>> {
 /// Last attempt error (status stays `pending` while retries remain).
 pub async fn set_error(pool: &PgPool, service: Uuid, error: &str) -> AppResult<()> {
     let e: String = error.chars().take(2000).collect();
-    sqlx::query("UPDATE services SET provision_error = $2 WHERE id = $1").bind(service).bind(e).execute(pool).await.map_err(db_err)?;
+    sqlx::query("UPDATE services SET provision_error = $2 WHERE id = $1")
+        .bind(service)
+        .bind(e)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     Ok(())
 }
 
@@ -299,10 +397,21 @@ pub async fn list_groups(pool: &PgPool) -> AppResult<Vec<ServerGroup>> {
     .map_err(db_err)
 }
 
-pub async fn upsert_group(pool: &PgPool, id: Option<Uuid>, name: &str, strategy: &str) -> AppResult<Uuid> {
+pub async fn upsert_group(
+    pool: &PgPool,
+    id: Option<Uuid>,
+    name: &str,
+    strategy: &str,
+) -> AppResult<Uuid> {
     match id {
         Some(id) => {
-            let n = sqlx::query("UPDATE server_groups SET name = $2, strategy = $3 WHERE id = $1").bind(id).bind(name).bind(strategy).execute(pool).await.map_err(db_err)?;
+            let n = sqlx::query("UPDATE server_groups SET name = $2, strategy = $3 WHERE id = $1")
+                .bind(id)
+                .bind(name)
+                .bind(strategy)
+                .execute(pool)
+                .await
+                .map_err(db_err)?;
             if n.rows_affected() == 0 {
                 return Err(AppError::NotFound);
             }
@@ -310,45 +419,90 @@ pub async fn upsert_group(pool: &PgPool, id: Option<Uuid>, name: &str, strategy:
         }
         None => {
             let id = Uuid::new_v4();
-            sqlx::query("INSERT INTO server_groups (id, name, strategy) VALUES ($1,$2,$3)").bind(id).bind(name).bind(strategy).execute(pool).await.map_err(db_err)?;
+            sqlx::query("INSERT INTO server_groups (id, name, strategy) VALUES ($1,$2,$3)")
+                .bind(id)
+                .bind(name)
+                .bind(strategy)
+                .execute(pool)
+                .await
+                .map_err(db_err)?;
             Ok(id)
         }
     }
 }
 
 pub async fn delete_group(pool: &PgPool, id: Uuid) -> AppResult<bool> {
-    Ok(sqlx::query("DELETE FROM server_groups WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?.rows_affected() == 1)
+    Ok(sqlx::query("DELETE FROM server_groups WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?
+        .rows_affected()
+        == 1)
 }
 
 /// Replace the member list of a group (servers not listed leave it).
 pub async fn set_group_servers(pool: &PgPool, id: Uuid, servers: &[Uuid]) -> AppResult<()> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM server_groups WHERE id = $1)").bind(id).fetch_one(&mut *tx).await.map_err(db_err)?;
+    let exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM server_groups WHERE id = $1)")
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(db_err)?;
     if !exists {
         return Err(AppError::NotFound);
     }
-    sqlx::query("UPDATE servers SET group_id = NULL WHERE group_id = $1").bind(id).execute(&mut *tx).await.map_err(db_err)?;
-    sqlx::query("UPDATE servers SET group_id = $1 WHERE id = ANY($2)").bind(id).bind(servers).execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("UPDATE servers SET group_id = NULL WHERE group_id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
+    sqlx::query("UPDATE servers SET group_id = $1 WHERE id = ANY($2)")
+        .bind(id)
+        .bind(servers)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     tx.commit().await.map_err(db_err)
 }
 
 pub async fn group_servers(pool: &PgPool, id: Uuid) -> AppResult<Vec<Uuid>> {
-    sqlx::query_scalar("SELECT id FROM servers WHERE group_id = $1 ORDER BY name").bind(id).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_scalar("SELECT id FROM servers WHERE group_id = $1 ORDER BY name")
+        .bind(id)
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
-pub async fn set_product_group(pool: &PgPool, product: Uuid, group: Option<Uuid>) -> AppResult<bool> {
+pub async fn set_product_group(
+    pool: &PgPool,
+    product: Uuid,
+    group: Option<Uuid>,
+) -> AppResult<bool> {
     Ok(sqlx::query("UPDATE products SET server_group_id = $2 WHERE id = $1 AND ($2::uuid IS NULL OR EXISTS (SELECT 1 FROM server_groups WHERE id = $2))").bind(product).bind(group).execute(pool).await.map_err(db_err)?.rows_affected() == 1)
 }
 
 pub async fn product_group(pool: &PgPool, product: Uuid) -> AppResult<Option<Uuid>> {
-    Ok(sqlx::query_scalar::<_, Option<Uuid>>("SELECT server_group_id FROM products WHERE id = $1").bind(product).fetch_optional(pool).await.map_err(db_err)?.flatten())
+    Ok(
+        sqlx::query_scalar::<_, Option<Uuid>>("SELECT server_group_id FROM products WHERE id = $1")
+            .bind(product)
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?
+            .flatten(),
+    )
 }
 
 /// Pick a server for a service whose product is bound to a group and assign
 /// it to the service (sticky across retries). Serialised per group with a row
 /// lock so concurrent orders don't overfill one server. Returns None when the
 /// product has no group or no member has capacity.
-pub async fn assign_from_group(pool: &PgPool, service: Uuid, module: &str) -> AppResult<Option<Uuid>> {
+pub async fn assign_from_group(
+    pool: &PgPool,
+    service: Uuid,
+    module: &str,
+) -> AppResult<Option<Uuid>> {
     let mut tx = pool.begin().await.map_err(db_err)?;
     let row: Option<(Option<Uuid>, Option<Uuid>)> = sqlx::query_as(
         "SELECT s.server_id, p.server_group_id FROM services s JOIN products p ON p.id = s.product_id WHERE s.id = $1 FOR UPDATE OF s",
@@ -357,12 +511,21 @@ pub async fn assign_from_group(pool: &PgPool, service: Uuid, module: &str) -> Ap
     .fetch_optional(&mut *tx)
     .await
     .map_err(db_err)?;
-    let Some((current, Some(group))) = row else { return Ok(None) };
+    let Some((current, Some(group))) = row else {
+        return Ok(None);
+    };
     if current.is_some() {
         return Ok(current);
     }
-    let g: Option<(String, i64)> = sqlx::query_as("SELECT strategy, rr_cursor FROM server_groups WHERE id = $1 FOR UPDATE").bind(group).fetch_optional(&mut *tx).await.map_err(db_err)?;
-    let Some((strategy, cursor)) = g else { return Ok(None) };
+    let g: Option<(String, i64)> =
+        sqlx::query_as("SELECT strategy, rr_cursor FROM server_groups WHERE id = $1 FOR UPDATE")
+            .bind(group)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_err)?;
+    let Some((strategy, cursor)) = g else {
+        return Ok(None);
+    };
     let candidates: Vec<(Uuid, i64)> = sqlx::query_as(
         "SELECT v.id, (SELECT count(*) FROM services s WHERE s.server_id = v.id AND s.status IN ('pending','active','suspended')) AS used
          FROM servers v
@@ -375,11 +538,22 @@ pub async fn assign_from_group(pool: &PgPool, service: Uuid, module: &str) -> Ap
     .fetch_all(&mut *tx)
     .await
     .map_err(db_err)?;
-    let Some(pick) = pick_server(&strategy, cursor, &candidates) else { return Ok(None) };
+    let Some(pick) = pick_server(&strategy, cursor, &candidates) else {
+        return Ok(None);
+    };
     if strategy == "round_robin" {
-        sqlx::query("UPDATE server_groups SET rr_cursor = rr_cursor + 1 WHERE id = $1").bind(group).execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query("UPDATE server_groups SET rr_cursor = rr_cursor + 1 WHERE id = $1")
+            .bind(group)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
     }
-    sqlx::query("UPDATE services SET server_id = $2 WHERE id = $1").bind(service).bind(pick).execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("UPDATE services SET server_id = $2 WHERE id = $1")
+        .bind(service)
+        .bind(pick)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
     Ok(Some(pick))
 }
@@ -391,10 +565,18 @@ pub fn pick_server(strategy: &str, cursor: i64, c: &[(Uuid, i64)]) -> Option<Uui
     }
     match strategy {
         // Fill the busiest server with room first (first in order on ties).
-        "fill" => c.iter().enumerate().max_by_key(|(i, (_, u))| (*u, std::cmp::Reverse(*i))).map(|(_, (id, _))| *id),
+        "fill" => c
+            .iter()
+            .enumerate()
+            .max_by_key(|(i, (_, u))| (*u, std::cmp::Reverse(*i)))
+            .map(|(_, (id, _))| *id),
         "round_robin" => Some(c[(cursor.rem_euclid(c.len() as i64)) as usize].0),
         // least_services: emptiest first (first in order on ties).
-        _ => c.iter().enumerate().min_by_key(|(i, (_, u))| (*u, *i)).map(|(_, (id, _))| *id),
+        _ => c
+            .iter()
+            .enumerate()
+            .min_by_key(|(i, (_, u))| (*u, *i))
+            .map(|(_, (id, _))| *id),
     }
 }
 

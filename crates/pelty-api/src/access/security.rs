@@ -30,7 +30,10 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/admin/security/policy", get(get_policy).put(put_policy))
         .route("/admin/security/ip-rules", get(list_rules).post(add_rule))
-        .route("/admin/security/trusted-proxies", get(crate::trusted_proxy::get_cfg).put(crate::trusted_proxy::put_cfg))
+        .route(
+            "/admin/security/trusted-proxies",
+            get(crate::trusted_proxy::get_cfg).put(crate::trusted_proxy::put_cfg),
+        )
         .route("/admin/security/geoip", get(get_geoip))
         .route("/admin/security/ip-rules/{id}", delete(delete_rule))
         .route("/admin/customers/{id}/login-as", post(login_as_customer))
@@ -57,26 +60,47 @@ pub struct TosInput {
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/security/tos", responses((status = 200), (status = 403)))]
-pub async fn list_tos(State(s): State<AppState>, _p: RequirePermission<perms::SettingsManage>) -> ApiResult<Json<Value>> {
-    let items: Vec<Value> = db::list_tos(&s.pool).await?.into_iter().map(|(v, n)| json!({ "version": v, "acceptances": n })).collect();
+pub async fn list_tos(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::SettingsManage>,
+) -> ApiResult<Json<Value>> {
+    let items: Vec<Value> = db::list_tos(&s.pool)
+        .await?
+        .into_iter()
+        .map(|(v, n)| json!({ "version": v, "acceptances": n }))
+        .collect();
     Ok(Json(json!({ "items": items })))
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/security/tos", request_body = TosInput, responses((status = 200), (status = 409), (status = 422)))]
-pub async fn publish_tos(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::SettingsManage>, Json(b): Json<TosInput>) -> ApiResult<Json<Value>> {
+pub async fn publish_tos(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::SettingsManage>,
+    Json(b): Json<TosInput>,
+) -> ApiResult<Json<Value>> {
     let version = b.version.trim();
     let url = b.url.trim();
     if version.is_empty() || version.chars().count() > 40 {
         return Err(AppError::Validation("error.invalid_version").into());
     }
-    if (!url.is_empty() && !(url.starts_with("https://") || url.starts_with('/'))) || url.len() > 500 {
+    if (!url.is_empty() && !(url.starts_with("https://") || url.starts_with('/')))
+        || url.len() > 500
+    {
         return Err(AppError::Validation("error.invalid_url").into());
     }
     if b.summary.chars().count() > 2000 {
         return Err(AppError::Validation("error.too_long").into());
     }
     let v = db::publish_tos(&s.pool, version, url, b.summary.trim()).await?;
-    audit::record(&s.pool, Some(u.user_id), "security.tos_published", Some(&v.id.to_string()), u.ip.as_deref(), json!({ "version": v.version })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "security.tos_published",
+        Some(&v.id.to_string()),
+        u.ip.as_deref(),
+        json!({ "version": v.version }),
+    )
+    .await?;
     Ok(Json(json!({ "version": v })))
 }
 
@@ -87,7 +111,11 @@ pub async fn my_tos(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Json
         Some(v) => db::accepted_tos(&s.pool, u.user_id, v.id).await?,
         None => None,
     };
-    let history: Vec<Value> = db::tos_history(&s.pool, u.user_id).await?.into_iter().map(|(v, at)| json!({ "version": v, "accepted_at": fmt_ts(at) })).collect();
+    let history: Vec<Value> = db::tos_history(&s.pool, u.user_id)
+        .await?
+        .into_iter()
+        .map(|(v, at)| json!({ "version": v, "accepted_at": fmt_ts(at) }))
+        .collect();
     Ok(Json(json!({
         "current": cur,
         "accepted_at": accepted_at.map(fmt_ts),
@@ -103,7 +131,11 @@ pub struct AcceptTos {
 }
 
 #[utoipa::path(post, path = "/api/v1/account/tos/accept", request_body = AcceptTos, responses((status = 200), (status = 409)))]
-pub async fn accept_tos(State(s): State<AppState>, u: CurrentUser, Json(b): Json<AcceptTos>) -> ApiResult<Json<Value>> {
+pub async fn accept_tos(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Json(b): Json<AcceptTos>,
+) -> ApiResult<Json<Value>> {
     // Only the current version can be accepted: accepting a superseded text
     // would record consent to terms that no longer apply.
     let cur = db::current_tos(&s.pool).await?.ok_or(AppError::NotFound)?;
@@ -111,12 +143,21 @@ pub async fn accept_tos(State(s): State<AppState>, u: CurrentUser, Json(b): Json
         return Err(AppError::Conflict("error.tos_outdated").into());
     }
     db::accept_tos(&s.pool, u.user_id, cur.id, u.ip.as_deref()).await?;
-    audit::record(&s.pool, Some(u.user_id), "account.tos_accepted", Some(&cur.id.to_string()), u.ip.as_deref(), json!({ "version": cur.version })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "account.tos_accepted",
+        Some(&cur.id.to_string()),
+        u.ip.as_deref(),
+        json!({ "version": cur.version }),
+    )
+    .await?;
     Ok(Json(json!({ "ok": true })))
 }
 
 fn fmt_ts(t: OffsetDateTime) -> String {
-    t.format(&time::format_description::well_known::Rfc3339).unwrap_or_default()
+    t.format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_default()
 }
 
 /// Apply the stored login rate limit to the in-process limiter (startup).
@@ -130,23 +171,46 @@ pub async fn init(s: &AppState) -> pelty_core::AppResult<()> {
 // ----- policy -----
 
 #[utoipa::path(get, path = "/api/v1/admin/security/policy", responses((status = 200), (status = 403)))]
-pub async fn get_policy(State(s): State<AppState>, _p: RequirePermission<perms::SettingsManage>) -> ApiResult<Json<Value>> {
+pub async fn get_policy(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::SettingsManage>,
+) -> ApiResult<Json<Value>> {
     let p = policy::load(&s.pool).await?;
-    Ok(Json(json!({ "policy": p.to_value(), "defaults": { "session_idle_minutes": s.cfg.session_idle_minutes, "session_absolute_hours": s.cfg.session_absolute_hours, "login_rate_per_minute": s.cfg.auth_rate_per_minute } })))
+    Ok(Json(
+        json!({ "policy": p.to_value(), "defaults": { "session_idle_minutes": s.cfg.session_idle_minutes, "session_absolute_hours": s.cfg.session_absolute_hours, "login_rate_per_minute": s.cfg.auth_rate_per_minute } }),
+    ))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/security/geoip", responses((status = 200), (status = 403)))]
-pub async fn get_geoip(State(s): State<AppState>, _p: RequirePermission<perms::SettingsManage>) -> ApiResult<Json<Value>> {
+pub async fn get_geoip(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::SettingsManage>,
+) -> ApiResult<Json<Value>> {
     Ok(Json(s.geoip.status()))
 }
 
 #[utoipa::path(put, path = "/api/v1/admin/security/policy", responses((status = 200), (status = 422)))]
-pub async fn put_policy(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::SettingsManage>, Json(b): Json<Value>) -> ApiResult<Json<Value>> {
+pub async fn put_policy(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::SettingsManage>,
+    Json(b): Json<Value>,
+) -> ApiResult<Json<Value>> {
     let p = SecurityPolicy::from_value(&b)?;
     settings::set(&s.pool, policy::SETTING_KEY, p.to_value()).await?;
     policy::invalidate();
-    s.auth_limiter.set_limit(p.login_rate_per_minute.unwrap_or(s.cfg.auth_rate_per_minute));
-    audit::record(&s.pool, Some(u.user_id), "security.policy_updated", None, u.ip.as_deref(), p.to_value()).await?;
+    s.auth_limiter.set_limit(
+        p.login_rate_per_minute
+            .unwrap_or(s.cfg.auth_rate_per_minute),
+    );
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "security.policy_updated",
+        None,
+        u.ip.as_deref(),
+        p.to_value(),
+    )
+    .await?;
     Ok(Json(json!({ "policy": p.to_value() })))
 }
 
@@ -170,7 +234,10 @@ pub fn invalidate_caches() {
 /// Parse `1.2.3.4`, `1.2.3.0/24`, `2001:db8::/32`.
 pub fn parse_cidr(s: &str) -> Option<IpNet> {
     let s = s.trim();
-    s.parse::<IpNet>().ok().or_else(|| s.parse::<IpAddr>().ok().map(IpNet::from)).map(|n| n.trunc())
+    s.parse::<IpNet>()
+        .ok()
+        .or_else(|| s.parse::<IpAddr>().ok().map(IpNet::from))
+        .map(|n| n.trunc())
 }
 
 /// Decision for one request: `Some(code)` = refuse.
@@ -215,7 +282,10 @@ async fn cached_rules(s: &AppState) -> Vec<(IpNet, String)> {
             return vec![];
         }
     };
-    let parsed: Vec<_> = rows.into_iter().filter_map(|r| parse_cidr(&r.cidr).map(|n| (n, r.kind))).collect();
+    let parsed: Vec<_> = rows
+        .into_iter()
+        .filter_map(|r| parse_cidr(&r.cidr).map(|n| (n, r.kind)))
+        .collect();
     if let Ok(mut g) = RULES.lock() {
         *g = Some((Instant::now(), parsed.clone()));
     }
@@ -225,7 +295,11 @@ async fn cached_rules(s: &AppState) -> Vec<(IpNet, String)> {
 /// Middleware: banned IPs get 403 everywhere; when an admin allow-list
 /// exists, `/api/v1/admin/*` only answers to listed networks.
 pub async fn ip_guard(State(s): State<AppState>, req: Request, next: Next) -> Response {
-    if let Some(ip) = req.extensions().get::<ConnectInfo<SocketAddr>>().map(|c| c.0.ip()) {
+    if let Some(ip) = req
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|c| c.0.ip())
+    {
         let admin = req.uri().path().starts_with("/api/v1/admin");
         let rules = cached_rules(&s).await;
         if let Some(code) = decide(&rules, ip, admin) {
@@ -236,8 +310,13 @@ pub async fn ip_guard(State(s): State<AppState>, req: Request, next: Next) -> Re
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/security/ip-rules", responses((status = 200), (status = 403)))]
-pub async fn list_rules(State(s): State<AppState>, u: RequirePermission<perms::SettingsManage>) -> ApiResult<Json<Value>> {
-    Ok(Json(json!({ "rules": db::list_ip_rules(&s.pool).await?, "your_ip": u.0.ip })))
+pub async fn list_rules(
+    State(s): State<AppState>,
+    u: RequirePermission<perms::SettingsManage>,
+) -> ApiResult<Json<Value>> {
+    Ok(Json(
+        json!({ "rules": db::list_ip_rules(&s.pool).await?, "your_ip": u.0.ip }),
+    ))
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -253,9 +332,16 @@ pub struct RuleBody {
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/security/ip-rules", request_body = RuleBody, responses((status = 200), (status = 409), (status = 422)))]
-pub async fn add_rule(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::SettingsManage>, Json(b): Json<RuleBody>) -> ApiResult<Json<Value>> {
+pub async fn add_rule(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::SettingsManage>,
+    Json(b): Json<RuleBody>,
+) -> ApiResult<Json<Value>> {
     let net = parse_cidr(&b.cidr).ok_or(AppError::Validation("error.invalid_cidr"))?;
-    if !["ban", "admin_allow"].contains(&b.kind.as_str()) || b.reason.chars().count() > 500 || b.hours.is_some_and(|h| !(1..=24 * 3650).contains(&h)) {
+    if !["ban", "admin_allow"].contains(&b.kind.as_str())
+        || b.reason.chars().count() > 500
+        || b.hours.is_some_and(|h| !(1..=24 * 3650).contains(&h))
+    {
         return Err(AppError::Validation("error.invalid_ip_rule").into());
     }
     let me: Option<IpAddr> = u.ip.as_deref().and_then(|i| i.parse().ok());
@@ -266,50 +352,102 @@ pub async fn add_rule(State(s): State<AppState>, RequirePermission(u, _): Requir
         }
         if b.kind == "admin_allow" {
             let rules = cached_rules(&s).await;
-            let already = rules.iter().any(|(n, k)| k == "admin_allow" && n.contains(&me));
+            let already = rules
+                .iter()
+                .any(|(n, k)| k == "admin_allow" && n.contains(&me));
             if !already && !net.contains(&me) {
                 return Err(AppError::Validation("error.ip_rule_self_lockout").into());
             }
         }
     }
-    let exp = b.hours.map(|h| OffsetDateTime::now_utc() + time::Duration::hours(h));
-    let r = db::add_ip_rule(&s.pool, &net.to_string(), &b.kind, b.reason.trim(), exp, u.user_id).await?;
+    let exp = b
+        .hours
+        .map(|h| OffsetDateTime::now_utc() + time::Duration::hours(h));
+    let r = db::add_ip_rule(
+        &s.pool,
+        &net.to_string(),
+        &b.kind,
+        b.reason.trim(),
+        exp,
+        u.user_id,
+    )
+    .await?;
     invalidate_rules();
-    audit::record(&s.pool, Some(u.user_id), "security.ip_rule_added", Some(&r.id.to_string()), u.ip.as_deref(), json!({ "cidr": r.cidr, "kind": r.kind })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "security.ip_rule_added",
+        Some(&r.id.to_string()),
+        u.ip.as_deref(),
+        json!({ "cidr": r.cidr, "kind": r.kind }),
+    )
+    .await?;
     Ok(Json(json!(r)))
 }
 
 #[utoipa::path(delete, path = "/api/v1/admin/security/ip-rules/{id}", params(("id" = Uuid, Path)), responses((status = 204), (status = 404)))]
-pub async fn delete_rule(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::SettingsManage>, Path(id): Path<Uuid>) -> ApiResult<StatusCode> {
+pub async fn delete_rule(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::SettingsManage>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
     if !db::delete_ip_rule(&s.pool, id).await? {
         return Err(AppError::NotFound.into());
     }
     invalidate_rules();
-    audit::record(&s.pool, Some(u.user_id), "security.ip_rule_deleted", Some(&id.to_string()), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "security.ip_rule_deleted",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 // ----- impersonation -----
 
-async fn impersonate(s: &AppState, admin: &CurrentUser, g: &AuthGuard, headers: &HeaderMap, target: Uuid, customer: Option<Uuid>) -> ApiResult<Response> {
+async fn impersonate(
+    s: &AppState,
+    admin: &CurrentUser,
+    g: &AuthGuard,
+    headers: &HeaderMap,
+    target: Uuid,
+    customer: Option<Uuid>,
+) -> ApiResult<Response> {
     if admin.api_key {
         return Err(AppError::Denied("error.impersonation_api_key").into());
     }
     if target == admin.user_id {
         return Err(AppError::Validation("error.impersonation_self").into());
     }
-    if db::impersonation_of(&s.pool, admin.session_id).await?.is_some() {
+    if db::impersonation_of(&s.pool, admin.session_id)
+        .await?
+        .is_some()
+    {
         return Err(AppError::Validation("error.impersonation_nested").into());
     }
-    let user = users::find(&s.pool, target).await?.ok_or(AppError::NotFound)?;
+    let user = users::find(&s.pool, target)
+        .await?
+        .ok_or(AppError::NotFound)?;
     if !user.is_active {
         return Err(AppError::Validation("error.user_inactive").into());
     }
-    if users::roles(&s.pool, target).await?.iter().any(|r| r != "customer") {
+    if users::roles(&s.pool, target)
+        .await?
+        .iter()
+        .any(|r| r != "customer")
+    {
         return Err(AppError::Denied("error.impersonation_staff").into());
     }
-    let admin_token = crate::extract::cookie(headers, SESSION_COOKIE).ok_or(AppError::Unauthenticated)?;
-    let issued = s.auth.issue_session(user, g.ip(), Some("impersonation")).await?;
+    let admin_token =
+        crate::extract::cookie(headers, SESSION_COOKIE).ok_or(AppError::Unauthenticated)?;
+    let issued = s
+        .auth
+        .issue_session(user, g.ip(), Some("impersonation"))
+        .await?;
     db::mark_impersonation(&s.pool, issued.session.id, admin.user_id, admin.session_id).await?;
     audit::record(
         &s.pool,
@@ -321,64 +459,140 @@ async fn impersonate(s: &AppState, admin: &CurrentUser, g: &AuthGuard, headers: 
     )
     .await?;
     let max_age = 4 * 3600;
-    let mut r = Json(json!({ "user_id": target, "csrf_token": issued.csrf_token, "redirect": "/dashboard" })).into_response();
-    r.headers_mut().append(header::SET_COOKIE, cookie_header(s, SESSION_COOKIE, &issued.token, max_age, true));
-    r.headers_mut().append(header::SET_COOKIE, cookie_header(s, RETURN_COOKIE, &admin_token, max_age, true));
+    let mut r = Json(
+        json!({ "user_id": target, "csrf_token": issued.csrf_token, "redirect": "/dashboard" }),
+    )
+    .into_response();
+    r.headers_mut().append(
+        header::SET_COOKIE,
+        cookie_header(s, SESSION_COOKIE, &issued.token, max_age, true),
+    );
+    r.headers_mut().append(
+        header::SET_COOKIE,
+        cookie_header(s, RETURN_COOKIE, &admin_token, max_age, true),
+    );
     Ok(r)
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/customers/{id}/login-as", params(("id" = Uuid, Path)), responses((status = 200), (status = 403), (status = 404)))]
-pub async fn login_as_customer(State(s): State<AppState>, g: AuthGuard, headers: HeaderMap, RequirePermission(u, _): RequirePermission<perms::CustomersManage>, Path(id): Path<Uuid>) -> ApiResult<Response> {
-    let c = customers::get(&s.pool, id).await?.ok_or(AppError::NotFound)?;
+pub async fn login_as_customer(
+    State(s): State<AppState>,
+    g: AuthGuard,
+    headers: HeaderMap,
+    RequirePermission(u, _): RequirePermission<perms::CustomersManage>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Response> {
+    let c = customers::get(&s.pool, id)
+        .await?
+        .ok_or(AppError::NotFound)?;
     if c.status == "closed" {
         return Err(AppError::Validation("error.customer_closed").into());
     }
-    let owner = c.owner_user_id.ok_or(AppError::Validation("error.customer_no_login"))?;
+    let owner = c
+        .owner_user_id
+        .ok_or(AppError::Validation("error.customer_no_login"))?;
     impersonate(&s, &u, &g, &headers, owner, Some(id)).await
 }
 
 /// "Login as user", any client-side user, including sub-account users.
 #[utoipa::path(post, path = "/api/v1/admin/users/{id}/login-as", params(("id" = Uuid, Path)), responses((status = 200), (status = 403), (status = 404)))]
-pub async fn login_as_user(State(s): State<AppState>, g: AuthGuard, headers: HeaderMap, RequirePermission(u, _): RequirePermission<perms::UsersManage>, Path(id): Path<Uuid>) -> ApiResult<Response> {
+pub async fn login_as_user(
+    State(s): State<AppState>,
+    g: AuthGuard,
+    headers: HeaderMap,
+    RequirePermission(u, _): RequirePermission<perms::UsersManage>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Response> {
     impersonate(&s, &u, &g, &headers, id, None).await
 }
 
 #[utoipa::path(get, path = "/api/v1/auth/impersonation", responses((status = 200), (status = 401)))]
-pub async fn impersonation_status(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Json<Value>> {
+pub async fn impersonation_status(
+    State(s): State<AppState>,
+    u: CurrentUser,
+) -> ApiResult<Json<Value>> {
     match db::impersonation_of(&s.pool, u.session_id).await? {
         Some((admin, _)) => {
             let a = users::find(&s.pool, admin).await?;
-            Ok(Json(json!({ "active": true, "admin_id": admin, "admin_email": a.map(|a| a.email) })))
+            Ok(Json(
+                json!({ "active": true, "admin_id": admin, "admin_email": a.map(|a| a.email) }),
+            ))
         }
         None => Ok(Json(json!({ "active": false }))),
     }
 }
 
 #[utoipa::path(post, path = "/api/v1/auth/impersonation/stop", responses((status = 200), (status = 409)))]
-pub async fn stop_impersonation(State(s): State<AppState>, u: CurrentUser, headers: HeaderMap) -> ApiResult<Response> {
-    let (admin, parent) = db::impersonation_of(&s.pool, u.session_id).await?.ok_or(AppError::Conflict("error.not_impersonating"))?;
-    s.auth.revoke(u.user_id, u.session_id, u.ip.as_deref(), "auth.logout").await?;
-    audit::record(&s.pool, Some(admin), "admin.impersonation_ended", Some(&u.user_id.to_string()), u.ip.as_deref(), json!({ "target_user": u.user_id })).await?;
+pub async fn stop_impersonation(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    headers: HeaderMap,
+) -> ApiResult<Response> {
+    let (admin, parent) = db::impersonation_of(&s.pool, u.session_id)
+        .await?
+        .ok_or(AppError::Conflict("error.not_impersonating"))?;
+    s.auth
+        .revoke(u.user_id, u.session_id, u.ip.as_deref(), "auth.logout")
+        .await?;
+    audit::record(
+        &s.pool,
+        Some(admin),
+        "admin.impersonation_ended",
+        Some(&u.user_id.to_string()),
+        u.ip.as_deref(),
+        json!({ "target_user": u.user_id }),
+    )
+    .await?;
     let mut r = Json(json!({ "restored": false, "redirect": "/login" })).into_response();
     if let (Some(tok), Some(parent)) = (crate::extract::cookie(&headers, RETURN_COOKIE), parent) {
         if let Some(sess) = s.auth.authenticate(&tok).await? {
             if sess.id == parent && sess.user_id == admin {
-                r = Json(json!({ "restored": true, "redirect": "/admin/customers" })).into_response();
-                r.headers_mut().append(header::SET_COOKIE, cookie_header(&s, SESSION_COOKIE, &tok, s.cfg.session_absolute_hours * 3600, true));
+                r = Json(json!({ "restored": true, "redirect": "/admin/customers" }))
+                    .into_response();
+                r.headers_mut().append(
+                    header::SET_COOKIE,
+                    cookie_header(
+                        &s,
+                        SESSION_COOKIE,
+                        &tok,
+                        s.cfg.session_absolute_hours * 3600,
+                        true,
+                    ),
+                );
             }
         }
     }
-    r.headers_mut().append(header::SET_COOKIE, cookie_header(&s, RETURN_COOKIE, "", 0, true));
+    r.headers_mut().append(
+        header::SET_COOKIE,
+        cookie_header(&s, RETURN_COOKIE, "", 0, true),
+    );
     Ok(r)
 }
 
 // ----- client close / merge -----
 
 #[utoipa::path(post, path = "/api/v1/admin/customers/{id}/close", params(("id" = Uuid, Path)), responses((status = 200), (status = 404)))]
-pub async fn close_customer(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::CustomersManage>, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
-    let owner = db::close_customer(&s.pool, id).await?.ok_or(AppError::NotFound)?;
-    audit::record(&s.pool, Some(u.user_id), "customer.closed", Some(&id.to_string()), u.ip.as_deref(), json!({ "owner": owner })).await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("customer.closed", json!({ "customer_id": id })));
+pub async fn close_customer(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::CustomersManage>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
+    let owner = db::close_customer(&s.pool, id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "customer.closed",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "owner": owner }),
+    )
+    .await?;
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "customer.closed",
+        json!({ "customer_id": id }),
+    ));
     Ok(Json(json!({ "id": id, "status": "closed" })))
 }
 
@@ -389,10 +603,25 @@ pub struct MergeBody {
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/customers/{id}/merge", params(("id" = Uuid, Path)), request_body = MergeBody, responses((status = 200), (status = 404), (status = 422)))]
-pub async fn merge_customer(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::CustomersManage>, Path(id): Path<Uuid>, Json(b): Json<MergeBody>) -> ApiResult<Json<Value>> {
+pub async fn merge_customer(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::CustomersManage>,
+    Path(id): Path<Uuid>,
+    Json(b): Json<MergeBody>,
+) -> ApiResult<Json<Value>> {
     let moved = db::merge_customers(&s.pool, id, b.into).await?;
-    audit::record(&s.pool, Some(u.user_id), "customer.merged", Some(&id.to_string()), u.ip.as_deref(), json!({ "into": b.into, "rows": moved })).await?;
-    Ok(Json(json!({ "from": id, "into": b.into, "moved_rows": moved })))
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "customer.merged",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "into": b.into, "rows": moved }),
+    )
+    .await?;
+    Ok(Json(
+        json!({ "from": id, "into": b.into, "moved_rows": moved }),
+    ))
 }
 
 #[cfg(test)]
@@ -400,14 +629,29 @@ mod tests {
     use super::*;
     #[test]
     fn ip_decisions() {
-        let rules = vec![(parse_cidr("10.0.0.0/8").unwrap(), "ban".to_string()), (parse_cidr("192.168.1.5").unwrap(), "admin_allow".to_string())];
+        let rules = vec![
+            (parse_cidr("10.0.0.0/8").unwrap(), "ban".to_string()),
+            (
+                parse_cidr("192.168.1.5").unwrap(),
+                "admin_allow".to_string(),
+            ),
+        ];
         let ip = |s: &str| s.parse::<IpAddr>().unwrap();
-        assert_eq!(decide(&rules, ip("10.2.3.4"), false), Some("error.ip_banned"));
+        assert_eq!(
+            decide(&rules, ip("10.2.3.4"), false),
+            Some("error.ip_banned")
+        );
         assert_eq!(decide(&rules, ip("8.8.8.8"), false), None);
-        assert_eq!(decide(&rules, ip("8.8.8.8"), true), Some("error.ip_not_allowed"));
+        assert_eq!(
+            decide(&rules, ip("8.8.8.8"), true),
+            Some("error.ip_not_allowed")
+        );
         assert_eq!(decide(&rules, ip("192.168.1.5"), true), None);
         assert_eq!(parse_cidr("10.1.2.3/8").unwrap().to_string(), "10.0.0.0/8");
         assert!(parse_cidr("nope").is_none());
-        assert_eq!(parse_cidr("2001:db8::1").unwrap().to_string(), "2001:db8::1/128");
+        assert_eq!(
+            parse_cidr("2001:db8::1").unwrap().to_string(),
+            "2001:db8::1/128"
+        );
     }
 }

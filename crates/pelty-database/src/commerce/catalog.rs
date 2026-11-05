@@ -51,13 +51,17 @@ pub fn stock_allows(enabled: bool, qty: i32, backorder: bool) -> bool {
 
 /// Take one unit of stock inside an order transaction. Locks the product row
 /// so concurrent checkouts can't oversell.
-pub async fn take_stock(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, product: Uuid) -> AppResult<()> {
-    let row: Option<(bool, i32, bool)> =
-        sqlx::query_as("SELECT stock_enabled, stock_qty, allow_backorder FROM products WHERE id = $1 FOR UPDATE")
-            .bind(product)
-            .fetch_optional(&mut **tx)
-            .await
-            .map_err(db_err)?;
+pub async fn take_stock(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    product: Uuid,
+) -> AppResult<()> {
+    let row: Option<(bool, i32, bool)> = sqlx::query_as(
+        "SELECT stock_enabled, stock_qty, allow_backorder FROM products WHERE id = $1 FOR UPDATE",
+    )
+    .bind(product)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(db_err)?;
     let (enabled, qty, backorder) = row.ok_or(AppError::NotFound)?;
     if !enabled {
         return Ok(());
@@ -74,7 +78,13 @@ pub async fn take_stock(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, product:
 }
 
 /// Admin stock settings.
-pub async fn set_stock(pool: &PgPool, product: Uuid, enabled: bool, qty: i32, backorder: bool) -> AppResult<()> {
+pub async fn set_stock(
+    pool: &PgPool,
+    product: Uuid,
+    enabled: bool,
+    qty: i32,
+    backorder: bool,
+) -> AppResult<()> {
     if !(-1_000_000..=1_000_000).contains(&qty) {
         return Err(AppError::Validation("error.validation"));
     }
@@ -433,7 +443,11 @@ pub fn price_config(
             Some(ConfigValue::Choice(cid)) => {
                 let (_, label, price) = o.choices.iter().find(|c| c.0 == *cid).ok_or_else(bad)?;
                 total += price.unwrap_or(Decimal::ZERO);
-                labels.push(if o.option_type == "yesno" { o.name.clone() } else { label.clone() });
+                labels.push(if o.option_type == "yesno" {
+                    o.name.clone()
+                } else {
+                    label.clone()
+                });
             }
             Some(ConfigValue::Qty(_)) => return Err(bad()),
             None if o.required && o.option_type != "yesno" => return Err(bad()),
@@ -452,7 +466,10 @@ pub struct ChoiceInput {
 
 pub async fn add_option(pool: &PgPool, product_id: Uuid, o: &OptionInput) -> AppResult<Uuid> {
     check_name(&o.name, 120)?;
-    if o.choices.is_empty() || o.choices.len() > 100 || !OPTION_TYPES.contains(&o.option_type.as_str()) {
+    if o.choices.is_empty()
+        || o.choices.len() > 100
+        || !OPTION_TYPES.contains(&o.option_type.as_str())
+    {
         return Err(AppError::Validation("error.validation"));
     }
     if matches!(o.option_type.as_str(), "quantity" | "yesno") && o.choices.len() != 1 {
@@ -655,19 +672,21 @@ pub async fn quote(
     .map_err(db_err)?;
     let opts: Vec<PricedOption> = rows
         .into_iter()
-        .map(|(id, name, required, option_type, qty_min, qty_max)| PricedOption {
-            choices: choices
-                .iter()
-                .filter(|c| c.0 == id)
-                .map(|c| (c.1, c.2.clone(), c.3))
-                .collect(),
-            id,
-            name,
-            required,
-            option_type,
-            qty_min,
-            qty_max,
-        })
+        .map(
+            |(id, name, required, option_type, qty_min, qty_max)| PricedOption {
+                choices: choices
+                    .iter()
+                    .filter(|c| c.0 == id)
+                    .map(|c| (c.1, c.2.clone(), c.3))
+                    .collect(),
+                id,
+                name,
+                required,
+                option_type,
+                qty_min,
+                qty_max,
+            },
+        )
         .collect();
     let (delta, labels) = price_config(&opts, config)?;
     amount += delta;
@@ -740,14 +759,26 @@ mod config_tests {
             option_type: t.into(),
             qty_min: 1,
             qty_max: 8,
-            choices: choices.into_iter().map(|(a, b, c)| (a, b.into(), c)).collect(),
+            choices: choices
+                .into_iter()
+                .map(|(a, b, c)| (a, b.into(), c))
+                .collect(),
         }
     }
 
     #[test]
     fn prices_each_type() {
-        let (c1, c2, ram, yes) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
-        let dd = opt("dropdown", true, vec![(c1, "A", None), (c2, "B", Some(dec("2.50")))]);
+        let (c1, c2, ram, yes) = (
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+        );
+        let dd = opt(
+            "dropdown",
+            true,
+            vec![(c1, "A", None), (c2, "B", Some(dec("2.50")))],
+        );
         let q = opt("quantity", true, vec![(ram, "GB", Some(dec("1.2500")))]);
         let yn = opt("yesno", false, vec![(yes, "Yes", Some(dec("3")))]);
         let opts = vec![dd.clone(), q.clone(), yn.clone()];
@@ -768,7 +799,11 @@ mod config_tests {
     fn rejects_bad_input() {
         let c = Uuid::new_v4();
         let dd = opt("dropdown", true, vec![(c, "A", None)]);
-        let q = opt("quantity", false, vec![(Uuid::new_v4(), "GB", Some(dec("1")))]);
+        let q = opt(
+            "quantity",
+            false,
+            vec![(Uuid::new_v4(), "GB", Some(dec("1")))],
+        );
         let opts = vec![dd.clone(), q.clone()];
         // missing required dropdown
         assert!(price_config(&opts, &HashMap::new()).is_err());
@@ -780,7 +815,10 @@ mod config_tests {
         assert!(price_config(&opts, &s).is_err());
         let s = HashMap::from([(dd.id, ConfigValue::Choice(Uuid::new_v4()))]);
         assert!(price_config(&opts, &s).is_err());
-        let s = HashMap::from([(dd.id, ConfigValue::Choice(c)), (Uuid::new_v4(), ConfigValue::Qty(1))]);
+        let s = HashMap::from([
+            (dd.id, ConfigValue::Choice(c)),
+            (Uuid::new_v4(), ConfigValue::Qty(1)),
+        ]);
         assert!(price_config(&opts, &s).is_err());
         // optional quantity omitted = 0
         let s = HashMap::from([(dd.id, ConfigValue::Choice(c))]);

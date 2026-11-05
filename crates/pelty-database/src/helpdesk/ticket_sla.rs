@@ -57,7 +57,10 @@ impl PolicyInput {
             return Err("error.invalid_sla");
         }
         let bad = |m: Option<i32>| m.is_some_and(|m| !(1..=MAX_MINUTES).contains(&m));
-        if bad(self.first_response_minutes) || bad(self.resolution_minutes) || !(1..=99).contains(&self.warn_percent) {
+        if bad(self.first_response_minutes)
+            || bad(self.resolution_minutes)
+            || !(1..=99).contains(&self.warn_percent)
+        {
             return Err("error.invalid_sla");
         }
         if let (Some(f), Some(r)) = (self.first_response_minutes, self.resolution_minutes) {
@@ -82,8 +85,12 @@ pub async fn list(pool: &PgPool) -> AppResult<Vec<Policy>> {
 
 fn conflict(e: sqlx::Error) -> AppError {
     match &e {
-        sqlx::Error::Database(d) if d.code().as_deref() == Some("23505") => AppError::Conflict("error.sla_policy_exists"),
-        sqlx::Error::Database(d) if d.code().as_deref() == Some("23503") => AppError::Validation("error.validation"),
+        sqlx::Error::Database(d) if d.code().as_deref() == Some("23505") => {
+            AppError::Conflict("error.sla_policy_exists")
+        }
+        sqlx::Error::Database(d) if d.code().as_deref() == Some("23503") => {
+            AppError::Validation("error.validation")
+        }
         _ => db_err(e),
     }
 }
@@ -109,7 +116,12 @@ pub async fn update(pool: &PgPool, id: Uuid, p: &PolicyInput) -> AppResult<Polic
 }
 
 pub async fn delete(pool: &PgPool, id: Uuid) -> AppResult<()> {
-    let n = sqlx::query("DELETE FROM ticket_sla_policies WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?.rows_affected();
+    let n = sqlx::query("DELETE FROM ticket_sla_policies WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?
+        .rows_affected();
     if n == 0 {
         return Err(AppError::NotFound);
     }
@@ -118,7 +130,11 @@ pub async fn delete(pool: &PgPool, id: Uuid) -> AppResult<()> {
 
 /// Keeps the legacy per-department first-response SLA (0120) in sync with
 /// that department's catch-all policy.
-pub async fn sync_department_first_response(pool: &PgPool, department: Uuid, minutes: Option<i32>) -> AppResult<()> {
+pub async fn sync_department_first_response(
+    pool: &PgPool,
+    department: Uuid,
+    minutes: Option<i32>,
+) -> AppResult<()> {
     let key = "COALESCE(department_id, '00000000-0000-0000-0000-000000000000'::uuid) = $1 AND priority IS NULL";
     match minutes {
         Some(m) => {
@@ -130,7 +146,13 @@ pub async fn sync_department_first_response(pool: &PgPool, department: Uuid, min
             }
         }
         None => {
-            sqlx::query(&format!("DELETE FROM ticket_sla_policies WHERE {key} AND resolution_minutes IS NULL")).bind(department).execute(pool).await.map_err(db_err)?;
+            sqlx::query(&format!(
+                "DELETE FROM ticket_sla_policies WHERE {key} AND resolution_minutes IS NULL"
+            ))
+            .bind(department)
+            .execute(pool)
+            .await
+            .map_err(db_err)?;
             sqlx::query(&format!("UPDATE ticket_sla_policies SET first_response_minutes = NULL, updated_at = now() WHERE {key}")).bind(department).execute(pool).await.map_err(db_err)?;
         }
     }
@@ -148,14 +170,22 @@ pub struct TargetState {
 
 /// State of a target of `minutes` that started at `start`; `done` is when
 /// it was met (first staff reply / close).
-pub fn target_state(start: OffsetDateTime, minutes: Option<i32>, done: Option<OffsetDateTime>, warn_percent: i16, now: OffsetDateTime) -> Option<TargetState> {
+pub fn target_state(
+    start: OffsetDateTime,
+    minutes: Option<i32>,
+    done: Option<OffsetDateTime>,
+    warn_percent: i16,
+    now: OffsetDateTime,
+) -> Option<TargetState> {
     let m = i64::from(minutes?);
     let due_at = start + Duration::minutes(m);
     let state = match done {
         Some(d) if d <= due_at => "met",
         Some(_) => "missed",
         None if now >= due_at => "breached",
-        None if now >= start + Duration::seconds(m * 60 * i64::from(warn_percent) / 100) => "warning",
+        None if now >= start + Duration::seconds(m * 60 * i64::from(warn_percent) / 100) => {
+            "warning"
+        }
         None => "ok",
     };
     Some(TargetState { due_at, state })
@@ -174,7 +204,16 @@ const MATCH: &str = "LATERAL (SELECT * FROM ticket_sla_policies p WHERE (p.depar
       AND (p.priority IS NULL OR p.priority = t.priority)
     ORDER BY (p.department_id IS NOT NULL) DESC, (p.priority IS NOT NULL) DESC LIMIT 1) p";
 
-type Row = (Option<Uuid>, Option<i32>, Option<i32>, Option<i16>, OffsetDateTime, Option<OffsetDateTime>, Option<OffsetDateTime>, String);
+type Row = (
+    Option<Uuid>,
+    Option<i32>,
+    Option<i32>,
+    Option<i16>,
+    OffsetDateTime,
+    Option<OffsetDateTime>,
+    Option<OffsetDateTime>,
+    String,
+);
 
 pub async fn for_ticket(pool: &PgPool, ticket: Uuid) -> AppResult<TicketSla> {
     let r: Row = sqlx::query_as(&format!(
@@ -202,7 +241,8 @@ const OPEN: &str = "WITH c AS (
     CASE WHEN p.resolution_minutes IS NOT NULL THEN t.created_at + make_interval(secs => (p.resolution_minutes * 60 * p.warn_percent / 100.0)::float8) END AS res_warn
   FROM tickets t JOIN ";
 
-const OPEN_WHERE: &str = " ON true WHERE t.status NOT IN ('closed', 'on_hold') AND t.merged_into IS NULL)";
+const OPEN_WHERE: &str =
+    " ON true WHERE t.status NOT IN ('closed', 'on_hold') AND t.merged_into IS NULL)";
 
 #[derive(Debug, Clone, Serialize, FromRow, utoipa::ToSchema)]
 pub struct AtRisk {
@@ -222,7 +262,11 @@ pub struct AtRisk {
 }
 
 /// Open tickets past an SLA warning threshold, most urgent first.
-pub async fn at_risk(pool: &PgPool, department: Option<Uuid>, limit: i64) -> AppResult<Vec<AtRisk>> {
+pub async fn at_risk(
+    pool: &PgPool,
+    department: Option<Uuid>,
+    limit: i64,
+) -> AppResult<Vec<AtRisk>> {
     sqlx::query_as(&format!(
         "{OPEN}{MATCH}{OPEN_WHERE}
          SELECT ticket_id, number, subject, priority, status, assigned_to, department_id, fr_due, res_due,
@@ -247,9 +291,26 @@ pub struct Fired {
     pub escalated: bool,
 }
 
-type ScanRow = (Uuid, i64, String, Option<Uuid>, Uuid, Option<OffsetDateTime>, Option<OffsetDateTime>, Option<OffsetDateTime>, Option<OffsetDateTime>);
+type ScanRow = (
+    Uuid,
+    i64,
+    String,
+    Option<Uuid>,
+    Uuid,
+    Option<OffsetDateTime>,
+    Option<OffsetDateTime>,
+    Option<OffsetDateTime>,
+    Option<OffsetDateTime>,
+);
 
-async fn claim(pool: &PgPool, ticket: Uuid, target: &str, stage: &str, policy: Uuid, due: OffsetDateTime) -> AppResult<bool> {
+async fn claim(
+    pool: &PgPool,
+    ticket: Uuid,
+    target: &str,
+    stage: &str,
+    policy: Uuid,
+    due: OffsetDateTime,
+) -> AppResult<bool> {
     Ok(sqlx::query("INSERT INTO ticket_sla_events (ticket_id, target, stage, policy_id, due_at) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING")
         .bind(ticket).bind(target).bind(stage).bind(policy).bind(due)
         .execute(pool).await.map_err(db_err)?.rows_affected() == 1)
@@ -288,20 +349,38 @@ pub async fn scan(pool: &PgPool) -> AppResult<Vec<Fired>> {
     let now = OffsetDateTime::now_utc();
     let mut out = Vec::new();
     for (ticket, number, subject, assigned_to, policy, fr_due, fr_warn, res_due, res_warn) in rows {
-        for (target, due, warn) in [("first_response", fr_due, fr_warn), ("resolution", res_due, res_warn)] {
-            let (Some(due), Some(warn)) = (due, warn) else { continue };
+        for (target, due, warn) in [
+            ("first_response", fr_due, fr_warn),
+            ("resolution", res_due, res_warn),
+        ] {
+            let (Some(due), Some(warn)) = (due, warn) else {
+                continue;
+            };
             let fired = if now >= due {
                 // Late scans skip straight to the breach; the warning is moot.
                 let _ = claim(pool, ticket, target, "warning", policy, due).await?;
-                claim(pool, ticket, target, "breach", policy, due).await?.then_some("breach")
+                claim(pool, ticket, target, "breach", policy, due)
+                    .await?
+                    .then_some("breach")
             } else if now >= warn {
-                claim(pool, ticket, target, "warning", policy, due).await?.then_some("warning")
+                claim(pool, ticket, target, "warning", policy, due)
+                    .await?
+                    .then_some("warning")
             } else {
                 None
             };
             if let Some(stage) = fired {
                 let escalated = stage == "breach" && escalate(pool, ticket, policy).await?;
-                out.push(Fired { ticket_id: ticket, number, subject: subject.clone(), target, stage, due_at: due, assigned_to, escalated });
+                out.push(Fired {
+                    ticket_id: ticket,
+                    number,
+                    subject: subject.clone(),
+                    target,
+                    stage,
+                    due_at: due,
+                    assigned_to,
+                    escalated,
+                });
             }
         }
     }
@@ -317,23 +396,47 @@ mod tests {
         let t0 = OffsetDateTime::from_unix_timestamp(1_700_000_000).unwrap();
         let at = |m: i64| t0 + Duration::minutes(m);
         assert_eq!(target_state(t0, None, None, 80, at(5)), None);
-        let st = |done: Option<OffsetDateTime>, now: i64| target_state(t0, Some(60), done, 80, at(now)).unwrap().state;
+        let st = |done: Option<OffsetDateTime>, now: i64| {
+            target_state(t0, Some(60), done, 80, at(now)).unwrap().state
+        };
         assert_eq!(st(None, 10), "ok");
         assert_eq!(st(None, 48), "warning");
         assert_eq!(st(None, 60), "breached");
         assert_eq!(st(Some(at(59)), 500), "met");
         assert_eq!(st(Some(at(61)), 500), "missed");
-        assert_eq!(target_state(t0, Some(60), None, 80, at(0)).unwrap().due_at, at(60));
+        assert_eq!(
+            target_state(t0, Some(60), None, 80, at(0)).unwrap().due_at,
+            at(60)
+        );
     }
 
     #[test]
     fn policy_validation() {
-        let p = |fr: Option<i32>, res: Option<i32>| PolicyInput { department_id: None, priority: None, first_response_minutes: fr, resolution_minutes: res, warn_percent: 80, escalate_priority: None, escalate_to: None, escalate_department: None };
+        let p = |fr: Option<i32>, res: Option<i32>| PolicyInput {
+            department_id: None,
+            priority: None,
+            first_response_minutes: fr,
+            resolution_minutes: res,
+            warn_percent: 80,
+            escalate_priority: None,
+            escalate_to: None,
+            escalate_department: None,
+        };
         assert!(p(Some(60), Some(480)).validate().is_ok());
         assert!(p(None, None).validate().is_err());
         assert!(p(Some(60), Some(30)).validate().is_err());
         assert!(p(Some(0), None).validate().is_err());
-        assert!(PolicyInput { priority: Some("x".into()), ..p(Some(1), None) }.validate().is_err());
-        assert!(PolicyInput { warn_percent: 100, ..p(Some(1), None) }.validate().is_err());
+        assert!(PolicyInput {
+            priority: Some("x".into()),
+            ..p(Some(1), None)
+        }
+        .validate()
+        .is_err());
+        assert!(PolicyInput {
+            warn_percent: 100,
+            ..p(Some(1), None)
+        }
+        .validate()
+        .is_err());
     }
 }

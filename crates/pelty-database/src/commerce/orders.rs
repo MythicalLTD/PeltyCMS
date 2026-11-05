@@ -100,13 +100,27 @@ pub async fn place_with(
     due_days: i64,
     bundle: Option<&BundleDiscount>,
 ) -> AppResult<(Order, Invoice)> {
-    place_full(pool, customer_id, currency, items, coupon, due_days, bundle, &[]).await
+    place_full(
+        pool,
+        customer_id,
+        currency,
+        items,
+        coupon,
+        due_days,
+        bundle,
+        &[],
+    )
+    .await
 }
 
 /// Price the current catalog amounts of `items` without placing anything
 /// (input for addon discounts; `place_full` re-quotes inside its own
 /// transaction).
-pub async fn line_amounts(pool: &PgPool, currency: &str, items: &[CartItem]) -> AppResult<Vec<catalog::Quote>> {
+pub async fn line_amounts(
+    pool: &PgPool,
+    currency: &str,
+    items: &[CartItem],
+) -> AppResult<Vec<catalog::Quote>> {
     let currency = currency.to_ascii_uppercase();
     let mut tx = pool.begin().await.map_err(db_err)?;
     let mut out = Vec::with_capacity(items.len());
@@ -193,7 +207,10 @@ pub async fn place_full(
             }
             _ => Decimal::ZERO,
         };
-        if let Some(c) = coupon.as_ref().filter(|c| c.applies_addons && c.applies_to(q.product_id)) {
+        if let Some(c) = coupon
+            .as_ref()
+            .filter(|c| c.applies_addons && c.applies_to(q.product_id))
+        {
             discount += extras
                 .iter()
                 .filter(|a| a.cycle != "one_time")
@@ -207,7 +224,12 @@ pub async fn place_full(
         discount_total += discount;
         used[idx] += discount;
         if let Some(b) = bundle.filter(|b| b.items.contains(&idx)) {
-            let d = coupons::line_discount("percent", b.percent, (q.amount - discount).max(Decimal::ZERO), exp);
+            let d = coupons::line_discount(
+                "percent",
+                b.percent,
+                (q.amount - discount).max(Decimal::ZERO),
+                exp,
+            );
             bundle_total += d;
             used[idx] += d;
         }
@@ -357,7 +379,12 @@ pub async fn place_full(
     invoices::add_items(&mut tx, inv, &currency, &lines).await?;
     let invoice = invoices::finalize(&mut tx, inv, due_days).await?;
     if let Some(b) = bundle {
-        sqlx::query("UPDATE orders SET bundle_id = $2 WHERE id = $1").bind(order_id).bind(b.bundle_id).execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query("UPDATE orders SET bundle_id = $2 WHERE id = $1")
+            .bind(order_id)
+            .bind(b.bundle_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
     }
     let order: Order = sqlx::query_as(&format!("UPDATE orders SET total = $2, invoice_id = $3, coupon_id = $4, discount = $5 WHERE id = $1 RETURNING {COLS}"))
         .bind(order_id)
@@ -420,7 +447,11 @@ pub async fn list(
 
 /// Approve a pending order: creates one active service per item, all in one
 /// transaction (either every service exists or none). Returns service ids.
-pub async fn approve(pool: &PgPool, id: Uuid, actor: impl Into<Option<Uuid>>) -> AppResult<Vec<Uuid>> {
+pub async fn approve(
+    pool: &PgPool,
+    id: Uuid,
+    actor: impl Into<Option<Uuid>>,
+) -> AppResult<Vec<Uuid>> {
     let actor: Option<Uuid> = actor.into();
     let mut tx = pool.begin().await.map_err(db_err)?;
     let st: String = sqlx::query_scalar("SELECT status FROM orders WHERE id = $1 FOR UPDATE")
@@ -573,17 +604,28 @@ pub async fn reopen(pool: &PgPool, id: Uuid) -> AppResult<Order> {
 /// services can be removed (invoices keep existing, unlinked).
 pub async fn delete(pool: &PgPool, id: Uuid) -> AppResult<()> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let st: Option<(String,)> = sqlx::query_as("SELECT status FROM orders WHERE id = $1 FOR UPDATE").bind(id).fetch_optional(&mut *tx).await.map_err(db_err)?;
+    let st: Option<(String,)> =
+        sqlx::query_as("SELECT status FROM orders WHERE id = $1 FOR UPDATE")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_err)?;
     match st {
         None => return Err(AppError::NotFound),
-        Some((s,)) if s != "cancelled" && s != "fraud" => return Err(AppError::Conflict("error.order_not_cancelled")),
+        Some((s,)) if s != "cancelled" && s != "fraud" => {
+            return Err(AppError::Conflict("error.order_not_cancelled"))
+        }
         _ => {}
     }
     let (n,): (i64,) = sqlx::query_as("SELECT count(*) FROM services s JOIN order_items oi ON oi.id = s.order_item_id WHERE oi.order_id = $1").bind(id).fetch_one(&mut *tx).await.map_err(db_err)?;
     if n > 0 {
         return Err(AppError::Conflict("error.order_has_services"));
     }
-    sqlx::query("DELETE FROM orders WHERE id = $1").bind(id).execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("DELETE FROM orders WHERE id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
     Ok(())
 }

@@ -59,17 +59,31 @@ pub fn validate(b: &EndpointBody) -> Result<(String, String, Vec<String>), AppEr
         return Err(AppError::Validation("error.invalid_name"));
     }
     let url = b.url.trim();
-    let host_ok = url.strip_prefix("https://").and_then(|r| r.split(['/', '?', '#']).next()).is_some_and(|h| !h.is_empty() && !h.contains('@'));
+    let host_ok = url
+        .strip_prefix("https://")
+        .and_then(|r| r.split(['/', '?', '#']).next())
+        .is_some_and(|h| !h.is_empty() && !h.contains('@'));
     if !host_ok || url.len() > 500 || url.contains(char::is_whitespace) {
         return Err(AppError::Validation("error.invalid_webhook_url"));
     }
-    let mut events: Vec<String> = b.events.iter().map(|e| e.trim().to_string()).filter(|e| !e.is_empty()).collect();
+    let mut events: Vec<String> = b
+        .events
+        .iter()
+        .map(|e| e.trim().to_string())
+        .filter(|e| !e.is_empty())
+        .collect();
     events.sort();
     events.dedup();
     let known = |e: &str| {
         e == "*"
-            || e.strip_suffix(".*").is_some_and(|c| REGISTRY.iter().any(|x| x.kind == EventKind::Domain && x.category() == c))
-            || REGISTRY.iter().any(|x| x.kind == EventKind::Domain && x.name == e && !e.starts_with("webhook_endpoint."))
+            || e.strip_suffix(".*").is_some_and(|c| {
+                REGISTRY
+                    .iter()
+                    .any(|x| x.kind == EventKind::Domain && x.category() == c)
+            })
+            || REGISTRY.iter().any(|x| {
+                x.kind == EventKind::Domain && x.name == e && !e.starts_with("webhook_endpoint.")
+            })
     };
     if events.is_empty() || events.len() > 200 || events.iter().any(|e| !known(e)) {
         return Err(AppError::Validation("error.invalid_events"));
@@ -78,13 +92,21 @@ pub fn validate(b: &EndpointBody) -> Result<(String, String, Vec<String>), AppEr
 }
 
 fn seal(s: &AppState, secret: &str) -> Result<Vec<u8>, AppError> {
-    let sb = s.secret_box.as_ref().ok_or(AppError::Validation("error.encryption_key_missing"))?;
+    let sb = s
+        .secret_box
+        .as_ref()
+        .ok_or(AppError::Validation("error.encryption_key_missing"))?;
     Ok(sb.seal(secret.as_bytes()))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/webhook-endpoints", responses((status = 200), (status = 403)))]
-pub async fn list(State(s): State<AppState>, _p: RequirePermission<perms::WebhooksManage>) -> ApiResult<Json<Value>> {
-    Ok(Json(json!({ "items": db::list(&s.pool).await?, "events": catalog(), "signing_available": s.secret_box.is_some() })))
+pub async fn list(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::WebhooksManage>,
+) -> ApiResult<Json<Value>> {
+    Ok(Json(
+        json!({ "items": db::list(&s.pool).await?, "events": catalog(), "signing_available": s.secret_box.is_some() }),
+    ))
 }
 
 /// Create an endpoint. The signing secret is returned once.
@@ -99,8 +121,25 @@ pub async fn create(
         return Err(AppError::Conflict("error.too_many_webhooks").into());
     }
     let secret = webhooks_out::new_secret();
-    let ep = db::create(&s.pool, &name, &url, &events, &seal(&s, &secret)?, b.enabled, u.user_id).await?;
-    audit::record(&s.pool, Some(u.user_id), "webhook_endpoint.created", Some(&ep.id.to_string()), u.ip.as_deref(), json!({ "url": url, "events": events })).await?;
+    let ep = db::create(
+        &s.pool,
+        &name,
+        &url,
+        &events,
+        &seal(&s, &secret)?,
+        b.enabled,
+        u.user_id,
+    )
+    .await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "webhook_endpoint.created",
+        Some(&ep.id.to_string()),
+        u.ip.as_deref(),
+        json!({ "url": url, "events": events }),
+    )
+    .await?;
     Ok(Json(json!({ "endpoint": ep, "secret": secret })))
 }
 
@@ -113,33 +152,76 @@ pub async fn update(
 ) -> ApiResult<Json<Value>> {
     let (name, url, events) = validate(&b)?;
     let ep = db::update(&s.pool, id, &name, &url, &events, b.enabled).await?;
-    audit::record(&s.pool, Some(u.user_id), "webhook_endpoint.updated", Some(&id.to_string()), u.ip.as_deref(), json!({ "url": url, "events": events, "enabled": b.enabled })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "webhook_endpoint.updated",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "url": url, "events": events, "enabled": b.enabled }),
+    )
+    .await?;
     Ok(Json(json!({ "endpoint": ep })))
 }
 
 #[utoipa::path(delete, path = "/api/v1/admin/webhook-endpoints/{id}", responses((status = 204), (status = 404)))]
-pub async fn remove(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::WebhooksManage>, Path(id): Path<Uuid>) -> ApiResult<StatusCode> {
+pub async fn remove(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::WebhooksManage>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
     if !db::delete(&s.pool, id).await? {
         return Err(AppError::NotFound.into());
     }
-    audit::record(&s.pool, Some(u.user_id), "webhook_endpoint.deleted", Some(&id.to_string()), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "webhook_endpoint.deleted",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// Rotate the signing secret; the new one is returned once.
 #[utoipa::path(post, path = "/api/v1/admin/webhook-endpoints/{id}/secret", responses((status = 200), (status = 404), (status = 422)))]
-pub async fn rotate_secret(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::WebhooksManage>, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
+pub async fn rotate_secret(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::WebhooksManage>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
     let secret = webhooks_out::new_secret();
     db::set_secret(&s.pool, id, &seal(&s, &secret)?).await?;
-    audit::record(&s.pool, Some(u.user_id), "webhook_endpoint.secret_rotated", Some(&id.to_string()), u.ip.as_deref(), json!({})).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "webhook_endpoint.secret_rotated",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({}),
+    )
+    .await?;
     Ok(Json(json!({ "secret": secret })))
 }
 
 /// Queue a `webhook.ping` delivery (also to a disabled endpoint).
 #[utoipa::path(post, path = "/api/v1/admin/webhook-endpoints/{id}/test", responses((status = 200), (status = 404)))]
-pub async fn test(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::WebhooksManage>, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
+pub async fn test(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::WebhooksManage>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
     db::get(&s.pool, id).await?.ok_or(AppError::NotFound)?;
-    let did = webhooks_out::enqueue(&s, id, webhooks_out::PING_EVENT, &json!({ "endpoint_id": id, "by": u.user_id }), None).await?;
+    let did = webhooks_out::enqueue(
+        &s,
+        id,
+        webhooks_out::PING_EVENT,
+        &json!({ "endpoint_id": id, "by": u.user_id }),
+        None,
+    )
+    .await?;
     Ok(Json(json!({ "delivery_id": did })))
 }
 
@@ -154,24 +236,54 @@ pub struct DeliveryQuery {
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/webhook-deliveries", params(DeliveryQuery), responses((status = 200), (status = 403)))]
-pub async fn deliveries(State(s): State<AppState>, _p: RequirePermission<perms::WebhooksManage>, Query(q): Query<DeliveryQuery>) -> ApiResult<Json<Value>> {
-    let (limit, offset, page, per) = crate::routes::Page { page: q.page, per_page: q.per_page }.bounds();
-    let status = q.status.as_deref().filter(|x| ["pending", "delivered", "failed"].contains(x));
+pub async fn deliveries(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::WebhooksManage>,
+    Query(q): Query<DeliveryQuery>,
+) -> ApiResult<Json<Value>> {
+    let (limit, offset, page, per) = crate::routes::Page {
+        page: q.page,
+        per_page: q.per_page,
+    }
+    .bounds();
+    let status = q
+        .status
+        .as_deref()
+        .filter(|x| ["pending", "delivered", "failed"].contains(x));
     let event = q.event.as_deref().map(str::trim).filter(|x| !x.is_empty());
-    let (items, total) = db::deliveries(&s.pool, q.endpoint_id, status, event, limit, offset).await?;
+    let (items, total) =
+        db::deliveries(&s.pool, q.endpoint_id, status, event, limit, offset).await?;
     Ok(Json(crate::routes::paged(items, page, per, total)))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/webhook-deliveries/{id}", responses((status = 200), (status = 404)))]
-pub async fn delivery(State(s): State<AppState>, _p: RequirePermission<perms::WebhooksManage>, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
-    Ok(Json(json!({ "delivery": db::delivery(&s.pool, id).await?.ok_or(AppError::NotFound)? })))
+pub async fn delivery(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::WebhooksManage>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
+    Ok(Json(
+        json!({ "delivery": db::delivery(&s.pool, id).await?.ok_or(AppError::NotFound)? }),
+    ))
 }
 
 /// Send the same event and payload again as a new delivery.
 #[utoipa::path(post, path = "/api/v1/admin/webhook-deliveries/{id}/redeliver", responses((status = 200), (status = 404)))]
-pub async fn redeliver(State(s): State<AppState>, RequirePermission(u, _): RequirePermission<perms::WebhooksManage>, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
+pub async fn redeliver(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::WebhooksManage>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
     let new_id = webhooks_out::redeliver(&s, id).await?;
-    audit::record(&s.pool, Some(u.user_id), "webhook_delivery.redelivered", Some(&id.to_string()), u.ip.as_deref(), json!({ "new_delivery": new_id })).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "webhook_delivery.redelivered",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "new_delivery": new_id }),
+    )
+    .await?;
     Ok(Json(json!({ "delivery_id": new_id })))
 }
 
@@ -180,12 +292,21 @@ mod tests {
     use super::*;
 
     fn body(url: &str, events: &[&str]) -> EndpointBody {
-        EndpointBody { name: "x".into(), url: url.into(), events: events.iter().map(|e| e.to_string()).collect(), enabled: true }
+        EndpointBody {
+            name: "x".into(),
+            url: url.into(),
+            events: events.iter().map(|e| e.to_string()).collect(),
+            enabled: true,
+        }
     }
 
     #[test]
     fn validation() {
-        assert!(validate(&body("https://hooks.example.com/x", &["invoice.paid", "ticket.*", "*"])).is_ok());
+        assert!(validate(&body(
+            "https://hooks.example.com/x",
+            &["invoice.paid", "ticket.*", "*"]
+        ))
+        .is_ok());
         assert!(validate(&body("http://hooks.example.com/x", &["*"])).is_err());
         assert!(validate(&body("https://user@evil/x", &["*"])).is_err());
         assert!(validate(&body("https://", &["*"])).is_err());
@@ -193,7 +314,11 @@ mod tests {
         assert!(validate(&body("https://a.example", &["nope.event"])).is_err());
         assert!(validate(&body("https://a.example", &["nope.*"])).is_err());
         assert!(validate(&body("https://a.example", &["webhook_endpoint.disabled"])).is_err());
-        let (_, _, ev) = validate(&body(" https://a.example ", &["order.created", "order.created", "invoice.*"])).unwrap();
+        let (_, _, ev) = validate(&body(
+            " https://a.example ",
+            &["order.created", "order.created", "invoice.*"],
+        ))
+        .unwrap();
         assert_eq!(ev, vec!["invoice.*", "order.created"]);
     }
 }

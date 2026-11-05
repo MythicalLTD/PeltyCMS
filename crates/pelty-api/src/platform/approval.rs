@@ -11,12 +11,36 @@ use uuid::Uuid;
 pub const DUE_JOB: &str = "billing.due_reminders";
 
 /// Approve a pending order, then emit events and provision its services.
-pub async fn activate(s: &AppState, id: Uuid, actor: Option<Uuid>, ip: Option<&str>, auto: bool) -> AppResult<Vec<Uuid>> {
+pub async fn activate(
+    s: &AppState,
+    id: Uuid,
+    actor: Option<Uuid>,
+    ip: Option<&str>,
+    auto: bool,
+) -> AppResult<Vec<Uuid>> {
     let ids = orders::approve(&s.pool, id, actor).await?;
-    audit::record(&s.pool, actor, if auto { "order.auto_approved" } else { "order.approved" }, Some(&id.to_string()), ip, json!({ "services": ids })).await?;
-    s.emit(DomainEvent::new("order.approved", json!({ "order_id": id, "services": ids, "auto": auto })));
+    audit::record(
+        &s.pool,
+        actor,
+        if auto {
+            "order.auto_approved"
+        } else {
+            "order.approved"
+        },
+        Some(&id.to_string()),
+        ip,
+        json!({ "services": ids }),
+    )
+    .await?;
+    s.emit(DomainEvent::new(
+        "order.approved",
+        json!({ "order_id": id, "services": ids, "auto": auto }),
+    ));
     for sid in &ids {
-        s.emit(DomainEvent::new("service.created", json!({ "service_id": sid, "order_id": id })));
+        s.emit(DomainEvent::new(
+            "service.created",
+            json!({ "service_id": sid, "order_id": id }),
+        ));
         crate::provision::on_transition(s, *sid, "pending", "active").await;
     }
     Ok(ids)
@@ -38,8 +62,14 @@ pub async fn try_auto(s: &AppState, order: Uuid) -> AppResult<bool> {
 pub async fn on_event(s: &AppState, e: &DomainEvent) {
     let order = match e.name {
         "order.created" => e.payload["order_id"].as_str().and_then(|v| v.parse().ok()),
-        "invoice.paid" => match e.payload["invoice_id"].as_str().and_then(|v| v.parse::<Uuid>().ok()) {
-            Some(inv) => order_approval::pending_for_invoice(&s.pool, inv).await.ok().flatten(),
+        "invoice.paid" => match e.payload["invoice_id"]
+            .as_str()
+            .and_then(|v| v.parse::<Uuid>().ok())
+        {
+            Some(inv) => order_approval::pending_for_invoice(&s.pool, inv)
+                .await
+                .ok()
+                .flatten(),
             None => None,
         },
         _ => None,
@@ -53,19 +83,37 @@ pub async fn on_event(s: &AppState, e: &DomainEvent) {
 
 pub async fn schedule_due(s: &AppState) -> AppResult<Option<i64>> {
     let today = OffsetDateTime::now_utc().date();
-    pelty_database::jobs::enqueue(&s.pool, DUE_JOB, json!({ "date": today.to_string() }), None, Some(&format!("due:{today}")), 5).await
+    pelty_database::jobs::enqueue(
+        &s.pool,
+        DUE_JOB,
+        json!({ "date": today.to_string() }),
+        None,
+        Some(&format!("due:{today}")),
+        5,
+    )
+    .await
 }
 
 /// Mail one "invoice due soon" reminder.
 pub async fn mail_due(s: &AppState, m: &invoice_tools::DueSoon) -> AppResult<()> {
-    let Some((to, name, locale)) = pelty_database::overdue::recipient(&s.pool, m.customer_id).await? else {
+    let Some((to, name, locale)) =
+        pelty_database::overdue::recipient(&s.pool, m.customer_id).await?
+    else {
         return Ok(());
     };
-    let locale = locale.filter(|l| s.i18n.has(l)).unwrap_or_else(|| s.cfg.default_locale.clone());
+    let locale = locale
+        .filter(|l| s.i18n.has(l))
+        .unwrap_or_else(|| s.cfg.default_locale.clone());
     let link = format!("{}/invoices/{}", s.cfg.public_url, m.invoice_id);
     let total = format!("{} {}", m.balance.normalize(), m.currency);
     let (due, days) = (m.due_date.to_string(), m.days_left.to_string());
-    let mut v = crate::mail::vars(&[("invoice_number", &m.number), ("total", &total), ("due_date", &due), ("days_left", &days), ("link", &link)]);
+    let mut v = crate::mail::vars(&[
+        ("invoice_number", &m.number),
+        ("total", &total),
+        ("due_date", &due),
+        ("days_left", &days),
+        ("link", &link),
+    ]);
     v.insert("name".into(), name);
     crate::mail::enqueue(s, "invoice_due_soon", &locale, &to, v).await
 }

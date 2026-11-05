@@ -9,7 +9,10 @@ pub type R<T = ()> = Result<T, String>;
 
 /// Repository root (the directory above `xtask/`).
 pub fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("xtask lives in the repo root").to_path_buf()
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("xtask lives in the repo root")
+        .to_path_buf()
 }
 
 /// The environment every command runs with: the process environment plus
@@ -24,7 +27,10 @@ pub struct Ctx {
 impl Ctx {
     /// Without `.env`: only the repo root (build, docs, lint, ...).
     pub fn plain() -> Ctx {
-        Ctx { root: root(), extra: BTreeMap::new() }
+        Ctx {
+            root: root(),
+            extra: BTreeMap::new(),
+        }
     }
 
     /// Loads `.env`, creating it from `.env.example` when missing.
@@ -34,7 +40,8 @@ impl Ctx {
         if !env_file.exists() {
             let example = ctx.root.join(".env.example");
             if example.exists() {
-                std::fs::copy(&example, &env_file).map_err(|e| format!("copy .env.example: {e}"))?;
+                std::fs::copy(&example, &env_file)
+                    .map_err(|e| format!("copy .env.example: {e}"))?;
                 println!("created .env from .env.example");
             }
         }
@@ -45,7 +52,12 @@ impl Ctx {
                 }
             }
         }
-        let addons = ctx.root.join("data").join("addons").to_string_lossy().into_owned();
+        let addons = ctx
+            .root
+            .join("data")
+            .join("addons")
+            .to_string_lossy()
+            .into_owned();
         ctx.default("PELTY_ADDONS_DIR", &addons);
         ctx.default("PELTY_BIND", "127.0.0.1:8080");
         Ok(ctx)
@@ -59,7 +71,10 @@ impl Ctx {
 
     /// A variable from the environment or `.env`.
     pub fn get(&self, k: &str) -> Option<String> {
-        std::env::var(k).ok().or_else(|| self.extra.get(k).cloned()).filter(|v| !v.is_empty())
+        std::env::var(k)
+            .ok()
+            .or_else(|| self.extra.get(k).cloned())
+            .filter(|v| !v.is_empty())
     }
 
     /// `program` resolved on PATH (so `pnpm.cmd` / `corepack.cmd` work on
@@ -73,7 +88,11 @@ impl Ctx {
     pub fn cargo(&self) -> Command {
         // CARGO points at the cargo that runs xtask (set by `cargo run`).
         let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
-        let mut c = if Path::new(&cargo).is_absolute() { Command::new(cargo) } else { self.cmd(&cargo) };
+        let mut c = if Path::new(&cargo).is_absolute() {
+            Command::new(cargo)
+        } else {
+            self.cmd(&cargo)
+        };
         c.current_dir(&self.root).envs(&self.extra);
         c
     }
@@ -82,10 +101,16 @@ impl Ctx {
     /// through corepack when available (a globally activated pnpm or stale shim
     /// cannot then trip ERR_PNPM_BAD_PM_VERSION), else a pnpm on PATH.
     pub fn pnpm(&self) -> R<Command> {
-        let pkg = std::fs::read_to_string(self.root.join("frontend").join("package.json")).unwrap_or_default();
+        let pkg = std::fs::read_to_string(self.root.join("frontend").join("package.json"))
+            .unwrap_or_default();
         let wanted = serde_json::from_str::<serde_json::Value>(&pkg)
             .ok()
-            .and_then(|v| v.get("packageManager")?.as_str()?.strip_prefix("pnpm@").map(String::from))
+            .and_then(|v| {
+                v.get("packageManager")?
+                    .as_str()?
+                    .strip_prefix("pnpm@")
+                    .map(String::from)
+            })
             .unwrap_or_else(|| "12.16.1".into());
         if which("corepack").is_some() {
             static ENABLED: std::sync::Once = std::sync::Once::new();
@@ -98,7 +123,10 @@ impl Ctx {
                 let home = PathBuf::from(home);
                 if std::fs::create_dir_all(&home).is_err() || !dir_writable(&home) {
                     if let Some(user_home) = home_dir() {
-                        c.env("COREPACK_HOME", user_home.join(".cache").join("node").join("corepack"));
+                        c.env(
+                            "COREPACK_HOME",
+                            user_home.join(".cache").join("node").join("corepack"),
+                        );
                     }
                 }
             }
@@ -118,7 +146,8 @@ impl Ctx {
             return Ok(());
         }
         let mut c = self.pnpm()?;
-        c.current_dir(self.root.join("frontend")).args(["install", "--frozen-lockfile"]);
+        c.current_dir(self.root.join("frontend"))
+            .args(["install", "--frozen-lockfile"]);
         run(&mut c)
     }
 }
@@ -129,7 +158,10 @@ pub fn parse_dotenv(text: &str) -> Vec<(String, String)> {
     text.lines()
         .map(|l| l.trim_end_matches('\r'))
         .filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#'))
-        .filter_map(|l| l.split_once('=').map(|(k, v)| (k.trim().to_string(), v.to_string())))
+        .filter_map(|l| {
+            l.split_once('=')
+                .map(|(k, v)| (k.trim().to_string(), v.to_string()))
+        })
         .filter(|(k, _)| !k.is_empty())
         .collect()
 }
@@ -154,7 +186,11 @@ pub fn which(name: &str) -> Option<PathBuf> {
     }
     let exts: Vec<String> = if cfg!(windows) {
         let pe = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
-        let mut v: Vec<String> = pe.split(';').filter(|e| !e.is_empty()).map(|e| e.to_ascii_lowercase()).collect();
+        let mut v: Vec<String> = pe
+            .split(';')
+            .filter(|e| !e.is_empty())
+            .map(|e| e.to_ascii_lowercase())
+            .collect();
         if p.extension().is_some() {
             v.insert(0, String::new());
         }
@@ -202,17 +238,29 @@ pub fn run(c: &mut Command) -> R {
 }
 
 pub fn status(c: &mut Command) -> R<ExitStatus> {
-    c.status().map_err(|e| format!("cannot start `{}`: {e}", describe(c)))
+    c.status()
+        .map_err(|e| format!("cannot start `{}`: {e}", describe(c)))
 }
 
 /// True when the command exits 0 (output discarded).
 pub fn succeeds(c: &mut Command) -> bool {
-    c.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status().map(|s| s.success()).unwrap_or(false)
+    c.stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
 pub fn describe(c: &Command) -> String {
-    let prog = Path::new(c.get_program()).file_name().unwrap_or(OsStr::new("?")).to_string_lossy().into_owned();
-    std::iter::once(prog).chain(c.get_args().map(|a| a.to_string_lossy().into_owned())).collect::<Vec<_>>().join(" ")
+    let prog = Path::new(c.get_program())
+        .file_name()
+        .unwrap_or(OsStr::new("?"))
+        .to_string_lossy()
+        .into_owned();
+    std::iter::once(prog)
+        .chain(c.get_args().map(|a| a.to_string_lossy().into_owned()))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Removes a directory tree if it exists.
@@ -245,7 +293,8 @@ pub fn copy_dir(from: &Path, to: &Path) -> R {
         if entry.file_type().map_err(|e| e.to_string())?.is_dir() {
             copy_dir(&entry.path(), &dst)?;
         } else {
-            std::fs::copy(entry.path(), &dst).map_err(|e| format!("copy {}: {e}", entry.path().display()))?;
+            std::fs::copy(entry.path(), &dst)
+                .map_err(|e| format!("copy {}: {e}", entry.path().display()))?;
         }
     }
     Ok(())

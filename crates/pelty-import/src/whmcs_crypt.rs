@@ -15,7 +15,11 @@ use sha1::{Digest, Sha1};
 const BLOCK: usize = 20;
 
 fn md5_hex(b: &[u8]) -> String {
-    md5::compute(b).0.iter().map(|x| format!("{x:02x}")).collect()
+    md5::compute(b)
+        .0
+        .iter()
+        .map(|x| format!("{x:02x}"))
+        .collect()
 }
 
 fn sha1(b: &[u8]) -> [u8; BLOCK] {
@@ -33,7 +37,9 @@ fn hash_key(cc: &str) -> [u8; BLOCK] {
 /// caller detects as non-UTF-8 / non-printable.
 pub fn decrypt(cc_encryption_hash: &str, value: &str) -> Option<String> {
     use base64::Engine;
-    let raw = base64::engine::general_purpose::STANDARD.decode(value.trim()).ok()?;
+    let raw = base64::engine::general_purpose::STANDARD
+        .decode(value.trim())
+        .ok()?;
     if raw.len() < BLOCK {
         return None;
     }
@@ -77,7 +83,12 @@ pub fn encrypt(cc_encryption_hash: &str, plain: &str, iv: [u8; BLOCK]) -> String
 pub fn login_hash(h: &str) -> Option<String> {
     let h = h.trim();
     let bcrypt = h.len() == 60 && ["$2y$", "$2a$", "$2b$"].iter().any(|p| h.starts_with(p));
-    let legacy = h.split_once(':').is_some_and(|(m, salt)| m.len() == 32 && m.bytes().all(|b| b.is_ascii_hexdigit()) && !salt.is_empty() && salt.len() <= 64);
+    let legacy = h.split_once(':').is_some_and(|(m, salt)| {
+        m.len() == 32
+            && m.bytes().all(|b| b.is_ascii_hexdigit())
+            && !salt.is_empty()
+            && salt.len() <= 64
+    });
     (bcrypt || legacy).then(|| format!("whmcs:{h}"))
 }
 
@@ -88,7 +99,11 @@ mod tests {
     #[test]
     fn cipher_round_trips_and_wrong_keys_fail() {
         let cc = "s3cr3tCcHashFromConfigurationPhp";
-        for pw in ["", "x", "a much longer server password spanning several 20-byte blocks!"] {
+        for pw in [
+            "",
+            "x",
+            "a much longer server password spanning several 20-byte blocks!",
+        ] {
             let enc = encrypt(cc, pw, [7; BLOCK]);
             assert_eq!(decrypt(cc, &enc).as_deref(), Some(pw));
         }
@@ -101,7 +116,10 @@ mod tests {
     fn login_hashes() {
         let b = "$2y$10$abcdefghijklmnopqrstuuMRK7cL0nL3oQwXzu3m1aW0eP4yS6J2y";
         assert_eq!(b.len(), 60);
-        assert_eq!(login_hash(b).as_deref(), Some(format!("whmcs:{b}").as_str()));
+        assert_eq!(
+            login_hash(b).as_deref(),
+            Some(format!("whmcs:{b}").as_str())
+        );
         assert!(login_hash("5f4dcc3b5aa765d61d8327deb882cf99:abcde").is_some());
         assert_eq!(login_hash(""), None);
         assert_eq!(login_hash("plaintext"), None);

@@ -25,7 +25,10 @@ async fn attachment_size_limit_is_configurable() {
     let before = g.clone();
     g.support.attachment_max_mb = 1;
     gs::save(&state.pool, &g).await.unwrap();
-    assert_eq!(up(&app, &cust, 1024 * 1024 + 1).await, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        up(&app, &cust, 1024 * 1024 + 1).await,
+        StatusCode::BAD_REQUEST
+    );
     assert_eq!(up(&app, &cust, 1000).await, StatusCode::OK);
     g.support.attachment_max_mb = 8;
     gs::save(&state.pool, &g).await.unwrap();

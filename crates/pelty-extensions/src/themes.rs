@@ -314,7 +314,9 @@ mod tests {
             assert!(!valid_asset_name(a), "should reject {a}");
         }
         assert!(valid_asset_name("assets/logo.svg"));
-        let s = ThemeStore::load(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../extensions/themes"));
+        let s = ThemeStore::load(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../extensions/themes"),
+        );
         assert!(s.get("default").is_some());
         assert!(s.asset_path("default", "../midnight/theme.json").is_none());
         assert!(s.asset_path("default", "../../Cargo.toml").is_none());

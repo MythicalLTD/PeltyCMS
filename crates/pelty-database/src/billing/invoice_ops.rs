@@ -20,7 +20,14 @@ struct Src {
 }
 
 async fn lock(tx: &mut Tx<'_>, ids: &[Uuid]) -> AppResult<Vec<Src>> {
-    let rows: Vec<(Uuid, Uuid, String, String, rust_decimal::Decimal, Option<OffsetDateTime>)> = sqlx::query_as(
+    let rows: Vec<(
+        Uuid,
+        Uuid,
+        String,
+        String,
+        rust_decimal::Decimal,
+        Option<OffsetDateTime>,
+    )> = sqlx::query_as(
         "SELECT id, customer_id, currency::text, status, amount_paid, due_at FROM invoices
          WHERE id = ANY($1) AND kind = 'invoice' ORDER BY created_at, id FOR UPDATE",
     )
@@ -33,7 +40,16 @@ async fn lock(tx: &mut Tx<'_>, ids: &[Uuid]) -> AppResult<Vec<Src>> {
     }
     Ok(rows
         .into_iter()
-        .map(|(id, customer_id, currency, status, amount_paid, due_at)| Src { id, customer_id, currency, status, amount_paid, due_at })
+        .map(
+            |(id, customer_id, currency, status, amount_paid, due_at)| Src {
+                id,
+                customer_id,
+                currency,
+                status,
+                amount_paid,
+                due_at,
+            },
+        )
         .collect())
 }
 
@@ -42,7 +58,12 @@ fn mergeable(s: &Src) -> bool {
 }
 
 /// Copy lines (all, or only `only`) of `from` into draft `to`.
-async fn copy_lines(tx: &mut Tx<'_>, from: Uuid, to: Uuid, only: Option<&[Uuid]>) -> AppResult<u64> {
+async fn copy_lines(
+    tx: &mut Tx<'_>,
+    from: Uuid,
+    to: Uuid,
+    only: Option<&[Uuid]>,
+) -> AppResult<u64> {
     let r = sqlx::query(
         "INSERT INTO invoice_items (id, invoice_id, description, quantity, unit_price, tax_rate, amount, tax_amount,
             service_id, period_start, period_end, tax_auto, sort_order, copied_from)
@@ -65,9 +86,17 @@ async fn finish(tx: &mut Tx<'_>, id: Uuid, due: Option<OffsetDateTime>) -> AppRe
     invoices::recompute(tx, id).await?;
     let inv = invoices::finalize(tx, id, 0).await?;
     if let Some(d) = due {
-        sqlx::query("UPDATE invoices SET due_at = $2 WHERE id = $1").bind(id).bind(d).execute(&mut **tx).await.map_err(db_err)?;
+        sqlx::query("UPDATE invoices SET due_at = $2 WHERE id = $1")
+            .bind(id)
+            .bind(d)
+            .execute(&mut **tx)
+            .await
+            .map_err(db_err)?;
     }
-    Ok(Invoice { due_at: due.or(inv.due_at), ..inv })
+    Ok(Invoice {
+        due_at: due.or(inv.due_at),
+        ..inv
+    })
 }
 
 /// Merge 2-50 unpaid, unpaid-to-date invoices of one customer and currency
@@ -84,7 +113,10 @@ pub async fn merge(pool: &PgPool, ids: &[Uuid]) -> AppResult<Invoice> {
     if !src.iter().all(mergeable) {
         return Err(AppError::Conflict("error.invoice_not_mergeable"));
     }
-    if src.iter().any(|s| s.customer_id != src[0].customer_id || s.currency != src[0].currency) {
+    if src
+        .iter()
+        .any(|s| s.customer_id != src[0].customer_id || s.currency != src[0].currency)
+    {
         return Err(AppError::Validation("error.merge_mixed"));
     }
     let new = invoices::create_draft(&mut tx, src[0].customer_id, &src[0].currency, None).await?;
@@ -107,7 +139,10 @@ pub async fn merge(pool: &PgPool, ids: &[Uuid]) -> AppResult<Invoice> {
 /// lines, remaining lines), same due date; the original is voided.
 pub async fn split(pool: &PgPool, id: Uuid, item_ids: &[Uuid]) -> AppResult<(Invoice, Invoice)> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let src = lock(&mut tx, &[id]).await?.pop().ok_or(AppError::NotFound)?;
+    let src = lock(&mut tx, &[id])
+        .await?
+        .pop()
+        .ok_or(AppError::NotFound)?;
     if !mergeable(&src) {
         return Err(AppError::Conflict("error.invoice_not_mergeable"));
     }
@@ -116,7 +151,11 @@ pub async fn split(pool: &PgPool, id: Uuid, item_ids: &[Uuid]) -> AppResult<(Inv
         .fetch_all(&mut *tx)
         .await
         .map_err(db_err)?;
-    let mut pick: Vec<Uuid> = item_ids.iter().copied().filter(|i| all.contains(i)).collect();
+    let mut pick: Vec<Uuid> = item_ids
+        .iter()
+        .copied()
+        .filter(|i| all.contains(i))
+        .collect();
     pick.sort();
     pick.dedup();
     if pick.is_empty() || pick.len() != item_ids.len() || pick.len() >= all.len() {
@@ -127,10 +166,19 @@ pub async fn split(pool: &PgPool, id: Uuid, item_ids: &[Uuid]) -> AppResult<(Inv
     for sel in [&pick, &rest] {
         let n = invoices::create_draft(&mut tx, src.customer_id, &src.currency, None).await?;
         copy_lines(&mut tx, id, n, Some(sel)).await?;
-        sqlx::query("UPDATE invoices SET split_from = $2 WHERE id = $1").bind(n).bind(id).execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query("UPDATE invoices SET split_from = $2 WHERE id = $1")
+            .bind(n)
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
         out.push(finish(&mut tx, n, src.due_at).await?);
     }
-    sqlx::query("UPDATE invoices SET status = 'void' WHERE id = $1").bind(id).execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("UPDATE invoices SET status = 'void' WHERE id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
     let b = out.pop().ok_or(AppError::NotFound)?;
     let a = out.pop().ok_or(AppError::NotFound)?;
@@ -141,11 +189,12 @@ pub async fn split(pool: &PgPool, id: Uuid, item_ids: &[Uuid]) -> AppResult<(Inv
 /// periods not re-claimed).
 pub async fn duplicate(pool: &PgPool, id: Uuid) -> AppResult<Uuid> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let r: Option<(Uuid, String, String)> = sqlx::query_as("SELECT customer_id, currency::text, kind FROM invoices WHERE id = $1")
-        .bind(id)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db_err)?;
+    let r: Option<(Uuid, String, String)> =
+        sqlx::query_as("SELECT customer_id, currency::text, kind FROM invoices WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_err)?;
     let (customer, currency, kind) = r.ok_or(AppError::NotFound)?;
     if kind != "invoice" {
         return Err(AppError::Conflict("error.invoice_not_duplicable"));
@@ -175,17 +224,33 @@ pub async fn set_notes(pool: &PgPool, id: Uuid, admin: &str, client: &str) -> Ap
     Ok(())
 }
 
-pub async fn notes(pool: &PgPool, id: Uuid) -> AppResult<(String, String, Option<Uuid>, Option<Uuid>)> {
-    sqlx::query_as("SELECT admin_notes, client_notes, merged_into, split_from FROM invoices WHERE id = $1")
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?
-        .ok_or(AppError::NotFound)
+pub async fn notes(
+    pool: &PgPool,
+    id: Uuid,
+) -> AppResult<(String, String, Option<Uuid>, Option<Uuid>)> {
+    sqlx::query_as(
+        "SELECT admin_notes, client_notes, merged_into, split_from FROM invoices WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?
+    .ok_or(AppError::NotFound)
 }
 
 /// A customer's invoices that can take part in a merge (unpaid, nothing paid).
-pub async fn list_mergeable(pool: &PgPool, customer: Uuid) -> AppResult<Vec<(Uuid, Option<String>, String, rust_decimal::Decimal, Option<OffsetDateTime>)>> {
+pub async fn list_mergeable(
+    pool: &PgPool,
+    customer: Uuid,
+) -> AppResult<
+    Vec<(
+        Uuid,
+        Option<String>,
+        String,
+        rust_decimal::Decimal,
+        Option<OffsetDateTime>,
+    )>,
+> {
     sqlx::query_as(
         "SELECT id, number, currency::text, total, due_at FROM invoices
          WHERE customer_id = $1 AND kind = 'invoice' AND status = 'unpaid' AND amount_paid = 0 ORDER BY due_at NULLS LAST, id LIMIT 200",

@@ -34,7 +34,12 @@ pub fn embedded_file(rel: &str) -> Option<&'static [u8]> {
 
 /// Serve compiled-in bytes; the ETag is a content hash (computed per
 /// request, but `assets/*` are immutable so browsers rarely ask twice).
-fn serve_bytes(name: &str, bytes: &'static [u8], req_headers: &HeaderMap, cache: &'static str) -> Option<Response> {
+fn serve_bytes(
+    name: &str,
+    bytes: &'static [u8],
+    req_headers: &HeaderMap,
+    cache: &'static str,
+) -> Option<Response> {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
     bytes.hash(&mut h);
@@ -44,24 +49,40 @@ fn serve_bytes(name: &str, bytes: &'static [u8], req_headers: &HeaderMap, cache:
         .get(header::IF_NONE_MATCH)
         .and_then(|v| v.to_str().ok())
         .is_some_and(|v| v.split(',').any(|t| t.trim() == etag || t.trim() == "*"));
-    let base = [(header::ETAG, etag_hv), (header::CACHE_CONTROL, HeaderValue::from_static(cache))];
+    let base = [
+        (header::ETAG, etag_hv),
+        (header::CACHE_CONTROL, HeaderValue::from_static(cache)),
+    ];
     if not_modified {
         return Some((StatusCode::NOT_MODIFIED, base).into_response());
     }
-    Some((base, [(header::CONTENT_TYPE, content_type(Path::new(name)))], Body::from(bytes)).into_response())
+    Some(
+        (
+            base,
+            [(header::CONTENT_TYPE, content_type(Path::new(name)))],
+            Body::from(bytes),
+        )
+            .into_response(),
+    )
 }
 
 /// Embedded fallback for [`frontend`]: same rules as the disk bundle.
 fn serve_embedded(path: &str, req_headers: &HeaderMap) -> Option<Response> {
     let rel = path.trim_start_matches('/');
-    let safe = Path::new(rel).components().all(|c| matches!(c, Component::Normal(_)));
+    let safe = Path::new(rel)
+        .components()
+        .all(|c| matches!(c, Component::Normal(_)));
     if !safe {
         // `..`, absolute or prefixed paths are never a route.
         return Some(StatusCode::NOT_FOUND.into_response());
     }
     if !rel.is_empty() {
         if let Some(b) = embedded_file(rel) {
-            let cache = if path.starts_with("/assets/") { IMMUTABLE } else { NO_CACHE };
+            let cache = if path.starts_with("/assets/") {
+                IMMUTABLE
+            } else {
+                NO_CACHE
+            };
             return serve_bytes(rel, b, req_headers, cache);
         }
     }
@@ -69,7 +90,12 @@ fn serve_embedded(path: &str, req_headers: &HeaderMap) -> Option<Response> {
     if last.contains('.') {
         return Some(StatusCode::NOT_FOUND.into_response());
     }
-    serve_bytes("index.html", embedded_file("index.html")?, req_headers, NO_CACHE)
+    serve_bytes(
+        "index.html",
+        embedded_file("index.html")?,
+        req_headers,
+        NO_CACHE,
+    )
 }
 
 pub const IMMUTABLE: &str = "public, max-age=31536000, immutable";
@@ -213,15 +239,27 @@ mod tests {
         let r = serve_embedded("/assets/app-1.js", &h).unwrap();
         assert_eq!(r.status(), StatusCode::OK);
         assert_eq!(r.headers()[header::CACHE_CONTROL], IMMUTABLE);
-        assert_eq!(r.headers()[header::CONTENT_TYPE], "text/javascript; charset=utf-8");
+        assert_eq!(
+            r.headers()[header::CONTENT_TYPE],
+            "text/javascript; charset=utf-8"
+        );
         let etag = r.headers()[header::ETAG].clone();
         let mut h2 = HeaderMap::new();
         h2.insert(header::IF_NONE_MATCH, etag);
-        assert_eq!(serve_embedded("/assets/app-1.js", &h2).unwrap().status(), StatusCode::NOT_MODIFIED);
+        assert_eq!(
+            serve_embedded("/assets/app-1.js", &h2).unwrap().status(),
+            StatusCode::NOT_MODIFIED
+        );
         let spa = serve_embedded("/admin/jobs", &h).unwrap();
         assert_eq!(spa.status(), StatusCode::OK);
         assert_eq!(spa.headers()[header::CACHE_CONTROL], NO_CACHE);
-        assert_eq!(serve_embedded("/missing.js", &h).unwrap().status(), StatusCode::NOT_FOUND);
-        assert_eq!(serve_embedded("/../etc/passwd", &h).unwrap().status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            serve_embedded("/missing.js", &h).unwrap().status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            serve_embedded("/../etc/passwd", &h).unwrap().status(),
+            StatusCode::NOT_FOUND
+        );
     }
 }

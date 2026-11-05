@@ -67,7 +67,9 @@ const MCOLS: &str = "id, product_id, key, name, unit, unit_price, included_quant
 
 fn check_err(e: sqlx::Error) -> AppError {
     match &e {
-        sqlx::Error::Database(d) if d.is_check_violation() || d.is_foreign_key_violation() => AppError::Validation("error.validation"),
+        sqlx::Error::Database(d) if d.is_check_violation() || d.is_foreign_key_violation() => {
+            AppError::Validation("error.validation")
+        }
         _ => db_err(e),
     }
 }
@@ -120,11 +122,20 @@ pub async fn update_metric(pool: &PgPool, id: Uuid, m: &MetricInput) -> AppResul
 }
 
 pub async fn delete_metric(pool: &PgPool, id: Uuid) -> AppResult<()> {
-    let used: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM usage_records WHERE metric_id = $1)").bind(id).fetch_one(pool).await.map_err(db_err)?;
+    let used: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM usage_records WHERE metric_id = $1)")
+            .bind(id)
+            .fetch_one(pool)
+            .await
+            .map_err(db_err)?;
     if used {
         return Err(AppError::Conflict("error.metric_in_use"));
     }
-    let r = sqlx::query("DELETE FROM usage_metrics WHERE id = $1").bind(id).execute(pool).await.map_err(db_err)?;
+    let r = sqlx::query("DELETE FROM usage_metrics WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
@@ -137,7 +148,11 @@ pub fn period_end(start: Date, next_due: Option<Date>) -> Date {
     match next_due {
         Some(d) if d > start => d,
         _ => {
-            let (y, m) = if start.month() == time::Month::December { (start.year() + 1, time::Month::January) } else { (start.year(), start.month().next()) };
+            let (y, m) = if start.month() == time::Month::December {
+                (start.year() + 1, time::Month::January)
+            } else {
+                (start.year(), start.month().next())
+            };
             let mut day = start.day();
             loop {
                 if let Ok(d) = Date::from_calendar_date(y, m, day) {
@@ -170,7 +185,14 @@ pub struct Recorded {
 
 /// Record usage for a service (idempotent per `idempotency_key`). Usage
 /// timestamped after the open period's end opens the next period.
-pub async fn record(pool: &PgPool, service_id: Uuid, metric_key: &str, quantity: Decimal, at: OffsetDateTime, key: &str) -> AppResult<Recorded> {
+pub async fn record(
+    pool: &PgPool,
+    service_id: Uuid,
+    metric_key: &str,
+    quantity: Decimal,
+    at: OffsetDateTime,
+    key: &str,
+) -> AppResult<Recorded> {
     if quantity <= Decimal::ZERO || quantity.scale() > 6 {
         return Err(AppError::Validation("error.invalid_quantity"));
     }
@@ -180,54 +202,81 @@ pub async fn record(pool: &PgPool, service_id: Uuid, metric_key: &str, quantity:
     }
     let mut tx = pool.begin().await.map_err(db_err)?;
     // Serialize per service so concurrent records agree on the period.
-    let svc: Option<(Uuid, Option<Date>, String)> = sqlx::query_as("SELECT product_id, next_due_date, status FROM services WHERE id = $1 FOR UPDATE")
-        .bind(service_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db_err)?;
+    let svc: Option<(Uuid, Option<Date>, String)> = sqlx::query_as(
+        "SELECT product_id, next_due_date, status FROM services WHERE id = $1 FOR UPDATE",
+    )
+    .bind(service_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_err)?;
     let (product, next_due, status) = svc.ok_or(AppError::NotFound)?;
     if status == "terminated" || status == "cancelled" {
         return Err(AppError::Validation("error.service_not_active"));
     }
-    if let Some((id, pid)) = sqlx::query_as::<_, (Uuid, Uuid)>("SELECT id, period_id FROM usage_records WHERE service_id = $1 AND idempotency_key = $2")
-        .bind(service_id)
-        .bind(key)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db_err)?
+    if let Some((id, pid)) = sqlx::query_as::<_, (Uuid, Uuid)>(
+        "SELECT id, period_id FROM usage_records WHERE service_id = $1 AND idempotency_key = $2",
+    )
+    .bind(service_id)
+    .bind(key)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_err)?
     {
-        let period = sqlx::query_as(&format!("SELECT {PCOLS} FROM usage_periods WHERE id = $1")).bind(pid).fetch_one(&mut *tx).await.map_err(db_err)?;
-        return Ok(Recorded { id, duplicate: true, period });
+        let period = sqlx::query_as(&format!("SELECT {PCOLS} FROM usage_periods WHERE id = $1"))
+            .bind(pid)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        return Ok(Recorded {
+            id,
+            duplicate: true,
+            period,
+        });
     }
-    let metric: Option<Uuid> = sqlx::query_scalar("SELECT id FROM usage_metrics WHERE product_id = $1 AND key = $2 AND active")
-        .bind(product)
-        .bind(metric_key)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db_err)?;
+    let metric: Option<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM usage_metrics WHERE product_id = $1 AND key = $2 AND active",
+    )
+    .bind(product)
+    .bind(metric_key)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_err)?;
     let metric = metric.ok_or(AppError::Validation("error.unknown_metric"))?;
     let day = at.date();
-    let mut open: Option<Period> = sqlx::query_as(&format!("SELECT {PCOLS} FROM usage_periods WHERE service_id = $1 AND status = 'open'"))
-        .bind(service_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db_err)?;
+    let mut open: Option<Period> = sqlx::query_as(&format!(
+        "SELECT {PCOLS} FROM usage_periods WHERE service_id = $1 AND status = 'open'"
+    ))
+    .bind(service_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_err)?;
     if let Some(p) = open.clone() {
         if day < p.period_start {
             return Err(AppError::Validation("error.usage_period_closed"));
         }
         if day >= p.period_end {
             // Period over but not billed yet: close it for new records.
-            sqlx::query("UPDATE usage_periods SET status = 'closed' WHERE id = $1").bind(p.id).execute(&mut *tx).await.map_err(db_err)?;
+            sqlx::query("UPDATE usage_periods SET status = 'closed' WHERE id = $1")
+                .bind(p.id)
+                .execute(&mut *tx)
+                .await
+                .map_err(db_err)?;
             open = None;
         }
     }
     if open.is_none() {
-        let last_end: Option<Date> = sqlx::query_scalar("SELECT max(period_end) FROM usage_periods WHERE service_id = $1").bind(service_id).fetch_one(&mut *tx).await.map_err(db_err)?;
+        let last_end: Option<Date> =
+            sqlx::query_scalar("SELECT max(period_end) FROM usage_periods WHERE service_id = $1")
+                .bind(service_id)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(db_err)?;
         if last_end.is_some_and(|e| day < e) {
             return Err(AppError::Validation("error.usage_period_closed"));
         }
-        let start = last_end.filter(|e| day < period_end(*e, next_due)).unwrap_or(day);
+        let start = last_end
+            .filter(|e| day < period_end(*e, next_due))
+            .unwrap_or(day);
         let end = period_end(start, next_due);
         open = Some(
             sqlx::query_as(&format!("INSERT INTO usage_periods (service_id, period_start, period_end) VALUES ($1,$2,$3) RETURNING {PCOLS}"))
@@ -251,7 +300,11 @@ pub async fn record(pool: &PgPool, service_id: Uuid, metric_key: &str, quantity:
         .await
         .map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
-    Ok(Recorded { id, duplicate: false, period })
+    Ok(Recorded {
+        id,
+        duplicate: false,
+        period,
+    })
 }
 
 #[derive(Debug, Clone, FromRow, Serialize)]
@@ -325,7 +378,9 @@ pub async fn bill_period(pool: &PgPool, pid: Uuid) -> AppResult<Option<Uuid>> {
     .fetch_optional(&mut *tx)
     .await
     .map_err(db_err)?;
-    let Some((_sid, start, end, customer, currency, product)) = p else { return Ok(None) };
+    let Some((_sid, start, end, customer, currency, product)) = p else {
+        return Ok(None);
+    };
     let exp = invoices::exponent(&mut tx, &currency).await?;
     let last = end - Duration::days(1);
     let items: Vec<NewItem> = usage
@@ -333,7 +388,13 @@ pub async fn bill_period(pool: &PgPool, pid: Uuid) -> AppResult<Option<Uuid>> {
         .filter_map(|u| {
             let amount = math::round(u.charge(), exp);
             (amount > Decimal::ZERO).then(|| NewItem {
-                description: format!("{product}, {}: {} {} × {} ({start}, {last})", u.name, u.billable().normalize(), u.unit, u.unit_price.normalize()),
+                description: format!(
+                    "{product}, {}: {} {} × {} ({start}, {last})",
+                    u.name,
+                    u.billable().normalize(),
+                    u.unit,
+                    u.unit_price.normalize()
+                ),
                 quantity: Decimal::ONE,
                 unit_price: amount,
                 tax_rate: Decimal::ZERO,
@@ -368,17 +429,40 @@ mod tests {
     use time::macros::date;
     #[test]
     fn periods_follow_cycle() {
-        assert_eq!(period_end(date!(2026 - 10 - 05), Some(date!(2026 - 11 - 01))), date!(2026 - 11 - 01));
-        assert_eq!(period_end(date!(2026 - 01 - 31), None), date!(2026 - 02 - 28));
-        assert_eq!(period_end(date!(2026 - 12 - 15), Some(date!(2026 - 12 - 01))), date!(2027 - 01 - 15));
+        assert_eq!(
+            period_end(date!(2026 - 10 - 05), Some(date!(2026 - 11 - 01))),
+            date!(2026 - 11 - 01)
+        );
+        assert_eq!(
+            period_end(date!(2026 - 01 - 31), None),
+            date!(2026 - 02 - 28)
+        );
+        assert_eq!(
+            period_end(date!(2026 - 12 - 15), Some(date!(2026 - 12 - 01))),
+            date!(2027 - 01 - 15)
+        );
     }
     #[test]
     fn charge_is_exact() {
-        let u = MetricUsage { metric_id: Uuid::nil(), key: "gb".into(), name: "GB".into(), unit: "GB".into(), unit_price: "0.00012345".parse().unwrap(), included_quantity: "10".parse().unwrap(), quantity: "1010.5".parse().unwrap() };
+        let u = MetricUsage {
+            metric_id: Uuid::nil(),
+            key: "gb".into(),
+            name: "GB".into(),
+            unit: "GB".into(),
+            unit_price: "0.00012345".parse().unwrap(),
+            included_quantity: "10".parse().unwrap(),
+            quantity: "1010.5".parse().unwrap(),
+        };
         assert_eq!(u.billable(), "1000.5".parse::<Decimal>().unwrap());
         assert_eq!(u.charge(), "0.123511725".parse::<Decimal>().unwrap());
-        assert_eq!(math::round(u.charge(), 2), "0.12".parse::<Decimal>().unwrap());
-        let none = MetricUsage { quantity: "5".parse().unwrap(), ..u };
+        assert_eq!(
+            math::round(u.charge(), 2),
+            "0.12".parse::<Decimal>().unwrap()
+        );
+        let none = MetricUsage {
+            quantity: "5".parse().unwrap(),
+            ..u
+        };
         assert_eq!(none.charge(), Decimal::ZERO);
     }
 }
@@ -392,18 +476,26 @@ pub fn sample_value(usage: &serde_json::Value, path: &str, divisor: Decimal) -> 
         v = v.get(part)?;
     }
     let d = match v {
-        serde_json::Value::Number(n) => Decimal::from_str(&n.to_string()).or_else(|_| Decimal::from_scientific(&n.to_string())).ok()?,
+        serde_json::Value::Number(n) => Decimal::from_str(&n.to_string())
+            .or_else(|_| Decimal::from_scientific(&n.to_string()))
+            .ok()?,
         serde_json::Value::String(s) => Decimal::from_str(s.trim()).ok()?,
         _ => return None,
     };
     if divisor <= Decimal::ZERO || d.is_sign_negative() {
         return None;
     }
-    Some((d / divisor).round_dp_with_strategy(6, rust_decimal::RoundingStrategy::MidpointAwayFromZero))
+    Some(
+        (d / divisor)
+            .round_dp_with_strategy(6, rust_decimal::RoundingStrategy::MidpointAwayFromZero),
+    )
 }
 
 /// Module-sourced metrics of a service's product: (key, source_key, divisor).
-pub async fn module_metrics(pool: &PgPool, service_id: Uuid) -> AppResult<Vec<(String, String, Decimal)>> {
+pub async fn module_metrics(
+    pool: &PgPool,
+    service_id: Uuid,
+) -> AppResult<Vec<(String, String, Decimal)>> {
     sqlx::query_as(
         "SELECT m.key, m.source_key, m.source_divisor FROM usage_metrics m JOIN services s ON s.product_id = m.product_id
          WHERE s.id = $1 AND m.active AND m.source_key <> '' ORDER BY m.key",
@@ -428,12 +520,27 @@ pub async fn services_with_module_metrics(pool: &PgPool, limit: i64) -> AppResul
 
 /// Record one sample per module metric from a usage object. Idempotent per
 /// hour (`module:<key>:<YYYY-MM-DDTHH>`); zero/missing values are skipped.
-pub async fn record_samples(pool: &PgPool, service_id: Uuid, usage: &serde_json::Value, at: OffsetDateTime) -> AppResult<Vec<(String, Decimal)>> {
+pub async fn record_samples(
+    pool: &PgPool,
+    service_id: Uuid,
+    usage: &serde_json::Value,
+    at: OffsetDateTime,
+) -> AppResult<Vec<(String, Decimal)>> {
     let hour = format!("{}T{:02}", at.date(), at.hour());
     let mut out = Vec::new();
     for (key, path, div) in module_metrics(pool, service_id).await? {
-        let Some(q) = sample_value(usage, &path, div).filter(|q| *q > Decimal::ZERO) else { continue };
-        let r = record(pool, service_id, &key, q, at, &format!("module:{key}:{hour}")).await?;
+        let Some(q) = sample_value(usage, &path, div).filter(|q| *q > Decimal::ZERO) else {
+            continue;
+        };
+        let r = record(
+            pool,
+            service_id,
+            &key,
+            q,
+            at,
+            &format!("module:{key}:{hour}"),
+        )
+        .await?;
         if !r.duplicate {
             out.push((key, q));
         }

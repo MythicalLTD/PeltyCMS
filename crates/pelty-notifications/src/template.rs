@@ -15,7 +15,18 @@ pub const TEMPLATES: &[TemplateDef] = &[
     },
     TemplateDef {
         name: "admin_login_alert",
-        vars: &["email", "ip", "location", "city", "region", "country", "country_name", "user_agent", "time", "company"],
+        vars: &[
+            "email",
+            "ip",
+            "location",
+            "city",
+            "region",
+            "country",
+            "country_name",
+            "user_agent",
+            "time",
+            "company",
+        ],
     },
     TemplateDef {
         name: "password_reset",
@@ -70,11 +81,27 @@ pub const TEMPLATES: &[TemplateDef] = &[
     },
     TemplateDef {
         name: "payment_failed",
-        vars: &["name", "invoice_number", "total", "reason", "next_retry", "link", "company"],
+        vars: &[
+            "name",
+            "invoice_number",
+            "total",
+            "reason",
+            "next_retry",
+            "link",
+            "company",
+        ],
     },
     TemplateDef {
         name: "invoice_due_soon",
-        vars: &["name", "invoice_number", "total", "due_date", "days_left", "link", "company"],
+        vars: &[
+            "name",
+            "invoice_number",
+            "total",
+            "due_date",
+            "days_left",
+            "link",
+            "company",
+        ],
     },
     TemplateDef {
         name: "service_suspended",
@@ -98,11 +125,28 @@ pub const TEMPLATES: &[TemplateDef] = &[
     },
     TemplateDef {
         name: "ticket_autoreply",
-        vars: &["name", "ticket_number", "subject", "department", "message", "link", "company"],
+        vars: &[
+            "name",
+            "ticket_number",
+            "subject",
+            "department",
+            "message",
+            "link",
+            "company",
+        ],
     },
     TemplateDef {
         name: "ticket_staff_notify",
-        vars: &["name", "ticket_number", "subject", "customer", "department", "message", "link", "company"],
+        vars: &[
+            "name",
+            "ticket_number",
+            "subject",
+            "customer",
+            "department",
+            "message",
+            "link",
+            "company",
+        ],
     },
     TemplateDef {
         name: "quote_sent",
@@ -190,11 +234,27 @@ pub const TEMPLATES: &[TemplateDef] = &[
     },
     TemplateDef {
         name: "invoice_second_overdue",
-        vars: &["name", "invoice_number", "total", "due_date", "days_overdue", "link", "company"],
+        vars: &[
+            "name",
+            "invoice_number",
+            "total",
+            "due_date",
+            "days_overdue",
+            "link",
+            "company",
+        ],
     },
     TemplateDef {
         name: "invoice_third_overdue",
-        vars: &["name", "invoice_number", "total", "due_date", "days_overdue", "link", "company"],
+        vars: &[
+            "name",
+            "invoice_number",
+            "total",
+            "due_date",
+            "days_overdue",
+            "link",
+            "company",
+        ],
     },
     TemplateDef {
         name: "invoice_refund_confirmation",
@@ -222,7 +282,14 @@ pub const TEMPLATES: &[TemplateDef] = &[
     },
     TemplateDef {
         name: "affiliate_monthly_referrals",
-        vars: &["affiliate", "signups", "conversions", "balance", "link", "company"],
+        vars: &[
+            "affiliate",
+            "signups",
+            "conversions",
+            "balance",
+            "link",
+            "company",
+        ],
     },
     TemplateDef {
         name: "admin_new_order",
@@ -234,7 +301,16 @@ pub const TEMPLATES: &[TemplateDef] = &[
     },
     TemplateDef {
         name: "mass_mail",
-        vars: &["name", "first_name", "last_name", "email", "company_name", "subject", "message", "company"],
+        vars: &[
+            "name",
+            "first_name",
+            "last_name",
+            "email",
+            "company_name",
+            "subject",
+            "message",
+            "company",
+        ],
     },
     TemplateDef {
         name: "provisioning_failed",
@@ -249,12 +325,28 @@ pub const TEMPLATES: &[TemplateDef] = &[
 /// WHMCS-style template category, used to group the admin list.
 pub fn category(name: &str) -> &'static str {
     match name {
-        "admin_account_locked" | "admin_login_alert" | "ticket_staff_notify" | "admin_new_order" | "admin_password_reset" | "automation_task_tripped" => "admin",
+        "admin_account_locked"
+        | "admin_login_alert"
+        | "ticket_staff_notify"
+        | "admin_new_order"
+        | "admin_password_reset"
+        | "automation_task_tripped" => "admin",
         n if n.starts_with("affiliate_") => "affiliate",
         n if n.starts_with("ticket_") => "support",
         n if n.starts_with("domain_") => "domain",
-        n if n.starts_with("invoice_") || n == "payment_failed" || n == "credit_added" || n == "credit_card_expiring" => "invoice",
-        "new_service_info" | "service_suspended" | "service_unsuspended" | "service_terminated" | "cancellation_confirmation" | "upgrade_order_confirmation" => "product",
+        n if n.starts_with("invoice_")
+            || n == "payment_failed"
+            || n == "credit_added"
+            || n == "credit_card_expiring" =>
+        {
+            "invoice"
+        }
+        "new_service_info"
+        | "service_suspended"
+        | "service_unsuspended"
+        | "service_terminated"
+        | "cancellation_confirmation"
+        | "upgrade_order_confirmation" => "product",
         _ => "general",
     }
 }

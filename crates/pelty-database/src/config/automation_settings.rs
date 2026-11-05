@@ -29,7 +29,12 @@ pub async fn all(pool: &PgPool) -> AppResult<Vec<AutomationSetting>> {
     sqlx::query_as("SELECT kind, enabled, run_hour, schedule, updated_at, failures, tripped_at, tripped_error, missed FROM automation_settings ORDER BY kind").fetch_all(pool).await.map_err(db_err)
 }
 
-pub async fn upsert(pool: &PgPool, kind: &str, enabled: bool, run_hour: Option<i16>) -> AppResult<()> {
+pub async fn upsert(
+    pool: &PgPool,
+    kind: &str,
+    enabled: bool,
+    run_hour: Option<i16>,
+) -> AppResult<()> {
     sqlx::query(
         "INSERT INTO automation_settings (kind, enabled, run_hour) VALUES ($1, $2, $3)
          ON CONFLICT (kind) DO UPDATE SET enabled = $2, run_hour = $3, updated_at = now(),
@@ -64,9 +69,20 @@ pub async fn set_schedule(pool: &PgPool, kind: &str, schedule: Option<&str>) -> 
 /// failure count; a failure increments it and, at `limit`, disables the
 /// task. Returns the failure count when this call tripped the breaker.
 /// `updated_at` is left alone (it anchors the cron schedule).
-pub async fn record_outcome(pool: &PgPool, kind: &str, err: Option<&str>, limit: i32) -> AppResult<Option<i32>> {
+pub async fn record_outcome(
+    pool: &PgPool,
+    kind: &str,
+    err: Option<&str>,
+    limit: i32,
+) -> AppResult<Option<i32>> {
     let Some(err) = err else {
-        sqlx::query("UPDATE automation_settings SET failures = 0 WHERE kind = $1 AND failures <> 0").bind(kind).execute(pool).await.map_err(db_err)?;
+        sqlx::query(
+            "UPDATE automation_settings SET failures = 0 WHERE kind = $1 AND failures <> 0",
+        )
+        .bind(kind)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
         return Ok(None);
     };
     let err: String = err.chars().take(500).collect();

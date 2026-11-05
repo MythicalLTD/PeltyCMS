@@ -62,7 +62,9 @@ pub async fn public_catalog(State(s): State<AppState>) -> ApiResult<Json<Value>>
     if !crate::addon_filters::has(&s, "catalog.public") {
         return Ok(Json(v));
     }
-    Ok(Json(crate::addon_filters::apply(&s, "catalog.public", v, json!({})).await))
+    Ok(Json(
+        crate::addon_filters::apply(&s, "catalog.public", v, json!({})).await,
+    ))
 }
 
 #[utoipa::path(get, path = "/api/v1/currencies", responses((status = 200)))]
@@ -140,7 +142,10 @@ pub async fn create_product(
         json!({ "slug": p.slug }),
     )
     .await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("catalog.product_created", json!({ "product_id": p.id, "slug": p.slug })));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "catalog.product_created",
+        json!({ "product_id": p.id, "slug": p.slug }),
+    ));
     Ok(Json(json!(p)))
 }
 
@@ -163,7 +168,10 @@ pub async fn update_product(
         json!({}),
     )
     .await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("catalog.product_updated", json!({ "product_id": id })));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "catalog.product_updated",
+        json!({ "product_id": id }),
+    ));
     Ok(Json(json!(p)))
 }
 
@@ -192,7 +200,10 @@ pub async fn set_prices(
         json!({ "count": b.prices.len() }),
     )
     .await?;
-    s.emit(pelty_extensions::events::DomainEvent::new("catalog.prices_changed", json!({ "product_id": id, "count": b.prices.len() })));
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "catalog.prices_changed",
+        json!({ "product_id": id, "count": b.prices.len() }),
+    ));
     let p = catalog::products(&s.pool, false, Some(id)).await?;
     Ok(Json(json!(p.first())))
 }

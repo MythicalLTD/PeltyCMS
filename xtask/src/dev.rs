@@ -8,11 +8,15 @@ use std::time::{Duration, Instant};
 const VITE_PORT: u16 = 5173;
 
 fn bind(ctx: &Ctx) -> String {
-    ctx.get("PELTY_BIND").unwrap_or_else(|| "127.0.0.1:8080".into())
+    ctx.get("PELTY_BIND")
+        .unwrap_or_else(|| "127.0.0.1:8080".into())
 }
 
 fn bind_port(ctx: &Ctx) -> u16 {
-    bind(ctx).rsplit_once(':').and_then(|(_, p)| p.parse().ok()).unwrap_or(8080)
+    bind(ctx)
+        .rsplit_once(':')
+        .and_then(|(_, p)| p.parse().ok())
+        .unwrap_or(8080)
 }
 
 /// Vite listens on localhost only when the API is loopback; else on all interfaces.
@@ -20,7 +24,12 @@ fn vite_host(ctx: &Ctx) -> String {
     if let Some(h) = ctx.get("PELTY_VITE_HOST") {
         return h;
     }
-    match bind(ctx).rsplit_once(':').map(|(h, _)| h.to_string()).unwrap_or_default().as_str() {
+    match bind(ctx)
+        .rsplit_once(':')
+        .map(|(h, _)| h.to_string())
+        .unwrap_or_default()
+        .as_str()
+    {
         "127.0.0.1" | "localhost" => "127.0.0.1".into(),
         _ => "0.0.0.0".into(),
     }
@@ -32,7 +41,11 @@ fn port_busy(host: &str, port: u16) -> bool {
     if TcpStream::connect_timeout(&local, Duration::from_millis(300)).is_ok() {
         return true;
     }
-    let addr = (host, port).to_socket_addrs().ok().and_then(|mut a| a.next()).unwrap_or(local);
+    let addr = (host, port)
+        .to_socket_addrs()
+        .ok()
+        .and_then(|mut a| a.next())
+        .unwrap_or(local);
     TcpListener::bind(addr).is_err()
 }
 
@@ -46,7 +59,9 @@ fn require_port_free(host: &str, port: u16, label: &str) -> R {
             } else {
                 "Free the port (or set PELTY_VITE_HOST / stop the other Vite)."
             };
-            return Err(format!("{label} port {port} is already in use by another program.\n  {hint}"));
+            return Err(format!(
+                "{label} port {port} is already in use by another program.\n  {hint}"
+            ));
         }
         std::thread::sleep(Duration::from_millis(200));
     }
@@ -57,7 +72,14 @@ fn require_port_free(host: &str, port: u16, label: &str) -> R {
 pub fn stop_prior(ctx: &Ctx) {
     let stopped = procs::stop_recorded(&ctx.root);
     if !stopped.is_empty() {
-        println!("stopped prior PeltyCMS dev process(es): {}", stopped.iter().map(u32::to_string).collect::<Vec<_>>().join(" "));
+        println!(
+            "stopped prior PeltyCMS dev process(es): {}",
+            stopped
+                .iter()
+                .map(u32::to_string)
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
     }
 }
 
@@ -66,9 +88,27 @@ pub fn stop_prior(ctx: &Ctx) {
 fn backend_cmd(ctx: &Ctx) -> Command {
     let mut c = ctx.cargo();
     if util::succeeds(ctx.cargo().args(["watch", "--version"])) {
-        c.args(["watch", "-w", "crates", "-w", "migrations", "-w", "locales", "-x", "run -p pelty-server -- serve --no-console --no-setup"]);
+        c.args([
+            "watch",
+            "-w",
+            "crates",
+            "-w",
+            "migrations",
+            "-w",
+            "locales",
+            "-x",
+            "run -p pelty-server -- serve --no-console --no-setup",
+        ]);
     } else {
-        c.args(["run", "-p", "pelty-server", "--", "serve", "--no-console", "--no-setup"]);
+        c.args([
+            "run",
+            "-p",
+            "pelty-server",
+            "--",
+            "serve",
+            "--no-console",
+            "--no-setup",
+        ]);
     }
     // Developers of PeltyCMS itself: no eula.txt prompt in the checkout.
     if ctx.get("PELTY_EULA").is_none() {
@@ -79,7 +119,9 @@ fn backend_cmd(ctx: &Ctx) -> Command {
 
 fn vite_cmd(ctx: &Ctx) -> R<Command> {
     let mut c = ctx.pnpm()?;
-    c.arg("--dir").arg(ctx.root.join("frontend")).args(["exec", "vite", "--host", &vite_host(ctx)]);
+    c.arg("--dir")
+        .arg(ctx.root.join("frontend"))
+        .args(["exec", "vite", "--host", &vite_host(ctx)]);
     // Vite must reach the API on loopback even when PELTY_BIND is 0.0.0.0.
     c.env("PELTY_API", format!("http://127.0.0.1:{}", bind_port(ctx)));
     Ok(c)
@@ -99,13 +141,24 @@ fn ui_host(vite_host: &str) -> String {
 
 pub fn dev(ctx: &Ctx) -> R {
     stop_prior(ctx);
-    require_port_free(&bind(ctx).rsplit_once(':').map(|(h, _)| h.to_string()).unwrap_or_default(), bind_port(ctx), "backend")?;
+    require_port_free(
+        &bind(ctx)
+            .rsplit_once(':')
+            .map(|(h, _)| h.to_string())
+            .unwrap_or_default(),
+        bind_port(ctx),
+        "backend",
+    )?;
     require_port_free(&vite_host(ctx), VITE_PORT, "frontend")?;
     pg::ensure_server(ctx)?;
     ctx.frontend_deps()?;
     procs::catch_interrupts();
     let vh = vite_host(ctx);
-    println!("PeltyCMS UI → http://{}:{VITE_PORT}  (API :{}, vite --host {vh})  Ctrl+C stops both", ui_host(&vh), bind_port(ctx));
+    println!(
+        "PeltyCMS UI → http://{}:{VITE_PORT}  (API :{}, vite --host {vh})  Ctrl+C stops both",
+        ui_host(&vh),
+        bind_port(ctx)
+    );
     let mut vite = procs::spawn(&mut vite_cmd(ctx)?)?;
     // Fail fast if pnpm/vite died immediately (version mismatch, missing deps, ...).
     std::thread::sleep(Duration::from_millis(600));
@@ -124,7 +177,14 @@ pub fn dev(ctx: &Ctx) -> R {
 
 pub fn backend(ctx: &Ctx) -> R {
     stop_prior(ctx);
-    require_port_free(&bind(ctx).rsplit_once(':').map(|(h, _)| h.to_string()).unwrap_or_default(), bind_port(ctx), "backend")?;
+    require_port_free(
+        &bind(ctx)
+            .rsplit_once(':')
+            .map(|(h, _)| h.to_string())
+            .unwrap_or_default(),
+        bind_port(ctx),
+        "backend",
+    )?;
     procs::catch_interrupts();
     let b = procs::spawn(&mut backend_cmd(ctx))?;
     procs::supervise(&ctx.root, vec![("backend", b)])
@@ -152,7 +212,10 @@ pub fn stop(ctx: &Ctx, args: &[String]) -> R {
 }
 
 fn migrate(ctx: &Ctx) -> R {
-    util::run(ctx.cargo().args(["run", "-q", "-p", "pelty-server", "--", "migrate"]))
+    util::run(
+        ctx.cargo()
+            .args(["run", "-q", "-p", "pelty-server", "--", "migrate"]),
+    )
 }
 
 /// Server up, database created (by `pelty-server migrate`) and migrated.
