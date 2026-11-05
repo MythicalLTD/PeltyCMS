@@ -471,16 +471,35 @@ async fn plesk_creates_client_and_subscription() {
         created.module_data,
     );
     run(p.as_ref(), "suspend", &c, &s).await.unwrap();
+    run(p.as_ref(), "unsuspend", &c, &s).await.unwrap();
     run(p.as_ref(), "change_package", &c, &s).await.unwrap();
+    run_custom(p.as_ref(), "change_password", &c, &s, &json!({"password": "NewP@ss1"}))
+        .await
+        .unwrap();
+    assert!(
+        p.sso_url(&c, &s, "tok").await.unwrap().is_none(),
+        "Plesk SSO needs sso_url with {{token}}"
+    );
+    assert!(p.usage(&c, &s).await.unwrap().is_none());
     let r = reqs(&m);
     let cli: Vec<&Req> = r
         .iter()
         .filter(|x| x.path == "/api/v2/cli/subscription/call")
         .collect();
     assert!(cli[0].body.contains("--webspace-off") && cli[0].body.contains("alice.example"));
-    assert!(cli[1].body.contains("--switch-subscription") && cli[1].body.contains("Pro"));
+    assert!(cli.iter().any(|x| x.body.contains("--webspace-on")));
+    assert!(cli.iter().any(|x| x.body.contains("--switch-subscription") && x.body.contains("Pro")));
     // client already deleted (404) still counts as terminated
     run(p.as_ref(), "terminate", &c, &s).await.unwrap();
+    let bare = svc(json!({"plan": "Pro"}), Some("x"), json!({}));
+    assert!(
+        run(p.as_ref(), "terminate", &c, &bare)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("domain_id or client_id"),
+        "terminate without ids must fail"
+    );
 }
 
 #[tokio::test]
@@ -498,6 +517,18 @@ async fn directadmin_cyberpanel_hestia_ispconfig() {
             "/CMD_API_MODIFY_USER",
             200,
             json!({"error": "1", "text": "bad package", "details": "Package xl does not exist"}),
+        ),
+        (
+            "POST",
+            "/CMD_API_USER_PASSWD",
+            200,
+            json!({"error": "0", "text": "Password Changed"}),
+        ),
+        (
+            "POST",
+            "/CMD_API_SELECT_USERS",
+            200,
+            json!({"error": "0"}),
         ),
         (
             "POST",
@@ -581,6 +612,24 @@ async fn directadmin_cyberpanel_hestia_ispconfig() {
     assert!(reqs(&m)
         .iter()
         .any(|x| x.path.starts_with("/CMD_API_SELECT_USERS") && x.body.contains("dosuspend=yes")));
+    run(da.as_ref(), "unsuspend", &c, &s).await.unwrap();
+    assert!(reqs(&m).iter().any(|x| {
+        x.path.starts_with("/CMD_API_SELECT_USERS") && x.body.contains("dounsuspend=yes")
+    }));
+    run_custom(
+        da.as_ref(),
+        "change_password",
+        &c,
+        &s,
+        &json!({"password": "NewP@ss1"}),
+    )
+    .await
+    .unwrap();
+    assert!(
+        da.sso_url(&c, &s, "tok").await.unwrap().is_none(),
+        "DirectAdmin SSO needs sso_url with {{token}}"
+    );
+    assert!(da.usage(&c, &s).await.unwrap().is_none());
     let e = run(da.as_ref(), "change_package", &c, &s)
         .await
         .unwrap_err();

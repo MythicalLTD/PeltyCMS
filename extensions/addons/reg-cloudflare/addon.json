@@ -1,0 +1,43 @@
+{
+  "id": "registrar-cloudflare",
+  "name": "Cloudflare DNS",
+  "version": "0.1.0",
+  "kind": "registrar",
+  "engine": "wasm",
+  "provides": "cloudflare",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.registrar.cloudflare",
+  "author": "MythicalSystems",
+  "permissions": [
+    "domains.manage",
+    "network.outbound"
+  ],
+  "capabilities": {
+    "http": [
+      "api.cloudflare.com",
+      "$setting:api_base"
+    ],
+    "secrets": []
+  },
+  "settings": [
+    {
+      "key": "api_token",
+      "label": "addons.registrar.setting.api_token",
+      "kind": "secret",
+      "required": true
+    },
+    {
+      "key": "account_id",
+      "label": "addons.registrar.setting.account_id",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "key": "api_base",
+      "label": "addons.registrar.setting.api_base",
+      "kind": "text",
+      "required": false
+    }
+  ]
+}

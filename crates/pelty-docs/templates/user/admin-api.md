@@ -26,7 +26,7 @@ Admin → Addons & integrations → **Webhooks** (permission `webhooks.manage`) 
 
 ## OAuth clients and SAML
 
-**OAuth clients** registers apps that sign users in with PeltyCMS (PeltyCMS as OAuth provider). Clients see the apps they approved under **Connected apps**. **SAML** configures SAML identity providers for single sign-on.
+**OAuth clients** registers apps that sign users in with PeltyCMS (PeltyCMS as OAuth provider). Clients see the apps they approved under **Connected apps**. **SAML** configures SAML identity providers for single sign-on (Exclusive C14N, RSA/ECDSA-SHA256, HTTP-POST/Redirect only — no EncryptedAssertion or artifact binding; see [Security](admin-security.md)).
 
 ## The HTTP API
 

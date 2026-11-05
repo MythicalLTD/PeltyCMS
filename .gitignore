@@ -13,6 +13,7 @@ extensions/addons/dist/
 /backups/
 /eula.txt
 /dist/
+/tmp/
 AGENTS.md 
 CLAUDE.md 
 .cursor 

@@ -39,6 +39,7 @@ pub fn rerr_to(e: &RegistrarError) -> String {
         RegistrarError::Unavailable => "unavailable:".into(),
         RegistrarError::BadAuthCode => "bad_auth_code:".into(),
         RegistrarError::UnknownDomain => "unknown_domain:".into(),
+        RegistrarError::Unsupported => "unsupported:".into(),
         RegistrarError::Remote(m) => format!("remote:{m}"),
     }
 }
@@ -48,6 +49,7 @@ pub fn rerr_from(s: &str) -> RegistrarError {
         Some(("unavailable", _)) => RegistrarError::Unavailable,
         Some(("bad_auth_code", _)) => RegistrarError::BadAuthCode,
         Some(("unknown_domain", _)) => RegistrarError::UnknownDomain,
+        Some(("unsupported", _)) => RegistrarError::Unsupported,
         Some(("remote", m)) => RegistrarError::Remote(m.into()),
         _ => RegistrarError::Remote(s.into()),
     }
@@ -265,6 +267,46 @@ pub fn call_registrar(
         "premium_price" => block_on(Box::pin(async move {
             m.premium_price(d).await.map(|c| json!(c)).map_err(e)
         }))?,
+        "set_lock" => {
+            let locked = input["locked"].as_bool().unwrap_or(true);
+            block_on(Box::pin(async move {
+                m.set_lock(d, locked)
+                    .await
+                    .map(|_| Value::Null)
+                    .map_err(e)
+            }))?
+        }
+        "set_id_protection" => {
+            let enabled = input["enabled"].as_bool().unwrap_or(true);
+            block_on(Box::pin(async move {
+                m.set_id_protection(d, enabled)
+                    .await
+                    .map(|_| Value::Null)
+                    .map_err(e)
+            }))?
+        }
+        "replace_dns" => {
+            let records: Vec<crate::registrar::DnsZoneRecord> =
+                serde_json::from_value(input["records"].clone()).unwrap_or_default();
+            block_on(Box::pin(async move {
+                m.replace_dns(d, &records)
+                    .await
+                    .map(|_| Value::Null)
+                    .map_err(e)
+            }))?
+        }
+        "get_dns" => block_on(Box::pin(async move {
+            m.get_dns(d).await.map(|r| json!(r)).map_err(e)
+        }))?,
+        "set_dnssec" => {
+            let enabled = input["enabled"].as_bool().unwrap_or(true);
+            block_on(Box::pin(async move {
+                m.set_dnssec(d, enabled)
+                    .await
+                    .map(|_| Value::Null)
+                    .map_err(e)
+            }))?
+        }
         other => return Err(format!("remote:unknown op {other}")),
     };
     Ok(out.to_string())

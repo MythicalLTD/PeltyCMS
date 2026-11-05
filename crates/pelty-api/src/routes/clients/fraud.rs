@@ -53,10 +53,16 @@ pub async fn put_settings(
     }
     b.vpn_ranges = ranges;
     fraud::put_settings(&s.pool, &b).await?;
+    crate::fraud::sync_http_hook(&s, &b);
     // The domain/range lists can be long; keep the audit entry readable.
     let mut meta = json!(b);
     meta["disposable_domains"] = json!(b.disposable_domains.len());
     meta["vpn_ranges"] = json!(b.vpn_ranges.len());
+    meta["http_hook_key"] = json!(if b.http_hook_key.is_empty() {
+        ""
+    } else {
+        "***"
+    });
     audit::record(
         &s.pool,
         Some(u.user_id),

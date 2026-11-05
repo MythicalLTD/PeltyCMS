@@ -194,7 +194,7 @@ pub async fn run_job(s: &AppState, job: &Job) -> Result<Value, JobError> {
             json!({ "attempt": job.attempts + 1, "retryable": e.retryable() }),
         ),
     };
-    let _ = mx::log(
+    if let Err(e) = mx::log(
         &s.pool,
         mx::LogEntry {
             service: Some(sid),
@@ -209,7 +209,10 @@ pub async fn run_job(s: &AppState, job: &Job) -> Result<Value, JobError> {
             duration_ms: ms,
         },
     )
-    .await;
+    .await
+    {
+        tracing::error!(error = %e, service = %sid, action = %action, "module_log write failed");
+    }
     match res {
         Ok(created) => {
             let sealed = created.as_ref().map(|c| seal_secrets(s, &c.module_data));
@@ -227,7 +230,9 @@ pub async fn run_job(s: &AppState, job: &Job) -> Result<Value, JobError> {
             Ok(json!({ "action": action, "remote_id": created.map(|c| c.remote_id) }))
         }
         Err(e) => {
-            let _ = db::set_error(&s.pool, sid, &err_s).await;
+            if let Err(se) = db::set_error(&s.pool, sid, &err_s).await {
+                tracing::error!(error = %se, service = %sid, "provision set_error failed");
+            }
             if e.retryable() {
                 Err(JobError::Retry(err_s))
             } else {

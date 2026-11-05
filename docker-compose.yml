@@ -1,5 +1,4 @@
-# UNVERIFIED: statically reviewed, never run (no Docker on the dev box).
-# Put secrets in a .env file next to this file (never commit it):
+# Local / self-host stack. Put secrets in a .env file next to this file (never commit it):
 #   POSTGRES_PASSWORD=<long random>
 #   PELTY_ENCRYPTION_KEY=<32-byte key, base64>   # encrypts server API keys / gateway secrets
 #   PELTY_PUBLIC_URL=https://billing.example.com

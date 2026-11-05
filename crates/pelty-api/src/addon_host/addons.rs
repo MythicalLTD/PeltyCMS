@@ -692,10 +692,16 @@ async fn upload(
     Ok(Json(entry_json(&e, row.as_ref())))
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 struct RegistrySettings {
     #[serde(default)]
     url: String,
+    /// MythicCloud / panel public key (`X-Panel-Public-Key`) for paid addon downloads.
+    #[serde(default)]
+    panel_public_key: String,
+    /// MythicCloud / panel private key (`X-Panel-Private-Key`).
+    #[serde(default)]
+    panel_private_key: String,
 }
 
 async fn load_registry(s: &AppState) -> AppResult<RegistrySettings> {
@@ -709,7 +715,13 @@ async fn registry_settings(
     State(s): State<AppState>,
     _p: RequirePermission<perms::PluginsManage>,
 ) -> ApiResult<Json<Value>> {
-    Ok(Json(json!(load_registry(&s).await?)))
+    let cfg = load_registry(&s).await?;
+    Ok(Json(json!({
+        "url": cfg.url,
+        "panel_public_key": cfg.panel_public_key,
+        "panel_private_key": if cfg.panel_private_key.is_empty() { "" } else { "********" },
+        "panel_linked": !cfg.panel_public_key.is_empty() && !cfg.panel_private_key.is_empty(),
+    })))
 }
 
 async fn put_registry_settings(
@@ -725,17 +737,39 @@ async fn put_registry_settings(
     {
         return Err(AppError::Validation("error.invalid_url").into());
     }
-    pelty_database::settings::set(&s.pool, REGISTRY_KEY, json!({ "url": url })).await?;
+    let prev = load_registry(&s).await?;
+    let panel_public_key = v.panel_public_key.trim().chars().take(200).collect::<String>();
+    let incoming_priv = v.panel_private_key.trim();
+    let panel_private_key = if incoming_priv.is_empty() || incoming_priv == "********" {
+        prev.panel_private_key
+    } else {
+        incoming_priv.chars().take(400).collect::<String>()
+    };
+    let cfg = RegistrySettings {
+        url: url.clone(),
+        panel_public_key: panel_public_key.clone(),
+        panel_private_key: panel_private_key.clone(),
+    };
+    pelty_database::settings::set(&s.pool, REGISTRY_KEY, json!(cfg)).await?;
     pelty_database::audit::record(
         &s.pool,
         Some(u.user_id),
         "addon.registry_updated",
         None,
         u.ip.as_deref(),
-        json!({ "url": url }),
+        json!({
+            "url": url,
+            "panel_linked": !panel_public_key.is_empty() && !panel_private_key.is_empty(),
+        }),
     )
     .await?;
-    Ok(Json(json!({ "url": url })))
+    Ok(Json(json!({
+        "url": url,
+        "panel_public_key": panel_public_key,
+        // Never echo the private key back; UI keeps local draft until save.
+        "panel_private_key": if panel_private_key.is_empty() { "" } else { "********" },
+        "panel_linked": !panel_public_key.is_empty() && !panel_private_key.is_empty(),
+    })))
 }
 
 fn reqwest_like_has_creds(url: &str) -> bool {
@@ -759,6 +793,42 @@ pub struct RegistryItem {
     pub sha256: String,
     #[serde(default)]
     pub homepage: String,
+    #[serde(default)]
+    pub icon_url: String,
+    #[serde(default)]
+    pub price: String,
+    #[serde(default = "registry_item_free")]
+    pub is_free: bool,
+    #[serde(default)]
+    pub purchase_url: String,
+}
+
+fn registry_item_free() -> bool {
+    true
+}
+
+fn registry_auth_headers(cfg: &RegistrySettings) -> Vec<(&str, &str)> {
+    let mut h = Vec::new();
+    if !cfg.panel_public_key.is_empty() && !cfg.panel_private_key.is_empty() {
+        h.push(("X-Panel-Public-Key", cfg.panel_public_key.as_str()));
+        h.push(("X-Panel-Private-Key", cfg.panel_private_key.as_str()));
+    }
+    h
+}
+
+fn registry_fetch_url(cfg: &RegistrySettings) -> String {
+    let url = cfg.url.trim().to_string();
+    if cfg.panel_public_key.is_empty() || cfg.panel_private_key.is_empty() {
+        return url;
+    }
+    // Prefer MythicCloud-authenticated catalog when panel keys are linked.
+    if url.contains("/api/pelty/addons/registry.json") {
+        return url.replace(
+            "/api/pelty/addons/registry.json",
+            "/api/pelty/cloud/addons/registry.json",
+        );
+    }
+    url
 }
 
 async fn fetch_index(s: &AppState) -> AppResult<Vec<RegistryItem>> {
@@ -766,7 +836,9 @@ async fn fetch_index(s: &AppState) -> AppResult<Vec<RegistryItem>> {
     if cfg.url.is_empty() {
         return Err(AppError::Conflict("error.addon_registry_unset"));
     }
-    let raw = pelty_provisioning::http::get_bytes(&cfg.url, INDEX_MAX)
+    let fetch_url = registry_fetch_url(&cfg);
+    let hdrs = registry_auth_headers(&cfg);
+    let raw = pelty_provisioning::http::get_bytes_with_headers(&fetch_url, INDEX_MAX, &hdrs)
         .await
         .map_err(|e| {
             tracing::warn!(error = %e, "addon registry fetch failed");
@@ -806,6 +878,7 @@ async fn registry_index(
             json!({
                 "id": i.id, "name": i.name, "version": i.version, "kind": i.kind, "description": i.description,
                 "author": i.author, "homepage": i.homepage, "sha256": i.sha256,
+                "icon_url": i.icon_url, "price": i.price, "is_free": i.is_free, "purchase_url": i.purchase_url,
                 "local_version": local.map(|e| e.manifest.version.clone()),
                 "builtin": local.is_some_and(|e| e.source == "builtin"),
                 "installed": rows.iter().any(|r| r.id == i.id),
@@ -826,12 +899,24 @@ async fn registry_install(
         .into_iter()
         .find(|i| i.id == id)
         .ok_or(AppError::NotFound)?;
-    let bytes = pelty_provisioning::http::get_bytes(&item.download_url, PKG_LIMITS.max_zip_bytes)
-        .await
-        .map_err(|e| {
-            tracing::warn!(error = %e, id = %id, "addon download failed");
-            AppError::Validation("error.addon_registry_fetch")
-        })?;
+    if !item.is_free {
+        let cfg = load_registry(&s).await?;
+        if cfg.panel_public_key.is_empty() || cfg.panel_private_key.is_empty() {
+            return Err(AppError::Conflict("error.addon_registry_panel_required").into());
+        }
+    }
+    let cfg = load_registry(&s).await?;
+    let hdrs = registry_auth_headers(&cfg);
+    let bytes = pelty_provisioning::http::get_bytes_with_headers(
+        &item.download_url,
+        PKG_LIMITS.max_zip_bytes,
+        &hdrs,
+    )
+    .await
+    .map_err(|e| {
+        tracing::warn!(error = %e, id = %id, "addon download failed");
+        AppError::Validation("error.addon_registry_fetch")
+    })?;
     if !sha_hex(&bytes).eq_ignore_ascii_case(&item.sha256) {
         return Err(AppError::Validation("error.addon_integrity").into());
     }

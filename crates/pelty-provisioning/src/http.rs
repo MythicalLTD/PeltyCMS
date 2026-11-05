@@ -368,6 +368,16 @@ pub async fn post_to(url: &str, headers: &[(&str, &str)], body: String) -> Resul
 /// GET an absolute URL with the SSRF guard, refusing bodies over `max` bytes.
 /// Used for the addon registry index and package downloads.
 pub async fn get_bytes(url: &str, max: usize) -> Result<Vec<u8>, String> {
+    get_bytes_with_headers(url, max, &[]).await
+}
+
+#[cfg(not(target_family = "wasm"))]
+/// Like [`get_bytes`], with optional request headers (e.g. MythicCloud panel keys).
+pub async fn get_bytes_with_headers(
+    url: &str,
+    max: usize,
+    headers: &[(&str, &str)],
+) -> Result<Vec<u8>, String> {
     if !(url.starts_with("https://") || url.starts_with("http://")) {
         return Err("url must be http(s)".into());
     }
@@ -375,10 +385,14 @@ pub async fn get_bytes(url: &str, max: usize) -> Result<Vec<u8>, String> {
     if !u.username().is_empty() || u.password().is_some() {
         return Err("url must not contain credentials".into());
     }
-    let mut res = guarded_client(&u)
+    let mut req = guarded_client(&u)
         .await
         .map_err(|e| e.to_string())?
-        .get(u)
+        .get(u);
+    for (k, v) in headers {
+        req = req.header(*k, *v);
+    }
+    let mut res = req
         .send()
         .await
         .map_err(|e| e.without_url().to_string())?;

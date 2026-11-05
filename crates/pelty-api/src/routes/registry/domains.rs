@@ -11,10 +11,58 @@ use axum::{Json, Router};
 use pelty_core::AppError;
 use pelty_database::audit;
 use pelty_database::domains::{self as db, Domain, NewOrder, Tld};
-use pelty_provisioning::registrar::Contact;
+use pelty_provisioning::registrar::{Contact, DnsZoneRecord, RegistrarError};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
+
+/// Soft registrar push: `Unsupported` is ignored (local DB still updates).
+async fn reg_ok(r: Result<(), RegistrarError>) -> ApiResult<()> {
+    match r {
+        Ok(()) | Err(RegistrarError::Unsupported) => Ok(()),
+        Err(_) => Err(AppError::Validation("error.registrar_rejected").into()),
+    }
+}
+
+async fn push_lock(s: &AppState, d: &Domain, locked: bool) -> ApiResult<()> {
+    if d.status != "active" {
+        return Ok(());
+    }
+    let Some(reg) = crate::addons::registrar(s, &d.registrar).await? else {
+        return Ok(());
+    };
+    reg_ok(reg.set_lock(&d.name, locked).await).await
+}
+
+async fn push_privacy(s: &AppState, d: &Domain, enabled: bool) -> ApiResult<()> {
+    if d.status != "active" {
+        return Ok(());
+    }
+    let Some(reg) = crate::addons::registrar(s, &d.registrar).await? else {
+        return Ok(());
+    };
+    reg_ok(reg.set_id_protection(&d.name, enabled).await).await
+}
+
+async fn push_dns(s: &AppState, d: &Domain, records: &[db::DnsRecord]) -> ApiResult<()> {
+    if d.status != "active" || !d.dns_management {
+        return Ok(());
+    }
+    let Some(reg) = crate::addons::registrar(s, &d.registrar).await? else {
+        return Ok(());
+    };
+    let zone: Vec<DnsZoneRecord> = records
+        .iter()
+        .map(|r| DnsZoneRecord {
+            rtype: r.rtype.clone(),
+            host: r.host.clone(),
+            value: r.value.clone(),
+            ttl: r.ttl.max(0) as u32,
+            priority: r.priority.map(|p| p.max(0) as u32),
+        })
+        .collect();
+    reg_ok(reg.replace_dns(&d.name, &zone).await).await
+}
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -41,6 +89,7 @@ pub fn router() -> Router<AppState> {
         .route("/admin/domains/run", post(admin_run))
         .route("/admin/domains/{id}", get(admin_get).patch(admin_update))
         .route("/admin/domains/{id}/sync", post(admin_sync))
+        .route("/admin/domains/{id}/epp", post(admin_epp))
         .route(
             "/client/domains/{id}/dns",
             get(client_dns).put(client_dns_put),
@@ -536,6 +585,36 @@ pub async fn client_epp(
     Ok(Json(json!({ "code": code })))
 }
 
+#[utoipa::path(post, path = "/api/v1/admin/domains/{id}/epp", responses((status = 200), (status = 409), (status = 422)))]
+pub async fn admin_epp(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::ServicesManage>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
+    let d = s.domains().get(id).await?.ok_or(AppError::NotFound)?;
+    if d.status != "active" {
+        return Err(AppError::Validation("error.domain_not_active").into());
+    }
+    let reg = crate::addons::registrar(&s, &d.registrar)
+        .await?
+        .ok_or(AppError::Validation("error.registrar_unavailable"))?;
+    let code = reg
+        .epp_code(&d.name)
+        .await
+        .map_err(|_| AppError::Validation("error.registrar_rejected"))?;
+    let code = code.ok_or(AppError::Conflict("error.epp_unsupported"))?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "domain.epp_revealed",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "by_staff": true }),
+    )
+    .await?;
+    Ok(Json(json!({ "code": code })))
+}
+
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct RenewBody {
     #[serde(default = "one")]
@@ -697,6 +776,12 @@ pub async fn admin_update(
         .admin_update(id, b.status.as_deref(), b.expires_on, b.auto_renew)
         .await?;
     if b.dns_management.is_some() || b.registrar_lock.is_some() || b.privacy.is_some() {
+        if let Some(locked) = b.registrar_lock {
+            push_lock(&s, &d, locked).await?;
+        }
+        if let Some(privacy) = b.privacy {
+            push_privacy(&s, &d, privacy).await?;
+        }
         s.domains()
             .set_flags(id, b.dns_management, b.registrar_lock, b.privacy)
             .await?;
@@ -815,6 +900,7 @@ pub async fn client_dns_put(
         return Err(AppError::Validation("error.domain_not_active").into());
     }
     let items = s.domains().replace_dns(id, &b.records).await?;
+    push_dns(&s, &d, &items).await?;
     audit::record(
         &s.pool,
         Some(u.user_id),
@@ -850,8 +936,9 @@ pub async fn admin_dns_put(
     Path(id): Path<Uuid>,
     Json(b): Json<DnsBody>,
 ) -> ApiResult<Json<Value>> {
-    s.domains().get(id).await?.ok_or(AppError::NotFound)?;
+    let d = s.domains().get(id).await?.ok_or(AppError::NotFound)?;
     let items = s.domains().replace_dns(id, &b.records).await?;
+    push_dns(&s, &d, &items).await?;
     audit::record(
         &s.pool,
         Some(u.user_id),
@@ -888,6 +975,12 @@ pub async fn client_addons(
     let d = s.domains().get_owned(id, c).await?;
     if !matches!(d.status.as_str(), "active" | "pending" | "grace") {
         return Err(AppError::Validation("error.domain_not_active").into());
+    }
+    if let Some(locked) = b.registrar_lock {
+        push_lock(&s, &d, locked).await?;
+    }
+    if let Some(privacy) = b.privacy {
+        push_privacy(&s, &d, privacy).await?;
     }
     s.domains()
         .set_flags(id, b.dns_management, b.registrar_lock, b.privacy)
@@ -926,12 +1019,15 @@ async fn bulk_one(
             .await
             .map(|_| json!(null))
             .map_err(Into::into),
-        "lock" => s
-            .domains()
-            .set_flags(d.id, None, Some(b.value.unwrap_or(true)), None)
-            .await
-            .map(|_| json!(null))
-            .map_err(Into::into),
+        "lock" => {
+            let locked = b.value.unwrap_or(true);
+            push_lock(s, d, locked).await?;
+            s.domains()
+                .set_flags(d.id, None, Some(locked), None)
+                .await
+                .map(|_| json!(null))
+                .map_err(Into::into)
+        }
         "renew" => {
             if !db::RENEWABLE.contains(&d.status.as_str()) {
                 return Err(AppError::Validation("error.domain_not_active").into());

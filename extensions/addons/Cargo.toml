@@ -30,6 +30,8 @@ members = [
     "fixture-prov",
     "fixture-pay",
     "stripe",
+    "authorizenet",
+    "netopia",
     "paypal",
     "mollie",
     "razorpay",
@@ -75,6 +77,7 @@ members = [
     "reg-godaddy",
     "reg-centralnic",
     "reg-generic",
+    "reg-cloudflare",
     "reg-mock",
     "../examples/addon-guide",
 ]

@@ -1,0 +1,278 @@
+# Reusable + dispatchable Mythic Marketplace publisher for Pelty WASM addons.
+# Mirrors featherpanel-com/PterodactylPanelApi (build artifact → publish-release → GH release).
+#
+# From an addon repo:
+#   jobs:
+#     release:
+#       uses: MythicalLTD/PeltyCMS/.github/workflows/release-pelty-addon.yml@develop
+#       with:
+#         addon_dir: stripe
+#       secrets:
+#         MYTHIC_PRODUCT_ID: ${{ secrets.MYTHIC_PRODUCT_ID }}
+#         MYTHIC_RELEASE_TOKEN: ${{ secrets.MYTHIC_RELEASE_TOKEN }}
+#
+# Required secrets (repo or org):
+#   MYTHIC_PRODUCT_ID      — marketplace product UUID
+#   MYTHIC_RELEASE_TOKEN   — mp_rel_… from Mythic Automated Release Uploads
+
+name: Release Pelty Addon
+
+on:
+  workflow_call:
+    inputs:
+      addon_dir:
+        description: Directory under extensions/addons (e.g. stripe, prov-ssl-reseller)
+        required: true
+        type: string
+      version:
+        description: Semver override; empty reads addon.json
+        required: false
+        type: string
+        default: ""
+      environment:
+        description: Mythic publish environment
+        required: false
+        type: string
+        default: production
+      changelog:
+        description: Release notes sent to Mythic
+        required: false
+        type: string
+        default: Updated to latest PeltyCMS addon version
+      monorepo_ref:
+        description: MythicalLTD/PeltyCMS ref used to build
+        required: false
+        type: string
+        default: develop
+      overlay_caller:
+        description: Replace monorepo addon dir with the calling repository checkout
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      MYTHIC_PRODUCT_ID:
+        required: true
+      MYTHIC_RELEASE_TOKEN:
+        required: true
+    outputs:
+      version:
+        description: Published version
+        value: ${{ jobs.release.outputs.version }}
+      zip_file:
+        description: Built zip path
+        value: ${{ jobs.release.outputs.zip_file }}
+      release_url:
+        description: Mythic publish URL
+        value: ${{ jobs.release.outputs.release_url }}
+
+  workflow_dispatch:
+    inputs:
+      addon_dir:
+        description: Directory under extensions/addons
+        required: true
+        type: string
+      version:
+        description: Semver override (empty = addon.json)
+        required: false
+        default: ""
+      environment:
+        description: Mythic Marketplace environment
+        type: choice
+        options:
+          - production
+          - dev
+        default: production
+      changelog:
+        description: Release notes
+        required: false
+        default: Updated to latest PeltyCMS addon version
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      zip_file: ${{ steps.build.outputs.zip_file }}
+      release_url: ${{ steps.publish.outputs.release_url }}
+    steps:
+      - name: Resolve inputs
+        id: args
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "addon_dir=${{ inputs.addon_dir }}" >> "$GITHUB_OUTPUT"
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "environment=${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
+            echo "changelog=${{ inputs.changelog }}" >> "$GITHUB_OUTPUT"
+            echo "monorepo_ref=develop" >> "$GITHUB_OUTPUT"
+            echo "overlay_caller=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "addon_dir=${{ inputs.addon_dir }}" >> "$GITHUB_OUTPUT"
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "environment=${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
+            echo "changelog=${{ inputs.changelog }}" >> "$GITHUB_OUTPUT"
+            echo "monorepo_ref=${{ inputs.monorepo_ref }}" >> "$GITHUB_OUTPUT"
+            echo "overlay_caller=${{ inputs.overlay_caller }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate secrets
+        shell: bash
+        env:
+          HAS_PRODUCT_ID: ${{ secrets.MYTHIC_PRODUCT_ID != '' }}
+          HAS_RELEASE_TOKEN: ${{ secrets.MYTHIC_RELEASE_TOKEN != '' }}
+        run: |
+          missing=0
+          if [ "${HAS_PRODUCT_ID}" != "true" ]; then
+            echo "::error::Missing secret MYTHIC_PRODUCT_ID"
+            missing=1
+          fi
+          if [ "${HAS_RELEASE_TOKEN}" != "true" ]; then
+            echo "::error::Missing secret MYTHIC_RELEASE_TOKEN"
+            missing=1
+          fi
+          if [ "${missing}" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Checkout monorepo
+        uses: actions/checkout@v4
+        with:
+          repository: MythicalLTD/PeltyCMS
+          ref: ${{ steps.args.outputs.monorepo_ref }}
+          path: monorepo
+
+      - name: Checkout addon overlay
+        if: steps.args.outputs.overlay_caller == 'true'
+        uses: actions/checkout@v4
+        with:
+          path: addon-src
+
+      - name: Overlay caller into monorepo addon dir
+        if: steps.args.outputs.overlay_caller == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="${{ steps.args.outputs.addon_dir }}"
+          dest="monorepo/extensions/addons/${dir}"
+          rm -rf "${dest}"
+          mkdir -p "${dest}"
+          # Keep crate sources; drop nested git metadata from the overlay.
+          rsync -a --exclude '.git' --exclude '.github' --exclude 'target' addon-src/ "${dest}/"
+
+      - name: Resolve version + addon id
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="${{ steps.args.outputs.addon_dir }}"
+          json="monorepo/extensions/addons/${dir}/addon.json"
+          if [ ! -f "${json}" ]; then
+            echo "::error::Missing ${json}"
+            exit 1
+          fi
+          id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "${json}")"
+          ver_input="${{ steps.args.outputs.version }}"
+          if [ -n "${ver_input}" ]; then
+            ver="${ver_input}"
+            python3 - <<PY
+          import json
+          p="${json}"
+          d=json.load(open(p))
+          d["version"]="${ver}"
+          json.dump(d, open(p,"w"), indent=2)
+          open(p,"a").write("\n")
+          PY
+          else
+            ver="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "${json}")"
+          fi
+          echo "addon_id=${id}" >> "$GITHUB_OUTPUT"
+          echo "version=${ver}" >> "$GITHUB_OUTPUT"
+          echo "Resolved ${id}@${ver} from ${dir}"
+
+      - name: Install Rust (wasm32-wasip2)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: monorepo -> monorepo/target
+          shared-key: pelty-addon-${{ steps.args.outputs.addon_dir }}
+
+      - name: Build + pack addon zip
+        id: build
+        working-directory: monorepo
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="${{ steps.args.outputs.addon_dir }}"
+          id="${{ steps.meta.outputs.addon_id }}"
+          cargo xtask addons "${dir}"
+          zip="extensions/addons/dist/${id}.zip"
+          if [ ! -f "${zip}" ]; then
+            echo "::error::Expected zip missing: ${zip}"
+            exit 1
+          fi
+          # Absolute path for the composite publish action.
+          abs="$(realpath "${zip}")"
+          echo "zip_file=${abs}" >> "$GITHUB_OUTPUT"
+          echo "zip_name=$(basename "${zip}")" >> "$GITHUB_OUTPUT"
+          ls -lh "${zip}"
+
+      - name: Publish to Mythic Marketplace
+        id: publish
+        uses: MythicalLTD/.github/actions/publish-release@v1
+        with:
+          product_id: ${{ secrets.MYTHIC_PRODUCT_ID }}
+          environment: ${{ steps.args.outputs.environment }}
+          version: ${{ steps.meta.outputs.version }}
+          changelog: ${{ steps.args.outputs.changelog }}
+          file_path: ${{ steps.build.outputs.zip_file }}
+          title: "${{ steps.meta.outputs.addon_id }} ${{ steps.meta.outputs.version }}"
+          release_token: ${{ secrets.MYTHIC_RELEASE_TOKEN }}
+
+      - name: Create GitHub Release
+        if: github.event_name != 'workflow_call' || true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Prefer releasing on the calling addon repo when overlaid; else monorepo.
+          ver="${{ steps.meta.outputs.version }}"
+          tag="v${ver}"
+          zip="${{ steps.build.outputs.zip_file }}"
+          notes="${{ steps.args.outputs.changelog }}"
+
+          if [ "${{ steps.args.outputs.overlay_caller }}" = "true" ]; then
+            cd addon-src
+          else
+            cd monorepo
+          fi
+
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" "${zip}" --clobber
+            gh release edit "${tag}" --notes "${notes}"
+          else
+            gh release create "${tag}" "${zip}" --title "${tag}" --notes "${notes}"
+          fi
+
+      - name: Release summary
+        if: success()
+        shell: bash
+        run: |
+          {
+            echo "### Pelty addon release published"
+            echo "| Addon | \`${{ steps.meta.outputs.addon_id }}\` |"
+            echo "| Dir | \`${{ steps.args.outputs.addon_dir }}\` |"
+            echo "| Version | \`${{ steps.meta.outputs.version }}\` |"
+            echo "| Zip | \`${{ steps.build.outputs.zip_name }}\` |"
+            echo "| Environment | \`${{ steps.args.outputs.environment }}\` |"
+            echo "| Marketplace | \`${{ steps.publish.outputs.release_url }}\` |"
+            echo "| GitHub | [\`v${{ steps.meta.outputs.version }}\`](${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ steps.meta.outputs.version }}) |"
+          } >> "$GITHUB_STEP_SUMMARY"

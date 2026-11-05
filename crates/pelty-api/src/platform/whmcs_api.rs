@@ -62,6 +62,17 @@ pub const ACTIONS: &[&str] = &[
     "ModuleUnsuspend",
     "ModuleTerminate",
     "ModuleCreate",
+    "ModuleChangePackage",
+    "ModuleChangePw",
+    "CreateInvoice",
+    "UpdateInvoice",
+    "CapturePayment",
+    "SendEmail",
+    "DomainWhois",
+    "DomainUpdateNameservers",
+    "DomainUpdateLockingStatus",
+    "DomainRequestEPPCode",
+    "DomainGetWhoisInfo",
     "GetTickets",
     "GetTicket",
     "OpenTicket",
@@ -348,6 +359,162 @@ pub fn translate(
         "ModuleUnsuspend" => svc_action("unsuspend")?,
         "ModuleTerminate" => svc_action("terminate")?,
         "ModuleCreate" => svc_action("activate")?,
+        "ModuleChangePackage" => {
+            let id = s(p, "serviceid")
+                .or_else(|| s(p, "accountid"))
+                .ok_or("Missing parameter: serviceid")?;
+            let pid = need("pid").or_else(|_| need("productid"))?;
+            (
+                Method::POST,
+                format!("/api/v1/admin/services/{id}/change"),
+                Some(json!({ "product_id": pid })),
+            )
+        }
+        "ModuleChangePw" => {
+            let id = s(p, "serviceid")
+                .or_else(|| s(p, "accountid"))
+                .ok_or("Missing parameter: serviceid")?;
+            let pw = need("password").or_else(|_| need("servicepassword"))?;
+            (
+                Method::POST,
+                format!("/api/v1/admin/services/{id}/module/custom"),
+                Some(json!({ "action": "change_password", "params": { "password": pw } })),
+            )
+        }
+        "CreateInvoice" => {
+            let cid = need("userid").or_else(|_| need("clientid"))?;
+            let currency = s(p, "currency")
+                .unwrap_or("EUR")
+                .to_ascii_uppercase();
+            let mut items = Vec::new();
+            for i in 1..=50 {
+                let desc = match s(p, &format!("itemdescription{i}")) {
+                    Some(d) if !d.is_empty() => d,
+                    _ => break,
+                };
+                let amount = s(p, &format!("itemamount{i}")).unwrap_or("0");
+                items.push(json!({
+                    "description": desc,
+                    "quantity": "1",
+                    "unit_price": amount,
+                }));
+            }
+            if items.is_empty() {
+                return Err("Missing parameter: itemdescription1".into());
+            }
+            let finalize = s(p, "status")
+                .map(|st| !st.eq_ignore_ascii_case("draft") && !st.eq_ignore_ascii_case("unpaid"))
+                .unwrap_or(true);
+            (
+                Method::POST,
+                "/api/v1/admin/invoices".into(),
+                Some(json!({
+                    "customer_id": cid,
+                    "currency": currency,
+                    "items": items,
+                    "finalize": finalize,
+                    "admin_notes": s(p, "notes").unwrap_or(""),
+                })),
+            )
+        }
+        "UpdateInvoice" => {
+            // PeltyCMS finalizes drafts; status=Paid is recorded via CapturePayment /
+            // AddInvoicePayment. Here we finalize when asked to leave draft.
+            let id = need("invoiceid")?;
+            if s(p, "status").is_some_and(|st| st.eq_ignore_ascii_case("Cancelled")) {
+                (
+                    Method::POST,
+                    format!("/api/v1/admin/invoices/{id}/void"),
+                    Some(json!({})),
+                )
+            } else {
+                (
+                    Method::POST,
+                    format!("/api/v1/admin/invoices/{id}/finalize"),
+                    Some(json!({})),
+                )
+            }
+        }
+        "CapturePayment" => {
+            let id = need("invoiceid")?;
+            let amount = need("amount")?;
+            let trans = s(p, "transid")
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("whmcs-capture-{id}"));
+            (
+                Method::POST,
+                format!("/api/v1/admin/invoices/{id}/payments"),
+                Some(json!({
+                    "idempotency_key": format!("whmcs-capture:{trans}"),
+                    "reference": trans,
+                    "gateway": s(p, "gateway").unwrap_or("manual"),
+                    "amount": amount,
+                })),
+            )
+        }
+        "SendEmail" => {
+            let cid = need("id")
+                .or_else(|_| need("userid"))
+                .or_else(|_| need("clientid"))?;
+            let template = need("messagename").or_else(|_| need("template"))?;
+            let mut vars = Map::new();
+            if let Some(Value::Object(cv)) = p.get("customvars").cloned() {
+                vars = cv;
+            }
+            (
+                Method::POST,
+                format!("/api/v1/admin/customers/{cid}/emails/send"),
+                Some(json!({ "template": template, "vars": vars })),
+            )
+        }
+        "DomainWhois" => (
+            Method::GET,
+            format!(
+                "/api/v1/public/domains/whois?domain={}",
+                enc(&need("domain")?)
+            ),
+            None,
+        ),
+        "DomainUpdateNameservers" => {
+            let mut ns = Vec::new();
+            for i in 1..=5 {
+                if let Some(n) = s(p, &format!("ns{i}")) {
+                    if !n.is_empty() {
+                        ns.push(n.to_string());
+                    }
+                }
+            }
+            (
+                Method::POST,
+                "/api/v1/admin/domains/bulk".into(),
+                Some(json!({
+                    "ids": [need("domainid")?],
+                    "action": "nameservers",
+                    "nameservers": ns,
+                })),
+            )
+        }
+        "DomainUpdateLockingStatus" => (
+            Method::POST,
+            "/api/v1/admin/domains/bulk".into(),
+            Some(json!({
+                "ids": [need("domainid")?],
+                "action": "lock",
+                "value": s(p, "lockstatus")
+                    .map(|v| v == "1" || v.eq_ignore_ascii_case("locked") || v.eq_ignore_ascii_case("true"))
+                    .unwrap_or(true),
+            })),
+        ),
+        "DomainRequestEPPCode" => (
+            Method::POST,
+            format!("/api/v1/admin/domains/{}/epp", need("domainid")?),
+            Some(json!({})),
+        ),
+        "DomainGetWhoisInfo" => (
+            Method::GET,
+            format!("/api/v1/admin/domains/{}", need("domainid")?),
+            None,
+        ),
         "UpdateClientProduct" => match s(p, "status").map(str::to_ascii_lowercase).as_deref() {
             Some("suspended") => svc_action("suspend")?,
             Some("active") => svc_action("unsuspend")?,
@@ -873,6 +1040,30 @@ mod tests {
             translate("GetInvoice", &Map::new()).unwrap_err(),
             "Missing parameter: invoiceid"
         );
+        let (_, path, body) = translate(
+            "ModuleChangePw",
+            &m(json!({"serviceid": "s1", "password": "x"})),
+        )
+        .unwrap();
+        assert!(path.contains("/module/custom"));
+        assert_eq!(body.unwrap()["action"], "change_password");
+        let (_, _, body) = translate(
+            "CreateInvoice",
+            &m(json!({
+                "clientid": "c1",
+                "itemdescription1": "Setup",
+                "itemamount1": "10.00",
+                "currency": "EUR"
+            })),
+        )
+        .unwrap();
+        assert_eq!(body.unwrap()["items"][0]["description"], "Setup");
+        let (_, path, _) = translate(
+            "SendEmail",
+            &m(json!({"id": "c1", "messagename": "invoice_created"})),
+        )
+        .unwrap();
+        assert!(path.ends_with("/emails/send"));
         for a in ACTIONS {
             // every advertised action is routed (may fail only on missing params)
             if let Err(e) = translate(a, &Map::new()) {

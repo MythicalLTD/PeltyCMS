@@ -14,6 +14,8 @@ pub enum RegistrarError {
     BadAuthCode,
     #[error("unknown domain")]
     UnknownDomain,
+    #[error("operation not supported by this registrar")]
+    Unsupported,
     #[error("registrar error: {0}")]
     Remote(String),
 }
@@ -63,6 +65,21 @@ pub struct RemoteDomain {
     /// `active`, `expired`, `transferring` or `cancelled`.
     pub status: String,
     pub nameservers: Vec<String>,
+}
+
+/// One DNS record pushed to a registrar or DNS host (Cloudflare, etc.).
+#[derive(Debug, Clone, Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct DnsZoneRecord {
+    pub rtype: String,
+    pub host: String,
+    pub value: String,
+    #[serde(default = "dns_ttl_default")]
+    pub ttl: u32,
+    #[serde(default)]
+    pub priority: Option<u32>,
+}
+fn dns_ttl_default() -> u32 {
+    3600
 }
 
 /// Custom domain fields as flat `(key, value)` registrar parameters (pure).
@@ -196,6 +213,46 @@ pub trait RegistrarModule: Send + Sync {
         _domain: &'a str,
     ) -> BoxFuture<'a, RegistrarResult<Option<PremiumQuote>>> {
         Box::pin(async { Ok(None) })
+    }
+    /// Transfer lock at the registry. Default: unsupported.
+    fn set_lock<'a>(
+        &'a self,
+        _domain: &'a str,
+        _locked: bool,
+    ) -> BoxFuture<'a, RegistrarResult<()>> {
+        Box::pin(async { Err(RegistrarError::Unsupported) })
+    }
+    /// WHOIS / ID protection. Default: unsupported.
+    fn set_id_protection<'a>(
+        &'a self,
+        _domain: &'a str,
+        _enabled: bool,
+    ) -> BoxFuture<'a, RegistrarResult<()>> {
+        Box::pin(async { Err(RegistrarError::Unsupported) })
+    }
+    /// Replace the DNS zone at the registrar or DNS host. Default: unsupported
+    /// (PeltyCMS still keeps a local copy in `domain_dns_records`).
+    fn replace_dns<'a>(
+        &'a self,
+        _domain: &'a str,
+        _records: &'a [DnsZoneRecord],
+    ) -> BoxFuture<'a, RegistrarResult<()>> {
+        Box::pin(async { Err(RegistrarError::Unsupported) })
+    }
+    /// Read the remote DNS zone. Default: unsupported.
+    fn get_dns<'a>(
+        &'a self,
+        _domain: &'a str,
+    ) -> BoxFuture<'a, RegistrarResult<Vec<DnsZoneRecord>>> {
+        Box::pin(async { Err(RegistrarError::Unsupported) })
+    }
+    /// Enable or disable DNSSEC (DS at registry). Default: unsupported.
+    fn set_dnssec<'a>(
+        &'a self,
+        _domain: &'a str,
+        _enabled: bool,
+    ) -> BoxFuture<'a, RegistrarResult<()>> {
+        Box::pin(async { Err(RegistrarError::Unsupported) })
     }
     /// A copy configured with the registrar addon's settings (API keys…).
     /// `None` = the module needs no settings and `self` is used as is.

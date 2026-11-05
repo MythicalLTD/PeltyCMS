@@ -46,6 +46,14 @@ pub struct FraudSettings {
     pub max_customers_per_ip: u32,
     /// Score for the shared-IP rule.
     pub shared_ip_score: u8,
+    /// Optional HTTP fraud network endpoint (MaxMind / FraudLabs-style or custom).
+    /// PeltyCMS POSTs the order context as JSON and expects
+    /// `{ "hits": [ { "rule": "…", "score": 0-100 } ] }` or `{ "score": N, "rule": "…" }`.
+    #[serde(default)]
+    pub http_hook_url: String,
+    /// Bearer / API key sent as `Authorization: Bearer …` (empty = no header).
+    #[serde(default)]
+    pub http_hook_key: String,
 }
 
 impl Default for FraudSettings {
@@ -67,6 +75,8 @@ impl Default for FraudSettings {
             vpn_score: 40,
             max_customers_per_ip: 3,
             shared_ip_score: 30,
+            http_hook_url: String::new(),
+            http_hook_key: String::new(),
         }
     }
 }
@@ -152,6 +162,19 @@ impl FraudSettings {
         }
         r.dedup();
         self.vpn_ranges = r;
+        self.http_hook_url = self.http_hook_url.trim().to_string();
+        self.http_hook_key = self.http_hook_key.trim().to_string();
+        if !self.http_hook_url.is_empty() {
+            let ok = (self.http_hook_url.starts_with("https://")
+                || self.http_hook_url.starts_with("http://"))
+                && self.http_hook_url.len() <= 500;
+            if !ok {
+                return Err("error.validation");
+            }
+        }
+        if self.http_hook_key.len() > 500 {
+            return Err("error.validation");
+        }
         Ok(self)
     }
 }

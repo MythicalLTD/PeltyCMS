@@ -36,6 +36,7 @@ pub fn router() -> Router<AppState> {
         .route("/admin/staff-online", get(staff_online))
         .route("/admin/calendar", get(calendar))
         .route("/admin/customers/{id}/emails", get(customer_emails))
+        .route("/admin/customers/{id}/emails/send", post(send_customer_email))
         .route("/admin/emails/{job}/resend", post(resend))
         .route("/admin/backups", get(list_backups).post(create_backup))
         .route("/admin/backups/{id}", axum::routing::delete(delete_backup))
@@ -113,6 +114,69 @@ pub async fn customer_emails(
 ) -> ApiResult<Json<Value>> {
     Ok(Json(
         json!({ "items": ops::customer_emails(&s.pool, id).await? }),
+    ))
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct SendEmailBody {
+    /// Built-in template name (`invoice_created`, `client_welcome`, …).
+    pub template: String,
+    #[serde(default)]
+    pub locale: Option<String>,
+    /// Optional merge vars (string values only).
+    #[serde(default)]
+    #[schema(value_type = Object)]
+    pub vars: Value,
+}
+
+/// Queue a named email template to the customer's primary login address
+/// (WHMCS `SendEmail` compat and staff tools).
+#[utoipa::path(post, path = "/api/v1/admin/customers/{id}/emails/send", request_body = SendEmailBody, responses((status = 202), (status = 404), (status = 422)))]
+pub async fn send_customer_email(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::CustomersManage>,
+    Path(id): Path<Uuid>,
+    Json(b): Json<SendEmailBody>,
+) -> ApiResult<(axum::http::StatusCode, Json<Value>)> {
+    let name = b.template.trim();
+    if name.is_empty() || name.len() > 64 || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
+        return Err(AppError::Validation("error.validation").into());
+    }
+    let c = s.clients().get(id).await?.ok_or(AppError::NotFound)?;
+    let locale = if let Some(l) = b.locale.filter(|l| s.i18n.has(l)) {
+        l
+    } else if let Some(uid) = c.owner_user_id {
+        match pelty_database::users::find(&s.pool, uid).await? {
+            Some(usr) => crate::mail::user_locale(&s, &usr),
+            None => s.cfg.default_locale.clone(),
+        }
+    } else {
+        s.cfg.default_locale.clone()
+    };
+    let mut vars = crate::mail::Vars::default();
+    if let Some(o) = b.vars.as_object() {
+        for (k, v) in o {
+            if let Some(s) = v.as_str() {
+                vars.insert(k.clone(), s.to_string());
+            }
+        }
+    }
+    vars.entry("name".into())
+        .or_insert_with(|| format!("{} {}", c.first_name, c.last_name).trim().to_string());
+    crate::mail::enqueue(&s, name, &locale, &c.email, vars).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "email.sent",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "template": name, "locale": locale }),
+    )
+    .await?;
+    Ok((
+        axum::http::StatusCode::ACCEPTED,
+        Json(json!({ "ok": true, "template": name })),
     ))
 }
 

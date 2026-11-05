@@ -275,6 +275,9 @@ impl AppState {
         wasm_addons::seed_bundled(self).await?;
         wasm_addons::load_enabled(self).await?;
         addon_events::load_kill_switch(self).await;
+        if let Ok(cfg) = pelty_database::fraud::get_settings(&self.pool).await {
+            fraud::sync_http_hook(self, &cfg);
+        }
         Ok(())
     }
 

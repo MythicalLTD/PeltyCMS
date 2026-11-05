@@ -62,6 +62,10 @@ Click an entry to see its details. **Export CSV** downloads the filtered list, n
 
 Staff and clients can sign in with OAuth/OIDC providers (addons of kind `sso`) and SAML (Admin → Addons & integrations → **SAML**). PeltyCMS can also act as an OAuth provider for other apps (**OAuth clients**).
 
+### SAML scope (Service Provider)
+
+PeltyCMS implements a deliberately narrow SAML 2.0 SP: Exclusive C14N 1.0, enveloped XML-DSig with RSA-SHA256 / ECDSA-P256-SHA256 and SHA-256 digests, pinned IdP certificates, HTTP-POST responses and HTTP-Redirect requests. **Not supported:** EncryptedAssertion, SHA-1 signatures, inclusive C14N, XPath transforms, KeyInfo-supplied keys, or artifact binding. Prefer OIDC when the IdP offers it.
+
 ## Fraud screening
 
 Admin → Security → **Fraud** scores every new client order. Each rule that matches adds points (the total is capped at 100). At the **review score** the order is held for a decision; at the **reject score** it is cancelled as fraud straight away and the client sees an error. Fraud addons can add their own scores; a provider that fails is ignored so an outage never blocks sales.
@@ -81,7 +85,11 @@ Built-in rules:
 | Shared IP | Several other clients ordered from the same IP in the last 30 days | 30 |
 | No billing country | The client has not set a country | 10 |
 
-Set any heuristic's score to 0 to switch it off. Nothing here calls a paid service: the connection country comes from your edge proxy. Cloudflare (`CF-IPCountry`, with `T1` for Tor), CloudFront (`CloudFront-Viewer-Country`) and nginx GeoIP (`X-GeoIP-Country` or `X-Country-Code`) are read **only** from a trusted proxy (Admin → Security → **IP rules**, trusted proxies); from anyone else the headers are removed so a visitor cannot fake them. Requests from a private or loopback address are not counted as proxied, so an nginx in front of PeltyCMS that is not yet listed as trusted does not flag every order.
+Set any heuristic's score to 0 to switch it off. The connection country comes from your edge proxy. Cloudflare (`CF-IPCountry`, with `T1` for Tor), CloudFront (`CloudFront-Viewer-Country`) and nginx GeoIP (`X-GeoIP-Country` or `X-Country-Code`) are read **only** from a trusted proxy (Admin → Security → **IP rules**, trusted proxies); from anyone else the headers are removed so a visitor cannot fake them. Requests from a private or loopback address are not counted as proxied, so an nginx in front of PeltyCMS that is not yet listed as trusted does not flag every order.
+
+### HTTP fraud network (optional)
+
+Set **HTTP fraud hook URL** (and optional API key) to POST each screened order as JSON to MaxMind minFraud, FraudLabs Pro, or any custom scorer. The response should be `{ "hits": [ { "rule": "…", "score": 0-100 } ] }` or `{ "score": N, "rule": "…" }`. Failures are ignored (fail-open) so an outage never blocks sales.
 
 ### Review queue
 

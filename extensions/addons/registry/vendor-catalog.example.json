@@ -1,0 +1,41 @@
+{
+  "name": "Example Mythical vendor catalog",
+  "products": [
+    {
+      "sku": "ssl-dv",
+      "name": "Domain Validated SSL",
+      "description": "Single-domain DV certificate, annual.",
+      "cost": "4.50",
+      "currency": "USD",
+      "cycle": "annual",
+      "config": { "product": "ssl-dv", "validity_months": 12 }
+    },
+    {
+      "sku": "ssl-wildcard",
+      "name": "Wildcard SSL",
+      "description": "Wildcard DV certificate for *.example.com.",
+      "cost": "48.00",
+      "currency": "USD",
+      "cycle": "annual",
+      "config": { "product": "ssl-wildcard", "validity_months": 12 }
+    },
+    {
+      "sku": "site-builder-starter",
+      "name": "Site Builder Starter",
+      "description": "Upsell: drag-and-drop site builder seats.",
+      "cost": "2.99",
+      "currency": "EUR",
+      "cycle": "monthly",
+      "config": { "product": "site-builder", "tier": "starter" }
+    },
+    {
+      "sku": "email-pro",
+      "name": "Professional Email",
+      "description": "Upsell: mailbox hosting with spam filter.",
+      "cost": "1.49",
+      "currency": "EUR",
+      "cycle": "monthly",
+      "config": { "product": "email-pro", "mailboxes": 5 }
+    }
+  ]
+}

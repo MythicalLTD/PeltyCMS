@@ -1,5 +1,6 @@
-# UNVERIFIED: statically reviewed, never built (no Docker on the dev box).
-# Multi-stage: web build -> rust build -> slim runtime as non-root uid 10001.
+# Multi-stage: web build -> rust build (incl. pelty-docs, needs frontend/src) ->
+# slim runtime as non-root uid 10001. Smoke: `docker build -t peltycms:latest .`
+# then `docker compose up` with a local .env (see docker-compose.yml).
 FROM node:22-bookworm-slim AS web
 WORKDIR /src/frontend
 RUN corepack enable pnpm
@@ -20,6 +21,8 @@ COPY extensions/ extensions/
 # Workspace member (developer commands); only needed so the workspace resolves.
 COPY xtask/ xtask/
 COPY Makefile ./
+# Embedded into install docs (`{{file:docker-compose.yml}}` in pelty-docs).
+COPY docker-compose.yml ./
 # pelty-docs reads frontend/src (App.tsx, navRegistry, PluginSlot sites) at
 # generation time; the web stage only produces dist for the runtime image.
 COPY frontend/ frontend/

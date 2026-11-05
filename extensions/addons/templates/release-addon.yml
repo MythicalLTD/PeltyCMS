@@ -1,0 +1,43 @@
+# Copy to each PeltyCMS/addon-* repo as .github/workflows/release-addon.yml
+# Same shape as featherpanel-com/PterodactylPanelApi → Mythic publish-release.
+#
+# Repo secrets:
+#   MYTHIC_PRODUCT_ID
+#   MYTHIC_RELEASE_TOKEN   (or org secret on PeltyCMS)
+
+name: Release Addon
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version (e.g. 0.1.1). Leave empty to use addon.json.
+        required: false
+        default: ""
+      environment:
+        description: Mythic Marketplace environment
+        type: choice
+        options:
+          - production
+          - dev
+        default: production
+      changelog:
+        description: Release notes
+        required: false
+        default: Updated to latest PeltyCMS addon version
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: MythicalLTD/PeltyCMS/.github/workflows/release-pelty-addon.yml@develop
+    with:
+      addon_dir: ${{ vars.ADDON_DIR }}
+      version: ${{ inputs.version }}
+      environment: ${{ inputs.environment }}
+      changelog: ${{ inputs.changelog }}
+      overlay_caller: true
+    secrets:
+      MYTHIC_PRODUCT_ID: ${{ secrets.MYTHIC_PRODUCT_ID }}
+      MYTHIC_RELEASE_TOKEN: ${{ secrets.MYTHIC_RELEASE_TOKEN }}

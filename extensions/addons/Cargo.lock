@@ -962,6 +962,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "pelty-addon-gateway-authorizenet"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "hmac",
+ "pelty-addon-sdk",
+ "pelty-core",
+ "pelty-payments",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "sha2",
+ "subtle",
+ "tokio",
+]
+
+[[package]]
 name = "pelty-addon-gateway-crypto"
 version = "0.1.0"
 dependencies = [
@@ -1065,6 +1082,23 @@ dependencies = [
  "sha2",
  "subtle",
  "time",
+ "tokio",
+]
+
+[[package]]
+name = "pelty-addon-gateway-netopia"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "hmac",
+ "pelty-addon-sdk",
+ "pelty-core",
+ "pelty-payments",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "sha2",
+ "subtle",
  "tokio",
 ]
 
@@ -1724,6 +1758,18 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tokio",
+]
+
+[[package]]
+name = "pelty-addon-registrar-cloudflare"
+version = "0.1.0"
+dependencies = [
+ "pelty-addon-registrar-common",
+ "pelty-addon-sdk",
+ "pelty-provisioning",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 

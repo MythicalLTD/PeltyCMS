@@ -10,6 +10,8 @@ fn registry_has_builtins() {
         "webhook",
         "proxmox",
         "cpanel",
+        "plesk",
+        "directadmin",
         "licensing",
         "convoy",
         "virtfusion",

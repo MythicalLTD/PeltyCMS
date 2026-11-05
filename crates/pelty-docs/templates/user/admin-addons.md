@@ -11,9 +11,32 @@ Admin → Addons & integrations → **Addons** lists the installed addons, anyth
 - **Approve dangerous capabilities.** Some capabilities need an explicit tick before install succeeds, for example `http.any` (call any host), `http.private` (call private networks), `money.modify`, `db.read`, `db.write`, `db.sql`, `fs`, `exec`, `auth.provider`, request-wide hooks and iframes. The approval is recorded in the audit log.
 - **Enable** it and fill its **settings**. Secret settings are stored encrypted.
 
+## Official addon registry
+
+Admin → Addons → **Marketplace** (registry) can point at an HTTPS index JSON:
+
+```json
+{ "addons": [ { "id": "…", "name": "…", "kind": "gateway", "version": "0.1.0",
+  "url": "https://…/addon.zip", "sha256": "<64 hex>", "author": "…", "description": "…" } ] }
+```
+
+PeltyCMS downloads the zip, checks `sha256`, then runs the same capability review as a manual upload. Signed addons are verified against Admin → Addons → **Trust** (see [Addon signing](developers/addon-signing.md)).
+
+A starter index for MythicalSystems official packages lives in the source tree as `extensions/addons/registry/official.example.json`. Replace the zero `sha256` placeholders with the digests of the zips from `cargo xtask addons` before publishing the index. Host the JSON and the zips on HTTPS; set the registry URL under Addons → Marketplace → Registry settings.
+
 Disable stops the addon; uninstall removes it. Addons that change core API responses (mixins) can be switched off per addon with the mixin kill switch in the Addons page, without disabling the addon.
 
 Every bundled addon has a reference page in the developer docs ([Bundled addons](developers/addons.md)).
+
+## Vendor catalog (MarketConnect-style)
+
+Admin → Products & services → **Marketplace** syncs SKUs from a vendor provisioning server (`prov-vendor` / `prov-ssl-reseller`). Import a SKU into the product catalog with a markup; PeltyCMS then sells and provisions it like any other product. Start with SSL certificates via **SSL reseller**, then add further upstream catalogs as they become available. This is the PeltyCMS counterpart to WHMCS MarketConnect — content is yours to configure, not a locked branded store.
+
+A starter catalog (DV/wildcard SSL plus site-builder and email upsells) lives at `extensions/addons/registry/vendor-catalog.example.json`. Point your vendor module at a server that returns that shape, sync, then import SKUs with a markup.
+
+## Regional payment gateways
+
+Beyond Stripe/PayPal, bundled gateways include **Authorize.net** (Accept Hosted, US-centric), **Netopia Payments** (Romania, RON/EUR), and **Mollie**/Adyen-style redirects for broader EU coverage. Install them from the official registry or upload the zips from `cargo xtask addons`.
 
 ## Plugins
 

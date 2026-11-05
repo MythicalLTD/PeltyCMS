@@ -1,0 +1,27 @@
+{
+  "id": "gateway-authorizenet",
+  "name": "Authorize.net",
+  "version": "0.1.0",
+  "kind": "gateway",
+  "engine": "wasm",
+  "provides": "authorizenet",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.gateway.authorizenet",
+  "author": "MythicalSystems",
+  "permissions": ["payments.process", "network.outbound"],
+  "capabilities": {
+    "http": [
+      "api.authorize.net",
+      "apitest.authorize.net",
+      "accept.authorize.net",
+      "test.authorize.net",
+      "$setting:api_base"
+    ],
+    "secrets": ["api_login_id", "transaction_key", "signature_key"]
+  },
+  "settings": [
+    { "key": "live", "label": "addons.gateway.setting.live", "kind": "bool", "required": false, "default": false },
+    { "key": "api_base", "label": "addons.gateway.setting.api_base", "kind": "text", "required": false }
+  ]
+}

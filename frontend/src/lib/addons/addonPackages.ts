@@ -9,6 +9,10 @@ export interface RegistryItem {
   author: string;
   homepage: string;
   sha256: string;
+  icon_url?: string;
+  price?: string;
+  is_free?: boolean;
+  purchase_url?: string;
   local_version: string | null;
   builtin: boolean;
   installed: boolean;

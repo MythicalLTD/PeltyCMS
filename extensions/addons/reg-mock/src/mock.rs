@@ -12,6 +12,14 @@ struct MockEntry {
     nameservers: Vec<String>,
     contact: Contact,
     status: String,
+    #[serde(default)]
+    locked: bool,
+    #[serde(default)]
+    privacy: bool,
+    #[serde(default)]
+    dnssec: bool,
+    #[serde(default)]
+    dns: Vec<pelty_provisioning::registrar::DnsZoneRecord>,
 }
 
 /// In-memory registrar: names starting with `taken` are unavailable and the
@@ -123,6 +131,10 @@ impl RegistrarModule for MockRegistrar {
                     nameservers: nameservers.to_vec(),
                     contact: registrant.clone(),
                     status: "active".into(),
+                    locked: true,
+                    privacy: false,
+                    dnssec: false,
+                    dns: vec![],
                 },
             );
             Ok(())
@@ -162,6 +174,10 @@ impl RegistrarModule for MockRegistrar {
                     nameservers: Vec::new(),
                     contact: Contact::default(),
                     status: "active".into(),
+                    locked: true,
+                    privacy: false,
+                    dnssec: false,
+                    dns: vec![],
                 },
             );
             Ok(())
@@ -217,6 +233,74 @@ impl RegistrarModule for MockRegistrar {
                 status: e.status.clone(),
                 nameservers: e.nameservers.clone(),
             })
+        });
+        Box::pin(async move { r })
+    }
+    fn set_lock<'a>(
+        &'a self,
+        domain: &'a str,
+        locked: bool,
+    ) -> BoxFuture<'a, RegistrarResult<()>> {
+        self.log(format!("lock {domain} {locked}"));
+        let r = self.with(|m| {
+            m.get_mut(domain)
+                .ok_or(RegistrarError::UnknownDomain)?
+                .locked = locked;
+            Ok(())
+        });
+        Box::pin(async move { r })
+    }
+    fn set_id_protection<'a>(
+        &'a self,
+        domain: &'a str,
+        enabled: bool,
+    ) -> BoxFuture<'a, RegistrarResult<()>> {
+        self.log(format!("privacy {domain} {enabled}"));
+        let r = self.with(|m| {
+            m.get_mut(domain)
+                .ok_or(RegistrarError::UnknownDomain)?
+                .privacy = enabled;
+            Ok(())
+        });
+        Box::pin(async move { r })
+    }
+    fn replace_dns<'a>(
+        &'a self,
+        domain: &'a str,
+        records: &'a [pelty_provisioning::registrar::DnsZoneRecord],
+    ) -> BoxFuture<'a, RegistrarResult<()>> {
+        self.log(format!("dns {domain} {}", records.len()));
+        let r = self.with(|m| {
+            m.get_mut(domain)
+                .ok_or(RegistrarError::UnknownDomain)?
+                .dns = records.to_vec();
+            Ok(())
+        });
+        Box::pin(async move { r })
+    }
+    fn get_dns<'a>(
+        &'a self,
+        domain: &'a str,
+    ) -> BoxFuture<'a, RegistrarResult<Vec<pelty_provisioning::registrar::DnsZoneRecord>>> {
+        let r = self.with(|m| {
+            Ok(m.get(domain)
+                .ok_or(RegistrarError::UnknownDomain)?
+                .dns
+                .clone())
+        });
+        Box::pin(async move { r })
+    }
+    fn set_dnssec<'a>(
+        &'a self,
+        domain: &'a str,
+        enabled: bool,
+    ) -> BoxFuture<'a, RegistrarResult<()>> {
+        self.log(format!("dnssec {domain} {enabled}"));
+        let r = self.with(|m| {
+            m.get_mut(domain)
+                .ok_or(RegistrarError::UnknownDomain)?
+                .dnssec = enabled;
+            Ok(())
         });
         Box::pin(async move { r })
     }

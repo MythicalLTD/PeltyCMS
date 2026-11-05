@@ -92,7 +92,25 @@ pelty-server import whmcs --file whmcs.sql --dry-run   # report only, nothing is
 pelty-server import whmcs --file whmcs.sql
 ```
 
-The console has the same command (`import whmcs --file whmcs.sql --dry-run`). A binary built with `--features whmcs-mysql` can also read a live database with `--dsn mysql://user:pass@host/whmcs` (or `WHMCS_DSN`). That path compiles and reads the same columns, but it has not been tested against a real MySQL server yet. Prefer the export.
+The console has the same command (`import whmcs --file whmcs.sql --dry-run`). Prefer the SQL export path: it is what CI covers (`crates/pelty-import/tests` fixtures).
+
+### Live MySQL (optional)
+
+A binary built with `--features whmcs-mysql` can also read a live database:
+
+```bash
+cargo build -p pelty-server --release --features whmcs-mysql
+# Dry-run against a staging WHMCS DB (nothing is written to PeltyCMS):
+pelty-server import whmcs --dsn 'mysql://user:pass@127.0.0.1:3306/whmcs' \
+  --cc-hash "$WHMCS_CC_ENCRYPTION_HASH" --dry-run
+```
+
+Or set `WHMCS_DSN` / `WHMCS_CC_ENCRYPTION_HASH`. The live loader uses the same column map as the dump importer. Smoke-test checklist before a production cutover:
+
+1. `--dry-run` on a copy of production WHMCS; confirm created/skipped counts and warnings.
+2. Real import into an empty PeltyCMS database; spot-check clients, services, invoices, tickets.
+3. Client login with a WHMCS password; first success upgrades the hash to Argon2id.
+4. Re-enter server API keys if the run was without `cc_encryption_hash` (servers import disabled).
 
 What is imported: currencies, client groups, clients and their contacts, product groups, products and pricing, configurable options, product addons, servers, services (linked to their server, with the control-panel username), service addons, custom fields, domains, invoices with their items, transactions and refunds, client credit, ticket departments, tickets and replies, announcements, knowledgebase categories and articles, promotions (percentage and fixed-amount; other types are reported and skipped) and tax rules.
 

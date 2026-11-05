@@ -34,6 +34,8 @@ export interface FraudSettings {
   vpn_score: number;
   max_customers_per_ip: number;
   shared_ip_score: number;
+  http_hook_url?: string;
+  http_hook_key?: string;
 }
 interface Signals { billing_country?: string; geo_country?: string | null; proxy_headers?: string[]; vpn_range?: string | null; email_domain?: string }
 export interface FraudCheck {
@@ -213,6 +215,10 @@ export function AdminFraudPage() {
                   <Textarea id="fraud-ranges" rows={4} className="font-mono text-xs" value={ranges} onChange={(e) => setRanges(e.target.value)} placeholder="198.51.100.0/24" />
                   <p className="text-xs text-muted-foreground">{t("fraud.vpn_ranges_hint")}</p>
                 </div>
+              </div>
+              <div className="grid gap-4 *:min-w-0 sm:grid-cols-2">
+                <Field id="fraud-http-url" label={t("fraud.http_hook_url")} hint={t("fraud.http_hook_hint")} value={f.http_hook_url ?? ""} onChange={(e) => setF({ ...f, http_hook_url: e.target.value })} placeholder="https://fraud.example/score" />
+                <Field id="fraud-http-key" type="password" autoComplete="off" label={t("fraud.http_hook_key")} value={f.http_hook_key ?? ""} onChange={(e) => setF({ ...f, http_hook_key: e.target.value })} />
               </div>
               <FormError message={err} />
               <div><Button type="submit" disabled={save.isPending}>{t("fraud.save")}</Button></div>

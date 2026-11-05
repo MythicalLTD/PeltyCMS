@@ -42,6 +42,107 @@ pub trait FraudHook: Send + Sync {
     fn check<'a>(&'a self, ctx: &'a OrderContext) -> BoxFuture<'a, Result<Vec<Hit>, String>>;
 }
 
+/// External fraud network (MaxMind / FraudLabs / custom) over HTTPS.
+/// Configure via Admin → Security → Fraud (`http_hook_url` / `http_hook_key`).
+pub struct HttpFraudHook {
+    pub url: String,
+    pub api_key: String,
+}
+
+impl FraudHook for HttpFraudHook {
+    fn name(&self) -> &'static str {
+        "http"
+    }
+    fn check<'a>(&'a self, ctx: &'a OrderContext) -> BoxFuture<'a, Result<Vec<Hit>, String>> {
+        Box::pin(async move {
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(8))
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .map_err(|e| e.to_string())?;
+            let body = json!({
+                "order_id": ctx.order_id,
+                "customer_id": ctx.customer_id,
+                "ip": ctx.ip,
+                "total": ctx.total.to_string(),
+                "currency": ctx.currency,
+                "country": ctx.country,
+                "email": ctx.email,
+                "geo_country": ctx.geo_country,
+            })
+            .to_string();
+            let mut req = client
+                .post(&self.url)
+                .header(reqwest::header::CONTENT_TYPE, "application/json")
+                .body(body);
+            if !self.api_key.is_empty() {
+                req = req.bearer_auth(&self.api_key);
+            }
+            let resp = req.send().await.map_err(|e| e.to_string())?;
+            if !resp.status().is_success() {
+                return Err(format!("HTTP {}", resp.status()));
+            }
+            let body = resp.text().await.map_err(|e| e.to_string())?;
+            let v: serde_json::Value =
+                serde_json::from_str(&body).map_err(|e| format!("bad JSON: {e}"))?;
+            if let Some(arr) = v.get("hits").and_then(|h| h.as_array()) {
+                let mut out = Vec::new();
+                for h in arr {
+                    let rule = h
+                        .get("rule")
+                        .and_then(|r| r.as_str())
+                        .unwrap_or("score")
+                        .chars()
+                        .take(64)
+                        .collect::<String>();
+                    let score = h
+                        .get("score")
+                        .and_then(|s| s.as_u64())
+                        .unwrap_or(0)
+                        .min(100) as u8;
+                    if score > 0 {
+                        out.push(Hit { rule, score });
+                    }
+                }
+                return Ok(out);
+            }
+            let score = v
+                .get("score")
+                .and_then(|s| s.as_u64())
+                .unwrap_or(0)
+                .min(100) as u8;
+            if score == 0 {
+                return Ok(vec![]);
+            }
+            Ok(vec![Hit {
+                rule: v
+                    .get("rule")
+                    .and_then(|r| r.as_str())
+                    .unwrap_or("score")
+                    .chars()
+                    .take(64)
+                    .collect(),
+                score,
+            }])
+        })
+    }
+}
+
+/// Replace the built-in HTTP fraud hook from current settings (call after save).
+pub fn sync_http_hook(s: &AppState, cfg: &FraudSettings) {
+    let Ok(mut hooks) = s.fraud_hooks.write() else {
+        return;
+    };
+    hooks.retain(|h| h.name() != "http");
+    let url = cfg.http_hook_url.trim();
+    if !url.is_empty() {
+        hooks.push(Arc::new(HttpFraudHook {
+            url: url.to_string(),
+            api_key: cfg.http_hook_key.clone(),
+        }));
+    }
+}
+
 fn hit(rule: &str, score: u8) -> Hit {
     Hit {
         rule: rule.into(),

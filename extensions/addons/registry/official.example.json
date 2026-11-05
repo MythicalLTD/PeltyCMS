@@ -1,0 +1,8 @@
+{
+  "name": "MythicalSystems official PeltyCMS addons",
+  "homepage": "https://market.mythicalsystems.org",
+  "registry_url": "https://market.mythicalsystems.org/api/pelty/addons/registry.json",
+  "cloud_registry_url": "https://market.mythicalsystems.org/api/pelty/cloud/addons/registry.json",
+  "note": "Set Pelty Admin → Addons → Marketplace registry URL to registry_url. For paid addons, also paste MythicCloud panel public/private keys from your team cloud connection. Live digests are served by the Mythical marketplace API — do not use the zero sha256 placeholders below.",
+  "addons": []
+}

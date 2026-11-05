@@ -511,6 +511,68 @@ impl RegistrarModule for WasmRegistrar {
             async move { optional(self.op("premium_price", json!({ "domain": domain })).await) },
         )
     }
+    fn set_lock<'a>(
+        &'a self,
+        domain: &'a str,
+        locked: bool,
+    ) -> BoxFuture<'a, RegistrarResult<()>> {
+        Box::pin(async move {
+            optional_unit(self.op("set_lock", json!({ "domain": domain, "locked": locked })).await)
+        })
+    }
+    fn set_id_protection<'a>(
+        &'a self,
+        domain: &'a str,
+        enabled: bool,
+    ) -> BoxFuture<'a, RegistrarResult<()>> {
+        Box::pin(async move {
+            optional_unit(
+                self.op(
+                    "set_id_protection",
+                    json!({ "domain": domain, "enabled": enabled }),
+                )
+                .await,
+            )
+        })
+    }
+    fn replace_dns<'a>(
+        &'a self,
+        domain: &'a str,
+        records: &'a [registrar::DnsZoneRecord],
+    ) -> BoxFuture<'a, RegistrarResult<()>> {
+        Box::pin(async move {
+            optional_unit(
+                self.op("replace_dns", json!({ "domain": domain, "records": records }))
+                    .await,
+            )
+        })
+    }
+    fn get_dns<'a>(
+        &'a self,
+        domain: &'a str,
+    ) -> BoxFuture<'a, RegistrarResult<Vec<registrar::DnsZoneRecord>>> {
+        Box::pin(async move {
+            match optional(self.op("get_dns", json!({ "domain": domain })).await)? {
+                Some(v) => Ok(v),
+                None => Err(registrar::RegistrarError::Unsupported),
+            }
+        })
+    }
+    fn set_dnssec<'a>(
+        &'a self,
+        domain: &'a str,
+        enabled: bool,
+    ) -> BoxFuture<'a, RegistrarResult<()>> {
+        Box::pin(async move {
+            optional_unit(
+                self.op(
+                    "set_dnssec",
+                    json!({ "domain": domain, "enabled": enabled }),
+                )
+                .await,
+            )
+        })
+    }
 }
 
 /// Optional registrar ops: older addons answer "unknown op" (= unsupported).
@@ -523,6 +585,16 @@ fn optional<T: serde::de::DeserializeOwned>(
             .map(Some)
             .map_err(|e| registrar::RegistrarError::Remote(format!("addon: bad reply {e}"))),
         Err(registrar::RegistrarError::Remote(m)) if m.starts_with("unknown op") => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+fn optional_unit(r: RegistrarResult<Value>) -> RegistrarResult<()> {
+    match optional::<Value>(r) {
+        Ok(_) => Ok(()),
+        Err(registrar::RegistrarError::Remote(m)) if m.starts_with("unknown op") => {
+            Err(registrar::RegistrarError::Unsupported)
+        }
         Err(e) => Err(e),
     }
 }
