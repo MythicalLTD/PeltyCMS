@@ -473,9 +473,15 @@ async fn plesk_creates_client_and_subscription() {
     run(p.as_ref(), "suspend", &c, &s).await.unwrap();
     run(p.as_ref(), "unsuspend", &c, &s).await.unwrap();
     run(p.as_ref(), "change_package", &c, &s).await.unwrap();
-    run_custom(p.as_ref(), "change_password", &c, &s, &json!({"password": "NewP@ss1"}))
-        .await
-        .unwrap();
+    run_custom(
+        p.as_ref(),
+        "change_password",
+        &c,
+        &s,
+        &json!({"password": "NewP@ss1"}),
+    )
+    .await
+    .unwrap();
     assert!(
         p.sso_url(&c, &s, "tok").await.unwrap().is_none(),
         "Plesk SSO needs sso_url with {{token}}"
@@ -488,7 +494,9 @@ async fn plesk_creates_client_and_subscription() {
         .collect();
     assert!(cli[0].body.contains("--webspace-off") && cli[0].body.contains("alice.example"));
     assert!(cli.iter().any(|x| x.body.contains("--webspace-on")));
-    assert!(cli.iter().any(|x| x.body.contains("--switch-subscription") && x.body.contains("Pro")));
+    assert!(cli
+        .iter()
+        .any(|x| x.body.contains("--switch-subscription") && x.body.contains("Pro")));
     // client already deleted (404) still counts as terminated
     run(p.as_ref(), "terminate", &c, &s).await.unwrap();
     let bare = svc(json!({"plan": "Pro"}), Some("x"), json!({}));
@@ -524,12 +532,7 @@ async fn directadmin_cyberpanel_hestia_ispconfig() {
             200,
             json!({"error": "0", "text": "Password Changed"}),
         ),
-        (
-            "POST",
-            "/CMD_API_SELECT_USERS",
-            200,
-            json!({"error": "0"}),
-        ),
+        ("POST", "/CMD_API_SELECT_USERS", 200, json!({"error": "0"})),
         (
             "POST",
             "/api/createWebsite",

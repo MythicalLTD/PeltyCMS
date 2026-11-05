@@ -270,10 +270,7 @@ pub fn call_registrar(
         "set_lock" => {
             let locked = input["locked"].as_bool().unwrap_or(true);
             block_on(Box::pin(async move {
-                m.set_lock(d, locked)
-                    .await
-                    .map(|_| Value::Null)
-                    .map_err(e)
+                m.set_lock(d, locked).await.map(|_| Value::Null).map_err(e)
             }))?
         }
         "set_id_protection" => {

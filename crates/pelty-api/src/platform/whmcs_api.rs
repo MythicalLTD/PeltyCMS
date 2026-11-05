@@ -383,9 +383,7 @@ pub fn translate(
         }
         "CreateInvoice" => {
             let cid = need("userid").or_else(|_| need("clientid"))?;
-            let currency = s(p, "currency")
-                .unwrap_or("EUR")
-                .to_ascii_uppercase();
+            let currency = s(p, "currency").unwrap_or("EUR").to_ascii_uppercase();
             let mut items = Vec::new();
             for i in 1..=50 {
                 let desc = match s(p, &format!("itemdescription{i}")) {

@@ -511,13 +511,12 @@ impl RegistrarModule for WasmRegistrar {
             async move { optional(self.op("premium_price", json!({ "domain": domain })).await) },
         )
     }
-    fn set_lock<'a>(
-        &'a self,
-        domain: &'a str,
-        locked: bool,
-    ) -> BoxFuture<'a, RegistrarResult<()>> {
+    fn set_lock<'a>(&'a self, domain: &'a str, locked: bool) -> BoxFuture<'a, RegistrarResult<()>> {
         Box::pin(async move {
-            optional_unit(self.op("set_lock", json!({ "domain": domain, "locked": locked })).await)
+            optional_unit(
+                self.op("set_lock", json!({ "domain": domain, "locked": locked }))
+                    .await,
+            )
         })
     }
     fn set_id_protection<'a>(
@@ -542,8 +541,11 @@ impl RegistrarModule for WasmRegistrar {
     ) -> BoxFuture<'a, RegistrarResult<()>> {
         Box::pin(async move {
             optional_unit(
-                self.op("replace_dns", json!({ "domain": domain, "records": records }))
-                    .await,
+                self.op(
+                    "replace_dns",
+                    json!({ "domain": domain, "records": records }),
+                )
+                .await,
             )
         })
     }

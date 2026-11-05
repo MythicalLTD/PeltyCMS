@@ -236,11 +236,7 @@ impl RegistrarModule for MockRegistrar {
         });
         Box::pin(async move { r })
     }
-    fn set_lock<'a>(
-        &'a self,
-        domain: &'a str,
-        locked: bool,
-    ) -> BoxFuture<'a, RegistrarResult<()>> {
+    fn set_lock<'a>(&'a self, domain: &'a str, locked: bool) -> BoxFuture<'a, RegistrarResult<()>> {
         self.log(format!("lock {domain} {locked}"));
         let r = self.with(|m| {
             m.get_mut(domain)
@@ -271,9 +267,7 @@ impl RegistrarModule for MockRegistrar {
     ) -> BoxFuture<'a, RegistrarResult<()>> {
         self.log(format!("dns {domain} {}", records.len()));
         let r = self.with(|m| {
-            m.get_mut(domain)
-                .ok_or(RegistrarError::UnknownDomain)?
-                .dns = records.to_vec();
+            m.get_mut(domain).ok_or(RegistrarError::UnknownDomain)?.dns = records.to_vec();
             Ok(())
         });
         Box::pin(async move { r })

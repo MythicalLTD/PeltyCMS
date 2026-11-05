@@ -738,7 +738,12 @@ async fn put_registry_settings(
         return Err(AppError::Validation("error.invalid_url").into());
     }
     let prev = load_registry(&s).await?;
-    let panel_public_key = v.panel_public_key.trim().chars().take(200).collect::<String>();
+    let panel_public_key = v
+        .panel_public_key
+        .trim()
+        .chars()
+        .take(200)
+        .collect::<String>();
     let incoming_priv = v.panel_private_key.trim();
     let panel_private_key = if incoming_priv.is_empty() || incoming_priv == "********" {
         prev.panel_private_key

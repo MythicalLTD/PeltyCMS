@@ -385,17 +385,11 @@ pub async fn get_bytes_with_headers(
     if !u.username().is_empty() || u.password().is_some() {
         return Err("url must not contain credentials".into());
     }
-    let mut req = guarded_client(&u)
-        .await
-        .map_err(|e| e.to_string())?
-        .get(u);
+    let mut req = guarded_client(&u).await.map_err(|e| e.to_string())?.get(u);
     for (k, v) in headers {
         req = req.header(*k, *v);
     }
-    let mut res = req
-        .send()
-        .await
-        .map_err(|e| e.without_url().to_string())?;
+    let mut res = req.send().await.map_err(|e| e.without_url().to_string())?;
     if !res.status().is_success() {
         return Err(format!("http {}", res.status().as_u16()));
     }

@@ -36,7 +36,10 @@ pub fn router() -> Router<AppState> {
         .route("/admin/staff-online", get(staff_online))
         .route("/admin/calendar", get(calendar))
         .route("/admin/customers/{id}/emails", get(customer_emails))
-        .route("/admin/customers/{id}/emails/send", post(send_customer_email))
+        .route(
+            "/admin/customers/{id}/emails/send",
+            post(send_customer_email),
+        )
         .route("/admin/emails/{job}/resend", post(resend))
         .route("/admin/backups", get(list_backups).post(create_backup))
         .route("/admin/backups/{id}", axum::routing::delete(delete_backup))
@@ -139,7 +142,9 @@ pub async fn send_customer_email(
     Json(b): Json<SendEmailBody>,
 ) -> ApiResult<(axum::http::StatusCode, Json<Value>)> {
     let name = b.template.trim();
-    if name.is_empty() || name.len() > 64 || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    if name.is_empty()
+        || name.len() > 64
+        || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
     {
         return Err(AppError::Validation("error.validation").into());
     }
@@ -162,8 +167,11 @@ pub async fn send_customer_email(
             }
         }
     }
-    vars.entry("name".into())
-        .or_insert_with(|| format!("{} {}", c.first_name, c.last_name).trim().to_string());
+    vars.entry("name".into()).or_insert_with(|| {
+        format!("{} {}", c.first_name, c.last_name)
+            .trim()
+            .to_string()
+    });
     crate::mail::enqueue(&s, name, &locale, &c.email, vars).await?;
     audit::record(
         &s.pool,
