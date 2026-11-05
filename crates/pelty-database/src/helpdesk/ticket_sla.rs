@@ -75,9 +75,9 @@ impl PolicyInput {
 const COLS: &str = "id, department_id, priority, first_response_minutes, resolution_minutes, warn_percent, escalate_priority, escalate_to, escalate_department, updated_at";
 
 pub async fn list(pool: &PgPool) -> AppResult<Vec<Policy>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM ticket_sla_policies ORDER BY department_id NULLS FIRST, array_position(ARRAY['low','medium','high','urgent'], priority) NULLS FIRST"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)
@@ -96,20 +96,20 @@ fn conflict(e: sqlx::Error) -> AppError {
 }
 
 pub async fn create(pool: &PgPool, p: &PolicyInput) -> AppResult<Policy> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO ticket_sla_policies (department_id, priority, first_response_minutes, resolution_minutes, warn_percent, escalate_priority, escalate_to, escalate_department)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING {COLS}"
-    ))
+    )))
     .bind(p.department_id).bind(&p.priority).bind(p.first_response_minutes).bind(p.resolution_minutes).bind(p.warn_percent)
     .bind(&p.escalate_priority).bind(p.escalate_to).bind(p.escalate_department)
     .fetch_one(pool).await.map_err(conflict)
 }
 
 pub async fn update(pool: &PgPool, id: Uuid, p: &PolicyInput) -> AppResult<Policy> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE ticket_sla_policies SET department_id = $2, priority = $3, first_response_minutes = $4, resolution_minutes = $5, warn_percent = $6,
            escalate_priority = $7, escalate_to = $8, escalate_department = $9, updated_at = now() WHERE id = $1 RETURNING {COLS}"
-    ))
+    )))
     .bind(id).bind(p.department_id).bind(&p.priority).bind(p.first_response_minutes).bind(p.resolution_minutes).bind(p.warn_percent)
     .bind(&p.escalate_priority).bind(p.escalate_to).bind(p.escalate_department)
     .fetch_optional(pool).await.map_err(conflict)?.ok_or(AppError::NotFound)
@@ -138,7 +138,7 @@ pub async fn sync_department_first_response(
     let key = "COALESCE(department_id, '00000000-0000-0000-0000-000000000000'::uuid) = $1 AND priority IS NULL";
     match minutes {
         Some(m) => {
-            let n = sqlx::query(&format!("UPDATE ticket_sla_policies SET first_response_minutes = $2, updated_at = now() WHERE {key}"))
+            let n = sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE ticket_sla_policies SET first_response_minutes = $2, updated_at = now() WHERE {key}")))
                 .bind(department).bind(m).execute(pool).await.map_err(db_err)?.rows_affected();
             if n == 0 {
                 sqlx::query("INSERT INTO ticket_sla_policies (department_id, first_response_minutes) VALUES ($1, $2)")
@@ -146,14 +146,14 @@ pub async fn sync_department_first_response(
             }
         }
         None => {
-            sqlx::query(&format!(
+            sqlx::query(sqlx::AssertSqlSafe(format!(
                 "DELETE FROM ticket_sla_policies WHERE {key} AND resolution_minutes IS NULL"
-            ))
+            )))
             .bind(department)
             .execute(pool)
             .await
             .map_err(db_err)?;
-            sqlx::query(&format!("UPDATE ticket_sla_policies SET first_response_minutes = NULL, updated_at = now() WHERE {key}")).bind(department).execute(pool).await.map_err(db_err)?;
+            sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE ticket_sla_policies SET first_response_minutes = NULL, updated_at = now() WHERE {key}"))).bind(department).execute(pool).await.map_err(db_err)?;
         }
     }
     Ok(())
@@ -216,11 +216,11 @@ type Row = (
 );
 
 pub async fn for_ticket(pool: &PgPool, ticket: Uuid) -> AppResult<TicketSla> {
-    let r: Row = sqlx::query_as(&format!(
+    let r: Row = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT p.id, p.first_response_minutes, p.resolution_minutes, p.warn_percent, t.created_at, t.first_response_at,
                 CASE WHEN t.status = 'closed' THEN COALESCE(t.closed_at, now()) END, t.status
          FROM tickets t LEFT JOIN {MATCH} ON true WHERE t.id = $1"
-    ))
+    )))
     .bind(ticket).fetch_optional(pool).await.map_err(db_err)?.ok_or(AppError::NotFound)?;
     let (pid, fr, res, warn, created, first, closed, status) = r;
     let now = OffsetDateTime::now_utc();
@@ -267,13 +267,13 @@ pub async fn at_risk(
     department: Option<Uuid>,
     limit: i64,
 ) -> AppResult<Vec<AtRisk>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "{OPEN}{MATCH}{OPEN_WHERE}
          SELECT ticket_id, number, subject, priority, status, assigned_to, department_id, fr_due, res_due,
                 CASE WHEN LEAST(fr_due, res_due) <= now() THEN 'breached' ELSE 'warning' END AS state
          FROM c WHERE LEAST(fr_warn, res_warn) <= now() AND ($1::uuid IS NULL OR department_id = $1)
          ORDER BY LEAST(fr_due, res_due), number LIMIT $2"
-    ))
+    )))
     .bind(department).bind(limit).fetch_all(pool).await.map_err(db_err)
 }
 
@@ -340,11 +340,11 @@ async fn escalate(pool: &PgPool, ticket: Uuid, policy: Uuid) -> AppResult<bool> 
 /// target) and escalate breached tickets. Safe to run concurrently: the
 /// event insert is the claim.
 pub async fn scan(pool: &PgPool) -> AppResult<Vec<Fired>> {
-    let rows: Vec<ScanRow> = sqlx::query_as(&format!(
+    let rows: Vec<ScanRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "{OPEN}{MATCH}{OPEN_WHERE}
          SELECT ticket_id, number, subject, assigned_to, policy_id, fr_due, fr_warn, res_due, res_warn FROM c
          WHERE LEAST(fr_warn, res_warn) <= now() ORDER BY LEAST(fr_due, res_due) LIMIT 1000"
-    ))
+    )))
     .fetch_all(pool).await.map_err(db_err)?;
     let now = OffsetDateTime::now_utc();
     let mut out = Vec::new();

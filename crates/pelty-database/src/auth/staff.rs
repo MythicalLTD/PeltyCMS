@@ -58,14 +58,16 @@ pub async fn permissions(pool: &PgPool) -> AppResult<Vec<String>> {
 }
 
 pub async fn roles(pool: &PgPool) -> AppResult<Vec<Role>> {
-    sqlx::query_as(&format!("{ROLE_SQL} ORDER BY r.builtin DESC, r.name"))
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "{ROLE_SQL} ORDER BY r.builtin DESC, r.name"
+    )))
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn role(pool: &PgPool, id: Uuid) -> AppResult<Role> {
-    sqlx::query_as(&format!("{ROLE_SQL} WHERE r.id = $1"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("{ROLE_SQL} WHERE r.id = $1")))
         .bind(id)
         .fetch_optional(pool)
         .await

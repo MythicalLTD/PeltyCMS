@@ -48,9 +48,9 @@ pub async fn remove(pool: &PgPool, user_id: Uuid) -> AppResult<bool> {
 /// (bytes, version) for the requested size.
 pub async fn get(pool: &PgPool, user_id: Uuid, small: bool) -> AppResult<Option<(Vec<u8>, i64)>> {
     let col = if small { "small" } else { "large" };
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {col}, version FROM user_avatars WHERE user_id = $1"
-    ))
+    )))
     .bind(user_id)
     .fetch_optional(pool)
     .await

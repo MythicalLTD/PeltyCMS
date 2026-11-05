@@ -153,29 +153,31 @@ fn conflict(e: sqlx::Error) -> AppError {
 }
 
 pub async fn list(pool: &PgPool) -> AppResult<Vec<LegalEntity>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM legal_entities ORDER BY is_default DESC, name"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<LegalEntity>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM legal_entities WHERE id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM legal_entities WHERE id = $1"
+    )))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Create. The default entity is chosen explicitly (no default = customers
 /// without an entity keep the legacy global numbering).
 pub async fn create(pool: &PgPool, e: &EntityInput) -> AppResult<LegalEntity> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO legal_entities (id, name, address, tax_id, bank_name, iban, swift, footer, terms, invoice_prefix, credit_prefix, number_format, due_days, is_default)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, false) RETURNING {COLS}"
-    ))
+    )))
     .bind(Uuid::new_v4())
     .bind(&e.name).bind(&e.address).bind(&e.tax_id).bind(&e.bank_name).bind(&e.iban).bind(&e.swift)
     .bind(&e.footer).bind(&e.terms).bind(&e.invoice_prefix).bind(&e.credit_prefix).bind(&e.number_format).bind(e.due_days)
@@ -185,10 +187,10 @@ pub async fn create(pool: &PgPool, e: &EntityInput) -> AppResult<LegalEntity> {
 }
 
 pub async fn update(pool: &PgPool, id: Uuid, e: &EntityInput) -> AppResult<LegalEntity> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE legal_entities SET name=$2, address=$3, tax_id=$4, bank_name=$5, iban=$6, swift=$7, footer=$8, terms=$9,
             invoice_prefix=$10, credit_prefix=$11, number_format=$12, due_days=$13 WHERE id = $1 RETURNING {COLS}"
-    ))
+    )))
     .bind(id)
     .bind(&e.name).bind(&e.address).bind(&e.tax_id).bind(&e.bank_name).bind(&e.iban).bind(&e.swift)
     .bind(&e.footer).bind(&e.terms).bind(&e.invoice_prefix).bind(&e.credit_prefix).bind(&e.number_format).bind(e.due_days)
@@ -289,12 +291,12 @@ pub async fn of_customer(pool: &PgPool, customer_id: Uuid) -> AppResult<Option<U
 /// Entity for an invoice being finalized: the credited invoice's entity for
 /// credit notes, else the customer's, else the default.
 pub async fn resolve(tx: &mut Tx<'_>, invoice_id: Uuid) -> AppResult<Option<LegalEntity>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM legal_entities WHERE id = (
             SELECT COALESCE(i.legal_entity_id, o.legal_entity_id, c.legal_entity_id, (SELECT id FROM legal_entities WHERE is_default))
             FROM invoices i JOIN customers c ON c.id = i.customer_id LEFT JOIN invoices o ON o.id = i.credit_for
             WHERE i.id = $1)"
-    ))
+    )))
     .bind(invoice_id)
     .fetch_optional(&mut **tx)
     .await

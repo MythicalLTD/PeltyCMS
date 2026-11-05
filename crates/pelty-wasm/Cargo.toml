@@ -38,7 +38,7 @@ pelty-addon-gateway-adyen = { path = "../../extensions/addons/adyen", default-fe
 pelty-addon-gateway-manual = { path = "../../extensions/addons/manual", default-features = false }
 pelty-addon-gateway-custom = { path = "../../extensions/addons/custom", default-features = false }
 tokio = { workspace = true }
-hmac = "0.12"
+hmac = "0.13"
 hex = { workspace = true }
 axum = { workspace = true }
 

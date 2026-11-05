@@ -4,7 +4,7 @@ use axum::{
     http::{Request, StatusCode},
 };
 use base64::Engine;
-use hmac::{Hmac, Mac};
+use hmac::{digest::KeyInit, Hmac, Mac};
 use http_body_util::BodyExt;
 use pelty_api::{mailbox::parse_message, pipe};
 use serde_json::{json, Value};

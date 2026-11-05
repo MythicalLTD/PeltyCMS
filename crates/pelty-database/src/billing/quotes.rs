@@ -118,10 +118,10 @@ async fn hydrate(pool: &PgPool, mut q: Quote) -> AppResult<Quote> {
 }
 
 pub async fn get(pool: &PgPool, id: Uuid, customer: Option<Uuid>) -> AppResult<Option<Quote>> {
-    let q: Option<Quote> = sqlx::query_as(&format!(
+    let q: Option<Quote> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM quotes q JOIN customers c ON c.id = q.customer_id
           WHERE q.id = $1 AND ($2::uuid IS NULL OR (q.customer_id = $2 AND q.status <> 'draft'))"
-    ))
+    )))
     .bind(id)
     .bind(customer)
     .fetch_optional(pool)
@@ -140,21 +140,23 @@ pub async fn list(
     offset: i64,
 ) -> AppResult<(Vec<Quote>, i64)> {
     let filter = "($1::uuid IS NULL OR (q.customer_id = $1 AND q.status <> 'draft'))";
-    let rows: Vec<Quote> = sqlx::query_as(&format!(
+    let rows: Vec<Quote> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM quotes q JOIN customers c ON c.id = q.customer_id WHERE {filter}
           ORDER BY q.created_at DESC LIMIT $2 OFFSET $3"
-    ))
+    )))
     .bind(customer)
     .bind(limit)
     .bind(offset)
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    let total: i64 = sqlx::query_scalar(&format!("SELECT count(*) FROM quotes q WHERE {filter}"))
-        .bind(customer)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+    let total: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "SELECT count(*) FROM quotes q WHERE {filter}"
+    )))
+    .bind(customer)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
     let mut out = Vec::with_capacity(rows.len());
     for q in rows {
         out.push(hydrate(pool, q).await?);

@@ -85,12 +85,12 @@ pub async fn enqueue_in(
 /// Claim up to `n` ready jobs for `worker`. Concurrent workers never get the
 /// same job (SKIP LOCKED); claiming counts as an attempt.
 pub async fn claim(pool: &PgPool, worker: &str, n: i64) -> AppResult<Vec<Job>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "WITH c AS (UPDATE jobs SET status = 'running', locked_at = now(), locked_by = $1, attempts = attempts + 1
          WHERE id IN (SELECT id FROM jobs WHERE status = 'queued' AND run_at <= now()
                       ORDER BY run_at, id FOR UPDATE SKIP LOCKED LIMIT $2)
          RETURNING {COLS}) SELECT * FROM c ORDER BY run_at, id"
-    ))
+    )))
     .bind(worker)
     .bind(n)
     .fetch_all(pool)
@@ -160,10 +160,10 @@ pub async fn recover_stuck(pool: &PgPool, secs: i64) -> AppResult<u64> {
 
 /// Manually retry a dead job from scratch.
 pub async fn retry(pool: &PgPool, id: i64) -> AppResult<Job> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE jobs SET status = 'queued', attempts = 0, run_at = now(), finished_at = NULL WHERE id = $1 AND status IN ('dead','failed')
          RETURNING {VIEW_COLS}"
-    ))
+    )))
     .bind(id)
     .fetch_optional(pool)
     .await
@@ -172,11 +172,13 @@ pub async fn retry(pool: &PgPool, id: i64) -> AppResult<Job> {
 }
 
 pub async fn get(pool: &PgPool, id: i64) -> AppResult<Option<Job>> {
-    sqlx::query_as(&format!("SELECT {VIEW_COLS} FROM jobs WHERE id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {VIEW_COLS} FROM jobs WHERE id = $1"
+    )))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn list(
@@ -191,10 +193,10 @@ pub async fn list(
         j: Job,
         total_count: i64,
     }
-    let rows: Vec<Row> = sqlx::query_as(&format!(
+    let rows: Vec<Row> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {VIEW_COLS}, count(*) OVER() AS total_count FROM jobs WHERE ($1::text IS NULL OR status = $1)
          ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3"
-    ))
+    )))
     .bind(status)
     .bind(limit)
     .bind(offset)

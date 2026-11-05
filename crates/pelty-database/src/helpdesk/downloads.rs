@@ -81,18 +81,18 @@ pub async fn create(pool: &PgPool, n: NewDownload<'_>) -> AppResult<Uuid> {
 }
 
 pub async fn list_all(pool: &PgPool) -> AppResult<Vec<Download>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM downloads d ORDER BY d.created_at DESC"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)
 }
 
 pub async fn list_for(pool: &PgPool, customer: Uuid) -> AppResult<Vec<Download>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM downloads d WHERE {ALLOWED} ORDER BY d.title"
-    ))
+    )))
     .bind(customer)
     .fetch_all(pool)
     .await
@@ -109,7 +109,7 @@ pub async fn fetch(
         Some(_) => format!("SELECT d.filename, d.content_type, d.data FROM downloads d WHERE d.id = $2 AND {ALLOWED}"),
         None => "SELECT d.filename, d.content_type, d.data FROM downloads d WHERE d.id = $2 AND $1::uuid IS NULL".to_string(),
     };
-    sqlx::query_as(&sql)
+    sqlx::query_as(sqlx::AssertSqlSafe(sql))
         .bind(customer)
         .bind(id)
         .fetch_optional(pool)

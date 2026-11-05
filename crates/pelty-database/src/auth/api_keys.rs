@@ -28,7 +28,7 @@ pub struct ApiKey {
 const COLS: &str = "id, name, prefix, scopes, allowed_ips, expires_at, last_used_at, last_used_ip, revoked_at, created_at";
 
 pub async fn list(pool: &PgPool, user_id: Uuid) -> AppResult<Vec<ApiKey>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM api_keys WHERE user_id=$1 ORDER BY revoked_at IS NOT NULL, created_at DESC"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {COLS} FROM api_keys WHERE user_id=$1 ORDER BY revoked_at IS NOT NULL, created_at DESC")))
         .bind(user_id)
         .fetch_all(pool)
         .await
@@ -54,9 +54,9 @@ pub async fn create(
     allowed_ips: &[String],
     expires_at: Option<OffsetDateTime>,
 ) -> AppResult<ApiKey> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO api_keys (user_id, name, prefix, key_hash, scopes, allowed_ips, expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING {COLS}"
-    ))
+    )))
     .bind(user_id)
     .bind(name)
     .bind(prefix)
@@ -78,12 +78,12 @@ pub async fn update(
     allowed_ips: Option<&[String]>,
     expires_at: Option<Option<OffsetDateTime>>,
 ) -> AppResult<Option<ApiKey>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE api_keys SET allowed_ips = COALESCE($3, allowed_ips),
                              expires_at = CASE WHEN $4 THEN $5 ELSE expires_at END
          WHERE id = $1 AND ($2::uuid IS NULL OR user_id = $2) AND revoked_at IS NULL
          RETURNING {COLS}"
-    ))
+    )))
     .bind(id)
     .bind(user_id)
     .bind(allowed_ips)
@@ -192,10 +192,10 @@ pub async fn list_all(
         .map(|c| format!("k.{c}"))
         .collect::<Vec<_>>()
         .join(", ");
-    let items = sqlx::query_as(&format!(
+    let items = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {cols}, k.user_id, u.email AS user_email FROM api_keys k JOIN users u ON u.id = k.user_id
          WHERE {filter} ORDER BY k.created_at DESC, k.id LIMIT $4 OFFSET $5"
-    ))
+    )))
     .bind(active_only)
     .bind(user_id)
     .bind(q)
@@ -204,9 +204,9 @@ pub async fn list_all(
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    let total = sqlx::query_scalar(&format!(
+    let total = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT count(*) FROM api_keys k JOIN users u ON u.id = k.user_id WHERE {filter}"
-    ))
+    )))
     .bind(active_only)
     .bind(user_id)
     .bind(q)

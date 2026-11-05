@@ -148,7 +148,7 @@ pub async fn filter(
 ) -> AppResult<(Vec<AuditEntry>, i64)> {
     let b = binds(f);
     let sql = format!("{SELECT} {WHERE} ORDER BY a.id DESC LIMIT $10 OFFSET $11");
-    let rows = bind_all!(sqlx::query_as::<_, AuditEntry>(&sql), b)
+    let rows = bind_all!(sqlx::query_as::<_, AuditEntry>(sqlx::AssertSqlSafe(sql)), b)
         .bind(limit)
         .bind(offset)
         .fetch_all(pool)
@@ -156,7 +156,7 @@ pub async fn filter(
         .map_err(db_err)?;
     let count =
         format!("SELECT count(*) FROM audit_logs a LEFT JOIN users u ON u.id = a.actor_id {WHERE}");
-    let total = bind_all!(sqlx::query_scalar::<_, i64>(&count), b)
+    let total = bind_all!(sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(count)), b)
         .fetch_one(pool)
         .await
         .map_err(db_err)?;

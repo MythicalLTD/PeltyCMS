@@ -8,19 +8,19 @@ license.workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-hmac = "0.12"
+hmac = "0.13"
 sha2 = { workspace = true }
 hex = { workspace = true }
 tracing = { workspace = true }
 url = "2"
 rand = { workspace = true }
-md-5 = "0.10"
+md-5 = "0.11"
 form_urlencoded = "1"
 base64 = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio = { workspace = true }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
 
 [dev-dependencies]
 tokio = { workspace = true }

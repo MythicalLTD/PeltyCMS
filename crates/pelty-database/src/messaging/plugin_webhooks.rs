@@ -95,9 +95,9 @@ pub async fn create(
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Delivery>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM plugin_deliveries WHERE id = $1"
-    ))
+    )))
     .bind(id)
     .fetch_optional(pool)
     .await
@@ -154,9 +154,9 @@ pub async fn list(
     limit: i64,
     offset: i64,
 ) -> AppResult<(Vec<Delivery>, i64)> {
-    let rows = sqlx::query_as(&format!(
+    let rows = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM plugin_deliveries WHERE plugin_id = $1 AND ($2::text IS NULL OR status = $2) ORDER BY created_at DESC, id LIMIT $3 OFFSET $4"
-    ))
+    )))
     .bind(plugin)
     .bind(status)
     .bind(limit)

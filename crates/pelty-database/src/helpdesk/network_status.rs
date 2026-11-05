@@ -84,7 +84,7 @@ pub async fn list(pool: &PgPool, public: bool, limit: i64) -> AppResult<Value> {
             SELECT {ISSUE_JSON} AS j FROM network_issues i WHERE {filter}
             ORDER BY (i.status = 'resolved'), i.starts_at DESC LIMIT $1) x"
     );
-    sqlx::query_scalar(&q)
+    sqlx::query_scalar(sqlx::AssertSqlSafe(q))
         .bind(limit)
         .fetch_one(pool)
         .await

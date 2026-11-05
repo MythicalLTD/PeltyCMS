@@ -63,38 +63,38 @@ pub async fn report(
     only_low: bool,
 ) -> AppResult<Report> {
     let filter = "t.rating IS NOT NULL AND t.rated_at >= $1 AND ($2::uuid IS NULL OR t.department_id = $2) AND t.merged_into IS NULL";
-    let summary: Summary = sqlx::query_as(&format!(
+    let summary: Summary = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {AGG},
             (SELECT CASE WHEN count(*) = 0 THEN NULL ELSE to_char(round(100.0 * count(rating) / count(*), 2), 'FM990.00') END
                FROM tickets x WHERE x.first_response_at IS NOT NULL AND x.created_at >= $1 AND ($2::uuid IS NULL OR x.department_id = $2) AND x.merged_into IS NULL) AS rated_tickets_share,
             count(*) FILTER (WHERE t.rating = 1) AS r1, count(*) FILTER (WHERE t.rating = 2) AS r2, count(*) FILTER (WHERE t.rating = 3) AS r3,
             count(*) FILTER (WHERE t.rating = 4) AS r4, count(*) FILTER (WHERE t.rating = 5) AS r5
          FROM tickets t WHERE {filter}"
-    ))
+    )))
     .bind(since).bind(department).fetch_one(pool).await.map_err(db_err)?;
-    let by_department: Vec<Group> = sqlx::query_as(&format!(
+    let by_department: Vec<Group> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT d.id AS id, d.name AS name, {AGG} FROM tickets t JOIN ticket_departments d ON d.id = t.department_id
          WHERE {filter} GROUP BY d.id ORDER BY count(t.rating) DESC, d.name"
-    ))
+    )))
     .bind(since).bind(department).fetch_all(pool).await.map_err(db_err)?;
-    let by_staff: Vec<Group> = sqlx::query_as(&format!(
+    let by_staff: Vec<Group> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT u.id AS id, COALESCE(NULLIF(u.display_name, ''), u.email::text, '') AS name, {AGG}
          FROM tickets t LEFT JOIN users u ON u.id = t.assigned_to
          WHERE {filter} GROUP BY u.id ORDER BY count(t.rating) DESC, 2"
-    ))
+    )))
     .bind(since)
     .bind(department)
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    let comments: Vec<Comment> = sqlx::query_as(&format!(
+    let comments: Vec<Comment> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT t.id AS ticket_id, t.number::bigint AS number, t.subject,
             COALESCE(NULLIF(trim(c.first_name || ' ' || c.last_name), ''), c.organization, c.email::text) AS customer_name,
             NULLIF(u.display_name, '') AS staff_name, t.rating, t.rating_comment AS comment, t.rated_at
          FROM tickets t JOIN customers c ON c.id = t.customer_id LEFT JOIN users u ON u.id = t.assigned_to
          WHERE {filter} AND t.rating_comment <> '' AND (NOT $3 OR t.rating <= 2)
          ORDER BY t.rated_at DESC LIMIT 50"
-    ))
+    )))
     .bind(since).bind(department).bind(only_low).fetch_all(pool).await.map_err(db_err)?;
     Ok(Report {
         summary,

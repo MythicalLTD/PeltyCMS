@@ -88,11 +88,11 @@ pub async fn run(pool: &PgPool) -> AppResult<Report> {
         .rows_affected();
     }
     if cfg.client_status_sync {
-        r.clients_inactivated = sqlx::query(&format!("UPDATE customers c SET status = 'inactive' WHERE c.status = 'active' AND c.merged_into IS NULL AND NOT {LIVE}"))
+        r.clients_inactivated = sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE customers c SET status = 'inactive' WHERE c.status = 'active' AND c.merged_into IS NULL AND NOT {LIVE}")))
             .execute(pool).await.map_err(db_err)?.rows_affected();
-        r.clients_reactivated = sqlx::query(&format!(
+        r.clients_reactivated = sqlx::query(sqlx::AssertSqlSafe(format!(
             "UPDATE customers c SET status = 'active' WHERE c.status = 'inactive' AND {LIVE}"
-        ))
+        )))
         .execute(pool)
         .await
         .map_err(db_err)?
@@ -100,9 +100,9 @@ pub async fn run(pool: &PgPool) -> AppResult<Report> {
     }
     if cfg.log_retention_days > 0 {
         for t in LOG_TABLES {
-            r.log_rows_pruned += sqlx::query(&format!(
+            r.log_rows_pruned += sqlx::query(sqlx::AssertSqlSafe(format!(
                 "DELETE FROM {t} WHERE created_at < now() - make_interval(days => $1)"
-            ))
+            )))
             .bind(cfg.log_retention_days)
             .execute(pool)
             .await

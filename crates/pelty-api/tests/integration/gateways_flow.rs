@@ -1,7 +1,7 @@
 use crate::common;
 use axum::http::StatusCode;
 use common::*;
-use hmac::{Hmac, Mac};
+use hmac::{digest::KeyInit, Hmac, Mac};
 use pelty_payments::http::MockTransport;
 use pelty_payments::GatewayRegistry;
 use serde_json::{json, Value};

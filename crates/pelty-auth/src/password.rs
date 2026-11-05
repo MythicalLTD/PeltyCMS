@@ -1,7 +1,5 @@
 //! Argon2 password hashing and verification.
-use argon2::password_hash::{
-    rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
-};
+use argon2::password_hash::{phc::PasswordHash, PasswordHasher, PasswordVerifier};
 use argon2::{Algorithm, Argon2, Params, Version};
 use pelty_core::{AppError, AppResult};
 use std::sync::OnceLock;
@@ -13,9 +11,8 @@ fn hasher() -> Argon2<'static> {
 }
 
 pub fn hash(password: &str) -> AppResult<String> {
-    let salt = SaltString::generate(&mut OsRng);
     hasher()
-        .hash_password(password.as_bytes(), &salt)
+        .hash_password(password.as_bytes())
         .map(|h| h.to_string())
         .map_err(AppError::internal)
 }

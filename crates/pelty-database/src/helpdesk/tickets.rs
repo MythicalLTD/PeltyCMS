@@ -141,9 +141,9 @@ pub async fn open(pool: &PgPool, t: NewTicket<'_>) -> AppResult<Ticket> {
 
 /// `customer`: restrict to that customer's tickets (client area).
 pub async fn get(pool: &PgPool, id: Uuid, customer: Option<Uuid>) -> AppResult<Option<Ticket>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} {FROM} WHERE t.id = $1 AND ($2::uuid IS NULL OR t.customer_id = $2)"
-    ))
+    )))
     .bind(id)
     .bind(customer)
     .fetch_optional(pool)
@@ -173,13 +173,13 @@ pub async fn list(
                 .replace('_', "\\_")
         )
     });
-    let rows: Vec<Row> = sqlx::query_as(&format!(
+    let rows: Vec<Row> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS}, count(*) OVER() AS total {FROM}
          WHERE ($1::uuid IS NULL OR t.customer_id = $1)
            AND ($2::text IS NULL OR ($2 = 'active' AND t.status <> 'closed') OR t.status = $2)
            AND ($3::text IS NULL OR t.subject ILIKE $3 OR COALESCE(c.email::text, t.guest_email) ILIKE $3 OR t.number::text = $4)
          ORDER BY (t.status = 'closed'), t.last_reply_at DESC LIMIT $5 OFFSET $6"
-    ))
+    )))
     .bind(customer).bind(status).bind(like.as_deref()).bind(q).bind(limit).bind(offset)
     .fetch_all(pool).await.map_err(db_err)?;
     let total = rows.first().map(|r| r.total).unwrap_or(0);

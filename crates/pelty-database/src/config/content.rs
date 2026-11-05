@@ -150,14 +150,14 @@ pub async fn articles(
                 .join(" & ")
         })
         .filter(|s| !s.is_empty());
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {ART} FROM kb_articles
          WHERE (NOT $1 OR is_published) AND ($2::text IS NULL OR locale IS NULL OR locale = $2)
            AND ($3::uuid IS NULL OR category_id = $3)
            AND ($4::text IS NULL OR search @@ to_tsquery('simple', $4))
          ORDER BY CASE WHEN $4::text IS NULL THEN 0 ELSE -ts_rank(search, to_tsquery('simple', $4)) END, views DESC, title
          LIMIT $5"
-    ))
+    )))
     .bind(published_only)
     .bind(locale)
     .bind(category)
@@ -192,11 +192,11 @@ pub async fn suggest(
     let Some(q) = suggest_query(text) else {
         return Ok(Vec::new());
     };
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {ART} FROM kb_articles
          WHERE is_published AND ($1::text IS NULL OR locale IS NULL OR locale = $1) AND search @@ to_tsquery('simple', $2)
          ORDER BY ts_rank(search, to_tsquery('simple', $2)) DESC, views DESC, title LIMIT $3"
-    ))
+    )))
     .bind(locale)
     .bind(q)
     .bind(limit)
@@ -206,18 +206,20 @@ pub async fn suggest(
 }
 
 pub async fn article(pool: &PgPool, id: Uuid) -> AppResult<Option<Article>> {
-    sqlx::query_as(&format!("SELECT {ART} FROM kb_articles WHERE id=$1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {ART} FROM kb_articles WHERE id=$1"
+    )))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Published article by slug; increments the view counter.
 pub async fn view_article(pool: &PgPool, slug: &str) -> AppResult<Option<Article>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE kb_articles SET views = views + 1 WHERE slug=$1 AND is_published RETURNING {ART}"
-    ))
+    )))
     .bind(slug)
     .fetch_optional(pool)
     .await
@@ -239,9 +241,9 @@ pub async fn vote(pool: &PgPool, slug: &str, helpful: bool) -> AppResult<bool> {
 }
 
 pub async fn create_article(pool: &PgPool, a: &ArticleInput<'_>) -> AppResult<Article> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO kb_articles (category_id, slug, title, body, locale, is_published) VALUES ($1,$2,$3,$4,$5,$6) RETURNING {ART}"
-    ))
+    )))
     .bind(a.category_id)
     .bind(a.slug)
     .bind(a.title)
@@ -258,10 +260,10 @@ pub async fn update_article(
     id: Uuid,
     a: &ArticleInput<'_>,
 ) -> AppResult<Option<Article>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE kb_articles SET category_id=$2, slug=$3, title=$4, body=$5, locale=$6, is_published=$7, updated_at=now()
          WHERE id=$1 RETURNING {ART}"
-    ))
+    )))
     .bind(id)
     .bind(a.category_id)
     .bind(a.slug)
@@ -291,7 +293,7 @@ pub async fn announcements(
     offset: i64,
 ) -> AppResult<(Vec<Announcement>, i64)> {
     let filter = "(NOT $1 OR (is_published AND published_at <= now())) AND ($2::text IS NULL OR locale IS NULL OR locale = $2)";
-    let items = sqlx::query_as(&format!("SELECT {ANN} FROM announcements WHERE {filter} ORDER BY published_at DESC LIMIT $3 OFFSET $4"))
+    let items = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {ANN} FROM announcements WHERE {filter} ORDER BY published_at DESC LIMIT $3 OFFSET $4")))
         .bind(published_only)
         .bind(locale)
         .bind(limit)
@@ -299,9 +301,9 @@ pub async fn announcements(
         .fetch_all(pool)
         .await
         .map_err(db_err)?;
-    let total = sqlx::query_scalar(&format!(
+    let total = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT count(*) FROM announcements WHERE {filter}"
-    ))
+    )))
     .bind(published_only)
     .bind(locale)
     .fetch_one(pool)
@@ -315,7 +317,7 @@ pub async fn announcement(
     id: Uuid,
     published_only: bool,
 ) -> AppResult<Option<Announcement>> {
-    sqlx::query_as(&format!("SELECT {ANN} FROM announcements WHERE id=$1 AND (NOT $2 OR (is_published AND published_at <= now()))"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {ANN} FROM announcements WHERE id=$1 AND (NOT $2 OR (is_published AND published_at <= now()))")))
         .bind(id)
         .bind(published_only)
         .fetch_optional(pool)
@@ -327,9 +329,9 @@ pub async fn create_announcement(
     pool: &PgPool,
     a: &AnnouncementInput<'_>,
 ) -> AppResult<Announcement> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO announcements (title, body, locale, is_published, published_at) VALUES ($1,$2,$3,$4,COALESCE($5, now())) RETURNING {ANN}"
-    ))
+    )))
     .bind(a.title)
     .bind(a.body)
     .bind(a.locale)
@@ -345,10 +347,10 @@ pub async fn update_announcement(
     id: Uuid,
     a: &AnnouncementInput<'_>,
 ) -> AppResult<Option<Announcement>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE announcements SET title=$2, body=$3, locale=$4, is_published=$5, published_at=COALESCE($6, published_at), updated_at=now()
          WHERE id=$1 RETURNING {ANN}"
-    ))
+    )))
     .bind(id)
     .bind(a.title)
     .bind(a.body)

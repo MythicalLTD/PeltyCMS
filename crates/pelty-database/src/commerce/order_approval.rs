@@ -111,7 +111,7 @@ const FACTS: &str = "SELECT o.total, COALESCE(i.status = 'paid', false) AS paid,
     FROM orders o LEFT JOIN invoices i ON i.id = o.invoice_id WHERE o.id = $1";
 
 pub async fn facts(pool: &PgPool, order: Uuid, r: &ApprovalRules) -> AppResult<Option<Facts>> {
-    sqlx::query_as(FACTS)
+    sqlx::query_as(sqlx::AssertSqlSafe(FACTS))
         .bind(order)
         .bind(&r.manual_product_ids)
         .fetch_optional(pool)

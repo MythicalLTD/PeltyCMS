@@ -240,7 +240,7 @@ pub fn ct_eq(a: &[u8], b: &[u8]) -> bool {
 }
 
 pub fn hmac_sha256(key: &[u8], msg: &[u8]) -> Vec<u8> {
-    use hmac::{Hmac, Mac};
+    use hmac::{digest::KeyInit, Hmac, Mac};
     let mut m = match Hmac::<sha2::Sha256>::new_from_slice(key) {
         Ok(m) => m,
         Err(_) => return Vec::new(),

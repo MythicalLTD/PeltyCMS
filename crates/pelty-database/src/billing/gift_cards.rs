@@ -2,7 +2,7 @@
 //! stored as SHA-256; redeeming moves the full balance to account credit.
 use crate::{db_err, invoices};
 use pelty_core::{AppError, AppResult};
-use rand::Rng;
+use rand::RngExt;
 use rust_decimal::Decimal;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -47,11 +47,11 @@ pub fn hash(code: &str) -> String {
 
 /// `XXXX-XXXX-XXXX-XXXX` from an unambiguous alphabet (80 bits).
 pub fn generate() -> String {
-    let mut r = rand::thread_rng();
+    let mut r = rand::rng();
     (0..4)
         .map(|_| {
             (0..4)
-                .map(|_| ALPHABET[r.gen_range(0..ALPHABET.len())] as char)
+                .map(|_| ALPHABET[r.random_range(0..ALPHABET.len())] as char)
                 .collect::<String>()
         })
         .collect::<Vec<_>>()
@@ -84,10 +84,10 @@ pub async fn create(
     for _ in 0..count {
         let code = generate();
         let n = normalize(&code);
-        let card: GiftCard = sqlx::query_as(&format!(
+        let card: GiftCard = sqlx::query_as(sqlx::AssertSqlSafe(format!(
             "INSERT INTO gift_cards (id, code_hash, code_last4, currency, amount, balance, note, expires_at, created_by)
              VALUES ($1,$2,$3,$4,$5,$5,$6,$7,$8) RETURNING {COLS}"
-        ))
+        )))
         .bind(Uuid::new_v4())
         .bind(hash(&n))
         .bind(&n[n.len() - 4..])
@@ -106,9 +106,9 @@ pub async fn create(
 }
 
 pub async fn list(pool: &PgPool, limit: i64) -> AppResult<Vec<GiftCard>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM gift_cards ORDER BY created_at DESC, id LIMIT $1"
-    ))
+    )))
     .bind(limit.clamp(1, 1000))
     .fetch_all(pool)
     .await

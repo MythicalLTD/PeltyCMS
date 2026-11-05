@@ -821,10 +821,10 @@ pub async fn history(s: &AppState, name: &str, n: i64) -> pelty_core::AppResult<
     let q =
         "SELECT id, status, attempts, created_at, finished_at, last_error, result FROM jobs WHERE ";
     let rows: Vec<Row> = if TASKS.iter().any(|t| t.0 == name) {
-        sqlx::query_as(&format!("{q} kind = $1 ORDER BY id DESC LIMIT $2")).bind(name).bind(n).fetch_all(&s.pool).await
+        sqlx::query_as(sqlx::AssertSqlSafe(format!("{q} kind = $1 ORDER BY id DESC LIMIT $2"))).bind(name).bind(n).fetch_all(&s.pool).await
     } else {
         let (addon, op) = name.split_once(':').ok_or(AppError::NotFound)?;
-        sqlx::query_as(&format!("{q} kind = $1 AND payload->>'addon' = $2 AND payload->>'op' = $3 ORDER BY id DESC LIMIT $4")).bind(crate::addon_power::JOB_KIND).bind(addon).bind(op).bind(n).fetch_all(&s.pool).await
+        sqlx::query_as(sqlx::AssertSqlSafe(format!("{q} kind = $1 AND payload->>'addon' = $2 AND payload->>'op' = $3 ORDER BY id DESC LIMIT $4"))).bind(crate::addon_power::JOB_KIND).bind(addon).bind(op).bind(n).fetch_all(&s.pool).await
     }
     .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(rows

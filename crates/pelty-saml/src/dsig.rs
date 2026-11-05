@@ -62,7 +62,7 @@ impl PublicKey {
     pub fn from_cert(input: &str) -> Result<PublicKey, Error> {
         let der = cert_der(input)?;
         let cert = x509_cert::Certificate::from_der(&der).map_err(|_| Error::Cert("parse"))?;
-        let spki = &cert.tbs_certificate.subject_public_key_info;
+        let spki = cert.tbs_certificate().subject_public_key_info();
         let bits = spki.subject_public_key.raw_bytes();
         match spki.algorithm.oid.to_string().as_str() {
             OID_RSA => {
@@ -75,13 +75,11 @@ impl PublicKey {
                 Ok(PublicKey::Rsa(k))
             }
             OID_EC => {
-                let curve = spki
-                    .algorithm
-                    .parameters
-                    .as_ref()
-                    .and_then(|p| p.to_der().ok())
-                    .and_then(|d| der::asn1::ObjectIdentifier::from_der(&d).ok())
-                    .map(|o| o.to_string());
+                let curve = spki.algorithm.parameters.as_ref().and_then(|p| {
+                    let encoded = p.to_der().ok()?;
+                    let oid: der::asn1::ObjectIdentifier = Decode::from_der(&encoded).ok()?;
+                    Some(oid.to_string())
+                });
                 if curve.as_deref() != Some(OID_P256) {
                     return Err(Error::Cert("ec_curve"));
                 }

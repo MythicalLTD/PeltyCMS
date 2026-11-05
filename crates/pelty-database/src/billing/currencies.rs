@@ -127,9 +127,9 @@ pub fn convert(amount: Decimal, from: Decimal, to: Decimal, exp: u32) -> Decimal
 const COLS: &str = "code::text AS code, exponent, enabled, rate, is_default, prefix, suffix, updated_at, decimal_sep, thousands_sep, auto_update, rate_updated_at";
 
 pub async fn list(pool: &PgPool) -> AppResult<Vec<Currency>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM currencies ORDER BY is_default DESC, code"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)
@@ -240,7 +240,7 @@ pub async fn sync_prices(pool: &PgPool, only_missing: bool) -> AppResult<u64> {
     } else {
         "DO UPDATE SET amount = EXCLUDED.amount"
     };
-    let a = sqlx::query(&format!(
+    let a = sqlx::query(sqlx::AssertSqlSafe(format!(
         "INSERT INTO product_prices (id, product_id, currency, cycle, amount, setup_fee)
          SELECT gen_random_uuid(), pp.product_id, c.code, pp.cycle,
                 round(pp.amount * c.rate, c.exponent), round(pp.setup_fee * c.rate, c.exponent)
@@ -253,19 +253,19 @@ pub async fn sync_prices(pool: &PgPool, only_missing: bool) -> AppResult<u64> {
         } else {
             "DO UPDATE SET amount = EXCLUDED.amount, setup_fee = EXCLUDED.setup_fee"
         }
-    ))
+    )))
     .execute(&mut *tx)
     .await
     .map_err(db_err)?
     .rows_affected();
-    let b = sqlx::query(&format!(
+    let b = sqlx::query(sqlx::AssertSqlSafe(format!(
         "INSERT INTO product_config_prices (choice_id, currency, cycle, amount)
          SELECT cp.choice_id, c.code, cp.cycle, round(cp.amount * c.rate, c.exponent)
          FROM product_config_prices cp
          JOIN currencies d ON d.is_default AND cp.currency = d.code
          JOIN currencies c ON c.enabled AND NOT c.is_default
          ON CONFLICT (choice_id, currency, cycle) {conflict}"
-    ))
+    )))
     .execute(&mut *tx)
     .await
     .map_err(db_err)?

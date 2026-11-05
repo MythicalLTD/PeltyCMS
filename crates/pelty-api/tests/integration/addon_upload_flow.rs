@@ -60,10 +60,10 @@ async fn zip_upload_and_registry_install() {
             .execute(&st.pool)
             .await
             .unwrap();
-        sqlx::query(&format!(
+        sqlx::query(sqlx::AssertSqlSafe(format!(
             "DROP TABLE IF EXISTS addon_{}_log",
             id.replace('-', "_")
-        ))
+        )))
         .execute(&st.pool)
         .await
         .unwrap();

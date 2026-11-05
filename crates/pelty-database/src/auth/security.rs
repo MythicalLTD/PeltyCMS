@@ -96,9 +96,9 @@ pub async fn find_identity(
     provider: &str,
     subject: &str,
 ) -> AppResult<Option<Identity>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {ID_COLS} FROM user_identities WHERE provider = $1 AND subject = $2"
-    ))
+    )))
     .bind(provider)
     .bind(subject)
     .fetch_optional(pool)
@@ -122,9 +122,9 @@ pub async fn link_identity(
     subject: &str,
     email: &str,
 ) -> AppResult<Identity> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO user_identities (id, user_id, provider, subject, email) VALUES ($1,$2,$3,$4,$5) RETURNING {ID_COLS}"
-    ))
+    )))
     .bind(Uuid::new_v4())
     .bind(user_id)
     .bind(provider)
@@ -139,9 +139,9 @@ pub async fn link_identity(
 }
 
 pub async fn list_identities(pool: &PgPool, user_id: Uuid) -> AppResult<Vec<Identity>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {ID_COLS} FROM user_identities WHERE user_id = $1 ORDER BY provider"
-    ))
+    )))
     .bind(user_id)
     .fetch_all(pool)
     .await
@@ -177,16 +177,16 @@ const IP_COLS: &str = "id, cidr, kind, reason, expires_at, created_by, created_a
 
 /// Active (non-expired) rules.
 pub async fn active_ip_rules(pool: &PgPool) -> AppResult<Vec<IpRule>> {
-    sqlx::query_as(&format!("SELECT {IP_COLS} FROM ip_rules WHERE expires_at IS NULL OR expires_at > now() ORDER BY created_at"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {IP_COLS} FROM ip_rules WHERE expires_at IS NULL OR expires_at > now() ORDER BY created_at")))
         .fetch_all(pool)
         .await
         .map_err(db_err)
 }
 
 pub async fn list_ip_rules(pool: &PgPool) -> AppResult<Vec<IpRule>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {IP_COLS} FROM ip_rules ORDER BY kind, created_at DESC"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)
@@ -200,9 +200,9 @@ pub async fn add_ip_rule(
     expires_at: Option<OffsetDateTime>,
     by: Uuid,
 ) -> AppResult<IpRule> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO ip_rules (id, cidr, kind, reason, expires_at, created_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING {IP_COLS}"
-    ))
+    )))
     .bind(Uuid::new_v4())
     .bind(cidr)
     .bind(kind)
@@ -439,7 +439,7 @@ pub async fn merge_customers(pool: &PgPool, from: Uuid, into: Uuid) -> AppResult
             .execute(&mut *tx)
             .await
             .map_err(db_err)?;
-        match sqlx::query(&q)
+        match sqlx::query(sqlx::AssertSqlSafe(q))
             .bind(from)
             .bind(into)
             .execute(&mut *tx)

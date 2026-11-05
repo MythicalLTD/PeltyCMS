@@ -55,7 +55,19 @@ seed-extra: ## More demo data for newer features (after make seed, same env)
 docker: ## Build the Docker image (peltycms:latest)
 	$(XTASK) docker
 
+# Rust equivalent of frontend `ncu` / `ncu -u` (needs: cargo install cargo-edit).
+# `cargo update` alone only moves the lockfile within existing Cargo.toml ranges.
+deps-rust: ## Like ncu (compatible): bump Cargo.toml within semver, refresh lockfile
+	@command -v cargo-upgrade >/dev/null || { echo "install: cargo install cargo-edit"; exit 1; }
+	cargo upgrade
+	cargo update
+
+deps-rust-latest: ## Like ncu -u: bump Cargo.toml to latest including majors (often needs code fixes)
+	@command -v cargo-upgrade >/dev/null || { echo "install: cargo install cargo-edit"; exit 1; }
+	cargo upgrade --incompatible
+	cargo update
+
 clean: ## Remove build outputs (target/, frontend/dist, addon zips)
 	$(XTASK) clean
 
-.PHONY: help dev stop backend frontend build docs addons addon test lint db db-reset seed seed-extra docker clean
+.PHONY: help dev stop backend frontend build docs addons addon test lint db db-reset seed seed-extra docker deps-rust deps-rust-latest clean

@@ -3,7 +3,7 @@
 //! never reach data it was not given. Values are escaped for their target
 //! (JSON string content, URL path segment or a shell-free plain string).
 use crate::ServiceCtx;
-use hmac::{Hmac, Mac};
+use hmac::{digest::KeyInit, Hmac, Mac};
 use serde_json::Value;
 use sha2::Sha256;
 use std::collections::BTreeMap;
@@ -94,7 +94,7 @@ pub fn render(tpl: &str, vars: &BTreeMap<String, String>, e: Escape) -> String {
 
 /// Hex HMAC-SHA256 of `msg` keyed with `secret`.
 pub fn sign(secret: &str, msg: &[u8]) -> String {
-    let mut m = <Hmac<Sha256> as Mac>::new_from_slice(secret.as_bytes())
+    let mut m = <Hmac<Sha256> as KeyInit>::new_from_slice(secret.as_bytes())
         .expect("hmac accepts any key length");
     m.update(msg);
     hex::encode(m.finalize().into_bytes())

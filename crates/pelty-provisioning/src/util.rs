@@ -1,6 +1,6 @@
 //! Shared helpers for the panel / cloud modules.
 use crate::{ProvisionError, ProvisionResult, ServiceCtx};
-use rand::Rng;
+use rand::RngExt;
 use serde_json::Value;
 
 /// `FieldSpec` with the conventional `provisioning.field.<key>` label.
@@ -55,19 +55,19 @@ pub fn gen_password(len: usize) -> String {
     const UPPER: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ";
     const DIGIT: &[u8] = b"23456789";
     const SYM: &[u8] = b"!@#%^*-_=+";
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let all: Vec<u8> = [LOWER, UPPER, DIGIT, SYM].concat();
     let mut out: Vec<u8> = vec![
-        LOWER[rng.gen_range(0..LOWER.len())],
-        UPPER[rng.gen_range(0..UPPER.len())],
-        DIGIT[rng.gen_range(0..DIGIT.len())],
-        SYM[rng.gen_range(0..SYM.len())],
+        LOWER[rng.random_range(0..LOWER.len())],
+        UPPER[rng.random_range(0..UPPER.len())],
+        DIGIT[rng.random_range(0..DIGIT.len())],
+        SYM[rng.random_range(0..SYM.len())],
     ];
     while out.len() < len.max(8) {
-        out.push(all[rng.gen_range(0..all.len())]);
+        out.push(all[rng.random_range(0..all.len())]);
     }
     for i in (1..out.len()).rev() {
-        out.swap(i, rng.gen_range(0..=i));
+        out.swap(i, rng.random_range(0..=i));
     }
     String::from_utf8(out).unwrap_or_default()
 }

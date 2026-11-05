@@ -122,9 +122,9 @@ fn statuses(seg: &Segment) -> Vec<String> {
 }
 
 pub async fn count_segment(pool: &PgPool, seg: &Segment) -> AppResult<i64> {
-    sqlx::query_scalar(&format!(
+    sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT count(*) FROM customers c WHERE {SEG_WHERE}"
-    ))
+    )))
     .bind(statuses(seg))
     .bind(seg.client_group_id)
     .bind(&seg.product_ids)
@@ -144,18 +144,18 @@ const COLS: &str = "m.id, m.name, m.subject, m.body, m.segment, m.status, m.crea
     (SELECT count(*) FROM mail_campaign_recipients r WHERE r.campaign_id = m.id AND r.status = 'skipped') AS skipped";
 
 pub async fn list(pool: &PgPool) -> AppResult<Vec<Campaign>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM mail_campaigns m ORDER BY m.created_at DESC LIMIT 200"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Campaign> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM mail_campaigns m WHERE m.id = $1"
-    ))
+    )))
     .bind(id)
     .fetch_optional(pool)
     .await
@@ -252,10 +252,10 @@ pub async fn queue(pool: &PgPool, id: Uuid) -> AppResult<i64> {
         return Err(AppError::Conflict("error.campaign_not_draft"));
     };
     let seg: Segment = serde_json::from_value(seg).unwrap_or_default();
-    let n = sqlx::query(&format!(
+    let n = sqlx::query(sqlx::AssertSqlSafe(format!(
         "INSERT INTO mail_campaign_recipients (campaign_id, customer_id, email, unsub_token) \
          SELECT $8, c.id, c.email, gen_random_uuid() FROM customers c WHERE {SEG_WHERE}"
-    ))
+    )))
     .bind(statuses(&seg))
     .bind(seg.client_group_id)
     .bind(&seg.product_ids)
@@ -364,7 +364,7 @@ pub async fn unsubscribe(pool: &PgPool, token: Uuid, apply: bool) -> AppResult<O
     } else {
         "SELECT c.email::text FROM mail_campaign_recipients r JOIN customers c ON c.id = r.customer_id WHERE r.unsub_token = $1"
     };
-    let email: Option<String> = sqlx::query_scalar(sql)
+    let email: Option<String> = sqlx::query_scalar(sqlx::AssertSqlSafe(sql))
         .bind(token)
         .fetch_optional(pool)
         .await

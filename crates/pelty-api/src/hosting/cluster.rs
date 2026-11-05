@@ -25,7 +25,7 @@ pub fn channel(s: &AppState) -> String {
         .shared
         .url()
         .and_then(|u| redis::Client::open(u).ok())
-        .map_or(0, |c| c.get_connection_info().redis.db);
+        .map_or(0, |c| c.get_connection_info().redis_settings().db());
     if db == 0 {
         CHANNEL.to_string()
     } else {

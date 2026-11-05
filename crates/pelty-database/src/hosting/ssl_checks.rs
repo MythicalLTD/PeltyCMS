@@ -42,7 +42,7 @@ pub async fn list(
     limit: i64,
     offset: i64,
 ) -> AppResult<(Vec<SslCheck>, i64)> {
-    let rows = sqlx::query_as(&format!("{SEL} WHERE ($1::text IS NULL OR c.status = $1) ORDER BY c.expires_at NULLS FIRST, d.name LIMIT $2 OFFSET $3"))
+    let rows = sqlx::query_as(sqlx::AssertSqlSafe(format!("{SEL} WHERE ($1::text IS NULL OR c.status = $1) ORDER BY c.expires_at NULLS FIRST, d.name LIMIT $2 OFFSET $3")))
         .bind(status)
         .bind(limit)
         .bind(offset)
@@ -60,15 +60,17 @@ pub async fn list(
 }
 
 pub async fn for_customer(pool: &PgPool, customer: Uuid) -> AppResult<Vec<SslCheck>> {
-    sqlx::query_as(&format!("{SEL} WHERE d.customer_id = $1 ORDER BY d.name"))
-        .bind(customer)
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "{SEL} WHERE d.customer_id = $1 ORDER BY d.name"
+    )))
+    .bind(customer)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn get(pool: &PgPool, domain: Uuid) -> AppResult<Option<SslCheck>> {
-    sqlx::query_as(&format!("{SEL} WHERE c.domain_id = $1"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("{SEL} WHERE c.domain_id = $1")))
         .bind(domain)
         .fetch_optional(pool)
         .await

@@ -16,7 +16,7 @@ use axum::routing::get;
 use axum::{Json, Router};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use hmac::{Hmac, Mac};
+use hmac::{digest::KeyInit, Hmac, Mac};
 use pelty_core::{AppError, AppResult};
 use pelty_database::{addon_registry as reg, audit, settings};
 use serde::{Deserialize, Serialize};
@@ -238,7 +238,7 @@ fn key() -> &'static [u8; 32] {
 }
 
 fn sign(payload: &str) -> String {
-    let mut m = <Hmac<Sha256> as Mac>::new_from_slice(key())
+    let mut m = <Hmac<Sha256> as KeyInit>::new_from_slice(key())
         .unwrap_or_else(|_| unreachable!("hmac accepts any key length"));
     m.update(payload.as_bytes());
     URL_SAFE_NO_PAD.encode(m.finalize().into_bytes())

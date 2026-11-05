@@ -984,9 +984,9 @@ impl host::Host for State {
     }
 
     fn random_bytes(&mut self, len: u32) -> Vec<u8> {
-        use rand::RngCore;
+        use rand::Rng;
         let mut v = vec![0u8; len.min(4096) as usize];
-        rand::rngs::OsRng.fill_bytes(&mut v);
+        rand::rng().fill_bytes(&mut v);
         v
     }
 }

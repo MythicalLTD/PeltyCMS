@@ -694,7 +694,7 @@ pub async fn inbound_token(
 /// Verify a five-minute, body-bound provider signature using constant-time HMAC.
 pub fn verify_inbound(token: &str, timestamp: &str, signature: &str, raw: &[u8], now: i64) -> bool {
     use base64::Engine;
-    use hmac::{Hmac, Mac};
+    use hmac::{digest::KeyInit, Hmac, Mac};
     let Ok(ts) = timestamp.parse::<i64>() else {
         return false;
     };

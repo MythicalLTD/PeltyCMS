@@ -219,18 +219,18 @@ fn err(e: pelty_core::AppError) -> String {
 
 /// A random password that passes every password-policy option.
 pub fn generate_password() -> String {
-    use rand::Rng;
+    use rand::RngExt;
     const SETS: [&[u8]; 4] = [
         b"ABCDEFGHJKLMNPQRSTUVWXYZ",
         b"abcdefghijkmnopqrstuvwxyz",
         b"23456789",
         b"-_.!@#%+=",
     ];
-    let mut rng = rand::rngs::OsRng;
+    let mut rng = rand::rng();
     loop {
         let all: Vec<u8> = SETS.concat();
         let p: String = (0..20)
-            .map(|_| all[rng.gen_range(0..all.len())] as char)
+            .map(|_| all[rng.random_range(0..all.len())] as char)
             .collect();
         if SETS.iter().all(|s| p.bytes().any(|b| s.contains(&b))) {
             return p;

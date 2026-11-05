@@ -127,24 +127,28 @@ pub fn validate(i: &FormInput) -> AppResult<()> {
 }
 
 pub async fn list(pool: &PgPool) -> AppResult<Vec<OrderForm>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM order_forms ORDER BY name, id"))
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM order_forms ORDER BY name, id"
+    )))
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<OrderForm>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM order_forms WHERE id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM order_forms WHERE id = $1"
+    )))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn by_slug(pool: &PgPool, slug: &str) -> AppResult<Option<OrderForm>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM order_forms WHERE slug = $1 AND active"
-    ))
+    )))
     .bind(slug)
     .fetch_optional(pool)
     .await
@@ -152,7 +156,7 @@ pub async fn by_slug(pool: &PgPool, slug: &str) -> AppResult<Option<OrderForm>> 
 }
 
 pub async fn for_group(pool: &PgPool, group: Uuid) -> AppResult<Option<OrderForm>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM order_forms WHERE active AND id = (SELECT order_form_id FROM product_groups WHERE id = $1)"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {COLS} FROM order_forms WHERE active AND id = (SELECT order_form_id FROM product_groups WHERE id = $1)")))
         .bind(group)
         .fetch_optional(pool)
         .await
@@ -175,7 +179,7 @@ pub async fn save(pool: &PgPool, id: Option<Uuid>, i: &FormInput) -> AppResult<O
         None => format!("INSERT INTO order_forms (id, slug, name, layout, product_ids, group_ids, steps, fields, redirect_url, active) VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING {COLS}"),
         Some(_) => format!("UPDATE order_forms SET slug=$1, name=$2, layout=$3, product_ids=$4, group_ids=$5, steps=$6, fields=$7, redirect_url=$8, active=$9, updated_at=now() WHERE id = $10 RETURNING {COLS}"),
     };
-    sqlx::query_as(&q)
+    sqlx::query_as(sqlx::AssertSqlSafe(q))
         .bind(&i.slug)
         .bind(i.name.trim())
         .bind(&i.layout)

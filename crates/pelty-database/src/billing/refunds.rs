@@ -128,10 +128,10 @@ pub async fn reserve(
     if amount > left {
         return Err(AppError::Conflict("error.refund_exceeds_payment"));
     }
-    let r: Refund = sqlx::query_as(&format!(
+    let r: Refund = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO refunds (id, payment_id, invoice_id, customer_id, gateway, amount, currency, status, reason, idempotency_key, actor_id, to_credit)
          VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8,$9,$10,$11) RETURNING {COLS}"
-    ))
+    )))
     .bind(Uuid::new_v4())
     .bind(payment_id)
     .bind(invoice_id)
@@ -192,9 +192,9 @@ pub async fn reserve(
 }
 
 async fn by_key(tx: &mut Tx<'_>, key: &str) -> AppResult<Option<Refund>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM refunds WHERE idempotency_key = $1"
-    ))
+    )))
     .bind(key)
     .fetch_optional(&mut **tx)
     .await
@@ -202,17 +202,19 @@ async fn by_key(tx: &mut Tx<'_>, key: &str) -> AppResult<Option<Refund>> {
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Refund>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM refunds WHERE id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM refunds WHERE id = $1"
+    )))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn for_invoice(pool: &PgPool, invoice_id: Uuid) -> AppResult<Vec<Refund>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM refunds WHERE invoice_id = $1 ORDER BY created_at"
-    ))
+    )))
     .bind(invoice_id)
     .fetch_all(pool)
     .await
@@ -222,9 +224,9 @@ pub async fn for_invoice(pool: &PgPool, invoice_id: Uuid) -> AppResult<Vec<Refun
 /// The gateway rejected the refund: release the reserved capacity.
 pub async fn fail(pool: &PgPool, id: Uuid, error: &str) -> AppResult<Refund> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let r: Refund = sqlx::query_as(&format!(
+    let r: Refund = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE refunds SET status = 'failed', error = left($2, 500), updated_at = now() WHERE id = $1 AND status = 'pending' RETURNING {COLS}"
-    ))
+    )))
     .bind(id)
     .bind(error)
     .fetch_optional(&mut *tx)
@@ -293,9 +295,9 @@ async fn complete_opts(
     reopen: Option<Reopen>,
 ) -> AppResult<(Refund, Vec<Uuid>)> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let r: Refund = sqlx::query_as(&format!(
+    let r: Refund = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM refunds WHERE id = $1 FOR UPDATE"
-    ))
+    )))
     .bind(id)
     .fetch_optional(&mut *tx)
     .await
@@ -372,10 +374,10 @@ async fn complete_opts(
     .await
     .map_err(db_err)?;
     }
-    let r: Refund = sqlx::query_as(&format!(
+    let r: Refund = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE refunds SET status = 'succeeded', provider_ref = COALESCE($2, provider_ref), credit_note_id = $3, updated_at = now()
          WHERE id = $1 RETURNING {COLS}"
-    ))
+    )))
     .bind(id)
     .bind(provider_ref)
     .bind(cn)

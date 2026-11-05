@@ -31,7 +31,7 @@ pub struct TaxRow {
 
 /// Rates are rounded to 2 dp: partial-refund credit notes carry an effective (derived) rate.
 pub async fn tax_report(pool: &PgPool, from: Date, to: Date) -> AppResult<Vec<TaxRow>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT to_char(i.issued_at AT TIME ZONE 'UTC', 'YYYY-MM') AS period,
                 COALESCE(NULLIF(i.customer_snapshot->>'country', ''), NULLIF(c.country, ''), '--') AS country,
                 i.currency::text AS currency, round(it.tax_rate, 2) AS rate, i.reverse_charge,
@@ -42,7 +42,7 @@ pub async fn tax_report(pool: &PgPool, from: Date, to: Date) -> AppResult<Vec<Ta
          FROM invoices i JOIN invoice_items it ON it.invoice_id = i.id LEFT JOIN customers c ON c.id = i.customer_id
          WHERE {ISSUED}
          GROUP BY 1, 2, 3, 4, 5 ORDER BY 1, 2, 3, 4, 5"
-    ))
+    )))
     .bind(from)
     .bind(to)
     .fetch_all(pool)
@@ -72,7 +72,7 @@ pub struct InvoiceRow {
 }
 
 pub async fn invoices(pool: &PgPool, from: Date, to: Date) -> AppResult<Vec<InvoiceRow>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT i.id, i.number, i.kind, i.status, i.issued_at, i.due_at, i.paid_at,
                 COALESCE(i.customer_snapshot->>'email', c.email::text, '') AS customer_email,
                 COALESCE(NULLIF(i.customer_snapshot->>'organization', ''), NULLIF(trim(COALESCE(i.customer_snapshot->>'first_name', c.first_name, '') || ' ' || COALESCE(i.customer_snapshot->>'last_name', c.last_name, '')), ''), '') AS customer_name,
@@ -81,7 +81,7 @@ pub async fn invoices(pool: &PgPool, from: Date, to: Date) -> AppResult<Vec<Invo
                 i.currency::text AS currency, i.subtotal, i.tax_total, i.total, i.amount_paid, i.reverse_charge
          FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
          WHERE {ISSUED} ORDER BY i.issued_at, i.number LIMIT 100000"
-    ))
+    )))
     .bind(from)
     .bind(to)
     .fetch_all(pool)

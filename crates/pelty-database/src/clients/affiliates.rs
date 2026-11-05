@@ -67,9 +67,9 @@ pub struct Balance {
 }
 
 pub async fn for_user(pool: &PgPool, user_id: Uuid) -> AppResult<Option<Affiliate>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM affiliates a JOIN users u ON u.id = a.user_id WHERE a.user_id = $1"
-    ))
+    )))
     .bind(user_id)
     .fetch_optional(pool)
     .await
@@ -158,10 +158,10 @@ pub async fn commissions(pool: &PgPool, affiliate_id: Uuid) -> AppResult<Vec<Com
 const PCOLS: &str = "p.id, p.affiliate_id, u.email::text AS email, p.currency::text AS currency, p.amount, p.status, p.note, p.created_at";
 
 pub async fn payouts(pool: &PgPool, affiliate_id: Option<Uuid>) -> AppResult<Vec<Payout>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {PCOLS} FROM affiliate_payouts p JOIN affiliates a ON a.id = p.affiliate_id JOIN users u ON u.id = a.user_id
           WHERE ($1::uuid IS NULL OR p.affiliate_id = $1) ORDER BY p.created_at DESC LIMIT 200"
-    ))
+    )))
     .bind(affiliate_id)
     .fetch_all(pool)
     .await
@@ -272,9 +272,9 @@ pub async fn staff_recipients(
 }
 
 pub async fn list(pool: &PgPool, limit: i64, offset: i64) -> AppResult<(Vec<Affiliate>, i64)> {
-    let items = sqlx::query_as(&format!(
+    let items = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM affiliates a JOIN users u ON u.id = a.user_id ORDER BY a.created_at DESC LIMIT $1 OFFSET $2"
-    ))
+    )))
     .bind(limit)
     .bind(offset)
     .fetch_all(pool)

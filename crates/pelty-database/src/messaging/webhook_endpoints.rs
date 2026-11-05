@@ -58,18 +58,18 @@ pub fn matches(filters: &[String], event: &str) -> bool {
 }
 
 pub async fn list(pool: &PgPool) -> AppResult<Vec<Endpoint>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {ECOLS} FROM webhook_endpoints ORDER BY created_at"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Endpoint>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {ECOLS} FROM webhook_endpoints WHERE id = $1"
-    ))
+    )))
     .bind(id)
     .fetch_optional(pool)
     .await
@@ -78,9 +78,9 @@ pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Endpoint>> {
 
 /// Enabled endpoints whose filter matches `event` (with their sealed secret).
 pub async fn targets(pool: &PgPool, event: &str) -> AppResult<Vec<Endpoint>> {
-    let all: Vec<Endpoint> = sqlx::query_as(&format!(
+    let all: Vec<Endpoint> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {ECOLS} FROM webhook_endpoints WHERE enabled"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
@@ -107,9 +107,9 @@ pub async fn create(
     enabled: bool,
     by: Uuid,
 ) -> AppResult<Endpoint> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO webhook_endpoints (name, url, events, secret_sealed, enabled, created_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING {ECOLS}"
-    ))
+    )))
     .bind(name)
     .bind(url)
     .bind(events)
@@ -130,12 +130,12 @@ pub async fn update(
     events: &[String],
     enabled: bool,
 ) -> AppResult<Endpoint> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE webhook_endpoints SET name = $2, url = $3, events = $4, enabled = $5, updated_at = now(),
                 failure_streak = CASE WHEN $5 AND NOT enabled THEN 0 ELSE failure_streak END,
                 disabled_reason = CASE WHEN $5 THEN '' ELSE disabled_reason END
          WHERE id = $1 RETURNING {ECOLS}"
-    ))
+    )))
     .bind(id)
     .bind(name)
     .bind(url)
@@ -192,9 +192,9 @@ pub async fn create_delivery(
 }
 
 pub async fn delivery(pool: &PgPool, id: Uuid) -> AppResult<Option<Delivery>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {DCOLS} FROM webhook_deliveries WHERE id = $1"
-    ))
+    )))
     .bind(id)
     .fetch_optional(pool)
     .await
@@ -211,7 +211,7 @@ pub async fn deliveries(
     offset: i64,
 ) -> AppResult<(Vec<Delivery>, i64)> {
     let filter = "($1::uuid IS NULL OR endpoint_id = $1) AND ($2::text IS NULL OR status = $2) AND ($3::text IS NULL OR event = $3)";
-    let items = sqlx::query_as(&format!("SELECT {DCOLS} FROM webhook_deliveries WHERE {filter} ORDER BY created_at DESC, id LIMIT $4 OFFSET $5"))
+    let items = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {DCOLS} FROM webhook_deliveries WHERE {filter} ORDER BY created_at DESC, id LIMIT $4 OFFSET $5")))
         .bind(endpoint)
         .bind(status)
         .bind(event)
@@ -220,9 +220,9 @@ pub async fn deliveries(
         .fetch_all(pool)
         .await
         .map_err(db_err)?;
-    let total = sqlx::query_scalar(&format!(
+    let total = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT count(*) FROM webhook_deliveries WHERE {filter}"
-    ))
+    )))
     .bind(endpoint)
     .bind(status)
     .bind(event)

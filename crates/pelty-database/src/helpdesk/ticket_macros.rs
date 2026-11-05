@@ -133,11 +133,11 @@ const COLS: &str = "id, name, description, department_id, reply_body, reply_inte
 /// All macros, or (with `department`) the active ones offered for that
 /// department.
 pub async fn list(pool: &PgPool, department: Option<Uuid>) -> AppResult<Vec<Macro>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM ticket_macros
          WHERE $1::uuid IS NULL OR (is_active AND (department_id IS NULL OR department_id = $1))
          ORDER BY sort_order, name"
-    ))
+    )))
     .bind(department)
     .fetch_all(pool)
     .await
@@ -145,30 +145,32 @@ pub async fn list(pool: &PgPool, department: Option<Uuid>) -> AppResult<Vec<Macr
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Macro> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM ticket_macros WHERE id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?
-        .ok_or(AppError::NotFound)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM ticket_macros WHERE id = $1"
+    )))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?
+    .ok_or(AppError::NotFound)
 }
 
 pub async fn create(pool: &PgPool, m: &MacroInput) -> AppResult<Macro> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO ticket_macros (name, description, department_id, reply_body, reply_internal, set_status, set_priority, assign_mode, assign_to, set_department, add_tags, is_active, sort_order)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING {COLS}"
-    ))
+    )))
     .bind(&m.name).bind(&m.description).bind(m.department_id).bind(&m.reply_body).bind(m.reply_internal).bind(&m.set_status)
     .bind(&m.set_priority).bind(&m.assign_mode).bind(m.assign_to).bind(m.set_department).bind(&m.add_tags).bind(m.is_active).bind(m.sort_order)
     .fetch_one(pool).await.map_err(db_err)
 }
 
 pub async fn update(pool: &PgPool, id: Uuid, m: &MacroInput) -> AppResult<Macro> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE ticket_macros SET name=$2, description=$3, department_id=$4, reply_body=$5, reply_internal=$6, set_status=$7, set_priority=$8,
             assign_mode=$9, assign_to=$10, set_department=$11, add_tags=$12, is_active=$13, sort_order=$14, updated_at=now()
          WHERE id = $1 RETURNING {COLS}"
-    ))
+    )))
     .bind(id).bind(&m.name).bind(&m.description).bind(m.department_id).bind(&m.reply_body).bind(m.reply_internal).bind(&m.set_status)
     .bind(&m.set_priority).bind(&m.assign_mode).bind(m.assign_to).bind(m.set_department).bind(&m.add_tags).bind(m.is_active).bind(m.sort_order)
     .fetch_optional(pool).await.map_err(db_err)?.ok_or(AppError::NotFound)

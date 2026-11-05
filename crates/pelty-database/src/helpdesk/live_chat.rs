@@ -3,7 +3,7 @@
 use crate::db_err;
 pub use crate::live_chat_ext::*;
 use pelty_core::{AppError, AppResult};
-use rand::RngCore;
+use rand::Rng;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use sqlx::{FromRow, PgPool};
@@ -116,7 +116,7 @@ pub async fn start_in_department(
         return Err(AppError::RateLimited);
     }
     let mut raw = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut raw);
+    rand::rng().fill_bytes(&mut raw);
     let token = hex::encode(raw);
     let id = Uuid::new_v4();
     let page: String = page.chars().take(500).collect();
@@ -166,9 +166,9 @@ pub async fn messages(
     } else {
         "visitor_unread"
     };
-    sqlx::query(&format!(
+    sqlx::query(sqlx::AssertSqlSafe(format!(
         "UPDATE chat_sessions SET {col} = 0 WHERE id = $1 AND {col} <> 0"
-    ))
+    )))
     .bind(id)
     .execute(pool)
     .await
@@ -196,7 +196,7 @@ pub async fn post(
         "staff_unread"
     };
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let r = sqlx::query(&format!("UPDATE chat_sessions SET {bump} = {bump} + 1, last_message_at = now(), assigned_to = COALESCE(assigned_to, $2::uuid) WHERE id = $1 AND status = 'open'"))
+    let r = sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE chat_sessions SET {bump} = {bump} + 1, last_message_at = now(), assigned_to = COALESCE(assigned_to, $2::uuid) WHERE id = $1 AND status = 'open'")))
         .bind(id).bind(staff).execute(&mut *tx).await.map_err(db_err)?;
     if r.rows_affected() == 0 {
         return Err(AppError::Conflict("error.chat_closed"));

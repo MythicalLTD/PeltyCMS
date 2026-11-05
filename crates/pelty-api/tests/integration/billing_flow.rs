@@ -565,7 +565,7 @@ async fn invoice_numbers_are_unique_and_gapless_under_concurrency() {
 
 #[tokio::test]
 async fn stripe_webhook_marks_invoice_paid_idempotently() {
-    use hmac::{Hmac, Mac};
+    use hmac::{digest::KeyInit, Hmac, Mac};
     let (app, st) = app().await;
     let admin = sess(&app, &st, "admin").await;
     let (pid, oid, ch) = seed_product(&app, &admin).await;
@@ -661,9 +661,9 @@ async fn recurring_billing_is_idempotent() {
     .await
     .unwrap();
     let count = || async {
-        sqlx::query_scalar::<_, i64>(&format!(
+        sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(format!(
             "SELECT count(*) FROM invoice_items WHERE service_id = '{sid}'"
-        ))
+        )))
         .fetch_one(&st.pool)
         .await
         .unwrap()

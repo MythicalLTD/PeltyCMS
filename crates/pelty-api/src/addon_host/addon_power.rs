@@ -244,7 +244,7 @@ async fn run_sql(pool: &PgPool, addon: &str, sql: &str, params: &[Value]) -> Res
     let out = if rows {
         let wrapped =
             format!("SELECT COALESCE(jsonb_agg(to_jsonb(q)), '[]'::jsonb) FROM ({sql}) q");
-        let mut q = sqlx::query_scalar::<_, Value>(&wrapped);
+        let mut q = sqlx::query_scalar::<_, Value>(sqlx::AssertSqlSafe(wrapped));
         for p in params {
             q = match p {
                 Value::Null => q.bind(None::<String>),
@@ -259,7 +259,7 @@ async fn run_sql(pool: &PgPool, addon: &str, sql: &str, params: &[Value]) -> Res
             .await
             .map_err(|e| format!("sql: {e}"))?
     } else {
-        let r = bind_all(sqlx::query(sql), params)
+        let r = bind_all(sqlx::query(sqlx::AssertSqlSafe(sql)), params)
             .execute(&mut *tx)
             .await
             .map_err(|e| format!("sql: {e}"))?;
@@ -315,7 +315,7 @@ async fn read(pool: &PgPool, entity: &str, q: &Value) -> Result<Value, String> {
     sql.push_str(&format!(
         " ORDER BY t.created_at DESC NULLS LAST LIMIT {limit} OFFSET {offset}) s"
     ));
-    let mut qq = sqlx::query_scalar::<_, Value>(&sql);
+    let mut qq = sqlx::query_scalar::<_, Value>(sqlx::AssertSqlSafe(sql));
     for (_, v) in &filters {
         qq = qq.bind(v.clone());
     }

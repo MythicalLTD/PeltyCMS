@@ -101,9 +101,9 @@ pub async fn status(pool: &PgPool, customer: Uuid) -> AppResult<Status> {
 }
 
 pub async fn documents(pool: &PgPool, customer: Uuid) -> AppResult<Vec<Document>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {DCOLS} FROM kyc_documents WHERE customer_id = $1 ORDER BY created_at DESC"
-    ))
+    )))
     .bind(customer)
     .fetch_all(pool)
     .await
@@ -160,7 +160,7 @@ pub async fn upload(
     if n >= MAX_DOCS {
         return Err(AppError::Validation("error.kyc_too_many"));
     }
-    let d: Document = sqlx::query_as(&format!("INSERT INTO kyc_documents (customer_id, kind, filename, content_type, size_bytes, data) VALUES ($1,$2,$3,$4,$5,$6) RETURNING {DCOLS}"))
+    let d: Document = sqlx::query_as(sqlx::AssertSqlSafe(format!("INSERT INTO kyc_documents (customer_id, kind, filename, content_type, size_bytes, data) VALUES ($1,$2,$3,$4,$5,$6) RETURNING {DCOLS}")))
         .bind(customer).bind(kind).bind(filename).bind(content_type).bind(data.len() as i32).bind(data)
         .fetch_one(pool).await.map_err(db_err)?;
     // A verified customer stays verified while new docs await review.

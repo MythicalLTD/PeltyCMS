@@ -5,8 +5,8 @@
 //! HMAC-SHA256 under the assigned server's API key (the "secret").
 //! The first check binds the license to the caller's domain / IP / directory
 //! (if the product allows binding); `reissue` clears the binding.
-use hmac::{Hmac, Mac};
-use rand::Rng;
+use hmac::{digest::KeyInit, Hmac, Mac};
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::Sha256;
@@ -15,11 +15,11 @@ const ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 /// `PREFIX-XXXXX-XXXXX-XXXXX-XXXXX` (100 bits of randomness, no 0/O/1/I).
 pub fn generate_key(prefix: &str) -> String {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let groups: Vec<String> = (0..4)
         .map(|_| {
             (0..5)
-                .map(|_| ALPHABET[rng.gen_range(0..ALPHABET.len())] as char)
+                .map(|_| ALPHABET[rng.random_range(0..ALPHABET.len())] as char)
                 .collect()
         })
         .collect();

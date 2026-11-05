@@ -88,19 +88,19 @@ pub async fn build(pool: &PgPool, from: Date, to: Date) -> AppResult<Report> {
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    let mrr = sqlx::query_as(&format!(
+    let mrr = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "WITH m AS ({months}), s AS ({SERVICES}), x AS (SELECT ms + interval '1 month' AS me, ms FROM m)
          SELECT to_char(x.ms AT TIME ZONE 'UTC', 'YYYY-MM') AS month, s.currency,
                 round(sum(s.recurring_amount / s.months), 4) AS amount, count(*) AS count
          FROM x JOIN s ON s.a < x.me AND (s.e IS NULL OR s.e >= x.me)
          GROUP BY 1, 2 ORDER BY 1, 2"
-    ))
+    )))
     .bind(from)
     .bind(to)
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    let churn = sqlx::query_as(&format!(
+    let churn = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "WITH m AS ({months}), s AS ({SERVICES}),
          live AS (
            SELECT m.ms, s.customer_id,
@@ -119,7 +119,7 @@ pub async fn build(pool: &PgPool, from: Date, to: Date) -> AppResult<Report> {
                      ELSE round(a.churned::numeric / a.customers_start, 4) END AS churn_rate,
                 (SELECT count(*) FROM customers c WHERE c.created_at >= a.ms AND c.created_at < a.ms + interval '1 month') AS new_signups
          FROM agg a ORDER BY a.ms"
-    ))
+    )))
     .bind(from)
     .bind(to)
     .fetch_all(pool)

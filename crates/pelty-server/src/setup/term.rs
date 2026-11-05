@@ -140,7 +140,8 @@ impl Services for Live {
         self.rt.block_on(async {
             use sqlx::Executor;
             let mut c = connect(admin.as_str()).await.map_err(|e| e.to_string())?;
-            c.execute(format!("CREATE DATABASE \"{}\"", name.replace('"', "\"\"")).as_str())
+            let sql = format!("CREATE DATABASE \"{}\"", name.replace('"', "\"\""));
+            c.execute(sqlx::AssertSqlSafe(sql))
                 .await
                 .map_err(|e| e.to_string())?;
             Ok(())

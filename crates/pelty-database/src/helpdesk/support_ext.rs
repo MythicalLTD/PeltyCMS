@@ -34,18 +34,18 @@ pub struct DeptSettings {
 const DEPT_COLS: &str = "id, name, email, auto_reply, auto_reply_text, pipe_protocol, pipe_host, pipe_port, pipe_tls, pipe_username, pipe_password, pipe_last_run, pipe_last_error, pipe_unknown_sender, pipe_webhook_secret";
 
 pub async fn departments(pool: &PgPool) -> AppResult<Vec<DeptSettings>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {DEPT_COLS} FROM ticket_departments ORDER BY sort_order, name"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)
 }
 
 pub async fn department(pool: &PgPool, id: Uuid) -> AppResult<Option<DeptSettings>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {DEPT_COLS} FROM ticket_departments WHERE id = $1"
-    ))
+    )))
     .bind(id)
     .fetch_optional(pool)
     .await
@@ -69,10 +69,10 @@ pub struct DeptUpdate {
 }
 
 pub async fn update_department(pool: &PgPool, id: Uuid, u: &DeptUpdate) -> AppResult<DeptSettings> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE ticket_departments SET auto_reply=$2, auto_reply_text=$3, pipe_protocol=$4, pipe_host=$5, pipe_port=$6, pipe_tls=$7,
            pipe_username=$8, pipe_password=COALESCE($9, pipe_password), pipe_unknown_sender=COALESCE($10, pipe_unknown_sender) WHERE id=$1 RETURNING {DEPT_COLS}"
-    ))
+    )))
     .bind(id)
     .bind(u.auto_reply)
     .bind(&u.auto_reply_text)
@@ -323,7 +323,7 @@ pub async fn add_contact(
     ip: Option<&str>,
     spam: bool,
 ) -> AppResult<ContactMessage> {
-    sqlx::query_as(&format!("INSERT INTO contact_messages (name, email, subject, body, ip, status) VALUES ($1,$2,$3,$4,$5,$6) RETURNING {CM_COLS}"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("INSERT INTO contact_messages (name, email, subject, body, ip, status) VALUES ($1,$2,$3,$4,$5,$6) RETURNING {CM_COLS}")))
         .bind(name)
         .bind(email)
         .bind(subject)
@@ -336,7 +336,7 @@ pub async fn add_contact(
 }
 
 pub async fn contacts(pool: &PgPool, status: Option<&str>) -> AppResult<Vec<ContactMessage>> {
-    sqlx::query_as(&format!("SELECT {CM_COLS} FROM contact_messages WHERE ($1::text IS NULL OR status = $1) ORDER BY created_at DESC LIMIT 200"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {CM_COLS} FROM contact_messages WHERE ($1::text IS NULL OR status = $1) ORDER BY created_at DESC LIMIT 200")))
         .bind(status)
         .fetch_all(pool)
         .await
@@ -344,9 +344,9 @@ pub async fn contacts(pool: &PgPool, status: Option<&str>) -> AppResult<Vec<Cont
 }
 
 pub async fn contact(pool: &PgPool, id: Uuid) -> AppResult<ContactMessage> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {CM_COLS} FROM contact_messages WHERE id = $1"
-    ))
+    )))
     .bind(id)
     .fetch_optional(pool)
     .await
@@ -360,7 +360,7 @@ pub async fn set_contact_status(
     status: &str,
     ticket: Option<Uuid>,
 ) -> AppResult<ContactMessage> {
-    sqlx::query_as(&format!("UPDATE contact_messages SET status = $2, ticket_id = COALESCE($3, ticket_id) WHERE id = $1 RETURNING {CM_COLS}"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("UPDATE contact_messages SET status = $2, ticket_id = COALESCE($3, ticket_id) WHERE id = $1 RETURNING {CM_COLS}")))
         .bind(id)
         .bind(status)
         .bind(ticket)

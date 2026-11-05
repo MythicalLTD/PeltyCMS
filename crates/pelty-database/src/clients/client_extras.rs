@@ -180,9 +180,9 @@ pub fn check_value(f: &ClientField, raw: &str) -> AppResult<String> {
 const FCOLS: &str = "id, name, description, field_type, options, required, admin_only, sort_order";
 
 pub async fn fields(pool: &PgPool, include_admin_only: bool) -> AppResult<Vec<ClientField>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {FCOLS} FROM client_fields WHERE ($1 OR NOT admin_only) ORDER BY sort_order, name"
-    ))
+    )))
     .bind(include_admin_only)
     .fetch_all(pool)
     .await

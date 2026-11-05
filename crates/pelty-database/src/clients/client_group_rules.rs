@@ -65,9 +65,9 @@ pub fn normalize(kind: &str, value: &str) -> AppResult<String> {
 const COLS: &str = "id, group_id, priority, kind, value, enabled, created_at";
 
 pub async fn list(pool: &PgPool) -> AppResult<Vec<Rule>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM client_group_rules ORDER BY priority, created_at"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)
@@ -81,7 +81,7 @@ pub async fn create(
     value: &str,
     enabled: bool,
 ) -> AppResult<Rule> {
-    sqlx::query_as(&format!("INSERT INTO client_group_rules (group_id, priority, kind, value, enabled) VALUES ($1,$2,$3,$4,$5) RETURNING {COLS}"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("INSERT INTO client_group_rules (group_id, priority, kind, value, enabled) VALUES ($1,$2,$3,$4,$5) RETURNING {COLS}")))
         .bind(group_id)
         .bind(priority)
         .bind(kind)
@@ -104,7 +104,7 @@ pub async fn update(
     value: &str,
     enabled: bool,
 ) -> AppResult<Option<Rule>> {
-    sqlx::query_as(&format!("UPDATE client_group_rules SET group_id=$2, priority=$3, kind=$4, value=$5, enabled=$6 WHERE id=$1 RETURNING {COLS}"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("UPDATE client_group_rules SET group_id=$2, priority=$3, kind=$4, value=$5, enabled=$6 WHERE id=$1 RETURNING {COLS}")))
         .bind(id)
         .bind(group_id)
         .bind(priority)
@@ -162,10 +162,10 @@ pub async fn apply(pool: &PgPool, dry_run: bool, overwrite: bool) -> AppResult<V
         let Some(p) = predicate(&r.kind) else {
             continue;
         };
-        let rows: Vec<(Uuid, Option<Uuid>)> = sqlx::query_as(&format!(
+        let rows: Vec<(Uuid, Option<Uuid>)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
             "SELECT c.id, c.client_group_id FROM customers c WHERE c.status <> 'closed' AND c.merged_into IS NULL AND ({p}) {}",
             if overwrite { "" } else { "AND c.client_group_id IS NULL" }
-        ))
+        )))
         .bind(&r.value)
         .fetch_all(pool)
         .await

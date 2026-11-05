@@ -46,9 +46,9 @@ fn at(root: &Path, p: &str) -> PathBuf {
 /// Base64 of 32 random bytes from the OS RNG (`PELTY_ENCRYPTION_KEY` format).
 pub fn generate_key() -> String {
     use base64::Engine;
-    use rand::RngCore;
+    use rand::Rng;
     let mut k = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut k);
+    rand::rng().fill_bytes(&mut k);
     base64::engine::general_purpose::STANDARD.encode(k)
 }
 

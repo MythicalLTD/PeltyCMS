@@ -16,11 +16,11 @@ uuid = { workspace = true }
 time = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
-hmac = "0.12"
-sha1 = "0.10"
-aes-gcm = "0.10"
+hmac = "0.13"
+sha1 = "0.11"
+aes-gcm = "0.11"
 # Verifying login hashes imported from WHMCS (rehashed to Argon2id on login).
-bcrypt = "0.17"
+bcrypt = "0.19"
 md5 = "0.8"
 
 [lints]

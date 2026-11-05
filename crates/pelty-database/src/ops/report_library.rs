@@ -107,7 +107,7 @@ pub async fn run(
     to: OffsetDateTime,
 ) -> AppResult<Table> {
     let d = find(key).ok_or(AppError::NotFound)?;
-    let rows = sqlx::query(d.sql)
+    let rows = sqlx::query(sqlx::AssertSqlSafe(d.sql))
         .bind(from)
         .bind(to)
         .fetch_all(pool)

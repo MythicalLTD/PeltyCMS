@@ -35,9 +35,9 @@ const COLS: &str =
     "id, slug, title, description, blocks, published, show_in_nav, sort_order, updated_at";
 
 pub async fn list(pool: &PgPool, published_only: bool) -> AppResult<Vec<Page>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM site_pages WHERE published OR NOT $1 ORDER BY sort_order, slug"
-    ))
+    )))
     .bind(published_only)
     .fetch_all(pool)
     .await
@@ -45,25 +45,29 @@ pub async fn list(pool: &PgPool, published_only: bool) -> AppResult<Vec<Page>> {
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Page>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM site_pages WHERE id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM site_pages WHERE id = $1"
+    )))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn by_slug(pool: &PgPool, slug: &str) -> AppResult<Option<Page>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM site_pages WHERE slug = $1"))
-        .bind(slug)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM site_pages WHERE slug = $1"
+    )))
+    .bind(slug)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn create(pool: &PgPool, p: &PageInput<'_>) -> AppResult<Page> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO site_pages (slug, title, description, blocks, published, show_in_nav, sort_order) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING {COLS}"
-    ))
+    )))
     .bind(p.slug)
     .bind(p.title)
     .bind(p.description)
@@ -77,9 +81,9 @@ pub async fn create(pool: &PgPool, p: &PageInput<'_>) -> AppResult<Page> {
 }
 
 pub async fn update(pool: &PgPool, id: Uuid, p: &PageInput<'_>) -> AppResult<Option<Page>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE site_pages SET slug=$2, title=$3, description=$4, blocks=$5, published=$6, show_in_nav=$7, sort_order=$8, updated_at=now() WHERE id=$1 RETURNING {COLS}"
-    ))
+    )))
     .bind(id)
     .bind(p.slug)
     .bind(p.title)

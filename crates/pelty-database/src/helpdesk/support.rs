@@ -39,7 +39,7 @@ pub async fn upsert_canned(
         Some(_) => "UPDATE ticket_canned_replies SET title=$2, body=$3, department_id=$4, category=$5 WHERE id=$1 RETURNING id, title, body, department_id, category",
         None => "INSERT INTO ticket_canned_replies (id, title, body, department_id, category) VALUES (COALESCE($1, gen_random_uuid()),$2,$3,$4,$5) RETURNING id, title, body, department_id, category",
     };
-    sqlx::query_as(q)
+    sqlx::query_as(sqlx::AssertSqlSafe(q))
         .bind(id)
         .bind(title)
         .bind(body)
@@ -152,7 +152,7 @@ pub async fn merge(pool: &PgPool, source: Uuid, target: Uuid) -> AppResult<()> {
             first_response_at = LEAST(t.first_response_at, s.first_response_at)
          FROM tickets s WHERE t.id = $2 AND s.id = $1",
     ] {
-        sqlx::query(q)
+        sqlx::query(sqlx::AssertSqlSafe(q))
             .bind(source)
             .bind(target)
             .execute(&mut *tx)
@@ -196,7 +196,7 @@ pub async fn split(
         "UPDATE ticket_messages SET ticket_id = $2 WHERE ticket_id = $1 AND id = ANY($3)",
         "UPDATE ticket_attachments SET ticket_id = $2 WHERE ticket_id = $1 AND message_id = ANY($3)",
     ] {
-        sqlx::query(q)
+        sqlx::query(sqlx::AssertSqlSafe(q))
             .bind(ticket)
             .bind(id)
             .bind(messages)
@@ -235,9 +235,9 @@ pub struct EscalationRule {
 const RULE_COLS: &str = "id, name, department_id, statuses, priority, after_minutes, set_priority, set_department, assign_to, add_tag, is_active";
 
 pub async fn rules(pool: &PgPool) -> AppResult<Vec<EscalationRule>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {RULE_COLS} FROM ticket_escalation_rules ORDER BY name"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)
@@ -252,7 +252,7 @@ pub async fn upsert_rule(
         Some(_) => format!("UPDATE ticket_escalation_rules SET name=$2, department_id=$3, statuses=$4, priority=$5, after_minutes=$6, set_priority=$7, set_department=$8, assign_to=$9, add_tag=$10, is_active=$11 WHERE id=$1 RETURNING {RULE_COLS}"),
         None => format!("INSERT INTO ticket_escalation_rules (id, name, department_id, statuses, priority, after_minutes, set_priority, set_department, assign_to, add_tag, is_active) VALUES (COALESCE($1, gen_random_uuid()),$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING {RULE_COLS}"),
     };
-    sqlx::query_as(&q)
+    sqlx::query_as(sqlx::AssertSqlSafe(q))
         .bind(id)
         .bind(&r.name)
         .bind(r.department_id)

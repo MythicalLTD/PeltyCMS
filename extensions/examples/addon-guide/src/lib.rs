@@ -199,5 +199,6 @@ impl pelty_addon_sdk::Guest for GuideAddon {
         Ok(())
     }
 }
+pelty_addon_sdk::__cron_export!(GuideAddon, |_| Err("cron not supported".into()));
 pelty_addon_sdk::export!(GuideAddon with_types_in pelty_addon_sdk);
 // docs:end:guest

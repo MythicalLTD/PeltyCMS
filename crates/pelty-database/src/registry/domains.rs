@@ -177,9 +177,9 @@ pub fn order_total(t: &Tld, kind: &str, years: i32) -> Decimal {
 // ---- TLD pricing ----
 
 pub async fn tlds(pool: &PgPool, active_only: bool, currency: Option<&str>) -> AppResult<Vec<Tld>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {TLD_COLS} FROM tld_pricing WHERE (NOT $1 OR active) AND ($2::text IS NULL OR currency = $2) ORDER BY sort_order, tld, currency"
-    ))
+    )))
     .bind(active_only)
     .bind(currency)
     .fetch_all(pool)
@@ -188,9 +188,9 @@ pub async fn tlds(pool: &PgPool, active_only: bool, currency: Option<&str>) -> A
 }
 
 pub async fn tld(pool: &PgPool, tld: &str, currency: &str) -> AppResult<Option<Tld>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {TLD_COLS} FROM tld_pricing WHERE tld = $1 AND currency = $2"
-    ))
+    )))
     .bind(tld)
     .bind(currency)
     .fetch_optional(pool)
@@ -216,7 +216,7 @@ pub async fn upsert_tld(pool: &PgPool, t: &Tld) -> AppResult<Tld> {
     {
         return Err(AppError::Validation("error.validation"));
     }
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO tld_pricing (tld, currency, register_price, renew_price, transfer_price, min_years, max_years, registrar, active,
            grace_days, grace_fee, redemption_days, redemption_fee, id_protection_price, dns_management_price, epp_required, tld_group, sort_order)
          VALUES ($1, upper($2), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
@@ -227,7 +227,7 @@ pub async fn upsert_tld(pool: &PgPool, t: &Tld) -> AppResult<Tld> {
            dns_management_price = EXCLUDED.dns_management_price, epp_required = EXCLUDED.epp_required, tld_group = EXCLUDED.tld_group,
            sort_order = EXCLUDED.sort_order
          RETURNING {TLD_COLS}"
-    ))
+    )))
     .bind(&tl)
     .bind(&t.currency)
     .bind(t.register_price)
@@ -484,17 +484,19 @@ pub async fn create_order(
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Domain>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM domains WHERE id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM domains WHERE id = $1"
+    )))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn get_owned(pool: &PgPool, id: Uuid, customer_id: Uuid) -> AppResult<Domain> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM domains WHERE id = $1 AND customer_id = $2"
-    ))
+    )))
     .bind(id)
     .bind(customer_id)
     .fetch_optional(pool)
@@ -523,9 +525,9 @@ pub async fn list(
 ) -> AppResult<(Vec<Domain>, i64)> {
     let q = q.map(|s| format!("%{}%", s.trim().to_lowercase()));
     let filter = "($1::uuid IS NULL OR customer_id = $1) AND ($2::text IS NULL OR status = $2) AND ($3::text IS NULL OR lower(name) LIKE $3)";
-    let rows = sqlx::query_as(&format!(
+    let rows = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM domains WHERE {filter} ORDER BY created_at DESC LIMIT $4 OFFSET $5"
-    ))
+    )))
     .bind(customer)
     .bind(status)
     .bind(&q)
@@ -534,13 +536,15 @@ pub async fn list(
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    let total = sqlx::query_scalar(&format!("SELECT count(*) FROM domains WHERE {filter}"))
-        .bind(customer)
-        .bind(status)
-        .bind(&q)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+    let total = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "SELECT count(*) FROM domains WHERE {filter}"
+    )))
+    .bind(customer)
+    .bind(status)
+    .bind(&q)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
     Ok((rows, total))
 }
 
@@ -585,10 +589,10 @@ pub async fn admin_update(
     if status.is_some_and(|s| !STATUSES.contains(&s)) {
         return Err(AppError::Validation("error.validation"));
     }
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE domains SET status = COALESCE($2, status), expires_on = COALESCE($3, expires_on), auto_renew = COALESCE($4, auto_renew),
            updated_at = now() WHERE id = $1 RETURNING {COLS}"
-    ))
+    )))
     .bind(id)
     .bind(status)
     .bind(expires_on)
@@ -601,10 +605,10 @@ pub async fn admin_update(
 
 /// Pending orders whose invoice is paid, with the sealed EPP code.
 pub async fn paid_pending(pool: &PgPool) -> AppResult<Vec<(Domain, Option<Vec<u8>>)>> {
-    let ds: Vec<Domain> = sqlx::query_as(&format!(
+    let ds: Vec<Domain> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {} FROM domains d JOIN invoices i ON i.id = d.invoice_id WHERE d.status = 'pending' AND i.status = 'paid' ORDER BY d.created_at LIMIT 100",
         COLS.split(", ").map(|c| format!("d.{}", c.trim())).collect::<Vec<_>>().join(", ")
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
@@ -769,10 +773,10 @@ pub async fn create_renewal(
 /// Active auto-renew domains expiring within `days` without a renewal for
 /// the current term.
 pub async fn due_auto_renew(pool: &PgPool, today: Date, days: i64) -> AppResult<Vec<Domain>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM domains d WHERE status = 'active' AND auto_renew AND expires_on <= $1::date + $2::int
            AND NOT EXISTS (SELECT 1 FROM domain_renewals r WHERE r.domain_id = d.id AND r.for_expiry = d.expires_on) LIMIT 500"
-    ))
+    )))
     .bind(today)
     .bind(days as i32)
     .fetch_all(pool)
@@ -1051,10 +1055,10 @@ pub async fn mark_synced(
 
 /// Live domains least recently synced (for the daily registrar sync).
 pub async fn sync_batch(pool: &PgPool, limit: i64) -> AppResult<Vec<Domain>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM domains WHERE status IN ('active','grace','redemption','transferring')
            AND (synced_at IS NULL OR synced_at < now() - interval '20 hours') ORDER BY synced_at NULLS FIRST LIMIT $1"
-    ))
+    )))
     .bind(limit)
     .fetch_all(pool)
     .await
@@ -1146,7 +1150,7 @@ pub async fn claim_reminder(pool: &PgPool, d: &Domain, days_before: i64) -> AppR
 }
 
 pub async fn expiring(pool: &PgPool, today: Date, within: i64) -> AppResult<Vec<Domain>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM domains WHERE status = 'active' AND expires_on >= $1 AND expires_on <= $1::date + $2::int"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {COLS} FROM domains WHERE status = 'active' AND expires_on >= $1 AND expires_on <= $1::date + $2::int")))
         .bind(today)
         .bind(within as i32)
         .fetch_all(pool)

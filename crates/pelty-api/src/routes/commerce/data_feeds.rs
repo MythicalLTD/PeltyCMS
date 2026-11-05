@@ -106,7 +106,7 @@ pub async fn tld_feed(
 ) -> ApiResult<Response> {
     let cur = currency_of(&q)?;
     let tld = tld.trim_start_matches('.').to_ascii_lowercase();
-    let amount: Option<Decimal> = sqlx::query_scalar(TLD_SQL)
+    let amount: Option<Decimal> = sqlx::query_scalar(sqlx::AssertSqlSafe(TLD_SQL))
         .bind(&tld)
         .bind(&cur)
         .fetch_optional(&s.pool)

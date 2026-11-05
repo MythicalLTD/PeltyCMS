@@ -94,7 +94,7 @@ pub async fn candidates(pool: &PgPool, days: i32, limit: i64) -> AppResult<Vec<C
     if !(365..=3650).contains(&days) {
         return Err(AppError::Validation("error.validation"));
     }
-    sqlx::query_as(CANDIDATES)
+    sqlx::query_as(sqlx::AssertSqlSafe(CANDIDATES))
         .bind(days)
         .bind(limit.clamp(1, 500))
         .fetch_all(pool)

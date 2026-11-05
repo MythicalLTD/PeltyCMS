@@ -3,14 +3,49 @@
 use crate::dsig::{cert_pem, ECDSA_SHA256, RSA_SHA256};
 use crate::Error;
 use der::{Decode, Encode};
+use rand::rand_core::{TryRng, UnwrapErr};
+use rand::rngs::SysRng;
 use rsa::pkcs8::{DecodePrivateKey, EncodePrivateKey, EncodePublicKey};
 use sha2::Sha256;
 use std::str::FromStr;
-use x509_cert::builder::{Builder, CertificateBuilder, Profile};
+use x509_cert::builder::profile::BuilderProfile;
+use x509_cert::builder::{Builder, CertificateBuilder};
+use x509_cert::certificate::TbsCertificate;
+use x509_cert::ext::Extension;
 use x509_cert::name::Name;
 use x509_cert::serial_number::SerialNumber;
-use x509_cert::spki::SubjectPublicKeyInfoOwned;
+use x509_cert::spki::{SubjectPublicKeyInfoOwned, SubjectPublicKeyInfoRef};
 use x509_cert::time::Validity;
+use x509_cert::SubjectPublicKeyInfo;
+
+/// Minimal profile: no CABF DN rules (test / self-signed IdP certs).
+struct SimpleProfile {
+    subject: Name,
+    issuer: Name,
+}
+
+impl BuilderProfile for SimpleProfile {
+    fn get_issuer(&self, _subject: &Name) -> Name {
+        self.issuer.clone()
+    }
+
+    fn get_subject(&self) -> Name {
+        self.subject.clone()
+    }
+
+    fn build_extensions(
+        &self,
+        _spk: SubjectPublicKeyInfoRef<'_>,
+        _issuer_spk: SubjectPublicKeyInfoRef<'_>,
+        _tbs: &TbsCertificate,
+    ) -> x509_cert::builder::Result<Vec<Extension>> {
+        Ok(Vec::new())
+    }
+}
+
+fn sys_rng() -> UnwrapErr<SysRng> {
+    UnwrapErr(SysRng)
+}
 
 pub enum SigningKey {
     Rsa(Box<rsa::RsaPrivateKey>),
@@ -19,8 +54,7 @@ pub enum SigningKey {
 
 impl SigningKey {
     pub fn generate_rsa() -> Result<SigningKey, Error> {
-        let k = rsa::RsaPrivateKey::new(&mut rand::rngs::OsRng, 2048)
-            .map_err(|_| Error::Cert("keygen"))?;
+        let k = rsa::RsaPrivateKey::new(&mut sys_rng(), 2048).map_err(|_| Error::Cert("keygen"))?;
         Ok(SigningKey::Rsa(Box::new(k)))
     }
 
@@ -79,7 +113,7 @@ impl SigningKey {
         }
     }
 
-    fn spki(&self) -> Result<SubjectPublicKeyInfoOwned, Error> {
+    fn spki(&self) -> Result<SubjectPublicKeyInfo, Error> {
         let der = match self {
             SigningKey::Rsa(k) => k
                 .to_public_key()
@@ -116,36 +150,37 @@ impl SigningKey {
             .filter(|c| c.is_ascii_alphanumeric() || ".-_ ".contains(*c))
             .take(60)
             .collect();
-        let subject = Name::from_str(&format!("CN={}", if cn.is_empty() { "pelty" } else { &cn }))
-            .map_err(|_| Error::Cert("name"))?;
+        let cn = if cn.is_empty() { "pelty" } else { &cn };
+        let subject = Name::from_str(&format!("CN={cn}")).map_err(|_| Error::Cert("name"))?;
         let issuer_key;
         let signer_rsa = match self {
             SigningKey::Rsa(k) => (**k).clone(),
             SigningKey::EcP256(_) => {
-                issuer_key = rsa::RsaPrivateKey::new(&mut rand::rngs::OsRng, 2048)
+                issuer_key = rsa::RsaPrivateKey::new(&mut sys_rng(), 2048)
                     .map_err(|_| Error::Cert("keygen"))?;
                 issuer_key
+            }
+        };
+        let issuer = match self {
+            SigningKey::Rsa(_) => subject.clone(),
+            SigningKey::EcP256(_) => {
+                Name::from_str("CN=pelty-test-issuer").map_err(|_| Error::Cert("name"))?
             }
         };
         let signer = rsa::pkcs1v15::SigningKey::<Sha256>::new(signer_rsa);
         let validity = Validity::from_now(std::time::Duration::from_secs(u64::from(days) * 86_400))
             .map_err(|_| Error::Cert("validity"))?;
         let mut serial = [0u8; 16];
-        rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut serial);
+        SysRng
+            .try_fill_bytes(&mut serial)
+            .map_err(|_| Error::Cert("rng"))?;
         serial[0] &= 0x7f;
         let serial = SerialNumber::new(&serial).map_err(|_| Error::Cert("serial"))?;
-        let profile = match self {
-            SigningKey::Rsa(_) => Profile::Root,
-            SigningKey::EcP256(_) => Profile::Leaf {
-                issuer: Name::from_str("CN=pelty-test-issuer").map_err(|_| Error::Cert("name"))?,
-                enable_key_agreement: false,
-                enable_key_encipherment: false,
-            },
-        };
-        let b = CertificateBuilder::new(profile, serial, validity, subject, self.spki()?, &signer)
+        let profile = SimpleProfile { subject, issuer };
+        let b = CertificateBuilder::new(profile, serial, validity, self.spki()?)
             .map_err(|_| Error::Cert("build"))?;
         let cert = b
-            .build::<rsa::pkcs1v15::Signature>()
+            .build::<_, rsa::pkcs1v15::Signature>(&signer)
             .map_err(|_| Error::Cert("build"))?;
         Ok(cert_pem(&cert.to_der().map_err(|_| Error::Cert("build"))?))
     }

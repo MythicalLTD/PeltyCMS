@@ -936,8 +936,8 @@ fn ui_key() -> &'static [u8; 32] {
 
 fn ui_sign(payload: &str) -> String {
     use base64::Engine as _;
-    use hmac::{Hmac, Mac};
-    let mut m = <Hmac<sha2::Sha256> as Mac>::new_from_slice(ui_key())
+    use hmac::{digest::KeyInit, Hmac, Mac};
+    let mut m = <Hmac<sha2::Sha256> as KeyInit>::new_from_slice(ui_key())
         .unwrap_or_else(|_| unreachable!("hmac accepts any key length"));
     m.update(payload.as_bytes());
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(m.finalize().into_bytes())
@@ -959,8 +959,8 @@ pub fn check_ui_token(t: &str, addon: &str, user: &str, now: i64) -> bool {
     };
     let sig_ok = {
         use base64::Engine as _;
-        use hmac::{Hmac, Mac};
-        let mut m = <Hmac<sha2::Sha256> as Mac>::new_from_slice(ui_key())
+        use hmac::{Hmac, KeyInit, Mac};
+        let mut m = <Hmac<sha2::Sha256> as KeyInit>::new_from_slice(ui_key())
             .unwrap_or_else(|_| unreachable!("hmac accepts any key length"));
         m.update(payload.as_bytes());
         base64::engine::general_purpose::URL_SAFE_NO_PAD

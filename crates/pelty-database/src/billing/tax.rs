@@ -119,9 +119,9 @@ impl RuleInput {
 const RCOLS: &str = "id, name, country, region, rate, compound, is_vat, priority, enabled";
 
 pub async fn list_rules(pool: &PgPool) -> AppResult<Vec<TaxRule>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {RCOLS} FROM tax_rules ORDER BY country, region, priority, name"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)
@@ -129,10 +129,10 @@ pub async fn list_rules(pool: &PgPool) -> AppResult<Vec<TaxRule>> {
 
 pub async fn create_rule(pool: &PgPool, mut r: RuleInput) -> AppResult<TaxRule> {
     r.validate()?;
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO tax_rules (id, name, country, region, rate, compound, is_vat, priority, enabled)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING {RCOLS}"
-    ))
+    )))
     .bind(Uuid::new_v4())
     .bind(&r.name)
     .bind(&r.country)
@@ -149,10 +149,10 @@ pub async fn create_rule(pool: &PgPool, mut r: RuleInput) -> AppResult<TaxRule> 
 
 pub async fn update_rule(pool: &PgPool, id: Uuid, mut r: RuleInput) -> AppResult<Option<TaxRule>> {
     r.validate()?;
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE tax_rules SET name=$2, country=$3, region=$4, rate=$5, compound=$6, is_vat=$7, priority=$8, enabled=$9
          WHERE id = $1 RETURNING {RCOLS}"
-    ))
+    )))
     .bind(id)
     .bind(&r.name)
     .bind(&r.country)
@@ -274,11 +274,12 @@ pub async fn apply(tx: &mut Tx<'_>, invoice_id: Uuid) -> AppResult<()> {
             ),
         );
     let rules: Vec<Rule> = if cfg.enabled && !c.tax_exempt {
-        let all: Vec<TaxRule> =
-            sqlx::query_as(&format!("SELECT {RCOLS} FROM tax_rules WHERE enabled"))
-                .fetch_all(&mut **tx)
-                .await
-                .map_err(db_err)?;
+        let all: Vec<TaxRule> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+            "SELECT {RCOLS} FROM tax_rules WHERE enabled"
+        )))
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(db_err)?;
         select(&all, &c.country, &c.region)
             .into_iter()
             .filter(|r| !(reverse && r.is_vat))

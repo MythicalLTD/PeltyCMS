@@ -30,7 +30,7 @@ pub const EVENTS: [&str; 11] = [
 ];
 
 async fn arr(pool: &PgPool, sql: &str, q: &str, limit: i64) -> AppResult<Value> {
-    let v: Option<Value> = sqlx::query_scalar(sql)
+    let v: Option<Value> = sqlx::query_scalar(sqlx::AssertSqlSafe(sql))
         .bind(q)
         .bind(limit)
         .fetch_one(pool)
@@ -76,7 +76,7 @@ pub async fn search(pool: &PgPool, q: &str, limit: i64) -> AppResult<Value> {
 }
 
 async fn arr_c(pool: &PgPool, sql: &str, q: &str, cid: uuid::Uuid, limit: i64) -> AppResult<Value> {
-    let v: Option<Value> = sqlx::query_scalar(sql)
+    let v: Option<Value> = sqlx::query_scalar(sqlx::AssertSqlSafe(sql))
         .bind(q)
         .bind(limit)
         .bind(cid)

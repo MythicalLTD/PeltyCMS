@@ -274,14 +274,14 @@ pub async fn finalize(tx: &mut Tx<'_>, invoice_id: Uuid, due_days: i64) -> AppRe
         .as_ref()
         .map(|e| serde_json::to_value(e).unwrap_or_default());
     // A zero-total invoice is paid on issue; credit notes are settled by definition.
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE invoices SET number = $2, finalized_at = now(), issued_at = now(),
             due_at = now() + make_interval(days => $3::int),
             status = CASE WHEN total = 0 OR kind = 'credit_note' THEN 'paid' ELSE 'unpaid' END,
             paid_at = CASE WHEN total = 0 OR kind = 'credit_note' THEN now() END,
             legal_entity_id = $4, seller_snapshot = $5
          WHERE id = $1 RETURNING {COLS}"
-    ))
+    )))
     .bind(invoice_id)
     .bind(number)
     .bind(due_days.clamp(0, 365) as i32)
@@ -293,18 +293,20 @@ pub async fn finalize(tx: &mut Tx<'_>, invoice_id: Uuid, due_days: i64) -> AppRe
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Invoice>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM invoices WHERE id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM invoices WHERE id = $1"
+    )))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Fetch only if owned by `customer_id` (ownership enforced in SQL).
 pub async fn get_owned(pool: &PgPool, id: Uuid, customer_id: Uuid) -> AppResult<Option<Invoice>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM invoices WHERE id = $1 AND customer_id = $2 AND status <> 'draft'"
-    ))
+    )))
     .bind(id)
     .bind(customer_id)
     .fetch_optional(pool)
@@ -337,11 +339,11 @@ pub async fn list(
         i: Invoice,
         total_count: i64,
     }
-    let rows: Vec<Row> = sqlx::query_as(&format!(
+    let rows: Vec<Row> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS}, count(*) OVER() AS total_count FROM invoices
          WHERE ($1::uuid IS NULL OR (customer_id = $1 AND status <> 'draft')) AND ($2::text IS NULL OR status = $2)
          ORDER BY created_at DESC, id LIMIT $3 OFFSET $4"
-    ))
+    )))
     .bind(customer)
     .bind(status)
     .bind(limit)
@@ -355,9 +357,9 @@ pub async fn list(
 
 /// Void an unpaid invoice that has received no money.
 pub async fn void(pool: &PgPool, id: Uuid) -> AppResult<Invoice> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE invoices SET status = 'void' WHERE id = $1 AND status = 'unpaid' AND amount_paid = 0 RETURNING {COLS}"
-    ))
+    )))
     .bind(id)
     .fetch_optional(pool)
     .await
@@ -440,9 +442,9 @@ pub struct Payment {
 const PAYCOLS: &str = "id, invoice_id, gateway, provider_ref, amount, currency::text AS currency, status, fee, applied_at, created_at";
 
 pub async fn payments(pool: &PgPool, invoice_id: Uuid) -> AppResult<Vec<Payment>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {PAYCOLS} FROM payments WHERE invoice_id = $1 ORDER BY created_at"
-    ))
+    )))
     .bind(invoice_id)
     .fetch_all(pool)
     .await
@@ -461,10 +463,10 @@ pub async fn create_pending(
     if inv.status != "unpaid" || inv.balance() <= Decimal::ZERO {
         return Err(AppError::Conflict("error.invoice_not_payable"));
     }
-    let row: Option<Payment> = sqlx::query_as(&format!(
+    let row: Option<Payment> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO payments (id, user_id, gateway, amount, currency, status, idempotency_key, invoice_id, customer_id)
          VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,$8) ON CONFLICT (idempotency_key) DO NOTHING RETURNING {PAYCOLS}"
-    ))
+    )))
     .bind(Uuid::new_v4())
     .bind(user)
     .bind(gateway)
@@ -478,9 +480,9 @@ pub async fn create_pending(
     .map_err(db_err)?;
     match row {
         Some(p) => Ok(p),
-        None => sqlx::query_as(&format!(
+        None => sqlx::query_as(sqlx::AssertSqlSafe(format!(
             "SELECT {PAYCOLS} FROM payments WHERE idempotency_key = $1 AND invoice_id = $2"
-        ))
+        )))
         .bind(key)
         .bind(inv.id)
         .fetch_optional(pool)
@@ -517,10 +519,10 @@ pub async fn create_pending_multi(
     }
     let total = invs.iter().fold(Decimal::ZERO, |a, i| a + i.balance());
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let row: Option<Payment> = sqlx::query_as(&format!(
+    let row: Option<Payment> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO payments (id, user_id, gateway, amount, currency, status, idempotency_key, invoice_id, customer_id)
          VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,$8) ON CONFLICT (idempotency_key) DO NOTHING RETURNING {PAYCOLS}"
-    ))
+    )))
     .bind(Uuid::new_v4())
     .bind(user)
     .bind(gateway)
@@ -536,9 +538,9 @@ pub async fn create_pending_multi(
         Some(p) => p,
         None => {
             tx.rollback().await.ok();
-            return sqlx::query_as(&format!(
+            return sqlx::query_as(sqlx::AssertSqlSafe(format!(
                 "SELECT {PAYCOLS} FROM payments WHERE idempotency_key = $1 AND invoice_id = $2"
-            ))
+            )))
             .bind(key)
             .bind(first.id)
             .fetch_optional(pool)
@@ -830,7 +832,7 @@ pub async fn debit_note(
 
 /// Debit notes issued against an invoice.
 pub async fn debit_notes_for(pool: &PgPool, invoice_id: Uuid) -> AppResult<Vec<Invoice>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM invoices WHERE credit_for = $1 AND kind = 'debit_note' AND number IS NOT NULL ORDER BY created_at"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {COLS} FROM invoices WHERE credit_for = $1 AND kind = 'debit_note' AND number IS NOT NULL ORDER BY created_at")))
         .bind(invoice_id)
         .fetch_all(pool)
         .await
@@ -848,7 +850,7 @@ pub async fn note_reason(pool: &PgPool, id: Uuid) -> AppResult<String> {
 }
 
 pub async fn credit_notes_for(pool: &PgPool, invoice_id: Uuid) -> AppResult<Vec<Invoice>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM invoices WHERE credit_for = $1 AND kind = 'credit_note' AND number IS NOT NULL ORDER BY created_at"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {COLS} FROM invoices WHERE credit_for = $1 AND kind = 'credit_note' AND number IS NOT NULL ORDER BY created_at")))
         .bind(invoice_id)
         .fetch_all(pool)
         .await

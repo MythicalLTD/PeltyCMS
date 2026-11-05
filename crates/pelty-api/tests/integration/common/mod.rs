@@ -101,7 +101,7 @@ async fn scrub_leftovers(pool: &sqlx::PgPool) {
             // retrying mails) would starve tests that pump the queue.
             "UPDATE jobs SET status = 'dead' WHERE status IN ('queued', 'running')",
         ] {
-            if let Err(e) = sqlx::query(sql).execute(pool).await {
+            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(sql)).execute(pool).await {
                 eprintln!("scrub_leftovers: {sql}: {e}");
             }
         }

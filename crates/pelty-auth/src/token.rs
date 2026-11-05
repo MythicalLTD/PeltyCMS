@@ -1,13 +1,13 @@
 //! Random tokens and their SHA-256 hashes for sessions and links.
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use rand::RngCore;
+use rand::Rng;
 use sha2::{Digest, Sha256};
 
 /// 256-bit random token, URL-safe base64.
 pub fn generate() -> String {
     let mut b = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut b);
+    rand::rng().fill_bytes(&mut b);
     URL_SAFE_NO_PAD.encode(b)
 }
 

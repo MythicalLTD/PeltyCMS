@@ -367,7 +367,7 @@ mod registrars {
         t.push(201, r#"{"ok":true}"#);
         r.register("a.dev", 1, "", &contact(), &[]).await.unwrap();
         let q = &t.requests()[1];
-        use hmac::{Hmac, Mac};
+        use hmac::{digest::KeyInit, Hmac, Mac};
         let mut m = Hmac::<sha2::Sha256>::new_from_slice(b"s").unwrap();
         m.update(q.body.as_bytes());
         assert_eq!(

@@ -35,9 +35,9 @@ pub struct Service {
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Service>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM services s JOIN products p ON p.id = s.product_id WHERE s.id = $1"
-    ))
+    )))
     .bind(id)
     .fetch_optional(pool)
     .await
@@ -45,9 +45,9 @@ pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Service>> {
 }
 
 pub async fn get_owned(pool: &PgPool, id: Uuid, customer_id: Uuid) -> AppResult<Option<Service>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM services s JOIN products p ON p.id = s.product_id WHERE s.id = $1 AND s.customer_id = $2"
-    ))
+    )))
     .bind(id)
     .bind(customer_id)
     .fetch_optional(pool)
@@ -68,11 +68,11 @@ pub async fn list(
         s: Service,
         total_count: i64,
     }
-    let rows: Vec<Row> = sqlx::query_as(&format!(
+    let rows: Vec<Row> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS}, count(*) OVER() AS total_count FROM services s JOIN products p ON p.id = s.product_id
          WHERE ($1::uuid IS NULL OR s.customer_id = $1) AND ($2::text IS NULL OR s.status = $2)
          ORDER BY s.created_at DESC, s.id LIMIT $3 OFFSET $4"
-    ))
+    )))
     .bind(customer)
     .bind(status)
     .bind(limit)

@@ -48,11 +48,13 @@ pub fn parse_items(v: &Value) -> Vec<CartItem> {
 }
 
 pub async fn get_cart(pool: &PgPool, id: Uuid) -> AppResult<Option<Cart>> {
-    sqlx::query_as(&format!("SELECT {CART_COLS} FROM carts WHERE id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {CART_COLS} FROM carts WHERE id = $1"
+    )))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Create or replace a cart. A cart that already became an order is frozen.
@@ -93,7 +95,7 @@ pub async fn save_cart(
             .await
             .map_err(db_err)?;
     let currency = enabled.ok_or(AppError::Validation("error.invalid_currency"))?;
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO carts (id, customer_id, email, currency, country, items, coupon, locale)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
          ON CONFLICT (id) DO UPDATE SET customer_id = COALESCE(EXCLUDED.customer_id, carts.customer_id),
@@ -102,7 +104,7 @@ pub async fn save_cart(
          WHERE carts.order_id IS NULL
            AND (carts.customer_id IS NULL OR EXCLUDED.customer_id IS NULL OR carts.customer_id = EXCLUDED.customer_id)
          RETURNING {CART_COLS}"
-    ))
+    )))
     .bind(id)
     .bind(customer)
     .bind(email)
@@ -427,9 +429,9 @@ pub fn check_perms(p: &[String]) -> AppResult<Vec<String>> {
 }
 
 pub async fn contacts(pool: &PgPool, customer: Uuid) -> AppResult<Vec<Contact>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {CONTACT_COLS} FROM customer_subaccounts c JOIN users u ON u.id = c.user_id WHERE c.customer_id = $1 ORDER BY c.created_at"
-    ))
+    )))
     .bind(customer)
     .fetch_all(pool)
     .await
@@ -446,9 +448,9 @@ pub async fn mark_invited(pool: &PgPool, id: Uuid) -> AppResult<()> {
 }
 
 pub async fn contact_for_user(pool: &PgPool, user: Uuid) -> AppResult<Option<Contact>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {CONTACT_COLS} FROM customer_subaccounts c JOIN users u ON u.id = c.user_id WHERE c.user_id = $1"
-    ))
+    )))
     .bind(user)
     .fetch_optional(pool)
     .await
@@ -666,9 +668,9 @@ async fn json_rows(pool: &PgPool, sql: &str, customer: Uuid, on: bool) -> AppRes
     if !on {
         return Ok(Value::Null);
     }
-    sqlx::query_scalar::<_, Value>(&format!(
+    sqlx::query_scalar::<_, Value>(sqlx::AssertSqlSafe(format!(
         "SELECT COALESCE(json_agg(t), '[]'::json)::jsonb FROM ({sql}) t"
-    ))
+    )))
     .bind(customer)
     .fetch_one(pool)
     .await

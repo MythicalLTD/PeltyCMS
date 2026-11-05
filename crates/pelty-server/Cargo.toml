@@ -24,7 +24,7 @@ pelty-extensions = { workspace = true }
 serde = { workspace = true }
 # Setup wizard prompts (hidden password input; Windows and Unix terminals).
 dialoguer = { version = "0.12", default-features = false, features = ["password", "fuzzy-select"] }
-console = "0.15"
+console = "0.16"
 ipnet = "2"
 sqlx = { workspace = true }
 url = "2"
@@ -32,7 +32,7 @@ percent-encoding = "2"
 pelty-notifications = { workspace = true }
 include_dir = { version = "0.7", optional = true }
 # Self-update (`pelty-server update`).
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 ring = "0.17"
 zip = { workspace = true }
 tar = "0.4"

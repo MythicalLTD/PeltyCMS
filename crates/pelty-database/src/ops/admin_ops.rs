@@ -101,7 +101,7 @@ pub async fn login_history(pool: &PgPool, user: Option<Uuid>, limit: i64) -> App
            CASE WHEN s.revoked_at IS NOT NULL THEN 'revoked' WHEN s.idle_expires_at < now() OR s.absolute_expires_at < now() THEN 'expired' ELSE 'active' END AS state
          FROM sessions s JOIN users u ON u.id = s.user_id WHERE {STAFF} AND ($1::uuid IS NULL OR u.id = $1)
          ORDER BY s.created_at DESC LIMIT $2) x");
-    sqlx::query_scalar(&q)
+    sqlx::query_scalar(sqlx::AssertSqlSafe(q))
         .bind(user)
         .bind(limit.clamp(1, 500))
         .fetch_one(pool)
@@ -116,7 +116,7 @@ pub async fn staff_online(pool: &PgPool, minutes: i64) -> AppResult<Value> {
          FROM sessions s JOIN users u ON u.id = s.user_id
          WHERE {STAFF} AND s.revoked_at IS NULL AND s.idle_expires_at > now() AND s.last_seen_at > now() - make_interval(mins => $1::int)
          GROUP BY u.id) x");
-    sqlx::query_scalar(&q)
+    sqlx::query_scalar(sqlx::AssertSqlSafe(q))
         .bind(minutes.clamp(1, 1440) as i32)
         .fetch_one(pool)
         .await

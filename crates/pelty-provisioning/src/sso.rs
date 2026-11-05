@@ -5,7 +5,7 @@
 //! signature and expiry offline, then calls `POST /api/v1/sso/consume` once to
 //! burn the nonce, so a token can never be replayed.
 use crate::{ServerConn, ServiceCtx};
-use hmac::{Hmac, Mac};
+use hmac::{digest::KeyInit, Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 

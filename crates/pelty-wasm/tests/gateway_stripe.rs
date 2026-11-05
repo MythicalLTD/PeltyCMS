@@ -142,7 +142,7 @@ async fn complete_payment_statuses() {
 }
 
 fn signed(body: &str, ts: i64, secret: &[u8]) -> Headers {
-    use hmac::{Hmac, Mac};
+    use hmac::{digest::KeyInit, Hmac, Mac};
     let mut m = Hmac::<sha2::Sha256>::new_from_slice(secret).unwrap();
     m.update(format!("{ts}.{body}").as_bytes());
     let sig = hex::encode(m.finalize().into_bytes());

@@ -147,44 +147,25 @@ impl GeoIp {
         let Some(reader) = &self.reader else {
             return GeoHit::unknown();
         };
-        match reader.lookup::<maxminddb::geoip2::City>(addr) {
+        let Ok(result) = reader.lookup(addr) else {
+            return GeoHit::unknown();
+        };
+        match result.decode::<maxminddb::geoip2::City>() {
             Ok(Some(city)) => {
-                let country = city
-                    .country
-                    .as_ref()
-                    .and_then(|c| c.iso_code.map(str::to_string));
-                let country_name = city
-                    .country
-                    .as_ref()
-                    .and_then(|c| c.names.as_ref())
-                    .and_then(|n| {
-                        n.get("en")
-                            .or_else(|| n.values().next())
-                            .map(|s| (*s).to_string())
-                    });
-                let city_name = city
-                    .city
-                    .as_ref()
-                    .and_then(|c| c.names.as_ref())
-                    .and_then(|n| {
-                        n.get("en")
-                            .or_else(|| n.values().next())
-                            .map(|s| (*s).to_string())
-                    });
+                let en = |n: &maxminddb::geoip2::Names<'_>| {
+                    n.english
+                        .or(n.german)
+                        .or(n.spanish)
+                        .or(n.french)
+                        .map(str::to_string)
+                };
+                let country = city.country.iso_code.map(str::to_string);
+                let country_name = en(&city.country.names);
+                let city_name = en(&city.city.names);
                 let region = city
                     .subdivisions
-                    .as_ref()
-                    .and_then(|s| s.first())
-                    .and_then(|s| {
-                        s.names
-                            .as_ref()
-                            .and_then(|n| {
-                                n.get("en")
-                                    .or_else(|| n.values().next())
-                                    .map(|x| (*x).to_string())
-                            })
-                            .or_else(|| s.iso_code.map(str::to_string))
-                    });
+                    .first()
+                    .and_then(|s| en(&s.names).or_else(|| s.iso_code.map(str::to_string)));
                 GeoHit::compose(city_name, region, country, country_name)
             }
             Ok(None) | Err(_) => GeoHit::unknown(),

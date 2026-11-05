@@ -80,7 +80,7 @@ pub async fn workspace(pool: &PgPool, id: Uuid, access: Access) -> AppResult<Val
             ("created_at DESC,id DESC", "r.created_at DESC,r.id DESC")
         };
         let sql = format!("SELECT jsonb_build_object('items',COALESCE((SELECT jsonb_agg(to_jsonb(r) ORDER BY {aggregate_order}) FROM (SELECT * FROM ({0}) source ORDER BY {order} LIMIT 50) r),'[]'::jsonb),'total',(SELECT count(*) FROM ({0}) source))", section.sql);
-        let page: Value = sqlx::query_scalar(&sql)
+        let page: Value = sqlx::query_scalar(sqlx::AssertSqlSafe(sql))
             .bind(id)
             .fetch_one(&mut *tx)
             .await
@@ -192,7 +192,7 @@ pub async fn activity(
     }
     let sql = format!("SELECT id,kind,occurred_at,title,status FROM ({}) events WHERE ($2::timestamptz IS NULL OR (occurred_at,id COLLATE \"C\") < ($2,$3::text COLLATE \"C\")) ORDER BY occurred_at DESC,id COLLATE \"C\" DESC LIMIT $4", branches.join(" UNION ALL "));
     let mut rows: Vec<(String, String, time::OffsetDateTime, String, Option<String>)> =
-        sqlx::query_as(&sql)
+        sqlx::query_as(sqlx::AssertSqlSafe(sql))
             .bind(id)
             .bind(cursor.as_ref().map(|c| c.at))
             .bind(cursor.as_ref().map(|c| c.key.as_str()))

@@ -33,9 +33,9 @@ pub async fn create(
     role: &str,
 ) -> AppResult<User> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let user: User = sqlx::query_as(&format!(
+    let user: User = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO users (id, email, password_hash, display_name) VALUES ($1,$2,$3,$4) RETURNING {COLS}"
-    ))
+    )))
     .bind(Uuid::new_v4())
     .bind(email)
     .bind(hash)
@@ -56,19 +56,23 @@ pub async fn create(
 }
 
 pub async fn find_by_email(pool: &PgPool, email: &str) -> AppResult<Option<User>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM users WHERE email = $1"))
-        .bind(email)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM users WHERE email = $1"
+    )))
+    .bind(email)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn find(pool: &PgPool, id: Uuid) -> AppResult<Option<User>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM users WHERE id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM users WHERE id = $1"
+    )))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn list(pool: &PgPool, limit: i64, offset: i64) -> AppResult<(Vec<User>, i64)> {
@@ -80,9 +84,9 @@ pub async fn list(pool: &PgPool, limit: i64, offset: i64) -> AppResult<(Vec<User
         user: User,
         total: i64,
     }
-    let rows: Vec<Row> = sqlx::query_as(&format!(
+    let rows: Vec<Row> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS}, count(*) OVER() AS total FROM users ORDER BY created_at DESC, id LIMIT $1 OFFSET $2"
-    ))
+    )))
     .bind(limit)
     .bind(offset)
     .fetch_all(pool)

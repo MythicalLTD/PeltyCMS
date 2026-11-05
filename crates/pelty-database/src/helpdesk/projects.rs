@@ -70,10 +70,10 @@ const SUMMARY: &str = "SELECT p.id, p.customer_id, c.email::text AS customer_ema
 
 /// Staff list (all, or one client's); `client` restricts to visible ones.
 pub async fn list(pool: &PgPool, customer: Option<Uuid>, client: bool) -> AppResult<Value> {
-    sqlx::query_scalar(&format!(
+    sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT COALESCE(json_agg(row_to_json(x) ORDER BY x.created_at DESC), '[]'::json)::jsonb FROM ({SUMMARY}
          WHERE ($1::uuid IS NULL OR p.customer_id = $1) AND (NOT $2 OR p.client_visible) ORDER BY p.created_at DESC LIMIT 500) x"
-    ))
+    )))
     .bind(customer)
     .bind(client)
     .fetch_one(pool)
@@ -83,7 +83,7 @@ pub async fn list(pool: &PgPool, customer: Option<Uuid>, client: bool) -> AppRes
 
 /// Full project. With `customer` set, only that client's visible project.
 pub async fn detail(pool: &PgPool, id: Uuid, customer: Option<Uuid>) -> AppResult<Value> {
-    let v: Option<Value> = sqlx::query_scalar(&format!(
+    let v: Option<Value> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT jsonb_build_object(
            'project', (SELECT row_to_json(x)::jsonb FROM ({SUMMARY} WHERE p.id = $1) x) || jsonb_build_object('description', p.description),
            'tasks', COALESCE((SELECT jsonb_agg(jsonb_build_object('id', t.id, 'title', t.title, 'done', t.done, 'due_date', t.due_date,
@@ -97,7 +97,7 @@ pub async fn detail(pool: &PgPool, id: Uuid, customer: Option<Uuid>) -> AppResul
                                           ELSE (SELECT COALESCE(i.number, 'PF-' || upper(left(i.id::text, 8))) FROM invoices i WHERE i.id = l.target_id) END)
                      ORDER BY l.kind, l.target_id) FROM project_links l WHERE l.project_id = p.id), '[]'::jsonb))
          FROM projects p WHERE p.id = $1 AND ($2::uuid IS NULL OR (p.customer_id = $2 AND p.client_visible))"
-    ))
+    )))
     .bind(id)
     .bind(customer)
     .fetch_optional(pool)
@@ -306,9 +306,9 @@ pub async fn link(pool: &PgPool, project: Uuid, kind: &str, target: Uuid) -> App
         "invoice" => "invoices",
         _ => return Err(v()),
     };
-    let ok: Option<bool> = sqlx::query_scalar(&format!(
+    let ok: Option<bool> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT EXISTS(SELECT 1 FROM {table} x WHERE x.id = $2 AND x.customer_id IS NOT DISTINCT FROM p.customer_id) FROM projects p WHERE p.id = $1"
-    ))
+    )))
     .bind(project)
     .bind(target)
     .fetch_optional(pool)

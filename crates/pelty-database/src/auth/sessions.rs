@@ -34,10 +34,10 @@ pub struct NewSession<'a> {
 
 pub async fn create(pool: &PgPool, s: NewSession<'_>) -> AppResult<Session> {
     let now = OffsetDateTime::now_utc();
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO sessions (id, user_id, token_hash, csrf_token, ip, user_agent, idle_expires_at, absolute_expires_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING {COLS}"
-    ))
+    )))
     .bind(Uuid::new_v4())
     .bind(s.user_id)
     .bind(s.token_hash)
@@ -54,11 +54,11 @@ pub async fn create(pool: &PgPool, s: NewSession<'_>) -> AppResult<Session> {
 /// Look up an active session by token hash and slide its idle expiry.
 pub async fn touch(pool: &PgPool, token_hash: &[u8], idle: Duration) -> AppResult<Option<Session>> {
     let now = OffsetDateTime::now_utc();
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE sessions SET last_seen_at = $2, idle_expires_at = LEAST($2 + $3::interval, absolute_expires_at)
          WHERE token_hash = $1 AND revoked_at IS NULL AND idle_expires_at > $2 AND absolute_expires_at > $2
          RETURNING {COLS}"
-    ))
+    )))
     .bind(token_hash)
     .bind(now)
     .bind(format!("{} seconds", idle.whole_seconds()))
@@ -78,10 +78,10 @@ pub async fn revoke(pool: &PgPool, user_id: Uuid, id: Uuid) -> AppResult<bool> {
 }
 
 pub async fn list_active(pool: &PgPool, user_id: Uuid) -> AppResult<Vec<Session>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM sessions WHERE user_id = $1 AND revoked_at IS NULL
          AND idle_expires_at > now() AND absolute_expires_at > now() ORDER BY last_seen_at DESC"
-    ))
+    )))
     .bind(user_id)
     .fetch_all(pool)
     .await

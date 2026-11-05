@@ -121,17 +121,19 @@ impl Profile {
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Customer>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM customers WHERE id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM customers WHERE id = $1"
+    )))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn by_owner(pool: &PgPool, user_id: Uuid) -> AppResult<Option<Customer>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM customers WHERE owner_user_id = $1"
-    ))
+    )))
     .bind(user_id)
     .fetch_optional(pool)
     .await
@@ -176,7 +178,7 @@ pub async fn create(pool: &PgPool, email: &str, p: &Profile) -> AppResult<Custom
 }
 
 pub async fn update_profile(pool: &PgPool, id: Uuid, p: &Profile) -> AppResult<Option<Customer>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE customers SET
             organization = COALESCE($2, organization), first_name = COALESCE($3, first_name),
             last_name = COALESCE($4, last_name), phone = COALESCE($5, phone),
@@ -186,7 +188,7 @@ pub async fn update_profile(pool: &PgPool, id: Uuid, p: &Profile) -> AppResult<O
             vat_number = COALESCE($14, vat_number),
             updated_at = now()
          WHERE id = $1 RETURNING {COLS}"
-    ))
+    )))
     .bind(id)
     .bind(&p.organization)
     .bind(&p.first_name)
@@ -220,10 +222,10 @@ pub async fn update_admin(
     if notes.is_some_and(|n| n.len() > 10_000) {
         return Err(AppError::Validation("error.field_too_long"));
     }
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE customers SET status = COALESCE($2, status), notes = COALESCE($3, notes), tax_exempt = COALESCE($4, tax_exempt), updated_at = now()
          WHERE id = $1 RETURNING {COLS}"
-    ))
+    )))
     .bind(id)
     .bind(status)
     .bind(notes)
@@ -247,7 +249,7 @@ pub async fn list(
         total: i64,
     }
     let pat = q.map(|s| format!("{}%", s.replace(['%', '_', '\\'], "")));
-    let rows: Vec<Row> = sqlx::query_as(&format!(
+    let rows: Vec<Row> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS}, count(*) OVER() AS total FROM customers
          WHERE ($1::text IS NULL OR email::text ILIKE $1 OR organization ILIKE $1 OR last_name ILIKE $1)
            -- Staff whose billing profile was only auto-created (no invoices, no services) are not customers.
@@ -256,7 +258,7 @@ pub async fn list(
                     AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.customer_id = customers.id)
                     AND NOT EXISTS (SELECT 1 FROM services sv WHERE sv.customer_id = customers.id))
          ORDER BY created_at DESC, id LIMIT $2 OFFSET $3"
-    ))
+    )))
     .bind(pat)
     .bind(limit)
     .bind(offset)

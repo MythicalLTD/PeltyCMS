@@ -11,7 +11,7 @@ description = "Cross-platform developer commands (`cargo xtask help`). Replaces 
 # (no TLS by default) for `cargo xtask seed` against a local server; lzma-rs
 # and tar (pure Rust) unpack the downloaded dev PostgreSQL on any OS.
 [dependencies]
-ctrlc = { version = "3.4", features = ["termination"] }
+ctrlc = { version = "3.5", features = ["termination"] }
 lzma-rs = "0.3"
 serde_json = { workspace = true }
 serde = { workspace = true, optional = true }

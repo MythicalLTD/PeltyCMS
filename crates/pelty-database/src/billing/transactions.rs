@@ -75,19 +75,19 @@ pub async fn list(
         "SELECT p.id, p.gateway, p.provider_ref, p.amount, p.fee, p.currency::text AS currency, p.status, p.invoice_id, i.number AS invoice_number,
                 p.customer_id, c.email AS customer_email, p.admin_note, p.created_at {WHERE} ORDER BY p.created_at DESC, p.id LIMIT $8 OFFSET $9"
     );
-    let items: Vec<Transaction> = bind_filter!(sqlx::query_as(&sql), f)
+    let items: Vec<Transaction> = bind_filter!(sqlx::query_as(sqlx::AssertSqlSafe(sql)), f)
         .bind(limit)
         .bind(offset)
         .fetch_all(pool)
         .await
         .map_err(db_err)?;
     let csql = format!("SELECT count(*) {WHERE}");
-    let (count,): (i64,) = bind_filter!(sqlx::query_as(&csql), f)
+    let (count,): (i64,) = bind_filter!(sqlx::query_as(sqlx::AssertSqlSafe(csql)), f)
         .fetch_one(pool)
         .await
         .map_err(db_err)?;
     let tsql = format!("SELECT p.currency::text AS currency, p.status, count(*) AS count, COALESCE(sum(p.amount), 0) AS amount {WHERE} GROUP BY 1, 2 ORDER BY 1, 2");
-    let totals: Vec<Total> = bind_filter!(sqlx::query_as(&tsql), f)
+    let totals: Vec<Total> = bind_filter!(sqlx::query_as(sqlx::AssertSqlSafe(tsql)), f)
         .fetch_all(pool)
         .await
         .map_err(db_err)?;

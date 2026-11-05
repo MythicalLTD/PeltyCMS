@@ -101,7 +101,7 @@ pub async fn save(pool: &PgPool, id: Option<Uuid>, i: &IdpInput) -> AppResult<Op
             group_map, role_map, nameid_is_email, allow_register, link_by_verified_email, allow_staff, button_label)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) RETURNING id"
     };
-    sqlx::query_scalar(sql)
+    sqlx::query_scalar(sqlx::AssertSqlSafe(sql))
         .bind(id_v)
         .bind(&i.name)
         .bind(i.enabled)

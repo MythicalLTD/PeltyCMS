@@ -75,7 +75,7 @@ fn check_err(e: sqlx::Error) -> AppError {
 }
 
 pub async fn metrics(pool: &PgPool, product: Option<Uuid>) -> AppResult<Vec<Metric>> {
-    sqlx::query_as(&format!("SELECT {MCOLS} FROM usage_metrics WHERE ($1::uuid IS NULL OR product_id = $1) ORDER BY product_id, key"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {MCOLS} FROM usage_metrics WHERE ($1::uuid IS NULL OR product_id = $1) ORDER BY product_id, key")))
         .bind(product)
         .fetch_all(pool)
         .await
@@ -83,9 +83,9 @@ pub async fn metrics(pool: &PgPool, product: Option<Uuid>) -> AppResult<Vec<Metr
 }
 
 pub async fn create_metric(pool: &PgPool, m: &MetricInput) -> AppResult<Metric> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO usage_metrics (product_id, key, name, unit, unit_price, included_quantity, active, source_key, source_divisor, aggregate) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING {MCOLS}"
-    ))
+    )))
     .bind(m.product_id)
     .bind(m.key.trim())
     .bind(m.name.trim())
@@ -103,9 +103,9 @@ pub async fn create_metric(pool: &PgPool, m: &MetricInput) -> AppResult<Metric> 
 
 /// Key and product are immutable (records reference the metric).
 pub async fn update_metric(pool: &PgPool, id: Uuid, m: &MetricInput) -> AppResult<Metric> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE usage_metrics SET name = $2, unit = $3, unit_price = $4, included_quantity = $5, active = $6, source_key = $7, source_divisor = $8, aggregate = $9 WHERE id = $1 RETURNING {MCOLS}"
-    ))
+    )))
     .bind(id)
     .bind(m.name.trim())
     .bind(m.unit.trim())
@@ -222,11 +222,13 @@ pub async fn record(
     .await
     .map_err(db_err)?
     {
-        let period = sqlx::query_as(&format!("SELECT {PCOLS} FROM usage_periods WHERE id = $1"))
-            .bind(pid)
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(db_err)?;
+        let period = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+            "SELECT {PCOLS} FROM usage_periods WHERE id = $1"
+        )))
+        .bind(pid)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_err)?;
         return Ok(Recorded {
             id,
             duplicate: true,
@@ -243,9 +245,9 @@ pub async fn record(
     .map_err(db_err)?;
     let metric = metric.ok_or(AppError::Validation("error.unknown_metric"))?;
     let day = at.date();
-    let mut open: Option<Period> = sqlx::query_as(&format!(
+    let mut open: Option<Period> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {PCOLS} FROM usage_periods WHERE service_id = $1 AND status = 'open'"
-    ))
+    )))
     .bind(service_id)
     .fetch_optional(&mut *tx)
     .await
@@ -279,7 +281,7 @@ pub async fn record(
             .unwrap_or(day);
         let end = period_end(start, next_due);
         open = Some(
-            sqlx::query_as(&format!("INSERT INTO usage_periods (service_id, period_start, period_end) VALUES ($1,$2,$3) RETURNING {PCOLS}"))
+            sqlx::query_as(sqlx::AssertSqlSafe(format!("INSERT INTO usage_periods (service_id, period_start, period_end) VALUES ($1,$2,$3) RETURNING {PCOLS}")))
                 .bind(service_id)
                 .bind(start)
                 .bind(end)
@@ -341,7 +343,7 @@ pub async fn period_usage(pool: &PgPool, period_id: Uuid) -> AppResult<Vec<Metri
 }
 
 pub async fn periods(pool: &PgPool, service_id: Uuid) -> AppResult<Vec<Period>> {
-    sqlx::query_as(&format!("SELECT {PCOLS} FROM usage_periods WHERE service_id = $1 ORDER BY period_start DESC LIMIT 24"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {PCOLS} FROM usage_periods WHERE service_id = $1 ORDER BY period_start DESC LIMIT 24")))
         .bind(service_id)
         .fetch_all(pool)
         .await

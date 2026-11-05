@@ -1,6 +1,6 @@
 //! RFC 6238 TOTP (SHA-1, 6 digits, 30 s) plus backup codes.
-use hmac::{Hmac, Mac};
-use rand::{Rng, RngCore};
+use hmac::{digest::KeyInit, Hmac, Mac};
+use rand::{Rng, RngExt};
 use sha1::Sha1;
 
 pub const STEP: i64 = 30;
@@ -11,7 +11,7 @@ pub const BACKUP_CODES: usize = 10;
 
 pub fn new_secret() -> Vec<u8> {
     let mut s = vec![0u8; 20];
-    rand::rngs::OsRng.fill_bytes(&mut s);
+    rand::rng().fill_bytes(&mut s);
     s
 }
 
@@ -35,7 +35,8 @@ pub fn base32(data: &[u8]) -> String {
 }
 
 pub fn hotp(secret: &[u8], counter: u64) -> u32 {
-    let mut mac = <Hmac<Sha1> as Mac>::new_from_slice(secret).expect("HMAC takes any key length");
+    let mut mac =
+        <Hmac<Sha1> as KeyInit>::new_from_slice(secret).expect("HMAC takes any key length");
     mac.update(&counter.to_be_bytes());
     let h = mac.finalize().into_bytes();
     let off = (h[19] & 0x0f) as usize;
@@ -103,9 +104,9 @@ pub fn otpauth_url(issuer: &str, account: &str, secret: &[u8]) -> String {
 /// `xxxxx-xxxxx` from an unambiguous alphabet (~50 bits).
 pub fn backup_code() -> String {
     const A: &[u8] = b"abcdefghjkmnpqrstuvwxyz23456789";
-    let mut r = rand::rngs::OsRng;
+    let mut r = rand::rng();
     let mut s: String = (0..10)
-        .map(|_| A[r.gen_range(0..A.len())] as char)
+        .map(|_| A[r.random_range(0..A.len())] as char)
         .collect();
     s.insert(5, '-');
     s

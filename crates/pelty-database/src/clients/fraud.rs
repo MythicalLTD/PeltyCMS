@@ -295,9 +295,9 @@ pub async fn list(
     limit: i64,
     offset: i64,
 ) -> AppResult<(Vec<Check>, i64)> {
-    let items = sqlx::query_as(&format!(
+    let items = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {CHECK_COLS} WHERE {WHERE} ORDER BY f.created_at DESC, f.id LIMIT $5 OFFSET $6"
-    ))
+    )))
     .bind(q.verdict)
     .bind(q.open)
     .bind(q.customer_id)
@@ -307,9 +307,9 @@ pub async fn list(
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    let total = sqlx::query_scalar(&format!(
+    let total = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT count(*) FROM fraud_checks f LEFT JOIN orders o ON o.id = f.order_id WHERE {WHERE}"
-    ))
+    )))
     .bind(q.verdict)
     .bind(q.open)
     .bind(q.customer_id)
@@ -321,12 +321,14 @@ pub async fn list(
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Check> {
-    sqlx::query_as(&format!("SELECT {CHECK_COLS} WHERE f.id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?
-        .ok_or(AppError::NotFound)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {CHECK_COLS} WHERE f.id = $1"
+    )))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?
+    .ok_or(AppError::NotFound)
 }
 
 /// Reviews awaiting a decision whose order is still pending.

@@ -200,7 +200,7 @@ pub fn db_err(e: sqlx::Error) -> AppError {
 
 /// Execute raw SQL (tests/maintenance only; never with user input).
 pub async fn raw_execute(pool: &PgPool, sql: &str) -> Result<u64, sqlx::Error> {
-    sqlx::query(sql)
+    sqlx::query(sqlx::AssertSqlSafe(sql))
         .execute(pool)
         .await
         .map(|r| r.rows_affected())

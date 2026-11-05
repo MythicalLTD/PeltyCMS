@@ -48,9 +48,7 @@ pub struct Doc {
     pub root: usize,
 }
 
-fn utf8(b: &[u8]) -> Result<&str, Error> {
-    std::str::from_utf8(b).map_err(|_| Error::Xml("utf8"))
-}
+// quick-xml 0.42 exposes text/attrs as UTF-8 `&str` / `Cow<str>`.
 
 fn split(q: &str) -> (&str, &str) {
     match q.split_once(':') {
@@ -106,7 +104,7 @@ impl Doc {
                     stack.pop().ok_or(Error::Xml("syntax"))?;
                 }
                 Event::Text(t) => {
-                    let raw = utf8(&t)?;
+                    let raw = t.as_ref();
                     match stack.last() {
                         Some(&p) => {
                             let v = unescape(raw)?;
@@ -119,16 +117,16 @@ impl Doc {
                 // quick-xml >= 0.38 reports `&amp;` etc. as separate events.
                 Event::GeneralRef(g) => {
                     let p = *stack.last().ok_or(Error::Xml("text_outside_root"))?;
-                    let v = unescape(&format!("&{};", utf8(&g)?))?;
+                    let v = unescape(&format!("&{};", g.as_ref()))?;
                     push_text(&mut elems[p].children, v);
                 }
                 Event::CData(t) => {
                     let p = *stack.last().ok_or(Error::Xml("text_outside_root"))?;
-                    elems[p].children.push(Child::Text(utf8(&t)?.to_string()));
+                    elems[p].children.push(Child::Text(t.as_ref().to_string()));
                 }
                 Event::PI(pi) => {
                     if let Some(&p) = stack.last() {
-                        let raw = utf8(&pi)?;
+                        let raw = pi.as_ref();
                         let (t, d) = raw
                             .split_once(|c: char| c.is_whitespace())
                             .unwrap_or((raw, ""));
@@ -163,9 +161,9 @@ impl Doc {
         let mut raw_attrs = vec![];
         for a in e.attributes().with_checks(true) {
             let a = a.map_err(|_| Error::Xml("attribute"))?;
-            let key = utf8(a.key.as_ref())?.to_string();
+            let key = a.key.as_ref().to_string();
             // Attribute-value normalization: literal whitespace becomes a space.
-            let raw = utf8(&a.value)?.replace(['\t', '\n'], " ");
+            let raw = a.value.as_ref().replace(['\t', '\n'], " ");
             let value = unescape(&raw)?;
             if key == "xmlns" {
                 scope.insert(String::new(), value);
@@ -184,7 +182,7 @@ impl Doc {
             }
             scope.get(p).cloned().ok_or(Error::Xml("unbound_prefix"))
         };
-        let name = utf8(e.name().as_ref())?.to_string();
+        let name = e.name().as_ref().to_string();
         let (prefix, local) = split(&name);
         let ns = if prefix.is_empty() {
             scope.get("").cloned().unwrap_or_default()

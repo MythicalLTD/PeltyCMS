@@ -169,7 +169,7 @@ pub async fn effective_percent(pool: &PgPool, affiliate_id: Uuid) -> AppResult<D
 const MCOLS: &str = "id, kind, title, body, image_url, sort_order, active, created_at";
 
 pub async fn materials(pool: &PgPool, only_active: bool) -> AppResult<Vec<Material>> {
-    sqlx::query_as(&format!("SELECT {MCOLS} FROM affiliate_materials WHERE active OR NOT $1 ORDER BY sort_order, created_at"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {MCOLS} FROM affiliate_materials WHERE active OR NOT $1 ORDER BY sort_order, created_at")))
         .bind(only_active).fetch_all(pool).await.map_err(db_err)
 }
 
@@ -202,7 +202,7 @@ pub async fn save_material(
         None => format!("INSERT INTO affiliate_materials (id, kind, title, body, image_url, sort_order, active) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING {MCOLS}"),
         Some(_) => format!("UPDATE affiliate_materials SET kind=$2, title=$3, body=$4, image_url=$5, sort_order=$6, active=$7 WHERE id=$1 RETURNING {MCOLS}"),
     };
-    sqlx::query_as(&q)
+    sqlx::query_as(sqlx::AssertSqlSafe(q))
         .bind(id.unwrap_or_else(Uuid::new_v4))
         .bind(&m.kind)
         .bind(m.title.trim())

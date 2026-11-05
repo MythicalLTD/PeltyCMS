@@ -9,7 +9,7 @@ edition = "2021"
 # Custom terms in ./LICENSE (PeltyCMS Source Available License). Not OSI Open Source.
 license = "LicenseRef-PeltyCMS-SAL-1.0"
 authors = ["MythicalSystems Studios LLC"]
-rust-version = "1.85"
+rust-version = "1.87"
 
 [workspace.dependencies]
 pelty-core = { path = "crates/pelty-core" }
@@ -28,8 +28,8 @@ pelty-docs = { path = "crates/pelty-docs" }
 axum = { version = "0.8", features = ["macros"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "net", "sync", "time", "io-std", "io-util"] }
 tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.6", features = ["trace", "request-id", "compression-gzip", "compression-br", "fs", "set-header", "util"] }
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "time", "json", "rust_decimal", "macros", "migrate"] }
+tower-http = { version = "0.7", features = ["trace", "request-id", "compression-gzip", "compression-br", "fs", "set-header", "util"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "time", "json", "rust_decimal", "macros", "migrate"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
@@ -38,15 +38,15 @@ thiserror = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 time = { version = "0.3", features = ["serde", "serde-human-readable", "formatting", "parsing", "macros"] }
 rust_decimal = { version = "1", features = ["serde-str"] }
-argon2 = { version = "0.5", features = ["std"] }
-rand = "0.8"
-sha2 = "0.10"
-base64 = "0.22"
+argon2 = { version = "0.6", features = ["password-hash", "alloc", "getrandom"] }
+rand = { version = "0.10", features = ["sys_rng"] }
+sha2 = "0.11"
+base64 = "0.23"
 webauthn-rs = { version = "0.6", features = ["danger-allow-state-serialisation", "conditional-ui"] }
 webauthn-authenticator-rs = { version = "0.6", default-features = false, features = ["softpasskey"] }
 hex = "0.4"
 subtle = "2"
-utoipa = { version = "5", features = ["uuid", "time", "axum_extras", "decimal"] }
+utoipa = { version = "6", features = ["uuid", "time", "axum_extras", "decimal"] }
 http-body-util = "0.1"
 zip = { version = "9", default-features = false, features = ["deflate"] }
 

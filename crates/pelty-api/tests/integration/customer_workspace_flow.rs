@@ -90,7 +90,7 @@ async fn fixture() -> Fixture {
         let account = &mut accounts[index];
         for (section, insert) in inserts {
             let sql = format!("WITH seed AS (SELECT $1::uuid cid,$2::uuid uid,$3::uuid pid,$4::uuid other,'2025-01-01T00:00:00Z'::timestamptz at FROM generate_series(1,53)) {insert} RETURNING id::text");
-            let ids: Vec<String> = sqlx::query_scalar(&sql)
+            let ids: Vec<String> = sqlx::query_scalar(sqlx::AssertSqlSafe(sql))
                 .bind(account.id)
                 .bind(account.owner)
                 .bind(product)

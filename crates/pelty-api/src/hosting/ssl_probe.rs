@@ -26,7 +26,8 @@ fn fail(status: &'static str, error: impl Into<String>) -> Probe {
 pub fn parse_leaf(der_bytes: &[u8]) -> Result<(OffsetDateTime, OffsetDateTime, String), String> {
     use der::Decode;
     let c = x509_cert::Certificate::from_der(der_bytes).map_err(|e| e.to_string())?;
-    let v = &c.tbs_certificate.validity;
+    let tbs = c.tbs_certificate();
+    let v = tbs.validity();
     let ts = |t: x509_cert::time::Time| {
         OffsetDateTime::from_unix_timestamp(t.to_unix_duration().as_secs() as i64)
             .map_err(|e| e.to_string())
@@ -34,7 +35,7 @@ pub fn parse_leaf(der_bytes: &[u8]) -> Result<(OffsetDateTime, OffsetDateTime, S
     Ok((
         ts(v.not_before)?,
         ts(v.not_after)?,
-        c.tbs_certificate.issuer.to_string(),
+        tbs.issuer().to_string(),
     ))
 }
 

@@ -21,9 +21,9 @@ pub struct Client {
 const COLS: &str = "id, client_id, secret_hash, name, redirect_uris, scopes, trusted, enabled";
 
 pub async fn client_by_public_id(pool: &PgPool, cid: &str) -> AppResult<Option<Client>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM oauth_clients WHERE client_id=$1"
-    ))
+    )))
     .bind(cid)
     .fetch_optional(pool)
     .await
@@ -31,9 +31,9 @@ pub async fn client_by_public_id(pool: &PgPool, cid: &str) -> AppResult<Option<C
 }
 
 pub async fn list_clients(pool: &PgPool) -> AppResult<Vec<Client>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM oauth_clients ORDER BY created_at DESC"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)
@@ -71,10 +71,10 @@ pub async fn update_client(
     id: Uuid,
     p: &ClientPatch<'_>,
 ) -> AppResult<Option<Client>> {
-    let row: Option<Client> = sqlx::query_as(&format!(
+    let row: Option<Client> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE oauth_clients SET name=COALESCE($2,name), redirect_uris=COALESCE($3,redirect_uris), scopes=COALESCE($4,scopes), \
          trusted=COALESCE($5,trusted), enabled=COALESCE($6,enabled) WHERE id=$1 RETURNING {COLS}"
-    ))
+    )))
     .bind(id).bind(p.name).bind(p.redirect_uris).bind(p.scopes).bind(p.trusted).bind(p.enabled)
     .fetch_optional(pool).await.map_err(db_err)?;
     if row.is_some() && p.enabled == Some(false) {

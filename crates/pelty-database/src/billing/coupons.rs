@@ -159,20 +159,22 @@ pub fn line_discount(kind: &str, value: Decimal, base: Decimal, exponent: u32) -
 }
 
 pub async fn list(pool: &PgPool) -> AppResult<Vec<Coupon>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM coupons c ORDER BY c.created_at DESC, c.id"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Coupon>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM coupons c WHERE c.id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM coupons c WHERE c.id = $1"
+    )))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 async fn set_products(
@@ -314,12 +316,14 @@ async fn check_eligible(
 
 /// Read-only check for the order form (no redemption).
 pub async fn check(pool: &PgPool, code: &str, customer: Uuid, currency: &str) -> AppResult<Coupon> {
-    let c: Coupon = sqlx::query_as(&format!("SELECT {COLS} FROM coupons c WHERE c.code = $1"))
-        .bind(normalize(code))
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?
-        .ok_or(AppError::Validation("error.coupon_invalid"))?;
+    let c: Coupon = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM coupons c WHERE c.code = $1"
+    )))
+    .bind(normalize(code))
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?
+    .ok_or(AppError::Validation("error.coupon_invalid"))?;
     check_usable(
         &c,
         &currency.to_ascii_uppercase(),
@@ -341,9 +345,9 @@ pub async fn lock_for_order(
     customer: Uuid,
     currency: &str,
 ) -> AppResult<Coupon> {
-    let c: Coupon = sqlx::query_as(&format!(
+    let c: Coupon = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM coupons c WHERE c.code = $1 FOR UPDATE OF c"
-    ))
+    )))
     .bind(normalize(code))
     .fetch_optional(&mut **tx)
     .await

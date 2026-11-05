@@ -63,20 +63,22 @@ pub fn valid_base_url(u: &str) -> bool {
 }
 
 pub async fn list_servers(pool: &PgPool) -> AppResult<Vec<Server>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM servers v ORDER BY v.name, v.id"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)
 }
 
 pub async fn get_server(pool: &PgPool, id: Uuid) -> AppResult<Option<Server>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM servers v WHERE v.id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM servers v WHERE v.id = $1"
+    )))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Sealed key + base url + module + config, for the worker only.

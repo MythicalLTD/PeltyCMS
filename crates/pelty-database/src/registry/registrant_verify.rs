@@ -25,9 +25,9 @@ pub struct Verification {
 const COLS: &str = "domain_id, email, status, deadline, sent_at, reminders, verified_at";
 
 pub async fn get(pool: &PgPool, domain: Uuid) -> AppResult<Option<Verification>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM registrant_verifications WHERE domain_id = $1"
-    ))
+    )))
     .bind(domain)
     .fetch_optional(pool)
     .await
@@ -48,12 +48,12 @@ pub async fn start(
     token_hash: &[u8],
     deadline: Date,
 ) -> AppResult<Verification> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO registrant_verifications (domain_id, email, token_hash, deadline) VALUES ($1, $2, $3, $4)
          ON CONFLICT (domain_id) DO UPDATE SET email = EXCLUDED.email, token_hash = EXCLUDED.token_hash, deadline = EXCLUDED.deadline,
            status = 'pending', sent_at = now(), reminders = 0, verified_at = NULL
          RETURNING {COLS}"
-    ))
+    )))
     .bind(domain).bind(email).bind(token_hash).bind(deadline).fetch_one(pool).await.map_err(db_err)
 }
 
@@ -65,11 +65,11 @@ pub async fn mark_verified_direct(
     token_hash: &[u8],
     today: Date,
 ) -> AppResult<Verification> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO registrant_verifications (domain_id, email, token_hash, deadline, status, verified_at) VALUES ($1, $2, $3, $4, 'verified', now())
          ON CONFLICT (domain_id) DO UPDATE SET email = EXCLUDED.email, token_hash = EXCLUDED.token_hash, status = 'verified', verified_at = now()
          RETURNING {COLS}"
-    ))
+    )))
     .bind(domain).bind(email).bind(token_hash).bind(today).fetch_one(pool).await.map_err(db_err)
 }
 
@@ -80,10 +80,10 @@ pub async fn rotate(
     token_hash: &[u8],
     reminder: bool,
 ) -> AppResult<Option<Verification>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE registrant_verifications SET token_hash = $2, sent_at = now(), reminders = reminders + CASE WHEN $3 THEN 1 ELSE 0 END
          WHERE domain_id = $1 AND status <> 'verified' RETURNING {COLS}"
-    ))
+    )))
     .bind(domain).bind(token_hash).bind(reminder).fetch_optional(pool).await.map_err(db_err)
 }
 
@@ -109,9 +109,9 @@ pub async fn admin_verify(pool: &PgPool, domain: Uuid) -> AppResult<bool> {
 
 /// Open requests: (row, days left until deadline).
 pub async fn open(pool: &PgPool) -> AppResult<Vec<Verification>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM registrant_verifications WHERE status = 'pending' ORDER BY deadline"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)

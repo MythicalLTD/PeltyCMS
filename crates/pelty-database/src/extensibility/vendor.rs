@@ -102,9 +102,9 @@ const SELECT: &str = "SELECT v.id, v.server_id, s.name AS server_name, s.module,
    LEFT JOIN product_prices pp ON pp.product_id = v.product_id AND pp.currency = v.currency AND pp.cycle = v.cycle";
 
 pub async fn list(pool: &PgPool, server: Option<Uuid>) -> AppResult<Vec<Item>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "{SELECT} WHERE ($1::uuid IS NULL OR v.server_id = $1) ORDER BY s.name, v.name, v.sku"
-    ))
+    )))
     .bind(server)
     .fetch_all(pool)
     .await
@@ -112,7 +112,7 @@ pub async fn list(pool: &PgPool, server: Option<Uuid>) -> AppResult<Vec<Item>> {
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Item> {
-    sqlx::query_as(&format!("{SELECT} WHERE v.id = $1"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("{SELECT} WHERE v.id = $1")))
         .bind(id)
         .fetch_optional(pool)
         .await

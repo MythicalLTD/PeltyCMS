@@ -42,12 +42,13 @@ const SECTIONS: &[(&str, &str)] = &[
 pub async fn export(pool: &PgPool, user_id: Uuid) -> AppResult<Value> {
     let mut out = serde_json::Map::new();
     for (name, q) in SECTIONS {
-        let rows: Vec<Value> =
-            sqlx::query_scalar(&format!("SELECT to_jsonb(x) FROM ({q}) AS x(v)"))
-                .bind(user_id)
-                .fetch_all(pool)
-                .await
-                .map_err(db_err)?;
+        let rows: Vec<Value> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+            "SELECT to_jsonb(x) FROM ({q}) AS x(v)"
+        )))
+        .bind(user_id)
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?;
         // Unwrap the single-column record.
         let rows: Vec<Value> = rows
             .into_iter()
@@ -88,9 +89,9 @@ pub struct Request {
 const COLS: &str = "id, user_id, subject_ref, status, reason, note, requested_at, decided_at";
 
 pub async fn latest_for(pool: &PgPool, user_id: Uuid) -> AppResult<Option<Request>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM gdpr_requests WHERE user_id = $1 ORDER BY requested_at DESC LIMIT 1"
-    ))
+    )))
     .bind(user_id)
     .fetch_optional(pool)
     .await
@@ -98,7 +99,7 @@ pub async fn latest_for(pool: &PgPool, user_id: Uuid) -> AppResult<Option<Reques
 }
 
 pub async fn create(pool: &PgPool, user_id: Uuid, email: &str, reason: &str) -> AppResult<Request> {
-    sqlx::query_as(&format!("INSERT INTO gdpr_requests (user_id, subject_ref, reason) VALUES ($1,$2,$3) RETURNING {COLS}"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("INSERT INTO gdpr_requests (user_id, subject_ref, reason) VALUES ($1,$2,$3) RETURNING {COLS}")))
         .bind(user_id).bind(email).bind(reason).fetch_one(pool).await.map_err(db_err)
 }
 
@@ -114,7 +115,7 @@ pub async fn list(
     limit: i64,
     offset: i64,
 ) -> AppResult<(Vec<Request>, i64)> {
-    let items = sqlx::query_as(&format!("SELECT {COLS} FROM gdpr_requests WHERE ($1::text IS NULL OR status = $1) ORDER BY requested_at DESC, id LIMIT $2 OFFSET $3"))
+    let items = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {COLS} FROM gdpr_requests WHERE ($1::text IS NULL OR status = $1) ORDER BY requested_at DESC, id LIMIT $2 OFFSET $3")))
         .bind(status).bind(limit).bind(offset).fetch_all(pool).await.map_err(db_err)?;
     let total = sqlx::query_scalar(
         "SELECT count(*) FROM gdpr_requests WHERE ($1::text IS NULL OR status = $1)",
@@ -127,11 +128,13 @@ pub async fn list(
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Request>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM gdpr_requests WHERE id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM gdpr_requests WHERE id = $1"
+    )))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn reject(pool: &PgPool, id: Uuid, by: Uuid, note: &str) -> AppResult<bool> {
@@ -193,7 +196,7 @@ async fn erase_as(pool: &PgPool, request_id: Uuid, by: Option<Uuid>) -> AppResul
         "UPDATE ticket_messages SET body = '[erased]' WHERE author_id = $1",
     ];
     for q in stmts {
-        sqlx::query(q)
+        sqlx::query(sqlx::AssertSqlSafe(*q))
             .bind(user_id)
             .execute(&mut *tx)
             .await

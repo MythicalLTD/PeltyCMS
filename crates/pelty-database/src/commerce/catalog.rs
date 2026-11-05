@@ -258,11 +258,11 @@ pub async fn create_product(pool: &PgPool, i: &ProductInput) -> AppResult<Produc
     let (Some(g), Some(n), Some(s)) = (i.group_id, i.name.as_deref(), i.slug.as_deref()) else {
         return Err(AppError::Validation("error.validation"));
     };
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO products (id, group_id, name, slug, description, status, module, module_config, sort_order)
          VALUES ($1,$2,$3,$4,COALESCE($5,''),COALESCE($6,'active'),NULLIF($7,''),COALESCE($8,'{{}}'::jsonb),COALESCE($9,0))
          RETURNING {PCOLS}"
-    ))
+    )))
     .bind(Uuid::new_v4())
     .bind(g)
     .bind(n.trim())
@@ -283,13 +283,13 @@ pub async fn update_product(
     i: &ProductInput,
 ) -> AppResult<Option<Product>> {
     i.validate()?;
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE products SET group_id = COALESCE($2, group_id), name = COALESCE($3, name), slug = COALESCE($4, slug),
             description = COALESCE($5, description), status = COALESCE($6, status),
             module = CASE WHEN $7::text IS NULL THEN module ELSE NULLIF($7, '') END,
             module_config = COALESCE($8, module_config), sort_order = COALESCE($9, sort_order)
          WHERE id = $1 RETURNING {PCOLS}"
-    ))
+    )))
     .bind(id)
     .bind(i.group_id)
     .bind(&i.name)
@@ -536,12 +536,12 @@ pub async fn products(
     public: bool,
     only: Option<Uuid>,
 ) -> AppResult<Vec<ProductFull>> {
-    let products: Vec<Product> = sqlx::query_as(&format!(
+    let products: Vec<Product> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT p.{} FROM products p JOIN product_groups g ON g.id = p.group_id
          WHERE ($1 = FALSE OR (p.status = 'active' AND NOT g.hidden)) AND ($2::uuid IS NULL OR p.id = $2)
          ORDER BY g.sort_order, p.sort_order, p.name",
         PCOLS.replace(", ", ", p.")
-    ))
+    )))
     .bind(public)
     .bind(only)
     .fetch_all(pool)

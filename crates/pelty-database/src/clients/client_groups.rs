@@ -41,18 +41,18 @@ const COLS: &str = "g.id, g.name, g.color, g.discount_percent, g.late_fee_exempt
     (SELECT count(*) FROM customers c WHERE c.client_group_id = g.id) AS member_count";
 
 pub async fn list(pool: &PgPool) -> AppResult<Vec<ClientGroup>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM client_groups g ORDER BY g.name"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<ClientGroup>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM client_groups g WHERE g.id = $1"
-    ))
+    )))
     .bind(id)
     .fetch_optional(pool)
     .await
@@ -130,7 +130,7 @@ pub async fn customer_by_email(pool: &PgPool, email: &str) -> AppResult<Option<U
 
 /// Group of a customer, for pricing/automation code that applies group rules.
 pub async fn of_customer(pool: &PgPool, customer_id: Uuid) -> AppResult<Option<ClientGroup>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM client_groups g JOIN customers c ON c.client_group_id = g.id WHERE c.id = $1"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {COLS} FROM client_groups g JOIN customers c ON c.client_group_id = g.id WHERE c.id = $1")))
         .bind(customer_id)
         .fetch_optional(pool)
         .await

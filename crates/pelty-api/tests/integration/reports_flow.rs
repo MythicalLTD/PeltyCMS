@@ -37,7 +37,10 @@ async fn revenue_mrr_and_churn_by_month() {
         "DELETE FROM services WHERE activated_at < '1991-01-01'",
         "DELETE FROM customers WHERE created_at < '1991-01-01'",
     ] {
-        sqlx::query(q).execute(&st.pool).await.unwrap();
+        sqlx::query(sqlx::AssertSqlSafe(q))
+            .execute(&st.pool)
+            .await
+            .unwrap();
     }
 
     let a = customer(&st, "1990-01-05T00:00:00Z").await;

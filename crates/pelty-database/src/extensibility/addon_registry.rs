@@ -24,16 +24,18 @@ pub struct InstalledAddon {
 const COLS: &str = "id, kind, engine, version, source, enabled, settings, permissions, manifest_hash, installed_at";
 
 pub async fn list(pool: &PgPool) -> AppResult<Vec<InstalledAddon>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM installed_addons ORDER BY id"))
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM installed_addons ORDER BY id"
+    )))
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn get(pool: &PgPool, id: &str) -> AppResult<Option<InstalledAddon>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} FROM installed_addons WHERE id = $1"
-    ))
+    )))
     .bind(id)
     .fetch_optional(pool)
     .await
@@ -106,7 +108,8 @@ pub async fn install(
         if done {
             continue;
         }
-        sqlx::Executor::execute(&mut *tx, sql.as_str())
+        sqlx::raw_sql(sqlx::AssertSqlSafe(sql.as_str()))
+            .execute(&mut *tx)
             .await
             .map_err(db_err)?;
         sqlx::query("INSERT INTO addon_migrations (addon_id, name, checksum) VALUES ($1,$2,$3)")

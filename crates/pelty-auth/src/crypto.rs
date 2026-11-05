@@ -5,7 +5,7 @@ use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use rand::RngCore;
+use rand::Rng;
 
 #[derive(Clone)]
 pub struct SecretBox {
@@ -34,10 +34,10 @@ impl SecretBox {
     /// nonce || ciphertext+tag
     pub fn seal(&self, plain: &[u8]) -> Vec<u8> {
         let mut n = [0u8; 12];
-        rand::rngs::OsRng.fill_bytes(&mut n);
+        rand::rng().fill_bytes(&mut n);
         let ct = self
             .cipher
-            .encrypt(Nonce::from_slice(&n), plain)
+            .encrypt(&Nonce::from(n), plain)
             .expect("AES-GCM encryption cannot fail for small inputs");
         let mut out = n.to_vec();
         out.extend(ct);
@@ -49,7 +49,8 @@ impl SecretBox {
             return None;
         }
         let (n, ct) = sealed.split_at(12);
-        self.cipher.decrypt(Nonce::from_slice(n), ct).ok()
+        let nonce: [u8; 12] = n.try_into().ok()?;
+        self.cipher.decrypt(&Nonce::from(nonce), ct).ok()
     }
 }
 

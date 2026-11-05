@@ -80,7 +80,7 @@ pub async fn list(
         )
     });
     let filter = "($1::uuid IS NULL OR user_id = $1) AND ($2::text IS NULL OR recipient ILIKE $2 OR subject ILIKE $2)";
-    let rows = sqlx::query_as::<_, EmailLogEntry>(&format!("SELECT {COLS} FROM email_log WHERE {filter} ORDER BY created_at DESC, id LIMIT $3 OFFSET $4"))
+    let rows = sqlx::query_as::<_, EmailLogEntry>(sqlx::AssertSqlSafe(format!("SELECT {COLS} FROM email_log WHERE {filter} ORDER BY created_at DESC, id LIMIT $3 OFFSET $4")))
         .bind(user_id)
         .bind(q.as_deref())
         .bind(limit.clamp(1, 200))
@@ -88,19 +88,21 @@ pub async fn list(
         .fetch_all(pool)
         .await
     .map_err(db_err)?;
-    let total: i64 = sqlx::query_scalar(&format!("SELECT count(*) FROM email_log WHERE {filter}"))
-        .bind(user_id)
-        .bind(q.as_deref())
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+    let total: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "SELECT count(*) FROM email_log WHERE {filter}"
+    )))
+    .bind(user_id)
+    .bind(q.as_deref())
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
     Ok((rows, total))
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<EmailLogDetail>> {
-    sqlx::query_as::<_, EmailLogDetail>(&format!(
+    sqlx::query_as::<_, EmailLogDetail>(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS}, body_text FROM email_log WHERE id = $1"
-    ))
+    )))
     .bind(id)
     .fetch_optional(pool)
     .await

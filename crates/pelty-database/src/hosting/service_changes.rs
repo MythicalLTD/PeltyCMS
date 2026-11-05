@@ -471,7 +471,7 @@ pub async fn cancel_change(pool: &PgPool, sid: Uuid) -> AppResult<()> {
 }
 
 pub async fn get_change(pool: &PgPool, id: Uuid) -> AppResult<Option<Change>> {
-    sqlx::query_as(&format!("SELECT {CHANGE_COLS} FROM service_changes c JOIN products p ON p.id = c.to_product WHERE c.id = $1"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {CHANGE_COLS} FROM service_changes c JOIN products p ON p.id = c.to_product WHERE c.id = $1")))
         .bind(id)
         .fetch_optional(pool)
         .await
@@ -479,9 +479,9 @@ pub async fn get_change(pool: &PgPool, id: Uuid) -> AppResult<Option<Change>> {
 }
 
 pub async fn changes_for(pool: &PgPool, sid: Uuid) -> AppResult<Vec<Change>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {CHANGE_COLS} FROM service_changes c JOIN products p ON p.id = c.to_product WHERE c.service_id = $1 ORDER BY c.created_at DESC LIMIT 20"
-    ))
+    )))
     .bind(sid)
     .fetch_all(pool)
     .await
@@ -525,9 +525,9 @@ pub async fn request_cancel(
 }
 
 pub async fn get_cancel(pool: &PgPool, id: Uuid) -> AppResult<Option<Cancellation>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {CANCEL_COLS} FROM {CANCEL_FROM} WHERE r.id = $1"
-    ))
+    )))
     .bind(id)
     .fetch_optional(pool)
     .await
@@ -536,7 +536,7 @@ pub async fn get_cancel(pool: &PgPool, id: Uuid) -> AppResult<Option<Cancellatio
 
 /// Open (pending/approved) request of a service.
 pub async fn open_cancel(pool: &PgPool, sid: Uuid) -> AppResult<Option<Cancellation>> {
-    sqlx::query_as(&format!("SELECT {CANCEL_COLS} FROM {CANCEL_FROM} WHERE r.service_id = $1 AND r.status IN ('pending','approved')"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {CANCEL_COLS} FROM {CANCEL_FROM} WHERE r.service_id = $1 AND r.status IN ('pending','approved')")))
         .bind(sid)
         .fetch_optional(pool)
         .await
@@ -549,9 +549,9 @@ pub async fn list_cancels(
     limit: i64,
     offset: i64,
 ) -> AppResult<(Vec<Cancellation>, i64)> {
-    let rows = sqlx::query_as(&format!(
+    let rows = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {CANCEL_COLS} FROM {CANCEL_FROM} WHERE ($1::text IS NULL OR r.status = $1) ORDER BY r.created_at DESC, r.id LIMIT $2 OFFSET $3"
-    ))
+    )))
     .bind(status)
     .bind(limit)
     .bind(offset)

@@ -386,7 +386,7 @@ pub async fn place_full(
             .await
             .map_err(db_err)?;
     }
-    let order: Order = sqlx::query_as(&format!("UPDATE orders SET total = $2, invoice_id = $3, coupon_id = $4, discount = $5 WHERE id = $1 RETURNING {COLS}"))
+    let order: Order = sqlx::query_as(sqlx::AssertSqlSafe(format!("UPDATE orders SET total = $2, invoice_id = $3, coupon_id = $4, discount = $5 WHERE id = $1 RETURNING {COLS}")))
         .bind(order_id)
         .bind(invoice.total)
         .bind(inv)
@@ -400,20 +400,24 @@ pub async fn place_full(
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Order>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM orders WHERE id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM orders WHERE id = $1"
+    )))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Look up an order by its human-facing number (as shown in lists).
 pub async fn get_by_number(pool: &PgPool, number: i64) -> AppResult<Option<Order>> {
-    sqlx::query_as(&format!("SELECT {COLS} FROM orders WHERE number = $1"))
-        .bind(number)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLS} FROM orders WHERE number = $1"
+    )))
+    .bind(number)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn list(
@@ -429,11 +433,11 @@ pub async fn list(
         o: Order,
         total_count: i64,
     }
-    let rows: Vec<Row> = sqlx::query_as(&format!(
+    let rows: Vec<Row> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS}, count(*) OVER() AS total_count FROM orders
          WHERE ($1::uuid IS NULL OR customer_id = $1) AND ($2::text IS NULL OR status = $2)
          ORDER BY created_at DESC, id LIMIT $3 OFFSET $4"
-    ))
+    )))
     .bind(customer)
     .bind(status)
     .bind(limit)
@@ -551,9 +555,9 @@ pub async fn approve(
 /// Cancel a pending order and void its invoice if nothing was paid.
 pub async fn cancel(pool: &PgPool, id: Uuid, fraud: bool) -> AppResult<Order> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let o: Order = sqlx::query_as(&format!(
+    let o: Order = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE orders SET status = $2 WHERE id = $1 AND status = 'pending' RETURNING {COLS}"
-    ))
+    )))
     .bind(id)
     .bind(if fraud { "fraud" } else { "cancelled" })
     .fetch_optional(&mut *tx)
@@ -585,7 +589,7 @@ pub async fn cancel(pool: &PgPool, id: Uuid, fraud: bool) -> AppResult<Order> {
 /// redemption released on cancel is not restored.
 pub async fn reopen(pool: &PgPool, id: Uuid) -> AppResult<Order> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let o: Order = sqlx::query_as(&format!("UPDATE orders SET status = 'pending' WHERE id = $1 AND status IN ('cancelled','fraud') RETURNING {COLS}"))
+    let o: Order = sqlx::query_as(sqlx::AssertSqlSafe(format!("UPDATE orders SET status = 'pending' WHERE id = $1 AND status IN ('cancelled','fraud') RETURNING {COLS}")))
         .bind(id)
         .fetch_optional(&mut *tx)
         .await

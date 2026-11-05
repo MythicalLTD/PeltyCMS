@@ -92,7 +92,7 @@ const PM: &str =
     "id, customer_id, gateway, token, brand, last4, exp_month, exp_year, is_default, created_at";
 
 pub async fn methods(pool: &PgPool, customer: Uuid) -> AppResult<Vec<PaymentMethod>> {
-    sqlx::query_as(&format!("SELECT {PM} FROM payment_methods WHERE customer_id = $1 AND deleted_at IS NULL ORDER BY is_default DESC, created_at"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {PM} FROM payment_methods WHERE customer_id = $1 AND deleted_at IS NULL ORDER BY is_default DESC, created_at")))
         .bind(customer)
         .fetch_all(pool)
         .await
@@ -130,10 +130,10 @@ pub async fn add_method(
     if n >= 10 {
         return Err(AppError::Conflict("error.too_many_payment_methods"));
     }
-    let r: PaymentMethod = sqlx::query_as(&format!(
+    let r: PaymentMethod = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "INSERT INTO payment_methods (id, customer_id, gateway, token, brand, last4, exp_month, exp_year, is_default)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING {PM}"
-    ))
+    )))
     .bind(Uuid::new_v4())
     .bind(customer)
     .bind(m.gateway)
@@ -257,7 +257,7 @@ pub struct Attempt {
 const AT: &str = "id, invoice_id, customer_id, payment_method_id, payment_id, attempt, status, error, next_retry, created_at";
 
 pub async fn attempts(pool: &PgPool, customer: Uuid, limit: i64) -> AppResult<Vec<Attempt>> {
-    sqlx::query_as(&format!("SELECT {AT} FROM autopay_attempts WHERE customer_id = $1 ORDER BY created_at DESC, attempt DESC LIMIT $2"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {AT} FROM autopay_attempts WHERE customer_id = $1 ORDER BY created_at DESC, attempt DESC LIMIT $2")))
         .bind(customer)
         .bind(limit)
         .fetch_all(pool)
@@ -306,9 +306,9 @@ pub async fn claim_due(pool: &PgPool, cfg: &AutopaySettings, today: Date) -> App
         let Some(attempt) = due_attempt(due, &cfg.retry_days, made, today) else {
             continue;
         };
-        let Some(method) = sqlx::query_as::<_, PaymentMethod>(&format!(
+        let Some(method) = sqlx::query_as::<_, PaymentMethod>(sqlx::AssertSqlSafe(format!(
             "SELECT {PM} FROM payment_methods WHERE customer_id = $1 AND is_default AND deleted_at IS NULL"
-        ))
+        )))
         .bind(customer_id)
         .fetch_optional(pool)
         .await
