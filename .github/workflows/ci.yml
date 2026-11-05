@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # Shared Postgres for Rust integration tests (see crates/pelty-api/tests).
+  TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/peltycms_test
+  DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/peltycms_test
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm exec tsc --noEmit
+
+      - name: Test
+        run: pnpm exec vitest run
+
+      - name: Build
+        run: pnpm run build
+
+  rust-lint:
+    name: Rust lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: lint
+
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+
+      - name: clippy
+        # Same surface as `cargo xtask lint` / Makefile (no -D warnings yet).
+        run: cargo clippy --workspace --all-targets --locked
+
+  rust-test:
+    name: Rust test
+    runs-on: ubuntu-latest
+    # Integration suite links one large binary (wasmtime + sqlx + addons).
+    # Keep disk free and cache the registry/target aggressively.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: peltycms_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d peltycms_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: test
+          cache-targets: true
+
+      - name: Free disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h
+
+      - name: Wait for Postgres
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+          for i in $(seq 1 60); do
+            pg_isready -h 127.0.0.1 -p 5432 -U postgres && exit 0
+            sleep 1
+          done
+          echo "Postgres did not become ready" >&2
+          exit 1
+
+      - name: Build WASM addons
+        run: cargo xtask addons
+
+      - name: Test workspace
+        run: cargo test --workspace --locked
+        env:
+          # Quiet sqlx noise in CI logs.
+          RUST_LOG: error,sqlx=off
+
+  docker:
+    name: Docker
+    runs-on: ubuntu-latest
+    # Image build is slow; run on develop pushes and on PRs that touch packaging.
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'docker')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          df -h
+
+      - name: Build image
+        run: docker build -t peltycms:ci .

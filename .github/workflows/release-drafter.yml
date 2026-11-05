@@ -1,0 +1,21 @@
+# Optional: keeps a draft release notes page in sync with merged PRs on develop.
+# Labels on PRs (feature, fix, docs, …) feed the categories below.
+name: Release drafter
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
