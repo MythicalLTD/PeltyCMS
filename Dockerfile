@@ -20,6 +20,9 @@ COPY extensions/ extensions/
 # Workspace member (developer commands); only needed so the workspace resolves.
 COPY xtask/ xtask/
 COPY Makefile ./
+# pelty-docs reads frontend/src (App.tsx, navRegistry, PluginSlot sites) at
+# generation time; the web stage only produces dist for the runtime image.
+COPY frontend/ frontend/
 RUN cargo build --release --locked -p pelty-server -p pelty-docs \
  && ./target/release/pelty-docs /src/target/docs
 
