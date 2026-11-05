@@ -46,7 +46,7 @@ webauthn-rs = { version = "0.6", features = ["danger-allow-state-serialisation",
 webauthn-authenticator-rs = { version = "0.6", default-features = false, features = ["softpasskey"] }
 hex = "0.4"
 subtle = "2"
-utoipa = { version = "6", features = ["uuid", "time", "axum_extras", "decimal"] }
+utoipa = { version = "5", features = ["uuid", "time", "axum_extras", "decimal"] }
 http-body-util = "0.1"
 zip = { version = "9", default-features = false, features = ["deflate"] }
 
