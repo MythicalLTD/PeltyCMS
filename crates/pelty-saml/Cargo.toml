@@ -14,7 +14,7 @@ time = { workspace = true }
 ring = "0.17"
 rsa = { version = "0.9", features = ["sha2"] }
 x509-cert = { version = "0.2", features = ["builder"] }
-der = { version = "0.7", features = ["pem"] }
+der = { version = "0.8", features = ["pem"] }
 spki = "0.7"
 flate2 = "1"
 rand = { workspace = true }
