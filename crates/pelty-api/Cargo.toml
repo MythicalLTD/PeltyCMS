@@ -50,7 +50,7 @@ ttf-parser = "0.25"
 subsetter = "0.2.6"
 croner = "4.0.2"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
-maxminddb = "0.26"
+maxminddb = "0.32"
 
 [lints]
 workspace = true
