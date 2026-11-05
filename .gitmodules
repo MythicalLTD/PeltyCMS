@@ -1,0 +1,208 @@
+[submodule "extensions/addons/stripe"]
+	path = extensions/addons/stripe
+	url = https://github.com/PeltyCMS/addon-gateway-stripe.git
+	branch = main
+[submodule "extensions/addons/adyen"]
+	path = extensions/addons/adyen
+	url = https://github.com/PeltyCMS/addon-gateway-adyen.git
+	branch = main
+[submodule "extensions/addons/captcha-hcaptcha"]
+	path = extensions/addons/captcha-hcaptcha
+	url = https://github.com/PeltyCMS/addon-captcha-hcaptcha.git
+	branch = main
+[submodule "extensions/addons/captcha-recaptcha-v2"]
+	path = extensions/addons/captcha-recaptcha-v2
+	url = https://github.com/PeltyCMS/addon-captcha-recaptcha-v2.git
+	branch = main
+[submodule "extensions/addons/captcha-recaptcha-v3"]
+	path = extensions/addons/captcha-recaptcha-v3
+	url = https://github.com/PeltyCMS/addon-captcha-recaptcha-v3.git
+	branch = main
+[submodule "extensions/addons/captcha-turnstile"]
+	path = extensions/addons/captcha-turnstile
+	url = https://github.com/PeltyCMS/addon-captcha-turnstile.git
+	branch = main
+[submodule "extensions/addons/crypto"]
+	path = extensions/addons/crypto
+	url = https://github.com/PeltyCMS/addon-gateway-crypto.git
+	branch = main
+[submodule "extensions/addons/custom"]
+	path = extensions/addons/custom
+	url = https://github.com/PeltyCMS/addon-gateway-custom-http.git
+	branch = main
+[submodule "extensions/addons/manual"]
+	path = extensions/addons/manual
+	url = https://github.com/PeltyCMS/addon-gateway-manual.git
+	branch = main
+[submodule "extensions/addons/mollie"]
+	path = extensions/addons/mollie
+	url = https://github.com/PeltyCMS/addon-gateway-mollie.git
+	branch = main
+[submodule "extensions/addons/paddle"]
+	path = extensions/addons/paddle
+	url = https://github.com/PeltyCMS/addon-gateway-paddle.git
+	branch = main
+[submodule "extensions/addons/paypal"]
+	path = extensions/addons/paypal
+	url = https://github.com/PeltyCMS/addon-gateway-paypal.git
+	branch = main
+[submodule "extensions/addons/prov-amp"]
+	path = extensions/addons/prov-amp
+	url = https://github.com/PeltyCMS/addon-provisioning-amp.git
+	branch = main
+[submodule "extensions/addons/prov-convoy"]
+	path = extensions/addons/prov-convoy
+	url = https://github.com/PeltyCMS/addon-provisioning-convoy.git
+	branch = main
+[submodule "extensions/addons/prov-cpanel"]
+	path = extensions/addons/prov-cpanel
+	url = https://github.com/PeltyCMS/addon-provisioning-cpanel.git
+	branch = main
+[submodule "extensions/addons/prov-cyberpanel"]
+	path = extensions/addons/prov-cyberpanel
+	url = https://github.com/PeltyCMS/addon-provisioning-cyberpanel.git
+	branch = main
+[submodule "extensions/addons/prov-digitalocean"]
+	path = extensions/addons/prov-digitalocean
+	url = https://github.com/PeltyCMS/addon-provisioning-digitalocean.git
+	branch = main
+[submodule "extensions/addons/prov-directadmin"]
+	path = extensions/addons/prov-directadmin
+	url = https://github.com/PeltyCMS/addon-provisioning-directadmin.git
+	branch = main
+[submodule "extensions/addons/prov-docker"]
+	path = extensions/addons/prov-docker
+	url = https://github.com/PeltyCMS/addon-provisioning-docker.git
+	branch = main
+[submodule "extensions/addons/prov-enhance"]
+	path = extensions/addons/prov-enhance
+	url = https://github.com/PeltyCMS/addon-provisioning-enhance.git
+	branch = main
+[submodule "extensions/addons/prov-featherpanel"]
+	path = extensions/addons/prov-featherpanel
+	url = https://github.com/PeltyCMS/addon-provisioning-featherpanel.git
+	branch = main
+[submodule "extensions/addons/prov-hestia"]
+	path = extensions/addons/prov-hestia
+	url = https://github.com/PeltyCMS/addon-provisioning-hestia.git
+	branch = main
+[submodule "extensions/addons/prov-hetzner-cloud"]
+	path = extensions/addons/prov-hetzner-cloud
+	url = https://github.com/PeltyCMS/addon-provisioning-hetzner-cloud.git
+	branch = main
+[submodule "extensions/addons/prov-https-agent"]
+	path = extensions/addons/prov-https-agent
+	url = https://github.com/PeltyCMS/addon-provisioning-https-agent.git
+	branch = main
+[submodule "extensions/addons/prov-ispconfig"]
+	path = extensions/addons/prov-ispconfig
+	url = https://github.com/PeltyCMS/addon-provisioning-ispconfig.git
+	branch = main
+[submodule "extensions/addons/prov-licensing"]
+	path = extensions/addons/prov-licensing
+	url = https://github.com/PeltyCMS/addon-provisioning-licensing.git
+	branch = main
+[submodule "extensions/addons/prov-linode"]
+	path = extensions/addons/prov-linode
+	url = https://github.com/PeltyCMS/addon-provisioning-linode.git
+	branch = main
+[submodule "extensions/addons/prov-openstack"]
+	path = extensions/addons/prov-openstack
+	url = https://github.com/PeltyCMS/addon-provisioning-openstack.git
+	branch = main
+[submodule "extensions/addons/prov-pelican"]
+	path = extensions/addons/prov-pelican
+	url = https://github.com/PeltyCMS/addon-provisioning-pelican.git
+	branch = main
+[submodule "extensions/addons/prov-plesk"]
+	path = extensions/addons/prov-plesk
+	url = https://github.com/PeltyCMS/addon-provisioning-plesk.git
+	branch = main
+[submodule "extensions/addons/prov-proxmox"]
+	path = extensions/addons/prov-proxmox
+	url = https://github.com/PeltyCMS/addon-provisioning-proxmox.git
+	branch = main
+[submodule "extensions/addons/prov-pterodactyl"]
+	path = extensions/addons/prov-pterodactyl
+	url = https://github.com/PeltyCMS/addon-provisioning-pterodactyl.git
+	branch = main
+[submodule "extensions/addons/prov-solusvm"]
+	path = extensions/addons/prov-solusvm
+	url = https://github.com/PeltyCMS/addon-provisioning-solusvm.git
+	branch = main
+[submodule "extensions/addons/prov-ssl-reseller"]
+	path = extensions/addons/prov-ssl-reseller
+	url = https://github.com/PeltyCMS/addon-provisioning-ssl-reseller.git
+	branch = main
+[submodule "extensions/addons/prov-virtfusion"]
+	path = extensions/addons/prov-virtfusion
+	url = https://github.com/PeltyCMS/addon-provisioning-virtfusion.git
+	branch = main
+[submodule "extensions/addons/prov-virtualizor"]
+	path = extensions/addons/prov-virtualizor
+	url = https://github.com/PeltyCMS/addon-provisioning-virtualizor.git
+	branch = main
+[submodule "extensions/addons/prov-vultr"]
+	path = extensions/addons/prov-vultr
+	url = https://github.com/PeltyCMS/addon-provisioning-vultr.git
+	branch = main
+[submodule "extensions/addons/prov-webhook"]
+	path = extensions/addons/prov-webhook
+	url = https://github.com/PeltyCMS/addon-provisioning-webhook.git
+	branch = main
+[submodule "extensions/addons/razorpay"]
+	path = extensions/addons/razorpay
+	url = https://github.com/PeltyCMS/addon-gateway-razorpay.git
+	branch = main
+[submodule "extensions/addons/reg-centralnic"]
+	path = extensions/addons/reg-centralnic
+	url = https://github.com/PeltyCMS/addon-registrar-centralnic.git
+	branch = main
+[submodule "extensions/addons/reg-enom"]
+	path = extensions/addons/reg-enom
+	url = https://github.com/PeltyCMS/addon-registrar-enom.git
+	branch = main
+[submodule "extensions/addons/reg-generic"]
+	path = extensions/addons/reg-generic
+	url = https://github.com/PeltyCMS/addon-registrar-generic.git
+	branch = main
+[submodule "extensions/addons/reg-godaddy"]
+	path = extensions/addons/reg-godaddy
+	url = https://github.com/PeltyCMS/addon-registrar-godaddy.git
+	branch = main
+[submodule "extensions/addons/reg-namecheap"]
+	path = extensions/addons/reg-namecheap
+	url = https://github.com/PeltyCMS/addon-registrar-namecheap.git
+	branch = main
+[submodule "extensions/addons/reg-opensrs"]
+	path = extensions/addons/reg-opensrs
+	url = https://github.com/PeltyCMS/addon-registrar-opensrs.git
+	branch = main
+[submodule "extensions/addons/reg-resellerclub"]
+	path = extensions/addons/reg-resellerclub
+	url = https://github.com/PeltyCMS/addon-registrar-resellerclub.git
+	branch = main
+[submodule "extensions/addons/sso-discord"]
+	path = extensions/addons/sso-discord
+	url = https://github.com/PeltyCMS/addon-sso-discord.git
+	branch = main
+[submodule "extensions/addons/sso-facebook"]
+	path = extensions/addons/sso-facebook
+	url = https://github.com/PeltyCMS/addon-sso-facebook.git
+	branch = main
+[submodule "extensions/addons/sso-github"]
+	path = extensions/addons/sso-github
+	url = https://github.com/PeltyCMS/addon-sso-github.git
+	branch = main
+[submodule "extensions/addons/sso-google"]
+	path = extensions/addons/sso-google
+	url = https://github.com/PeltyCMS/addon-sso-google.git
+	branch = main
+[submodule "extensions/addons/sso-microsoft"]
+	path = extensions/addons/sso-microsoft
+	url = https://github.com/PeltyCMS/addon-sso-microsoft.git
+	branch = main
+[submodule "extensions/addons/sso-oidc"]
+	path = extensions/addons/sso-oidc
+	url = https://github.com/PeltyCMS/addon-sso-oidc.git
+	branch = main
