@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PluginSlot } from "@/components/plugin-ui/PluginSlot";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
@@ -335,13 +335,34 @@ export function CheckoutPage() {
   const cart = view && !view.cart.order_id ? view.cart : null;
   const productIds = useMemo(() => [...new Set(cart?.items.map((l) => l.product_id) ?? [])], [cart]);
   const extras = useQueries({ queries: productIds.map((p) => ({ queryKey: ["catalog", "extras", p], queryFn: () => api<Extras>(`/catalog/products/${p}/extras`) })) });
-  const fieldsOf = (pid: string) => extras[productIds.indexOf(pid)]?.data?.fields ?? [];
-  const { data: gw } = useQuery({ queryKey: ["store", "gateways"], queryFn: () => api<{ items: string[] }>("/store/gateways") });
   const [gateway, setGateway] = useState<string | null>(null);
-  const chosen = gateway ?? gw?.items[0] ?? null;
   const [values, setValues] = useState<Record<number, Record<string, string>>>({});
+  const [dynFields, setDynFields] = useState<Record<string, Extras["fields"]>>({});
   const [shown, setShown] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { data: gw } = useQuery({ queryKey: ["store", "gateways"], queryFn: () => api<{ items: string[] }>("/store/gateways") });
+  const chosen = gateway ?? gw?.items[0] ?? null;
+  // Module-driven checkout form: re-fetch when answers change.
+  useEffect(() => {
+    if (!cart) return;
+    let cancelled = false;
+    const run = async () => {
+      const next: Record<string, Extras["fields"]> = {};
+      for (const [i, l] of cart.items.entries()) {
+        const selected = values[i] ?? {};
+        try {
+          const r = await api<{ fields: Extras["fields"] }>(`/catalog/products/${l.product_id}/checkout-config`, { method: "POST", body: { selected } });
+          next[l.product_id] = r.fields;
+        } catch {
+          next[l.product_id] = extras[productIds.indexOf(l.product_id)]?.data?.fields ?? [];
+        }
+      }
+      if (!cancelled) setDynFields(next);
+    };
+    const timer = window.setTimeout(() => { void run(); }, 150);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [cart, values, extras, productIds]);
+  const fieldsOf = (pid: string) => dynFields[pid] ?? extras[productIds.indexOf(pid)]?.data?.fields ?? [];
   const errs = (cart?.items ?? []).map((l, i) => fieldErrors(fieldsOf(l.product_id), values[i] ?? {}));
   const place = useMutation({
     mutationFn: async () => {
