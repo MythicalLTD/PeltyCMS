@@ -144,6 +144,7 @@ mod subaccount_invite_flow;
 mod support_ext_flow;
 mod support_suite_flow;
 mod tax_flow;
+mod theme_customization_flow;
 mod ticket_ai_flow;
 mod ticket_attachments_flow;
 mod ticket_auto_close_flow;

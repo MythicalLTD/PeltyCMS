@@ -19,6 +19,10 @@ pub fn router() -> Router<AppState> {
         .route("/themes/active", get(active_theme))
         .route("/themes/{id}/assets/{*file}", get(theme_asset))
         .route("/admin/themes/active", put(set_active_theme))
+        .route(
+            "/admin/themes/customization",
+            get(get_customization).put(put_customization),
+        )
         .route("/admin/plugins", get(list_plugins))
         .route("/admin/plugins/{id}", put(set_plugin))
         .route(
@@ -52,11 +56,34 @@ pub async fn list_themes(State(s): State<AppState>) -> ApiResult<Json<Value>> {
     ))
 }
 
-/// Active theme, sanitized: whitelisted tokens with validated CSS values.
+/// Active theme: package tokens merged with operator customization.
 #[utoipa::path(get, path = "/api/v1/themes/active", responses((status = 200)))]
 pub async fn active_theme(State(s): State<AppState>) -> ApiResult<Json<Value>> {
     let id = active_id(&s).await?;
-    Ok(Json(json!(s.themes.get(&id))))
+    let Some(mut theme) = s.themes.get(&id) else {
+        return Ok(Json(Value::Null));
+    };
+    let custom = pelty_database::theme_customization::load(&s.pool).await?;
+    for (k, v) in custom.tokens {
+        theme.tokens.insert(k, v);
+    }
+    if let Some(cs) = custom.color_scheme {
+        theme.color_scheme = cs;
+    }
+    Ok(Json(json!({
+        "id": theme.id,
+        "name": theme.name,
+        "version": theme.version,
+        "author": theme.author,
+        "description": theme.description,
+        "color_scheme": theme.color_scheme,
+        "tokens": theme.tokens,
+        "logo_url": theme.logo_url,
+        "stylesheet_url": theme.stylesheet_url,
+        "has_frontend": theme.has_frontend,
+        "templates": theme.templates,
+        "custom_css": custom.custom_css,
+    })))
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -194,4 +221,89 @@ pub async fn put_gateway_rules(
     )
     .await?;
     Ok(Json(r))
+}
+
+#[utoipa::path(get, path = "/api/v1/admin/themes/customization", responses((status = 200), (status = 403)))]
+pub async fn get_customization(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::SettingsManage>,
+) -> ApiResult<Json<Value>> {
+    let c = pelty_database::theme_customization::load(&s.pool).await?;
+    Ok(Json(json!(c)))
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CustomizationBody {
+    #[serde(default)]
+    pub tokens: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    pub custom_css: String,
+    #[serde(default)]
+    pub color_scheme: Option<String>,
+}
+
+#[utoipa::path(put, path = "/api/v1/admin/themes/customization", request_body = CustomizationBody, responses((status = 200), (status = 403), (status = 422)))]
+pub async fn put_customization(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::SettingsManage>,
+    Json(b): Json<CustomizationBody>,
+) -> ApiResult<Json<Value>> {
+    use pelty_extensions::themes::{valid_css_value, TOKEN_KEYS};
+    for (k, v) in &b.tokens {
+        if !TOKEN_KEYS.contains(&k.as_str()) {
+            return Err(AppError::Validation("error.unknown_theme_token").into());
+        }
+        if !valid_css_value(v) {
+            return Err(AppError::Validation("error.invalid_theme_token").into());
+        }
+    }
+    if let Some(cs) = &b.color_scheme {
+        if cs != "dark" && cs != "light" {
+            return Err(AppError::Validation("error.invalid_color_scheme").into());
+        }
+    }
+    let css = sanitize_custom_css(&b.custom_css)?;
+    let c = pelty_database::theme_customization::ThemeCustomization {
+        tokens: b.tokens,
+        custom_css: css,
+        color_scheme: b.color_scheme,
+    };
+    pelty_database::theme_customization::save(&s.pool, &c).await?;
+    pelty_database::audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "theme.customization_saved",
+        None,
+        u.ip.as_deref(),
+        json!({ "tokens": c.tokens.len(), "css_bytes": c.custom_css.len() }),
+    )
+    .await?;
+    Ok(Json(json!(c)))
+}
+
+fn sanitize_custom_css(raw: &str) -> ApiResult<String> {
+    use pelty_database::theme_customization::MAX_CSS;
+    if raw.len() > MAX_CSS {
+        return Err(AppError::Validation("error.theme_css_too_long").into());
+    }
+    let lower = raw.to_ascii_lowercase();
+    for bad in [
+        "@import",
+        "url(",
+        "expression(",
+        "javascript:",
+        "</style",
+        "<script",
+        "behavior:",
+        "-moz-binding",
+    ] {
+        if lower.contains(bad) {
+            return Err(AppError::Validation("error.theme_css_unsafe").into());
+        }
+    }
+    if raw.chars().any(|c| c == ' ') {
+        return Err(AppError::Validation("error.theme_css_unsafe").into());
+    }
+    Ok(raw.to_string())
 }
