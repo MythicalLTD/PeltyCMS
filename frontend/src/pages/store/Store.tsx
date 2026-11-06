@@ -358,8 +358,8 @@ export function CheckoutPage() {
       }
       if (!cancelled) setDynFields(next);
     };
-    const t = window.setTimeout(() => { void run(); }, 150);
-    return () => { cancelled = true; window.clearTimeout(t); };
+    const timer = window.setTimeout(() => { void run(); }, 150);
+    return () => { cancelled = true; window.clearTimeout(timer); };
   }, [cart, values, extras, productIds]);
   const fieldsOf = (pid: string) => dynFields[pid] ?? extras[productIds.indexOf(pid)]?.data?.fields ?? [];
   const errs = (cart?.items ?? []).map((l, i) => fieldErrors(fieldsOf(l.product_id), values[i] ?? {}));
