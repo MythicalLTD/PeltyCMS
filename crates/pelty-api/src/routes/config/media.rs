@@ -32,6 +32,7 @@ pub fn router() -> Router<AppState> {
 }
 
 pub fn media_dir() -> PathBuf {
+    // `PELTY_MEDIA_DIR`: uploaded brand/site images (default `data/media`).
     std::env::var("PELTY_MEDIA_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("data/media"))

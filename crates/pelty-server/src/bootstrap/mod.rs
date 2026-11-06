@@ -244,7 +244,9 @@ mod tests {
         ] {
             assert!(d.join(p).is_dir(), "{p}");
         }
-        for name in ["de.json", "en.json", "es.json", "fr.json", "nl.json", "ro.json"] {
+        for name in [
+            "de.json", "en.json", "es.json", "fr.json", "nl.json", "ro.json",
+        ] {
             assert!(d.join("locales").join(name).is_file(), "{name}");
         }
         let key = vars

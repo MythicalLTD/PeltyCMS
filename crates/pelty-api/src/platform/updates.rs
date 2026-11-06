@@ -243,16 +243,18 @@ pub async fn config_in(pool: &pelty_database::Pool) -> AppResult<CheckConfig> {
     })
 }
 
-/// `PELTY_UPDATE_URL`: release feed override (a mirror or a test server).
+/// Release feed override (a mirror or a test server).
 pub fn env_url() -> Option<String> {
+    // `PELTY_UPDATE_URL`: release feed override (a mirror or a test server).
     std::env::var("PELTY_UPDATE_URL")
         .ok()
         .map(|u| u.trim().to_string())
         .filter(|u| u.starts_with("https://") || u.starts_with("http://"))
 }
 
-/// Token for a private release feed: `PELTY_UPDATE_TOKEN`, else `GH_TOKEN` / `GITHUB_TOKEN`.
+/// Token for a private release feed (`GH_TOKEN` / `GITHUB_TOKEN` also accepted).
 pub fn token() -> Option<String> {
+    // `PELTY_UPDATE_TOKEN`: private release-feed token (else `GH_TOKEN` / `GITHUB_TOKEN`).
     ["PELTY_UPDATE_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"]
         .iter()
         .find_map(|k| {

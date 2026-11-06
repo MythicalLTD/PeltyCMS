@@ -592,7 +592,9 @@ fn build_and_package(
     .map(|(p, n)| (p, n.to_string()))
     .collect();
     // UI translations next to the binary (same set the binary can seed on first run).
-    for name in ["de.json", "en.json", "es.json", "fr.json", "nl.json", "ro.json"] {
+    for name in [
+        "de.json", "en.json", "es.json", "fr.json", "nl.json", "ro.json",
+    ] {
         extras.push((
             ctx.root.join("locales").join(name),
             format!("locales/{name}"),

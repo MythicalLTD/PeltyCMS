@@ -233,7 +233,12 @@ pub fn env_vars() -> Vec<EnvVar> {
         rs_files(&c.path().join("src"), &mut files);
     }
     for f in files {
-        let rel = f.strip_prefix(&root).unwrap().display().to_string();
+        // Normalize so Windows `\` matches the `/` skips below (and used_in paths).
+        let rel = f
+            .strip_prefix(&root)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
         if rel.starts_with("crates/pelty-docs") || rel.ends_with("/tests.rs") {
             continue;
         }
