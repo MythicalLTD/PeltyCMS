@@ -12,6 +12,7 @@ import { FormError } from "@/components/Field";
 import { api, ApiError } from "@/lib/api";
 import { applyTheme, loadActiveTheme, type Theme, type ThemeCustomization } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
+import type { TranslationKey } from "@/lib/i18n-core";
 
 const EDIT_KEYS = [
   "primary",
@@ -103,7 +104,7 @@ function ThemeEditor({
   base: Theme;
   initial: ThemeCustomization;
   onSaved: () => Promise<void>;
-  t: (k: string, v?: Record<string, string | number>) => string;
+  t: (k: TranslationKey, v?: Record<string, string | number>) => string;
   tCode: (k: string) => string;
 }) {
   const [tokens, setTokens] = useState<Record<string, string>>({ ...initial.tokens });
