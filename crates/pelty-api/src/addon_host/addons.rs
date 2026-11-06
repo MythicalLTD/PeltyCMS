@@ -734,12 +734,20 @@ struct RegistrySettings {
     oauth_pending_at: String,
 }
 
+fn panel_is_linked(cfg: &RegistrySettings) -> bool {
+    // Keys are minted at OAuth *start*; only a finished callback (team_uuid) counts as linked.
+    !cfg.team_uuid.trim().is_empty()
+        && !cfg.panel_public_key.is_empty()
+        && !cfg.panel_private_key.is_empty()
+}
+
 fn registry_public_json(cfg: &RegistrySettings) -> Value {
     json!({
         "url": cfg.url,
         "panel_public_key": cfg.panel_public_key,
         "panel_private_key": if cfg.panel_private_key.is_empty() { "" } else { "********" },
-        "panel_linked": !cfg.panel_public_key.is_empty() && !cfg.panel_private_key.is_empty(),
+        "panel_linked": panel_is_linked(cfg),
+        "oauth_pending": oauth_pending_recent(&cfg.oauth_pending_at) && !panel_is_linked(cfg),
         "team_uuid": cfg.team_uuid,
         "team_name": cfg.team_name,
         "mythic_user_id": cfg.mythic_user_id,
@@ -866,7 +874,7 @@ async fn put_registry_settings(
         u.ip.as_deref(),
         json!({
             "url": url,
-            "panel_linked": !panel_public_key.is_empty() && !panel_private_key.is_empty(),
+            "panel_linked": panel_is_linked(&cfg),
         }),
     )
     .await?;
