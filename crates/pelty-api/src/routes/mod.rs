@@ -91,6 +91,7 @@ pub use config::general_settings;
 pub use config::geo;
 pub use config::i18n;
 pub use config::license;
+pub use config::media;
 pub use config::settings;
 pub use config::setup_wizard;
 pub use config::site;
@@ -192,6 +193,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(license::router())
         .merge(admin_ops::router())
         .merge(general_settings::router())
+        .merge(media::router())
         .merge(client_extras::router())
         .merge(staff::router())
         .merge(campaigns::router())

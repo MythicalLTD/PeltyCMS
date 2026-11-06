@@ -4,6 +4,7 @@ import { ArrowsClockwiseIcon, DownloadSimpleIcon, PercentIcon, StorefrontIcon } 
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
+import { MarkdownSafe } from "@/components/MarkdownSafe";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -115,7 +116,7 @@ export function AdminVendorCatalogPage() {
                   <CardDescription className="break-all font-mono">{i.sku} · {i.server_name}</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-3 text-sm">
-                  {i.description && <p className="text-muted-foreground">{i.description}</p>}
+                  {i.description ? <MarkdownSafe source={i.description} clamp={4} className="text-muted-foreground" /> : null}
                   <dl className="grid grid-cols-3 gap-2">
                     <div><dt className="text-muted-foreground">{t("vendor.cost")}</dt><dd className="font-medium tabular-nums">{i.cost} {i.currency}</dd></div>
                     <div><dt className="text-muted-foreground">{t("vendor.price")}</dt><dd className="font-medium tabular-nums">{i.price ? `${i.price} ${i.currency}` : "-"}</dd></div>

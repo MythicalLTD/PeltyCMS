@@ -121,13 +121,18 @@ fn help() {
     println!("\nShortcuts (.cargo/config.toml): cargo dev, cargo stop, cargo addons, cargo seed");
 }
 
-/// `cargo run --release -p pelty-docs -- target/docs`.
-/// Release on purpose: `xtask build` then builds `pelty-server --release`, and
-/// pelty-docs depends on pelty-api. Dev-profile docs would recompile the whole
-/// API stack a second time in debug (ring/rustls/sqlx/…) for nothing.
+/// Docs share the same profile as `xtask build` (`release-fast`) so pelty-api
+/// is not compiled twice under different LTO settings.
 fn docs(ctx: &Ctx) -> R {
     util::run(
-        ctx.cargo()
-            .args(["run", "--release", "-p", "pelty-docs", "--", "target/docs"]),
+        ctx.cargo().args([
+            "run",
+            "--profile",
+            "release-fast",
+            "-p",
+            "pelty-docs",
+            "--",
+            "target/docs",
+        ]),
     )
 }

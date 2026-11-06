@@ -49,10 +49,10 @@ export function move<T>(list: T[], from: number, to: number): T[] {
 }
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-/** Only http(s), mailto and merge-field URLs survive; anything else becomes "#". */
+/** Only http(s), mailto, same-origin media paths, and merge-field URLs survive; anything else becomes "#". */
 export function safeUrl(u: string): string {
   const v = u.trim();
-  return /^(https?:\/\/|mailto:|\{\{\s*[a-z0-9_.]+\s*\}\})/i.test(v) ? v : "#";
+  return /^(https?:\/\/|mailto:|\/api\/v1\/media\/[0-9a-f-]{36}|\{\{\s*[a-z0-9_.]+\s*\}\})/i.test(v) ? v : "#";
 }
 const color = (c: string | undefined, d: string) => (c && /^#[0-9a-f]{3,8}$/i.test(c) ? c : d);
 const nl2br = (s: string) => esc(s).replace(/\n/g, "<br>");

@@ -32,6 +32,10 @@ export function usePublicGeneral() {
 
 export const httpsOrEmpty = (u: string) => u === "" || /^https:\/\/\S+$/.test(u);
 
+/** Company logo: HTTPS or same-origin media upload path. */
+export const logoUrlOk = (u: string) =>
+  httpsOrEmpty(u) || /^\/api\/v1\/media\/[0-9a-fA-F-]{36}$/.test(u);
+
 /**
  * Inject admin-provided CSS/JS into the client area once per value.
  * Elements are tagged so a changed value replaces the previous one.

@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { ArrowDownIcon, ArrowUpIcon, CopyIcon, DotsSixVerticalIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
+import { ImageUrlField } from "@/components/admin/ImageUrlField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -89,10 +90,17 @@ export function EmailBlockEditor({ design, vars, onChange }: { design: EmailDesi
               </div>
             )}
             {b.type === "image" && (
-              <div className="grid gap-2 sm:grid-cols-[2fr_1fr_6rem]">
-                <Input aria-label={t("email_editor.image_url")} placeholder="https://" {...field(b, "src")} />
-                <Input aria-label={t("email_editor.alt")} placeholder={t("email_editor.alt")} {...field(b, "alt")} />
-                <Input aria-label={t("email_editor.width")} type="number" min={16} max={536} value={b.width ?? 536} onChange={(e) => patch(b.id, { width: Number(e.target.value) })} />
+              <div className="grid gap-2 sm:grid-cols-[1fr_6rem]">
+                <ImageUrlField
+                  label={t("email_editor.image_url")}
+                  value={b.src ?? ""}
+                  onChange={(url) => patch(b.id, { src: url })}
+                  placeholder="https://"
+                />
+                <div className="grid gap-2 content-start">
+                  <Input aria-label={t("email_editor.alt")} placeholder={t("email_editor.alt")} {...field(b, "alt")} />
+                  <Input aria-label={t("email_editor.width")} type="number" min={16} max={536} value={b.width ?? 536} onChange={(e) => patch(b.id, { width: Number(e.target.value) })} />
+                </div>
               </div>
             )}
             {b.type === "spacer" && <div className="flex items-center gap-2"><Label className="text-xs">{t("email_editor.height")}</Label><Input type="number" className="w-24" min={4} max={120} value={b.height ?? 24} onChange={(e) => patch(b.id, { height: Number(e.target.value) })} /></div>}

@@ -176,7 +176,10 @@ pub async fn materials(pool: &PgPool, only_active: bool) -> AppResult<Vec<Materi
 fn check_material(m: &MaterialInput) -> AppResult<()> {
     let url_ok = m.image_url.is_empty()
         || ((m.image_url.starts_with("https://") || m.image_url.starts_with("http://"))
-            && m.image_url.len() <= 1000);
+            && m.image_url.len() <= 1000)
+        || (m.image_url.starts_with("/api/v1/media/")
+            && m.image_url.len() <= 300
+            && !m.image_url.contains(".."));
     let title = m.title.trim();
     if !matches!(m.kind.as_str(), "banner" | "text")
         || title.is_empty()

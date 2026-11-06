@@ -9,6 +9,7 @@ pub mod general_settings;
 pub mod geo;
 pub mod i18n;
 pub mod license;
+pub mod media;
 pub mod settings;
 pub mod setup_wizard;
 pub mod site;
