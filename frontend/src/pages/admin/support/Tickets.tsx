@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PluginSlot } from "@/components/plugin-ui/PluginSlot";
 import { OpenTicketDialog } from "@/pages/admin/support/OpenTicketDialog";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { Link, useNavigate, useParams } from "react-router";
@@ -161,6 +162,7 @@ export function AdminTicketPage() {
                   <TicketMacroButton ticketId={tk.id} departmentId={tk.department_id} onApplied={done} />
                 </div>
                 {!internal && <TicketAiSuggestion key={tk.id} ticketId={tk.id} onInsert={(draft) => setBody((current) => current ? `${current}\n\n${draft}` : draft)} />}
+                <PluginSlot slot="admin.ticket.reply" ctx={{ ticket_id: id }} />
                 <Textarea rows={6} value={body} onChange={(e) => setBody(e.target.value)} aria-label={t("tickets.reply")} />
                 <TicketAttachments files={files} onChange={setFiles} disabled={reply.isPending} />
                 <div className="flex flex-wrap items-center justify-between gap-3">

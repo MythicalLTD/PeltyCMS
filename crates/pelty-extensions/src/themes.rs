@@ -64,7 +64,21 @@ pub struct ThemeManifest {
     /// server serves this bundle instead of the default frontend.
     #[serde(default)]
     pub frontend: Option<String>,
+    /// Named layout/template overrides: slot → relative file under the theme
+    /// dir (`.css` or `.html`). Slots are allowlisted (`TEMPLATE_SLOTS`).
+    #[serde(default)]
+    pub templates: BTreeMap<String, String>,
 }
+
+/// Slots a theme may override with a CSS or HTML template file.
+pub const TEMPLATE_SLOTS: &[&str] = &[
+    "login",
+    "register",
+    "store-hero",
+    "client-footer",
+    "auth-aside",
+    "layout",
+];
 fn default_scheme() -> String {
     "dark".into()
 }
@@ -82,6 +96,8 @@ pub struct Theme {
     pub logo_url: Option<String>,
     pub stylesheet_url: Option<String>,
     pub has_frontend: bool,
+    /// Slot → asset URL for declared template overrides.
+    pub templates: BTreeMap<String, String>,
 }
 
 /// Conservative CSS value validator: colors, lengths, font stacks, functions
@@ -126,6 +142,17 @@ fn valid_asset_name(n: &str) -> bool {
         && p.extension()
             .and_then(|e| e.to_str())
             .is_some_and(|e| ASSET_EXTS.contains(&e))
+}
+
+fn valid_template_name(n: &str) -> bool {
+    let p = Path::new(n);
+    p.components().all(|c| matches!(c, Component::Normal(_)))
+        && !n.starts_with('.')
+        && n.chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-_./".contains(c))
+        && p.extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| matches!(e, "css" | "html"))
 }
 
 impl ThemeManifest {
@@ -173,6 +200,14 @@ impl ThemeManifest {
                 return bad("frontend path");
             }
         }
+        for (slot, file) in &self.templates {
+            if !TEMPLATE_SLOTS.contains(&slot.as_str()) {
+                return Err(ThemeError::Invalid(format!("unknown template slot {slot}")));
+            }
+            if !valid_template_name(file) {
+                return bad("template path");
+            }
+        }
         Ok(())
     }
 
@@ -181,6 +216,16 @@ impl ThemeManifest {
             f.as_ref()
                 .map(|f| format!("/api/v1/themes/{}/assets/{}", self.id, f))
         };
+        let templates = self
+            .templates
+            .iter()
+            .map(|(slot, file)| {
+                (
+                    slot.clone(),
+                    format!("/api/v1/themes/{}/assets/{}", self.id, file),
+                )
+            })
+            .collect();
         Theme {
             id: self.id.clone(),
             name: self.name.clone(),
@@ -192,6 +237,7 @@ impl ThemeManifest {
             logo_url: url(&self.logo),
             stylesheet_url: url(&self.stylesheet),
             has_frontend: self.frontend.is_some(),
+            templates,
         }
     }
 }
@@ -238,13 +284,25 @@ impl ThemeStore {
     }
 
     /// Resolve an asset path safely inside the theme directory.
+    /// Declared template files (`.html` / `.css`) are also allowed.
     pub fn asset_path(&self, id: &str, file: &str) -> Option<PathBuf> {
-        if !self.themes.contains_key(id) || !valid_asset_name(file) {
+        let m = self.themes.get(id)?;
+        let ok = valid_asset_name(file)
+            || (valid_template_name(file) && m.templates.values().any(|t| t == file));
+        if !ok {
             return None;
         }
         let base = self.dir.join(id).canonicalize().ok()?;
         let p = base.join(file).canonicalize().ok()?;
         p.starts_with(&base).then_some(p)
+    }
+
+    /// Slot names declared by the theme.
+    pub fn template_slots(&self, id: &str) -> Vec<String> {
+        self.themes
+            .get(id)
+            .map(|m| m.templates.keys().cloned().collect())
+            .unwrap_or_default()
     }
 
     /// Canonical root of a theme's full frontend bundle, if it declares one
@@ -322,5 +380,20 @@ mod tests {
         assert!(s.asset_path("default", "../../Cargo.toml").is_none());
         assert!(s.asset_path("nope", "logo.svg").is_none());
         assert!(s.asset_path("default", "logo.svg").is_some());
+    }
+
+    #[test]
+    fn accepts_template_slots() {
+        let with = |slot: &str, file: &str| {
+            OK.replacen(
+                "\"tokens\"",
+                &format!("\"templates\":{{\"{slot}\":\"{file}\"}},\"tokens\""),
+                1,
+            )
+        };
+        assert!(ThemeManifest::parse(&with("layout", "templates/layout.css")).is_ok());
+        assert!(ThemeManifest::parse(&with("login", "templates/login.html")).is_ok());
+        assert!(ThemeManifest::parse(&with("evil", "x.css")).is_err());
+        assert!(ThemeManifest::parse(&with("layout", "../x.css")).is_err());
     }
 }

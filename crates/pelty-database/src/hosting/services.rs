@@ -10,7 +10,7 @@ use time::{Date, OffsetDateTime};
 use uuid::Uuid;
 
 const COLS: &str = "s.id, s.customer_id, s.product_id, p.name AS product_name, s.status, s.cycle, s.currency::text AS currency, \
-    s.recurring_amount, s.next_due_date, s.suspend_reason, s.activated_at, s.terminated_at, s.created_at, s.custom_fields";
+    s.recurring_amount, s.next_due_date, s.suspend_reason, s.activated_at, s.terminated_at, s.created_at, s.custom_fields, s.config";
 
 #[derive(Debug, Clone, FromRow, Serialize)]
 pub struct Service {
@@ -32,6 +32,8 @@ pub struct Service {
     pub created_at: OffsetDateTime,
     /// Custom order field values (field_id → value).
     pub custom_fields: serde_json::Value,
+    /// Configurable-option selections (option_id → choice id or qty).
+    pub config: serde_json::Value,
 }
 
 pub async fn get(pool: &PgPool, id: Uuid) -> AppResult<Option<Service>> {
