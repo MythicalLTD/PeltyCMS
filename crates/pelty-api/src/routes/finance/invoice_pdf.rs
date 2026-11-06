@@ -112,6 +112,43 @@ pub(crate) fn bill_to(c: &Value) -> Vec<String> {
     out
 }
 
+/// Addon filter `invoice.pdf` over the free-text parts of the PDF.
+async fn pdf_filter(
+    s: &AppState,
+    inv: &invoices::Invoice,
+    locale: &str,
+    notes: Vec<String>,
+    footer: Vec<String>,
+) -> (Vec<String>, Vec<String>) {
+    if !crate::addon_filters::has(s, "invoice.pdf") {
+        return (notes, footer);
+    }
+    let out = crate::addon_filters::apply_with(
+        s,
+        "invoice.pdf",
+        serde_json::json!({ "notes": notes, "footer": footer }),
+        serde_json::json!({ "invoice_id": inv.id, "customer_id": inv.customer_id, "locale": locale }),
+        false,
+    )
+    .await;
+    (
+        clamp_lines(&out["notes"], 20).unwrap_or(notes),
+        clamp_lines(&out["footer"], 6).unwrap_or(footer),
+    )
+}
+
+/// String array → at most `max` lines of 300 chars without control chars.
+fn clamp_lines(v: &serde_json::Value, max: usize) -> Option<Vec<String>> {
+    let a = v.as_array()?;
+    Some(
+        a.iter()
+            .filter_map(serde_json::Value::as_str)
+            .map(|l| l.chars().filter(|c| !c.is_control()).take(300).collect())
+            .take(max)
+            .collect(),
+    )
+}
+
 pub async fn build(s: &AppState, inv: &invoices::Invoice, locale: &str) -> ApiResult<Vec<u8>> {
     let t = |k: &str| s.i18n.t(locale, k).to_string();
     let b = branding::get(&s.pool).await?;
@@ -254,6 +291,7 @@ pub async fn build(s: &AppState, inv: &invoices::Invoice, locale: &str) -> ApiRe
     if inv.number.is_none() {
         notes.push(unnumbered.clone());
     }
+    let (notes, footer) = pdf_filter(s, inv, locale, notes, footer).await;
     let doc = InvoiceDoc {
         title,
         number: inv.number.clone().unwrap_or(unnumbered),
@@ -373,4 +411,18 @@ pub async fn put_branding(
     )
     .await?;
     Ok(Json(b))
+}
+
+#[cfg(test)]
+mod pdf_filter_tests {
+    use super::clamp_lines;
+    use serde_json::json;
+
+    #[test]
+    fn clamps_addon_lines() {
+        let v = json!(["a\nb", "x".repeat(400), 3, "c"]);
+        let out = clamp_lines(&v, 2).unwrap();
+        assert_eq!(out, vec!["ab".to_string(), "x".repeat(300)]);
+        assert!(clamp_lines(&json!("nope"), 2).is_none());
+    }
 }
