@@ -185,12 +185,14 @@ async fn zip_upload_and_registry_install() {
         "enabled addons must be disabled first"
     );
 
-    // Registry: unset → 409; then an in-process index.
+    // Registry: unset → falls back to the official Mythical marketplace
+    // (never "not configured"); the live answer depends on the network, so
+    // only assert it is no longer a 409. Then an in-process index.
     sqlx::query("DELETE FROM system_settings WHERE key = 'addons.registry'")
         .execute(&st.pool)
         .await
         .ok();
-    assert_eq!(
+    assert_ne!(
         call(
             &app,
             "GET",
