@@ -84,6 +84,14 @@ pub const UI_RENDER_SLOTS: &[(&str, &[&str])] = &[
     ("admin.order.detail", &["order_id"]),
     ("admin.invoice.detail", &["invoice_id"]),
     ("client.home", &[]),
+    // Above the reply box of a ticket (staff and client side).
+    ("admin.ticket.reply", &["ticket_id"]),
+    ("client.ticket.reply", &["ticket_id"]),
+    // Extra checkout step, rendered before the payment method card.
+    ("client.checkout.step", &["currency", "gateway"]),
+    // Client invoice / service detail, under the main content.
+    ("client.invoice.detail", &["invoice_id"]),
+    ("client.service.detail", &["service_id"]),
 ];
 
 /// Positions an addon can fill on every page. A slot name is
@@ -503,6 +511,19 @@ mod tests {
             allow_core_actions: core,
             own_api: None,
             allow_iframe: false,
+        }
+    }
+
+    #[test]
+    fn named_reply_checkout_slots() {
+        for n in [
+            "admin.ticket.reply",
+            "client.ticket.reply",
+            "client.checkout.step",
+            "client.invoice.detail",
+            "client.service.detail",
+        ] {
+            assert!(valid_slot(n), "{n}");
         }
     }
 

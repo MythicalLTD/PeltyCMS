@@ -14,6 +14,7 @@ use pelty_database::service_changes as db;
 use pelty_extensions::events::DomainEvent;
 use serde::Deserialize;
 use serde_json::{json, Value};
+use sqlx;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -23,6 +24,14 @@ pub fn router() -> Router<AppState> {
         .route(
             "/client/services/{id}/change",
             post(client_change).delete(client_cancel_change),
+        )
+        .route(
+            "/client/services/{id}/options/quote",
+            post(client_quote_options),
+        )
+        .route(
+            "/client/services/{id}/options/change",
+            post(client_change_options).delete(client_cancel_option_change),
         )
         .route(
             "/client/services/{id}/cancellation",
@@ -58,8 +67,39 @@ async fn lifecycle(s: &AppState, id: Uuid) -> ApiResult<Value> {
         Err(e) => return Err(e.into()),
     };
     let changes = db::changes_for(&s.pool, id).await?;
+    let option_changes = db::option_changes_for(&s.pool, id).await?;
     let cancellation = db::open_cancel(&s.pool, id).await?;
-    Ok(json!({ "options": options, "changes": changes, "cancellation": cancellation }))
+    let config: Value = sqlx::query_scalar("SELECT config FROM services WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&s.pool)
+        .await
+        .map_err(pelty_database::db_err)?
+        .unwrap_or_else(|| json!({}));
+    // Product configurable options for the UI.
+    let product_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT product_id FROM services WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&s.pool)
+            .await
+            .map_err(pelty_database::db_err)?;
+    let product_options = match product_id {
+        Some(pid) => {
+            let full = pelty_database::catalog::products(&s.pool, false, Some(pid)).await?;
+            full.into_iter()
+                .next()
+                .map(|p| p.options)
+                .unwrap_or_default()
+        }
+        None => vec![],
+    };
+    Ok(json!({
+        "options": options,
+        "changes": changes,
+        "option_changes": option_changes,
+        "cancellation": cancellation,
+        "config": config,
+        "product_options": product_options,
+    }))
 }
 
 /// Cancel immediately: lifecycle transition plus provisioning hook.
@@ -323,4 +363,56 @@ pub async fn admin_decide(
         cancel_service(&s, d.request.service_id, Some(u.user_id)).await?;
     }
     Ok(Json(json!({ "cancellation": d.request })))
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct OptionChangeBody {
+    pub config: Value,
+}
+
+#[utoipa::path(post, path = "/api/v1/client/services/{id}/options/quote", request_body = OptionChangeBody, responses((status = 200), (status = 404)))]
+pub async fn client_quote_options(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Path(id): Path<Uuid>,
+    Json(b): Json<OptionChangeBody>,
+) -> ApiResult<Json<Value>> {
+    owned(&s, &u, id).await?;
+    let q = db::quote_options(&s.pool, id, &b.config, today()).await?;
+    Ok(Json(json!(q)))
+}
+
+#[utoipa::path(post, path = "/api/v1/client/services/{id}/options/change", request_body = OptionChangeBody, responses((status = 200), (status = 404)))]
+pub async fn client_change_options(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Path(id): Path<Uuid>,
+    Json(b): Json<OptionChangeBody>,
+) -> ApiResult<Json<Value>> {
+    owned(&s, &u, id).await?;
+    let (change, invoice) =
+        db::request_option_change(&s.pool, id, b.config, Some(u.user_id), today(), DUE_DAYS)
+            .await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "service.option_change",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "change_id": change.id, "status": change.status }),
+    )
+    .await?;
+    Ok(Json(json!({ "change": change, "invoice": invoice })))
+}
+
+#[utoipa::path(delete, path = "/api/v1/client/services/{id}/options/change", responses((status = 200), (status = 404)))]
+pub async fn client_cancel_option_change(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
+    owned(&s, &u, id).await?;
+    db::cancel_option_change(&s.pool, id).await?;
+    Ok(Json(json!({ "ok": true })))
 }

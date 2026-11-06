@@ -10,6 +10,15 @@ export interface Theme {
   tokens: Record<string, string>;
   logo_url: string | null;
   stylesheet_url: string | null;
+  has_frontend?: boolean;
+  templates?: Record<string, string>;
+  custom_css?: string;
+}
+
+export interface ThemeCustomization {
+  tokens: Record<string, string>;
+  custom_css: string;
+  color_scheme: "dark" | "light" | null;
 }
 
 /** Keys accepted by the server; anything else is ignored client-side too. */
@@ -80,8 +89,38 @@ export async function loadActiveTheme(): Promise<Theme | null> {
       link.href = theme.stylesheet_url;
       document.head.appendChild(link);
     }
+    applyCustomCss(theme.custom_css ?? "");
+    applyTemplateStyles(theme.templates ?? {});
     return theme;
   } catch {
     return null;
+  }
+}
+
+/** Inject admin-authored custom CSS (already sanitized server-side). */
+export function applyCustomCss(css: string) {
+  let el = document.getElementById("pelty-theme-custom") as HTMLStyleElement | null;
+  if (!css) {
+    el?.remove();
+    return;
+  }
+  if (!el) {
+    el = document.createElement("style");
+    el.id = "pelty-theme-custom";
+    document.head.appendChild(el);
+  }
+  el.textContent = css;
+}
+
+/** Load theme template CSS overrides (HTML templates are fetched by ThemeSlot). */
+export function applyTemplateStyles(templates: Record<string, string>) {
+  document.querySelectorAll("link[data-pelty-theme-slot]").forEach((n) => n.remove());
+  for (const [slot, href] of Object.entries(templates)) {
+    if (!href.endsWith(".css")) continue;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    link.dataset.peltyThemeSlot = slot;
+    document.head.appendChild(link);
   }
 }
