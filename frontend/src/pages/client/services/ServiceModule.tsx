@@ -56,7 +56,7 @@ function useModulePanel(service: Service, enabled: boolean) {
   });
   const copy = (v: string) => { void navigator.clipboard.writeText(v); toast.success(t("modx.copied")); };
   const setField = (action: string, field: string, value: string) =>
-    setForms((prev) => ({ ...prev, [action]: { ...(prev[action] ?? {}), [field]: value } }));
+    setForms((prev) => ({ ...prev, [action]: { ...prev[action], [field]: value } }));
   return { t, tCode, forms, setField, data: q.data, isLoading: q.isLoading, run, copy };
 }
 
