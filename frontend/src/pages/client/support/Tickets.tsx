@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PluginSlot } from "@/components/plugin-ui/PluginSlot";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { ArrowLeftIcon, BookOpenIcon, LifebuoyIcon, PlusIcon, StarIcon } from "@phosphor-icons/react";
@@ -207,6 +208,7 @@ export function ClientTicketPage() {
         <Card>
           <CardHeader><CardTitle>{t("tickets.reply")}</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-3">
+            <PluginSlot slot="client.ticket.reply" ctx={{ ticket_id: id }} />
             <Textarea rows={5} value={body} onChange={(e) => setBody(e.target.value)} aria-label={t("tickets.reply")} />
             <TicketAttachments files={files} onChange={setFiles} disabled={reply.isPending} />
             <div><Button disabled={!body.trim() || reply.isPending} onClick={() => reply.mutate()}>{t("tickets.send")}</Button></div>

@@ -60,7 +60,8 @@ export function usePluginRenderSlots(slots: string[]): PluginSlotUi[] {
   return slots.flatMap((name) => all.filter((s) => s.slot === name).toSorted((a, b) => (a.order ?? 0) - (b.order ?? 0)));
 }
 
-export type RenderSlot = "admin.dashboard" | "client.dashboard" | "admin.service.detail" | "admin.customer.detail" | "admin.order.detail" | "admin.invoice.detail" | "client.home";
+export type RenderSlot = "admin.dashboard" | "client.dashboard" | "admin.service.detail" | "admin.customer.detail" | "admin.order.detail" | "admin.invoice.detail" | "client.home"
+  | "admin.ticket.reply" | "client.ticket.reply" | "client.checkout.step" | "client.invoice.detail" | "client.service.detail";
 
 /** In-app route of a plugin page. */
 export const pluginPagePath = (p: Pick<PluginPage, "plugin" | "id" | "area">) => (p.area === "admin" ? `/admin/p/${p.plugin}/${p.id}` : `/p/${p.plugin}/${p.id}`);

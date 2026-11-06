@@ -1,4 +1,5 @@
 import { invoiceLabel } from "@/lib/billing/billing";
+import { PluginSlot } from "@/components/plugin-ui/PluginSlot";
 import { PageHeader } from "@/components/PageHeader";
 import { useState } from "react";
 import { PageSkeleton } from "@/components/PageSkeleton";
@@ -193,6 +194,7 @@ export function ClientInvoicePage() {
       )}
       <RelatedDocsCard scope="client" d={data} />
       <RefundsCard scope="client" invoiceId={inv.id} />
+      <PluginSlot slot="client.invoice.detail" ctx={{ invoice_id: inv.id }} />
       </div>
     </div>
     </div>
