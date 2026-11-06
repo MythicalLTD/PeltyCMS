@@ -17,10 +17,16 @@ pub fn root_router() -> Router<AppState> {
 }
 
 fn dir() -> PathBuf {
-    // Folder written by `cargo xtask docs` (default `target/docs`).
-    std::env::var("PELTY_DOCS_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("target/docs"))
+    // Release archives ship `docs/` next to the binary; source checkouts use `target/docs`.
+    if let Ok(p) = std::env::var("PELTY_DOCS_DIR") {
+        return PathBuf::from(p);
+    }
+    let release = PathBuf::from("docs");
+    if release.join("index.html").is_file() || release.is_dir() {
+        release
+    } else {
+        PathBuf::from("target/docs")
+    }
 }
 
 fn public() -> bool {
@@ -75,7 +81,7 @@ async fn serve(State(s): State<AppState>, req: Request) -> Response {
         return page(
             StatusCode::NOT_FOUND,
             "Docs not built",
-            "Run <code>cargo xtask docs</code> (or set PELTY_DOCS_DIR).",
+            "Set PELTY_DOCS_DIR, unpack the release <code>docs/</code> folder, or run <code>cargo xtask docs</code>.",
         );
     };
     let p = Path::new(&rel);

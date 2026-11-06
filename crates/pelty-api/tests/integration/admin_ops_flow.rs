@@ -266,7 +266,7 @@ async fn prefs_history_online_calendar_emails_backups() {
     )
     .await;
     assert_eq!(d.0, StatusCode::OK);
-    assert_eq!(&d.1[..5], b"PGDMP", "custom-format dump header");
+    assert_eq!(&d.1[..2], b"PK", "zip archive header");
     assert_eq!(
         call(
             &app,

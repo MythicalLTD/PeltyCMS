@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/pelty-core", "crates/pelty-database", "crates/pelty-auth", "crates/pelty-api", "crates/pelty-server", "crates/pelty-extensions", "crates/pelty-payments", "crates/pelty-billing", "crates/pelty-notifications", "crates/pelty-provisioning", "crates/pelty-import", "crates/pelty-cli", "crates/pelty-saml", "crates/pelty-wasm", "crates/pelty-docs", "xtask"]
+members = ["crates/pelty-core", "crates/pelty-database", "crates/pelty-auth", "crates/pelty-api", "crates/pelty-server", "crates/pelty-extensions", "crates/pelty-payments", "crates/pelty-billing", "crates/pelty-notifications", "crates/pelty-provisioning", "crates/pelty-import", "crates/pelty-cli", "crates/pelty-saml", "crates/pelty-wasm", "crates/pelty-docs", "crates/pelty-pg", "xtask"]
 exclude = ["examples", "addons", "extensions"]
 
 [workspace.package]
@@ -25,6 +25,7 @@ pelty-provisioning = { path = "crates/pelty-provisioning" }
 pelty-import = { path = "crates/pelty-import" }
 pelty-saml = { path = "crates/pelty-saml" }
 pelty-docs = { path = "crates/pelty-docs" }
+pelty-pg = { path = "crates/pelty-pg" }
 axum = { version = "0.8", features = ["macros"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "net", "sync", "time", "io-std", "io-util"] }
 tower = { version = "0.5", features = ["util"] }

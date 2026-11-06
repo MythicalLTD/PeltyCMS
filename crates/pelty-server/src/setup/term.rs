@@ -183,4 +183,8 @@ impl Services for Live {
                 .map_err(|_| "timed out".to_string())?
         })
     }
+
+    fn ensure_local_pg(&mut self, port: u16) -> Result<String, String> {
+        crate::local_pg::provision(port)
+    }
 }

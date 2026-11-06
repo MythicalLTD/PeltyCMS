@@ -51,6 +51,7 @@ subsetter = "0.2.6"
 croner = "4.0.3"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 maxminddb = "0.32"
+zip = { workspace = true }
 
 [lints]
 workspace = true
@@ -84,7 +85,6 @@ uuid = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }
 sqlx = { workspace = true }
-zip = { workspace = true }
 
 # All integration suites share one test binary (tests/integration/main.rs):
 # one link of wasmtime/sqlx/addons instead of one ~1 GB debug binary per file.

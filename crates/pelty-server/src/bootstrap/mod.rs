@@ -139,10 +139,11 @@ pub fn read_env_file(root: &Path) -> Vec<(String, String)> {
 pub const DIRS: &[(&str, &str, &str)] = &[
     ("PELTY_ADDONS_DIR", "data/addons", "addon packages"),
     ("PELTY_ADDON_DATA_DIR", "data/addons", "addon data"),
+    ("PELTY_PG_HOME", "data/pg", "local PostgreSQL (PELTY_LOCAL_PG)"),
     ("PELTY_THEMES_DIR", "extensions/themes", "themes"),
     ("PELTY_PLUGINS_DIR", "extensions/plugins", "webhook plugins"),
     ("PELTY_LOCALES_DIR", "locales", "translations"),
-    ("PELTY_BACKUP_DIR", "backups", "database backups"),
+    ("PELTY_BACKUP_DIR", "backups", "site backups"),
 ];
 
 /// Create missing folders and default locale files. `get` reads the
@@ -237,6 +238,7 @@ mod tests {
         assert!(d.join(".env").is_file());
         for p in [
             "data/addons",
+            "data/pg",
             "extensions/themes",
             "extensions/plugins",
             "locales",

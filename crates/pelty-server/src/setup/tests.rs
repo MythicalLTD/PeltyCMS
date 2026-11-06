@@ -115,6 +115,9 @@ impl Services for Fake {
         self.mails.push((u.into(), f.into(), t.into()));
         Ok(())
     }
+    fn ensure_local_pg(&mut self, port: u16) -> Result<String, String> {
+        Ok(format!("postgres://pelty:local-test-secret@127.0.0.1:{port}/peltycms"))
+    }
 }
 
 fn none(_: &str) -> Option<String> {
@@ -142,6 +145,7 @@ fn run(
 fn defaults_everywhere_with_generated_admin() {
     let mut p = Script::new(&[
         "y", // eula
+        "",  // existing PostgreSQL (default)
         "",  // as url? (no)
         "",
         "",
@@ -172,6 +176,7 @@ fn defaults_everywhere_with_generated_admin() {
         a.env["DATABASE_URL"],
         "postgres://postgres@127.0.0.1:5432/peltycms"
     );
+    assert_eq!(a.env["PELTY_LOCAL_PG"], "false");
     assert_eq!(a.env["PELTY_BIND"], "127.0.0.1:8080");
     assert_eq!(a.env["PELTY_PUBLIC_URL"], "http://localhost:8080");
     assert_eq!(a.env["PELTY_COOKIE_SECURE"], "false");
@@ -214,7 +219,7 @@ fn declining_the_eula_stops() {
 #[test]
 fn eula_already_accepted_is_not_asked_and_cancel_writes_nothing() {
     let mut p = Script::new(&[
-        "", "", "", "", "", "", "", "", "", "", "n", "n", "", "", "cancel",
+        "", "", "", "", "", "", "", "", "", "", "", "n", "n", "", "", "cancel",
     ]);
     let r = run(&mut p, &mut Fake::default(), &none, true);
     assert!(matches!(r, Err(Error::Cancelled)), "{r:?}");
@@ -226,6 +231,7 @@ fn eula_already_accepted_is_not_asked_and_cancel_writes_nothing() {
 fn database_parts_retry_create_and_validation() {
     let mut p = Script::new(&[
         "y",
+        "", // existing PostgreSQL
         "n",
         "db.local",
         "notaport",
@@ -276,6 +282,7 @@ fn database_parts_retry_create_and_validation() {
 fn typed_admin_password_policy_and_smtp_with_test_mail() {
     let mut p = Script::new(&[
         "y",
+        "", // existing PostgreSQL
         "",
         "",
         "",
@@ -389,6 +396,7 @@ fn typed_admin_password_policy_and_smtp_with_test_mail() {
 fn proxy_presets_and_validation() {
     // nginx preset; https defaults to yes behind a proxy.
     let mut p = Script::new(&[
+        "", // existing PostgreSQL
         "",
         "",
         "",
@@ -411,6 +419,7 @@ fn proxy_presets_and_validation() {
     assert!(p.said("listen on 127.0.0.1"));
     // Cloudflare preset, then "other" with validation.
     let mut p = Script::new(&[
+        "", // existing PostgreSQL
         "",
         "",
         "",
@@ -430,6 +439,7 @@ fn proxy_presets_and_validation() {
     let a = run(&mut p, &mut Fake::default(), &none, true).unwrap();
     assert_eq!(a.env["PELTY_TRUSTED_PROXIES"], CLOUDFLARE);
     let mut p = Script::new(&[
+        "", // existing PostgreSQL
         "",
         "",
         "",
@@ -456,7 +466,7 @@ fn proxy_presets_and_validation() {
     // Previously set, now "no proxy": cleared.
     let had = |k: &str| (k == "PELTY_TRUSTED_PROXIES").then(|| "127.0.0.1,::1".to_string());
     let mut p = Script::new(&[
-        "", "", "", "", "", "", "", "", "no", "", "n", "n", "", "", "",
+        "", "", "", "", "", "", "", "", "", "no", "", "n", "n", "", "", "",
     ]);
     let a = run(&mut p, &mut Fake::default(), &had, true).unwrap();
     assert_eq!(a.env["PELTY_TRUSTED_PROXIES"], "");
@@ -465,6 +475,7 @@ fn proxy_presets_and_validation() {
 #[test]
 fn selects_currency_language_timezone_and_reedit_from_summary() {
     let mut p = Script::new(&[
+        "", // existing PostgreSQL
         "",
         "",
         "",
@@ -556,6 +567,7 @@ fn captcha_choice_with_keys_and_none() {
     };
     // Turnstile with keys (empty secret re-asked), then re-edited to none from the summary.
     let mut p = Script::new(&[
+        "", // existing PostgreSQL
         "",
         "",
         "",
@@ -586,7 +598,7 @@ fn captcha_choice_with_keys_and_none() {
             && !p.out.iter().any(|l| l.contains("0xSECRET"))
     );
     let mut p = Script::new(&[
-        "", "", "", "", "", "", "", "", "", "", "n", "n", "", "built-in", "", "",
+        "", "", "", "", "", "", "", "", "", "", "", "n", "n", "", "built-in", "", "",
     ]);
     let a = wizard(&mut p, &mut Fake::default(), &mut ctx).unwrap();
     let c = a.plan.captcha.unwrap();
@@ -621,9 +633,11 @@ fn headless_defaults_flags_and_errors() {
     .collect();
     let h = Headless::take_flags(&mut args).unwrap();
     assert_eq!(args, vec!["setup"]);
+    assert!(!h.local_pg);
     let a = headless(&mut f, &none, false, &h).unwrap();
     assert_eq!(f.created, vec!["postgres://u@db/pelty".to_string()]);
     assert_eq!(a.env["PELTY_PUBLIC_URL"], "http://localhost:9000");
+    assert_eq!(a.env["PELTY_LOCAL_PG"], "false");
     assert_eq!(a.env[MARKER], "done");
     let admin = a.plan.admin.unwrap();
     assert!(admin.generated && admin.name == "Root");
@@ -646,6 +660,12 @@ fn headless_defaults_flags_and_errors() {
         .unwrap_err()
         .contains("refused"));
     assert!(Headless::take_flags(&mut vec!["--db-url".to_string()]).is_err());
+    let mut args = vec!["--local-pg".into(), "--accept-eula".into()];
+    let h = Headless::take_flags(&mut args).unwrap();
+    assert!(h.local_pg && args.is_empty());
+    let a = headless(&mut Fake::default(), &none, false, &h).unwrap();
+    assert_eq!(a.env["PELTY_LOCAL_PG"], "true");
+    assert!(a.env["DATABASE_URL"].contains("@127.0.0.1:5432/peltycms"));
 }
 
 #[test]
@@ -790,6 +810,7 @@ fn validators() {
 fn public_url_default_follows_the_port_until_customised() {
     let script = || {
         Script::new(&[
+            "", // existing PostgreSQL
             "",
             "",
             "",
@@ -861,6 +882,7 @@ fn gateways_from_bundled_packages_with_hidden_keys() {
         .label
         .to_lowercase();
     let mut p = Script::new(&[
+        "", // existing PostgreSQL
         "",
         "",
         "",
@@ -912,8 +934,31 @@ fn gateways_from_bundled_packages_with_hidden_keys() {
         p.said("live, 1/2 keys (hidden)") && !p.out.iter().any(|l| l.contains("sk_live_SECRET"))
     );
     let mut p = Script::new(&[
-        "", "", "", "", "", "", "", "", "", "", "n", "n", "n", "n", "", "",
+        "", "", "", "", "", "", "", "", "", "", "", "n", "n", "n", "n", "", "",
     ]);
     let a = wizard(&mut p, &mut Fake::default(), &mut ctx).unwrap();
     assert!(a.plan.gateways.is_empty() && p.said("(none now)"));
+}
+
+#[test]
+fn local_postgres_mode_sets_env() {
+    let mut p = Script::new(&[
+        "y",    // eula
+        "local", // Local PostgreSQL
+        "",     // port default 5432
+        "",
+        "",
+        "",
+        "", // web defaults
+        "n",
+        "n",
+        "n",
+        "n", // company / admin / smtp / advanced
+        "",  // save
+    ]);
+    let a = run(&mut p, &mut Fake::default(), &none, false).unwrap();
+    assert_eq!(a.env["PELTY_LOCAL_PG"], "true");
+    assert!(a.env["DATABASE_URL"].starts_with("postgres://pelty:"));
+    assert!(a.env["DATABASE_URL"].contains("@127.0.0.1:5432/peltycms"));
+    assert!(p.said("Ready at") && p.said("Connection OK"));
 }

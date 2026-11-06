@@ -1,0 +1,14 @@
+[package]
+name = "pelty-pg"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Download and run a local PostgreSQL for PeltyCMS (prod sidecar and shared with xtask)."
+
+[dependencies]
+lzma-rs = "0.3"
+rand = { workspace = true }
+tar = { version = "0.4", default-features = false }
+
+[lints]
+workspace = true

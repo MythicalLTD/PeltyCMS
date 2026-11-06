@@ -3654,6 +3654,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pelty-pg"
+version = "0.1.0"
+dependencies = [
+ "lzma-rs",
+ "rand 0.10.3",
+ "tar",
+]
+
+[[package]]
 name = "pelty-provisioning"
 version = "0.1.0"
 dependencies = [
@@ -3711,6 +3720,7 @@ dependencies = [
  "pelty-extensions",
  "pelty-import",
  "pelty-notifications",
+ "pelty-pg",
  "percent-encoding",
  "rand 0.10.3",
  "reqwest",
@@ -7122,10 +7132,10 @@ dependencies = [
  "base64 0.23.1",
  "ctrlc",
  "flate2",
- "lzma-rs",
  "nix",
  "pelty-extensions",
  "pelty-payments",
+ "pelty-pg",
  "pelty-wasm",
  "ring",
  "serde",

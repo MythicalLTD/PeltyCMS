@@ -52,6 +52,8 @@ pub trait Services {
     fn currencies(&mut self, url: &str) -> Vec<String>;
     /// `PING` a Redis URL; the round trip in milliseconds.
     fn redis_ping(&mut self, url: &str) -> Result<u128, String>;
+    /// Download/start a local PostgreSQL on `port`; returns the `DATABASE_URL`.
+    fn ensure_local_pg(&mut self, port: u16) -> Result<String, String>;
 }
 
 #[derive(Debug)]
@@ -791,6 +793,11 @@ fn license<P: Prompt + ?Sized>(p: &mut P, ctx: &Ctx, a: &mut Answers) -> Result<
     Ok(())
 }
 
+const DB_MODES: [&str; 2] = [
+    "Local PostgreSQL (download & manage on this machine)",
+    "Existing PostgreSQL (connection URL)",
+];
+
 fn database<P: Prompt + ?Sized, S: Services + ?Sized>(
     p: &mut P,
     svc: &mut S,
@@ -800,8 +807,28 @@ fn database<P: Prompt + ?Sized, S: Services + ?Sized>(
     header(
         p,
         1,
-        "PostgreSQL 16+. A missing database can be created for you.",
+        "PostgreSQL 16+. Local download needs no Docker; or point at a server you already run.",
     );
+    let default_mode = if ctx.c("PELTY_LOCAL_PG", "") == "true" || ctx.c("PELTY_LOCAL_PG", "") == "1"
+    {
+        0
+    } else {
+        1
+    };
+    let mode = p.select("How will PeltyCMS reach PostgreSQL?", &DB_MODES, default_mode)?;
+    if mode == 0 {
+        return database_local(p, svc, ctx, a);
+    }
+    database_existing(p, svc, ctx, a)
+}
+
+fn database_existing<P: Prompt + ?Sized, S: Services + ?Sized>(
+    p: &mut P,
+    svc: &mut S,
+    ctx: &mut Ctx,
+    a: &mut Answers,
+) -> Result<(), Error> {
+    a.env.insert("PELTY_LOCAL_PG".into(), "false".into());
     let mut url = a.env.get("DATABASE_URL").cloned().unwrap_or_else(|| {
         ctx.c(
             "DATABASE_URL",
@@ -821,14 +848,39 @@ fn database<P: Prompt + ?Sized, S: Services + ?Sized>(
             let db = ask(p, "Database name", &d.db, valid_db_name)?;
             url = pg_url(&PgParts { host, port, user, password, db });
         }
-        p.say(&format!("  Testing {} ...", mask_url(&url)));
-        let mut res = svc.check_db(&url);
-        if res == DbCheck::MissingDatabase {
-            let db = pg_parts(&url).db;
-            if p.confirm(
-                &format!("Database \"{db}\" does not exist. Create it now?"),
-                true,
-            )? {
+        if !test_db(p, svc, ctx, &url)? {
+            if !p.confirm("Try again?", true)? {
+                p.say("  Keeping it; the server will not start until this database is reachable.");
+                break;
+            }
+            continue;
+        }
+        break;
+    }
+    a.env.insert("DATABASE_URL".into(), url);
+    Ok(())
+}
+
+fn database_local<P: Prompt + ?Sized, S: Services + ?Sized>(
+    p: &mut P,
+    svc: &mut S,
+    ctx: &mut Ctx,
+    a: &mut Answers,
+) -> Result<(), Error> {
+    let port = ask(
+        p,
+        "Local PostgreSQL port",
+        &ctx.c("PELTY_LOCAL_PG_PORT", "5432"),
+        valid_port,
+    )?;
+    let port_n: u16 = port.parse().unwrap_or(5432);
+    p.say("  Downloading or starting local PostgreSQL (first run may take a minute) ...");
+    match svc.ensure_local_pg(port_n) {
+        Ok(url) => {
+            p.say(&format!("  Ready at {}.", mask_url(&url)));
+            let mut res = svc.check_db(&url);
+            if res == DbCheck::MissingDatabase {
+                let db = pg_parts(&url).db;
                 match svc.create_db(&url) {
                     Ok(()) => {
                         p.say(&format!("  Created database \"{db}\"."));
@@ -837,23 +889,62 @@ fn database<P: Prompt + ?Sized, S: Services + ?Sized>(
                     Err(e) => p.say(&format!("  ! could not create it: {e}")),
                 }
             }
-        }
-        match res {
-            DbCheck::Ok => {
+            if res == DbCheck::Ok {
                 p.say(&console::style("  Connection OK.").green().to_string());
                 ctx.currencies = svc.currencies(&url);
-                break;
+            } else if let DbCheck::Failed(e) = res {
+                p.say(&format!("  ! {e}"));
             }
-            DbCheck::MissingDatabase => p.say("  ! the database does not exist"),
-            DbCheck::Failed(e) => p.say(&format!("  ! {e}")),
+            a.env.insert("PELTY_LOCAL_PG".into(), "true".into());
+            a.env.insert("DATABASE_URL".into(), url);
         }
-        if !p.confirm("Try again?", true)? {
-            p.say("  Keeping it; the server will not start until this database is reachable.");
-            break;
+        Err(e) => {
+            p.say(&format!("  ! {e}"));
+            p.say("  Falling back to an existing connection.");
+            return database_existing(p, svc, ctx, a);
         }
     }
-    a.env.insert("DATABASE_URL".into(), url);
     Ok(())
+}
+
+fn test_db<P: Prompt + ?Sized, S: Services + ?Sized>(
+    p: &mut P,
+    svc: &mut S,
+    ctx: &mut Ctx,
+    url: &str,
+) -> Result<bool, Error> {
+    p.say(&format!("  Testing {} ...", mask_url(url)));
+    let mut res = svc.check_db(url);
+    if res == DbCheck::MissingDatabase {
+        let db = pg_parts(url).db;
+        if p.confirm(
+            &format!("Database \"{db}\" does not exist. Create it now?"),
+            true,
+        )? {
+            match svc.create_db(url) {
+                Ok(()) => {
+                    p.say(&format!("  Created database \"{db}\"."));
+                    res = svc.check_db(url);
+                }
+                Err(e) => p.say(&format!("  ! could not create it: {e}")),
+            }
+        }
+    }
+    match res {
+        DbCheck::Ok => {
+            p.say(&console::style("  Connection OK.").green().to_string());
+            ctx.currencies = svc.currencies(url);
+            Ok(true)
+        }
+        DbCheck::MissingDatabase => {
+            p.say("  ! the database does not exist");
+            Ok(false)
+        }
+        DbCheck::Failed(e) => {
+            p.say(&format!("  ! {e}"));
+            Ok(false)
+        }
+    }
 }
 
 const PROXIES: [&str; 5] = [
@@ -1834,6 +1925,8 @@ pub struct Headless {
     pub admin_password: Option<String>,
     pub admin_name: Option<String>,
     pub accept_eula: bool,
+    /// Download and manage a local PostgreSQL (`PELTY_LOCAL_PG=true`).
+    pub local_pg: bool,
 }
 
 impl Headless {
@@ -1845,6 +1938,10 @@ impl Headless {
         while let Some(a) = it.next() {
             if a == "--accept-eula" {
                 h.accept_eula = true;
+                continue;
+            }
+            if a == "--local-pg" {
+                h.local_pg = true;
                 continue;
             }
             let (k, inline) = match a.split_once('=') {
@@ -1890,12 +1987,30 @@ pub fn headless<S: Services + ?Sized>(
         return Err("the EULA is not accepted: add --accept-eula (or PELTY_EULA=true, or eula=true in eula.txt)".into());
     }
     a.eula = true;
-    let url = valid_pg_url(&c(
-        &h.db_url,
-        "DATABASE_URL",
-        "postgres://postgres@127.0.0.1:5432/peltycms",
-    ))
-    .map_err(|e| format!("--db-url: {e}"))?;
+    let local_pg = h.local_pg
+        || cur("PELTY_LOCAL_PG").is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+    let url = if local_pg {
+        let port = h
+            .db_url
+            .as_deref()
+            .and_then(|u| pelty_pg::DbUrl::parse(u).ok())
+            .map(|d| d.port)
+            .unwrap_or(5432);
+        println!("[PeltyCMS] setup: starting local PostgreSQL on 127.0.0.1:{port} ...");
+        let url = svc
+            .ensure_local_pg(port)
+            .map_err(|e| format!("--local-pg: {e}"))?;
+        a.env.insert("PELTY_LOCAL_PG".into(), "true".into());
+        url
+    } else {
+        a.env.insert("PELTY_LOCAL_PG".into(), "false".into());
+        valid_pg_url(&c(
+            &h.db_url,
+            "DATABASE_URL",
+            "postgres://postgres@127.0.0.1:5432/peltycms",
+        ))
+        .map_err(|e| format!("--db-url: {e}"))?
+    };
     let mut res = svc.check_db(&url);
     if res == DbCheck::MissingDatabase {
         svc.create_db(&url)

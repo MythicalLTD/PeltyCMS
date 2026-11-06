@@ -8,11 +8,10 @@ description = "Cross-platform developer commands (`cargo xtask help`). Replaces 
 
 # Kept deliberately small: std::process for everything, ctrlc to stop child
 # processes on Ctrl+C, serde_json for addon.json / the seed API, and ureq
-# (no TLS by default) for `cargo xtask seed` against a local server; lzma-rs
-# and tar (pure Rust) unpack the downloaded dev PostgreSQL on any OS.
+# (no TLS by default) for `cargo xtask seed` against a local server.
+# Local PostgreSQL download/start lives in `pelty-pg` (shared with pelty-server).
 [dependencies]
 ctrlc = { version = "3.5", features = ["termination"] }
-lzma-rs = "0.3"
 serde_json = { workspace = true }
 serde = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
@@ -20,6 +19,7 @@ tracing-subscriber = { workspace = true, optional = true }
 pelty-wasm = { path = "../crates/pelty-wasm", optional = true }
 pelty-extensions = { path = "../crates/pelty-extensions", optional = true }
 pelty-payments = { path = "../crates/pelty-payments", optional = true }
+pelty-pg = { workspace = true }
 tar = { version = "0.4", default-features = false }
 ureq = { version = "3", default-features = false }
 # `cargo xtask release`: archives, SHA256SUMS and their ed25519 signature.

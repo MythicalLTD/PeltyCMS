@@ -327,7 +327,7 @@ pub async fn backup(pool: &PgPool, id: Uuid) -> AppResult<Backup> {
 pub async fn create_backup(pool: &PgPool, by: Option<Uuid>) -> AppResult<Backup> {
     let id = Uuid::new_v4();
     let ts = time::OffsetDateTime::now_utc().unix_timestamp();
-    let name = format!("pelty-{ts}-{}.dump", &id.simple().to_string()[..8]);
+    let name = format!("pelty-{ts}-{}.zip", &id.simple().to_string()[..8]);
     sqlx::query("INSERT INTO db_backups (id, file_name, created_by) VALUES ($1,$2,$3)")
         .bind(id)
         .bind(&name)

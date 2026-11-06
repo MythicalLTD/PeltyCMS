@@ -71,17 +71,19 @@ cargo dev              # or: cargo xtask / pelty-server as documented in docs
 
 First terminal start runs the setup wizard (License/EULA, database, URL, company,
 admin, optional mail/captcha/gateways). Confirm the summary before anything is
-saved. Headless:
+saved. Headless (bring your own Postgres, or `--local-pg` to download one into
+`data/pg` with no Docker):
 
 ```bash
 pelty-server setup --yes --accept-eula \
   --db-url postgres://pelty:secret@localhost/pelty \
   --public-url http://localhost:8080 \
   --admin-email you@example.com
+# production-style binary: pelty-server setup --yes --accept-eula --local-pg ...
 ```
 
-See `crates/pelty-docs` / the built `/docs` site for install details
-(`admin-install`).
+Release archives ship `docs/` next to the binary. See `crates/pelty-docs` / the
+built `/docs` site for install details (`admin-install`).
 
 ## Repository layout
 

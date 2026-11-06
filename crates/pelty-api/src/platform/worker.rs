@@ -195,7 +195,7 @@ async fn handle(s: &AppState, job: &Job) -> Result<Value, JobError> {
         crate::notify::JOB_KIND => crate::notify::run_job(s, job).await,
         crate::webhooks_out::JOB_KIND => crate::webhooks_out::run_job(s, job).await,
         crate::addon_power::JOB_KIND => crate::addon_ext::run_job(s, &job.payload).await,
-        crate::backup::JOB_KIND => crate::backup::run_job(s, job).await,
+        crate::backup::JOB_KIND | "backup.pg_dump" => crate::backup::run_job(s, job).await,
         "test.fail" => Err(JobError::Retry("intentional failure".into())),
         "test.ok" => Ok(json!({ "ok": true })),
         other => Err(JobError::Retry(format!("unknown job kind {other}"))),

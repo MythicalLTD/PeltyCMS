@@ -2,11 +2,11 @@
 
 **PeltyCMS is not released yet.** There is no public download, image or installer today. This page describes how installation is planned to work at release, and the details may change.
 
-At release, PeltyCMS is planned to be one server binary, `pelty-server`, plus a PostgreSQL 16+ database. The binary serves the API, the built frontend and these docs, runs the database migrations on start and runs the background scheduler, so no separate cron or worker is needed.
+At release, PeltyCMS is planned to be one server binary, `pelty-server`, plus a PostgreSQL 16+ database. The binary serves the API, the built frontend and these docs, runs the database migrations on start and runs the background scheduler, so no separate cron or worker is needed. Release archives include a `docs/` folder next to the binary (served at `/docs`); set `PELTY_DOCS_DIR` only if you move it.
 
 ## Requirements
 
-- PostgreSQL 16 or newer.
+- PostgreSQL 16 or newer — either one you already run, Docker Compose, or the optional **local sidecar** (`PELTY_LOCAL_PG`) that downloads binaries on first use (no Docker, nothing Postgres-sized in the archive).
 - A domain with TLS in front of PeltyCMS (a reverse proxy such as nginx or Caddy). The server listens on plain HTTP.
 - For building from source: Rust with the `wasm32-wasip2` target, Node.js 20+ (its corepack provides pnpm). No make or bash needed, so it builds on Windows too.
 
@@ -25,6 +25,27 @@ The compose file refuses to start until `.env` contains `PELTY_EULA=true`, which
 
 The image runs `pelty-server serve`, listens on `0.0.0.0:8080` (`PELTY_BIND`), and has a health check on `/healthz`. The compose file binds it to `127.0.0.1:8080` so only your reverse proxy can reach it.
 
+## Binary install (no Docker)
+
+Unpack a release archive (`pelty-server-<version>-<target>.tar.gz` / `.zip`) into a folder. It contains `pelty-server`, `docs/`, locales, README, EULA and LICENSE. Start it in that folder:
+
+```bash
+mkdir /srv/pelty && cd /srv/pelty
+# copy or extract the archive here, then:
+./pelty-server           # first start in a terminal: setup wizard, then the server starts
+```
+
+### Local PostgreSQL (optional)
+
+If you do not already have a Postgres cluster, the setup wizard offers **Local PostgreSQL (download & manage)**. That sets `PELTY_LOCAL_PG=true`, downloads platform binaries once into `data/pg/dist`, keeps the data directory under `data/pg/data`, and listens on `127.0.0.1` only. Headless:
+
+```bash
+pelty-server setup --yes --accept-eula --local-pg \
+  --public-url https://billing.example.com --admin-email you@example.com
+```
+
+Manage it with `pelty-server pg start|stop|status|download`. The sidecar is left running when `serve` exits (restart-friendly); stop it explicitly with `pg stop`. Prefer a managed Postgres for multi-instance or production HA.
+
 ## From source
 
 ```bash
@@ -36,7 +57,7 @@ mkdir /srv/pelty && cd /srv/pelty
 The first start in a terminal runs a setup wizard. It asks for:
 
 - the License and EULA (Free Tier ≤50 Active Clients; Soft overage notices; see LICENSE, EULA.md, COMMERCIAL.md);
-- the database (tested live, can be created if missing);
+- the database (local download, or an existing URL; a missing database can be created);
 - the listen address, public URL, reverse proxy and HTTPS;
 - company name and email, default currency, language and time zone;
 - the first administrator's name and email (generated or typed password, never echoed);
@@ -62,6 +83,7 @@ The wizard's proxy question sets `PELTY_TRUSTED_PROXIES`: `127.0.0.1,::1` for ng
 ```bash
 pelty-server setup --yes --accept-eula --db-url postgres://pelty:secret@localhost/pelty \
   --public-url https://billing.example.com --admin-email you@example.com
+# or: --local-pg instead of --db-url (downloads PostgreSQL into data/pg)
 ```
 
 This uses defaults for everything not given (`--bind`, `--admin-password`, `--admin-name`, or `PELTY_ADMIN_EMAIL` / `PELTY_ADMIN_PASSWORD`), creates the database if needed and prints a generated password once. To configure by hand instead, use `--no-setup` and edit the files:

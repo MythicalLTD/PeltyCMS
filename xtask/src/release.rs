@@ -303,6 +303,46 @@ pub fn keygen(_ctx: &Ctx, args: &[String]) -> R {
     Ok(())
 }
 
+/// Flatten `extras` (files or directory trees) into `(abs path, archive name, executable)`.
+fn archive_entries(
+    bin: &Path,
+    bin_name: &str,
+    extras: &[(PathBuf, String)],
+) -> R<Vec<(PathBuf, String, bool)>> {
+    let mut files = vec![(bin.to_path_buf(), bin_name.to_string(), true)];
+    for (p, name) in extras {
+        if p.is_file() {
+            files.push((p.clone(), name.clone(), false));
+        } else if p.is_dir() {
+            collect_dir(p, name, &mut files)?;
+        }
+    }
+    Ok(files)
+}
+
+fn collect_dir(dir: &Path, prefix: &str, out: &mut Vec<(PathBuf, String, bool)>) -> R {
+    let mut entries: Vec<_> = std::fs::read_dir(dir)
+        .map_err(|e| format!("read {}: {e}", dir.display()))?
+        .flatten()
+        .collect();
+    entries.sort_by_key(|e| e.file_name());
+    for e in entries {
+        let name = e.file_name().to_string_lossy().into_owned();
+        let rel = if prefix.is_empty() {
+            name
+        } else {
+            format!("{prefix}/{name}")
+        };
+        let path = e.path();
+        if path.is_dir() {
+            collect_dir(&path, &rel, out)?;
+        } else if path.is_file() {
+            out.push((path, rel, false));
+        }
+    }
+    Ok(())
+}
+
 fn archive(
     dir: &Path,
     stem: &str,
@@ -311,15 +351,7 @@ fn archive(
     extras: &[(PathBuf, String)],
     zip: bool,
 ) -> R<PathBuf> {
-    let files: Vec<(PathBuf, String, bool)> =
-        std::iter::once((bin.to_path_buf(), bin_name.to_string(), true))
-            .chain(
-                extras
-                    .iter()
-                    .filter(|(p, _)| p.is_file())
-                    .map(|(p, n)| (p.clone(), n.clone(), false)),
-            )
-            .collect();
+    let files = archive_entries(bin, bin_name, extras)?;
     if zip {
         let out = dir.join(format!("{stem}.zip"));
         let f = std::fs::File::create(&out).map_err(|e| e.to_string())?;
@@ -599,6 +631,13 @@ fn build_and_package(
             ctx.root.join("locales").join(name),
             format!("locales/{name}"),
         ));
+    }
+    // Generated docs tree (`cargo xtask docs` / build_assets) so `/docs` works from the archive.
+    let docs = ctx.root.join("target").join("docs");
+    if docs.is_dir() {
+        extras.push((docs, "docs".into()));
+    } else {
+        println!("[release] warning: no target/docs (run without --skip-assets, or cargo xtask docs)");
     }
     let mut archives = kept;
     for (_target, name) in &archives {

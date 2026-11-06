@@ -9,11 +9,15 @@
 //!                                        reverse proxy, company, first admin, SMTP,
 //!                                        captcha, advanced); saves .env and eula.txt,
 //!                                        applies settings, offers to start the server
-//!   pelty-server setup --yes [--accept-eula] [--db-url <url>] [--bind <addr>]
+//!   pelty-server setup --yes [--accept-eula] [--local-pg] [--db-url <url>] [--bind <addr>]
 //!                [--public-url <url>] [--admin-email <email>] [--admin-password <pw>]
 //!                [--admin-name <name>]
 //!                                        the same without questions: defaults, flags,
-//!                                        then PELTY_ADMIN_EMAIL / PELTY_ADMIN_PASSWORD
+//!                                        then PELTY_ADMIN_EMAIL / PELTY_ADMIN_PASSWORD;
+//!                                        `--local-pg` downloads and starts PostgreSQL
+//!                                        under data/pg (no Docker)
+//!   pelty-server pg start|stop|status|download
+//!                                        manage the optional local PostgreSQL sidecar
 //!   pelty-server migrate                 run migrations and exit
 //!   pelty-server cron run [<task> | --schedule-only]
 //!                                        one scheduler pass, then run queued jobs
@@ -42,6 +46,7 @@ mod bootstrap;
 mod console;
 mod embedded;
 mod eula;
+mod local_pg;
 mod logging;
 mod setup;
 mod update;
@@ -342,6 +347,10 @@ async fn run(args: Vec<String>, console_flag: Option<bool>, plan: Option<setup::
             Ok(true) => serve(cfg, console_flag, None).await,
             other => other.map(|_| ()),
         },
+        ["pg", rest @ ..] => {
+            let root = std::env::current_dir().unwrap_or_default();
+            local_pg::cmd(&root, rest).map_err(|e| e.into())
+        }
         ["migrate"] => setup_db(&cfg).await.map(|_| ()),
         ["admin", "create", email, rest @ ..] => match rest {
             [] => admin_create(cfg, email, "Administrator").await,
@@ -353,7 +362,7 @@ async fn run(args: Vec<String>, console_flag: Option<bool>, plan: Option<setup::
         ["update", rest @ ..] => update_cmd(&cfg, rest).await,
         ["import", "whmcs", rest @ ..] => import_whmcs(&cfg, rest).await,
         ["import", src @ ("blesta" | "paymenter"), rest @ ..] => import_json(&cfg, src, rest).await,
-        _ => Err("usage: pelty-server [--version | serve [--console|--no-console] [--no-setup|--yes] | setup | migrate | update [--check] [--version x.y.z] [--yes] [--no-backup] | admin create <email> [--name <name>] | mail pipe --department <uuid> | cron run [<task> | --schedule-only] | import whmcs --file <whmcs.sql> | --dsn <mysql-url> [--cc-hash <hash>] [--dry-run] | import blesta|paymenter --file <export.json> [--dry-run]]".into()),
+        _ => Err("usage: pelty-server [--version | serve [--console|--no-console] [--no-setup|--yes] | setup [--yes] [--local-pg] | pg start|stop|status|download | migrate | update [--check] [--version x.y.z] [--yes] [--no-backup] | admin create <email> [--name <name>] | mail pipe --department <uuid> | cron run [<task> | --schedule-only] | import whmcs --file <whmcs.sql> | --dsn <mysql-url> [--cc-hash <hash>] [--dry-run] | import blesta|paymenter --file <export.json> [--dry-run]]".into()),
     };
     match res {
         Ok(()) => ExitCode::SUCCESS,
@@ -427,6 +436,10 @@ async fn pipe_email(cfg: Config, department: &str) -> Result<(), BoxErr> {
 }
 
 async fn setup_db(cfg: &Config) -> Result<pelty_database::Pool, BoxErr> {
+    if local_pg::enabled() {
+        let root = std::env::current_dir().unwrap_or_default();
+        local_pg::ensure_for_serve(&root)?;
+    }
     let pool = pelty_database::connect(&cfg.database_url, cfg.db_max_connections).await?;
     pelty_database::migrate(&pool).await?;
     tracing::info!("database connected, migrations applied");

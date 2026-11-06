@@ -7,7 +7,7 @@
 //!    when a release public key is compiled in (`release-key.pub`), require
 //!    a valid ed25519 `SHA256SUMS.sig`; the archive must match its checksum
 //!    (and the manifest's, when it lists one).
-//! 3. Take a database backup (`pg_dump`, listed in Admin > Backups) unless
+//! 3. Take a full site backup (DB + files zip, listed in Admin > Backups) unless
 //!    `--no-backup`.
 //! 4. Replace the binary atomically (`self-replace`, which also handles a
 //!    running .exe on Windows). Migrations run on the next start.
@@ -329,11 +329,11 @@ pub async fn run(
     }
     let bin = download_verified(&r, TARGET, public_key().as_deref(), say).await?;
     if o.no_backup {
-        say("skipping the database backup (--no-backup)".into());
+        say("skipping the site backup (--no-backup)".into());
     } else {
         let pool = pool.ok_or("no database connection for the pre-update backup (fix DATABASE_URL or pass --no-backup)")?;
-        let p = pelty_api::backup::backup_now(pool, database_url).await.map_err(|e| format!("database backup failed ({e}); not updating (set PELTY_PG_DUMP, or pass --no-backup)"))?;
-        say(format!("database backup: {}", p.display()));
+        let p = pelty_api::backup::backup_now(pool, database_url).await.map_err(|e| format!("site backup failed ({e}); not updating (set PELTY_PG_DUMP, or pass --no-backup)"))?;
+        say(format!("site backup: {}", p.display()));
     }
     replace(o.exe.as_deref(), &bin)?;
     say(format!("installed v{}. {}", r.version, restart_hint()));
