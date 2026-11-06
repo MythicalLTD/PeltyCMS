@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowSquareOutIcon,
   CheckCircleIcon,
   DownloadSimpleIcon,
+  InfoIcon,
   LinkSimpleIcon,
   LinkSimpleBreakIcon,
   SpinnerGapIcon,
@@ -16,6 +17,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { MarkdownSafe, plainFromMarkdown } from "@/components/MarkdownSafe";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,6 +44,8 @@ type RegistrySettings = {
   panel_public_key?: string;
   panel_private_key?: string;
   panel_linked?: boolean;
+  /** True while MythicCloud OAuth was started recently and the callback has not completed. */
+  oauth_pending?: boolean;
   team_uuid?: string;
   team_name?: string;
   mythic_user_id?: string;
@@ -66,6 +70,21 @@ function param(search: URLSearchParams, ...keys: string[]): string | null {
   return null;
 }
 
+/** Mythic may double-encode query values; decode repeatedly until stable. */
+function decodeParam(raw: string): string {
+  let s = raw;
+  for (let i = 0; i < 3; i++) {
+    try {
+      const next = decodeURIComponent(s);
+      if (next === s) break;
+      s = next;
+    } catch {
+      break;
+    }
+  }
+  return s;
+}
+
 export function AdminMarketplacePage() {
   const { t, tCode } = useI18n();
   const qc = useQueryClient();
@@ -74,6 +93,7 @@ export function AdminMarketplacePage() {
   const cfg = useQuery({
     queryKey: ["admin", "addons", "registry", "settings"],
     queryFn: () => api<RegistrySettings>("/admin/addons/registry/settings"),
+    refetchOnMount: "always",
   });
   const [q, setQ] = useState("");
   const [price, setPrice] = useState<"all" | "free" | "paid">("all");
@@ -146,6 +166,7 @@ export function AdminMarketplacePage() {
   });
 
   const linked = !!cfg.data?.panel_linked;
+  const oauthPending = !!cfg.data?.oauth_pending && !linked;
   const items = (idx.data?.items ?? []).filter((i) => {
     const free = i.is_free !== false;
     if (price === "free" && !free) return false;
@@ -177,13 +198,22 @@ export function AdminMarketplacePage() {
               <StorefrontIcon className="size-3.5" />
               {t("addons.market.mythical_only")}
             </Badge>
-            {linked ? (
+            {oauthPending ? (
+              <Badge variant="secondary">{t("addons.market.oauth_pending")}</Badge>
+            ) : linked ? (
               <Badge variant="outline">{t("addons.market.panel_linked")}</Badge>
             ) : (
               <Badge variant="muted">{t("addons.market.panel_unlinked")}</Badge>
             )}
           </div>
           <p className="text-sm text-muted-foreground">{t("addons.market.panel_hint")}</p>
+          {oauthPending && (
+            <Alert variant="default">
+              <InfoIcon />
+              <AlertTitle>{t("addons.market.oauth_pending")}</AlertTitle>
+              <AlertDescription>{t("addons.market.oauth_pending_hint")}</AlertDescription>
+            </Alert>
+          )}
           {linked && (cfg.data?.team_name || cfg.data?.team_uuid) ? (
             <p className="text-sm">
               {t("addons.market.linked_as", {
@@ -194,15 +224,17 @@ export function AdminMarketplacePage() {
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
-              disabled={connect.isPending || disconnect.isPending}
+              disabled={connect.isPending || disconnect.isPending || oauthPending}
               onClick={() => connect.mutate()}
             >
               <LinkSimpleIcon />
               {connect.isPending
                 ? t("addons.market.oauth_starting")
-                : linked
-                  ? t("addons.market.reconnect")
-                  : t("addons.market.connect")}
+                : oauthPending
+                  ? t("addons.market.oauth_pending")
+                  : linked
+                    ? t("addons.market.reconnect")
+                    : t("addons.market.connect")}
             </Button>
             {linked ? (
               <Button
@@ -328,34 +360,85 @@ export function AdminMarketplaceFinishPage() {
   const qc = useQueryClient();
   const ran = useRef(false);
   const [phase, setPhase] = useState<"loading" | "success" | "error" | "cancelled">("loading");
-  const [error, setError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<string | null>(null);
+
+  const settingsPreview = useQuery({
+    queryKey: ["admin", "addons", "registry", "settings"],
+    queryFn: () => api<RegistrySettings>("/admin/addons/registry/settings"),
+    staleTime: 0,
+  });
+
+  const keysFromServerOnly = useMemo(() => {
+    const pub = param(search, "public_identity_key", "panel_public_key");
+    const priv = param(search, "private_key", "panel_private_key");
+    if (!pub && !priv) return true;
+    const dp = pub ? decodeParam(pub) : "";
+    const di = priv ? decodeParam(priv) : "";
+    return dp.length === 0 && di.length === 0;
+  }, [search]);
 
   useEffect(() => {
     if (ran.current) return;
     ran.current = true;
 
     const finish = async () => {
-      const status = (param(search, "status") || "").toLowerCase();
-      const errorParam = param(search, "error", "error_message");
+      const statusRaw = param(search, "status");
+      const status = (statusRaw || "").toLowerCase();
+      const errorRaw = param(search, "error", "error_message", "error_description");
+      const errorNorm = errorRaw ? decodeParam(errorRaw).toLowerCase() : "";
 
-      if (status === "cancelled" || status === "cancel") {
+      const cancelledByReturn =
+        status === "cancelled" ||
+        status === "cancel" ||
+        errorNorm === "cancelled" ||
+        errorNorm === "cancel" ||
+        errorNorm === "access_denied" ||
+        errorNorm === "user_cancelled";
+
+      if (cancelledByReturn) {
         setPhase("cancelled");
-        setError(t("addons.market.finish.cancelled_desc"));
-        return;
-      }
-      if (status === "error" || errorParam) {
-        setPhase("error");
-        setError(errorParam ? decodeURIComponent(errorParam) : t("addons.market.finish.failed"));
+        setDetail(null);
         return;
       }
 
-      const body: Record<string, string> = { status: status || "success" };
+      if (status === "error") {
+        setPhase("error");
+        setDetail(errorRaw ? decodeParam(errorRaw) : t("addons.market.finish.error_intro"));
+        return;
+      }
+
+      if (errorRaw) {
+        setPhase("error");
+        setDetail(decodeParam(errorRaw));
+        return;
+      }
+
+      const mythicUserId = param(search, "mythic_user_id", "user_uuid", "authorizer_user_id", "user_id");
+      const teamUuid = param(search, "team_uuid", "team");
+      const pub = param(search, "public_identity_key", "panel_public_key");
+      const priv = param(search, "private_key", "panel_private_key");
+      const decodedPub = pub ? decodeParam(pub) : "";
+      const decodedPriv = priv ? decodeParam(priv) : "";
+      const hasPub = decodedPub.length > 0;
+      const hasPriv = decodedPriv.length > 0;
+
+      if (!mythicUserId?.trim() || !teamUuid?.trim()) {
+        setPhase("error");
+        setDetail(t("addons.market.finish.missing_params"));
+        return;
+      }
+      if (hasPub !== hasPriv) {
+        setPhase("error");
+        setDetail(t("addons.market.finish.missing_params"));
+        return;
+      }
+
+      const body: Record<string, string> = { status: status || "success", mythic_user_id: decodeParam(mythicUserId), team_uuid: decodeParam(teamUuid) };
+
       const optional: Array<[string, string | null]> = [
-        ["public_identity_key", param(search, "public_identity_key", "panel_public_key")],
-        ["private_key", param(search, "private_key", "panel_private_key")],
-        ["mythic_user_id", param(search, "mythic_user_id", "user_uuid", "authorizer_user_id", "user_id")],
+        ["public_identity_key", pub],
+        ["private_key", priv],
         ["user_uuid", param(search, "user_uuid")],
-        ["team_uuid", param(search, "team_uuid", "team")],
         ["team_name", param(search, "team_name")],
         ["team_slug", param(search, "team_slug")],
         ["cloud_api_key", param(search, "cloud_api_key")],
@@ -363,17 +446,7 @@ export function AdminMarketplaceFinishPage() {
       ];
       for (const [key, value] of optional) {
         if (!value) continue;
-        try {
-          body[key] = decodeURIComponent(value);
-        } catch {
-          body[key] = value;
-        }
-      }
-
-      if (!body.public_identity_key || !body.private_key || !body.mythic_user_id || !body.team_uuid) {
-        setPhase("error");
-        setError(t("addons.market.finish.missing_params"));
-        return;
+        body[key] = decodeParam(value);
       }
 
       try {
@@ -383,13 +456,23 @@ export function AdminMarketplaceFinishPage() {
         void qc.invalidateQueries({ queryKey: ["admin", "addons", "registry", "settings"] });
         window.setTimeout(() => navigate("/admin/marketplace", { replace: true }), 1600);
       } catch (e) {
+        if (e instanceof ApiError && e.code === "error.addon_registry_oauth_cancelled") {
+          setPhase("cancelled");
+          setDetail(null);
+          return;
+        }
         setPhase("error");
-        setError(e instanceof ApiError ? tCode(e.code) : t("addons.market.finish.failed"));
+        setDetail(e instanceof ApiError ? tCode(e.code) : t("addons.market.finish.error_intro"));
       }
     };
 
     void finish();
   }, [search, navigate, t, tCode, qc]);
+
+  const teamLabel =
+    settingsPreview.data?.team_name?.trim() ||
+    settingsPreview.data?.team_uuid?.trim() ||
+    null;
 
   return (
     <div className="flex min-h-[50vh] items-center justify-center p-6">
@@ -398,9 +481,8 @@ export function AdminMarketplaceFinishPage() {
           <div className="flex justify-center">
             {phase === "loading" && <SpinnerGapIcon className="size-12 animate-spin text-primary" />}
             {phase === "success" && <CheckCircleIcon className="size-12 text-success" weight="fill" />}
-            {(phase === "error" || phase === "cancelled") && (
-              <WarningCircleIcon className="size-12 text-destructive" weight="fill" />
-            )}
+            {phase === "cancelled" && <InfoIcon className="size-12 text-primary" weight="fill" />}
+            {phase === "error" && <WarningCircleIcon className="size-12 text-destructive" weight="fill" />}
           </div>
           <div className="grid gap-1">
             <h1 className="text-xl font-semibold tracking-tight">
@@ -412,10 +494,16 @@ export function AdminMarketplaceFinishPage() {
             <p className="text-sm text-muted-foreground">
               {phase === "loading" && t("addons.market.finish.processing_desc")}
               {phase === "success" && t("addons.market.finish.success_desc")}
-              {(phase === "error" || phase === "cancelled") &&
-                (error || t("addons.market.finish.cancelled_desc"))}
+              {phase === "cancelled" && t("addons.market.finish.cancelled_desc")}
+              {phase === "error" && (detail || t("addons.market.finish.error_intro"))}
             </p>
           </div>
+          {keysFromServerOnly && phase === "loading" && teamLabel ? (
+            <p className="flex items-start justify-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-left text-xs text-muted-foreground">
+              <InfoIcon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+              <span>{t("addons.market.finish.keys_from_server", { team: teamLabel })}</span>
+            </p>
+          ) : null}
           {phase !== "loading" && (
             <Button asChild>
               <Link to="/admin/marketplace">{t("addons.market.finish.back")}</Link>
