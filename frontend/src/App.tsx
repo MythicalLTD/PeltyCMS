@@ -22,6 +22,8 @@ import { DuoCallbackPage } from "@/components/account/Duo";
 // Lazy: the dashboard pulls the chart library.
 const DashboardPage = lazy(() => import("@/pages/Dashboard").then((m) => ({ default: m.DashboardPage })));
 import { SessionsPage } from "@/pages/account/Sessions";
+import { Setup2faPage } from "@/pages/auth/Setup2fa";
+import { Verify2faPage } from "@/pages/auth/Verify2fa";
 import { ApiKeysPage } from "@/pages/account/ApiKeys";
 import { OAuthAuthorizePage } from "@/pages/auth/OAuthAuthorize";
 import { ConnectedAppsPage } from "@/pages/account/ConnectedApps";
@@ -102,6 +104,7 @@ const AdminNoticeboardPage = lazy(() => import("@/pages/admin/support/Noticeboar
 const AdminKycPage = lazy(() => import("@/pages/admin/clients/Kyc").then((m) => ({ default: m.AdminKycPage })));
 const ClientVerificationPage = lazy(() => import("@/pages/client/account/Verification").then((m) => ({ default: m.ClientVerificationPage })));
 const AdminMarketplacePage = lazy(() => import("@/pages/admin/extensions/Marketplace").then((m) => ({ default: m.AdminMarketplacePage })));
+const AdminVendorCatalogPage = lazy(() => import("@/pages/admin/extensions/VendorCatalog").then((m) => ({ default: m.AdminVendorCatalogPage })));
 const AdminProjectsPage = lazy(() => import("@/pages/admin/support/Projects").then((m) => ({ default: m.AdminProjectsPage })));
 const AdminProjectDetailPage = lazy(() => import("@/pages/admin/support/Projects").then((m) => ({ default: m.AdminProjectDetailPage })));
 const ClientProjectsPage = lazy(() => import("@/pages/client/support/Projects").then((m) => ({ default: m.ClientProjectsPage })));
@@ -200,6 +203,7 @@ export function App() {
     <Routes>
       <Route element={<GuestOnly><AuthLayout /></GuestOnly>}>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/auth/verify-2fa" element={<Verify2faPage />} />
         <Route path="/auth/duo/callback" element={<DuoCallbackPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/r/:code" element={<ReferralLandingPage />} />
@@ -207,6 +211,7 @@ export function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Route>
       <Route element={<AuthLayout />}>
+        <Route path="/auth/setup-2fa" element={<RequireAuth><Setup2faPage /></RequireAuth>} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/verify-registrant" element={<VerifyRegistrantPage />} />
         <Route path="/status" element={<Suspense fallback={<Loading />}><NetworkStatusPage /></Suspense>} />
@@ -344,6 +349,7 @@ export function App() {
         <Route path="todos" element={<AdminTodosPage />} />
         <Route path="projects" element={<AdminProjectsPage />} />
         <Route path="marketplace" element={<AdminMarketplacePage />} />
+        <Route path="vendor-catalog" element={<AdminVendorCatalogPage />} />
         <Route path="kyc" element={<AdminKycPage />} />
         <Route path="getting-started" element={<AdminGettingStartedPage />} />
         <Route path="projects/:id" element={<AdminProjectDetailPage />} />

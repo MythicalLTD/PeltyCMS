@@ -59,6 +59,7 @@ export const ADMIN_NAV: NavCategory[] = [
     { to: "/admin/orders", label: "nav.orders", desc: "navdesc.admin_orders", icon: ShoppingCartIcon, primary: true },
     { to: "/admin/servers", label: "nav.servers", desc: "navdesc.admin_servers", icon: ComputerTowerIcon, primary: true },
     { to: "/admin/marketplace", label: "nav.marketplace", desc: "navdesc.admin_marketplace", icon: StorefrontIcon },
+    { to: "/admin/vendor-catalog", label: "nav.vendor_catalog", desc: "navdesc.admin_vendor_catalog", icon: StorefrontIcon },
     { to: "/admin/bundles", label: "nav.bundles", desc: "navdesc.admin_bundles", icon: StackIcon },
     { to: "/admin/order-forms", label: "nav.order_forms", desc: "navdesc.admin_order_forms", icon: ListChecksIcon },
     { to: "/admin/cancellations", label: "nav.cancellations", desc: "navdesc.admin_cancellations", icon: XCircleIcon },

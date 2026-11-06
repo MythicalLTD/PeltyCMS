@@ -5,6 +5,7 @@ export * from "./Addons";
 export * from "./Extensions";
 export * from "./DeveloperDocs";
 export * from "./Marketplace";
+export * from "./VendorCatalog";
 export * from "./OAuthClients";
 export * from "./PluginDeliveries";
 export * from "./PluginDetail";

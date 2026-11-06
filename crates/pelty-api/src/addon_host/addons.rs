@@ -524,6 +524,9 @@ pub const PKG_LIMITS: Limits = Limits {
 pub const NON_WASM_MAX_ZIP: usize = 10 * 1024 * 1024;
 const REGISTRY_KEY: &str = "addons.registry";
 const INDEX_MAX: usize = 2 * 1024 * 1024;
+/// Official MythicalSystems marketplace (same host family FeatherPanel uses for Mythic addons).
+pub const DEFAULT_MYTHICAL_REGISTRY: &str =
+    "https://market.mythicalsystems.org/api/pelty/addons/registry.json";
 
 fn pkg_err(e: PkgError) -> AppError {
     match e {
@@ -705,10 +708,14 @@ struct RegistrySettings {
 }
 
 async fn load_registry(s: &AppState) -> AppResult<RegistrySettings> {
-    Ok(pelty_database::settings::get(&s.pool, REGISTRY_KEY)
+    let mut cfg: RegistrySettings = pelty_database::settings::get(&s.pool, REGISTRY_KEY)
         .await?
         .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or_default())
+        .unwrap_or_default();
+    if cfg.url.trim().is_empty() {
+        cfg.url = DEFAULT_MYTHICAL_REGISTRY.to_string();
+    }
+    Ok(cfg)
 }
 
 async fn registry_settings(
@@ -729,11 +736,15 @@ async fn put_registry_settings(
     RequirePermission(u, _): RequirePermission<perms::PluginsManage>,
     Json(v): Json<RegistrySettings>,
 ) -> ApiResult<Json<Value>> {
-    let url = v.url.trim().to_string();
-    if !url.is_empty()
-        && (!(url.starts_with("https://") || url.starts_with("http://"))
-            || url.len() > 500
-            || reqwest_like_has_creds(&url))
+    // Empty → official Mythical marketplace. Custom URLs stay allowed for
+    // self-hosted mirrors / integration tests; the admin UI only offers Mythical.
+    let mut url = v.url.trim().to_string();
+    if url.is_empty() {
+        url = DEFAULT_MYTHICAL_REGISTRY.to_string();
+    }
+    if !(url.starts_with("https://") || url.starts_with("http://"))
+        || url.len() > 500
+        || reqwest_like_has_creds(&url)
     {
         return Err(AppError::Validation("error.invalid_url").into());
     }

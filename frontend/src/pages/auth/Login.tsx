@@ -8,8 +8,6 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Field, FormError } from "@/components/Field";
 import { useAuthActions, isStaff } from "@/lib/auth";
 import type { Me } from "@/lib/api";
-import { MfaStep } from "@/components/account/MfaStep";
-import { DuoStep } from "@/components/account/Duo";
 import { ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { Captcha } from "@/components/Captcha";
@@ -19,6 +17,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { setCsrfToken } from "@/lib/api";
 import { conditionalMediationAvailable, passkeyDiscoverLogin, passkeyLogin } from "@/lib/passkeys";
 import { usePasskeysAvailable } from "@/lib/admin/general";
+import { MFA_CHALLENGE_KEY, MFA_DUO_KEY, MFA_METHODS_KEY } from "@/pages/auth/Verify2fa";
 
 const schema = z.object({ email: z.email(), password: z.string().check(z.minLength(1)) });
 type Values = z.infer<typeof schema>;
@@ -27,9 +26,6 @@ export function LoginPage() {
   const { t, tCode } = useI18n();
   const { login } = useAuthActions();
   const [params] = useSearchParams();
-  const [challenge, setChallenge] = useState<string | null>(params.get("mfa_challenge"));
-  const [duo, setDuo] = useState(params.get("duo") === "1");
-  const [methods, setMethods] = useState<string[]>((params.get("methods") ?? "totp").split(","));
   const navigate = useNavigate();
   const loc = useLocation();
   const oauthErr = params.get("oauth_error") ?? params.get("saml_error");
@@ -38,6 +34,17 @@ export function LoginPage() {
   const qc = useQueryClient();
   const [pkBusy, setPkBusy] = useState(false);
   const pk = usePasskeysAvailable();
+
+  // Legacy ?mfa_challenge=… links → FeatherPanel-shaped /auth/verify-2fa
+  useEffect(() => {
+    const ch = params.get("mfa_challenge");
+    if (!ch) return;
+    sessionStorage.setItem(MFA_CHALLENGE_KEY, ch);
+    sessionStorage.setItem(MFA_METHODS_KEY, params.get("methods") ?? "totp");
+    if (params.get("duo") === "1") sessionStorage.setItem(MFA_DUO_KEY, "1");
+    const email = params.get("email") ?? "";
+    navigate(`/auth/verify-2fa?email=${encodeURIComponent(email)}${params.get("duo") === "1" ? "&duo=1" : ""}`, { replace: true });
+  }, [params, navigate]);
 
   const done = (me: Me) => {
     const from = (loc.state as { from?: string } | null)?.from;
@@ -48,8 +55,16 @@ export function LoginPage() {
     setError(null);
     try {
       const r = await login(v.email, v.password);
-      if (r.challenge) { setDuo(r.duo === true); setMethods(r.methods); setChallenge(r.challenge); }
-      else if (r.me) done(r.me);
+      if (r.challenge) {
+        sessionStorage.setItem(MFA_CHALLENGE_KEY, r.challenge);
+        sessionStorage.setItem(MFA_METHODS_KEY, (r.methods ?? ["totp"]).join(","));
+        if (r.duo === true) sessionStorage.setItem(MFA_DUO_KEY, "1");
+        else sessionStorage.removeItem(MFA_DUO_KEY);
+        // Same link shape as FeatherPanel: /auth/verify-2fa?email=…
+        navigate(`/auth/verify-2fa?email=${encodeURIComponent(v.email)}${r.duo ? "&duo=1" : ""}`, { replace: true, state: loc.state });
+        return;
+      }
+      if (r.me) done(r.me);
     } catch (e) {
       setError(e instanceof ApiError ? e.message || tCode(e.code) : t("common.error"));
     }
@@ -65,7 +80,7 @@ export function LoginPage() {
   // user picks the explicit button or leaves the page.
   const autofill = useRef<AbortController | null>(null);
   useEffect(() => {
-    if (challenge || !pk) return;
+    if (!pk) return;
     let live = true;
     void conditionalMediationAvailable().then((ok) => {
       if (!ok || !live) return undefined;
@@ -77,7 +92,7 @@ export function LoginPage() {
     });
     return () => { live = false; autofill.current?.abort(); autofill.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [challenge, pk]);
+  }, [pk]);
 
   /** Typed e-mail → that account's passkeys; empty → any saved passkey. */
   const withPasskey = async () => {
@@ -94,9 +109,6 @@ export function LoginPage() {
       setPkBusy(false);
     }
   };
-
-  if (challenge && duo) return <DuoStep challenge={challenge} onRestart={() => { setChallenge(null); setDuo(false); }} />;
-  if (challenge) return <MfaStep challenge={challenge} methods={methods} onDone={signedIn} onRestart={() => setChallenge(null)} />;
 
   return (
     <Card>
