@@ -139,7 +139,11 @@ pub fn read_env_file(root: &Path) -> Vec<(String, String)> {
 pub const DIRS: &[(&str, &str, &str)] = &[
     ("PELTY_ADDONS_DIR", "data/addons", "addon packages"),
     ("PELTY_ADDON_DATA_DIR", "data/addons", "addon data"),
-    ("PELTY_PG_HOME", "data/pg", "local PostgreSQL (PELTY_LOCAL_PG)"),
+    (
+        "PELTY_PG_HOME",
+        "data/pg",
+        "local PostgreSQL (PELTY_LOCAL_PG)",
+    ),
     ("PELTY_THEMES_DIR", "extensions/themes", "themes"),
     ("PELTY_PLUGINS_DIR", "extensions/plugins", "webhook plugins"),
     ("PELTY_LOCALES_DIR", "locales", "translations"),

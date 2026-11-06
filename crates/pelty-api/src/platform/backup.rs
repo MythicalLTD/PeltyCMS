@@ -192,7 +192,10 @@ fn site_dirs() -> Vec<(String, PathBuf)> {
     let addon_data = env_or("PELTY_ADDON_DATA_DIR", "data/addons");
     let mut v = vec![
         ("addons".into(), addons.clone()),
-        ("themes".into(), env_or("PELTY_THEMES_DIR", "extensions/themes")),
+        (
+            "themes".into(),
+            env_or("PELTY_THEMES_DIR", "extensions/themes"),
+        ),
         (
             "plugins".into(),
             env_or("PELTY_PLUGINS_DIR", "extensions/plugins"),

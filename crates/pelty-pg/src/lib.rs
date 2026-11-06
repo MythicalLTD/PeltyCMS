@@ -67,7 +67,10 @@ impl Config {
             .ok()
             .filter(|v| !v.trim().is_empty());
         let auth = match (
-            std::env::var("DATABASE_URL").ok().as_deref().and_then(|u| DbUrl::parse(u).ok()),
+            std::env::var("DATABASE_URL")
+                .ok()
+                .as_deref()
+                .and_then(|u| DbUrl::parse(u).ok()),
             std::env::var("PELTY_LOCAL_PG").ok(),
         ) {
             (Some(db), _) if !db.password.is_empty() => Auth::Password {
@@ -516,7 +519,8 @@ fn start_native(cfg: &Config, bin: &Path, port: u16) -> R {
                 #[cfg(unix)]
                 {
                     use std::os::unix::fs::PermissionsExt;
-                    let _ = std::fs::set_permissions(&pwfile, std::fs::Permissions::from_mode(0o600));
+                    let _ =
+                        std::fs::set_permissions(&pwfile, std::fs::Permissions::from_mode(0o600));
                 }
                 c.args(["-U", user, "-A", "scram-sha-256", "--pwfile"])
                     .arg(&pwfile);

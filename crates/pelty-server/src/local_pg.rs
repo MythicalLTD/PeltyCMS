@@ -77,10 +77,7 @@ pub fn ensure_for_serve(root: &Path) -> Result<(), String> {
         ));
     }
     let cfg = config(root, auth_from_url(&db));
-    println!(
-        "[PeltyCMS] local PostgreSQL ({})",
-        cfg.home_dir().display()
-    );
+    println!("[PeltyCMS] local PostgreSQL ({})", cfg.home_dir().display());
     pelty_pg::ensure(&cfg, &db)
 }
 

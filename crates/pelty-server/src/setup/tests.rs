@@ -116,7 +116,9 @@ impl Services for Fake {
         Ok(())
     }
     fn ensure_local_pg(&mut self, port: u16) -> Result<String, String> {
-        Ok(format!("postgres://pelty:local-test-secret@127.0.0.1:{port}/peltycms"))
+        Ok(format!(
+            "postgres://pelty:local-test-secret@127.0.0.1:{port}/peltycms"
+        ))
     }
 }
 
@@ -943,17 +945,11 @@ fn gateways_from_bundled_packages_with_hidden_keys() {
 #[test]
 fn local_postgres_mode_sets_env() {
     let mut p = Script::new(&[
-        "y",    // eula
+        "y",     // eula
         "local", // Local PostgreSQL
-        "",     // port default 5432
-        "",
-        "",
-        "",
-        "", // web defaults
-        "n",
-        "n",
-        "n",
-        "n", // company / admin / smtp / advanced
+        "",      // port default 5432
+        "", "", "", "", // web defaults
+        "n", "n", "n", "n", // company / admin / smtp / advanced
         "",  // save
     ]);
     let a = run(&mut p, &mut Fake::default(), &none, false).unwrap();

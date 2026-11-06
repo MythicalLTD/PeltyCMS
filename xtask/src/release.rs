@@ -637,7 +637,9 @@ fn build_and_package(
     if docs.is_dir() {
         extras.push((docs, "docs".into()));
     } else {
-        println!("[release] warning: no target/docs (run without --skip-assets, or cargo xtask docs)");
+        println!(
+            "[release] warning: no target/docs (run without --skip-assets, or cargo xtask docs)"
+        );
     }
     let mut archives = kept;
     for (_target, name) in &archives {

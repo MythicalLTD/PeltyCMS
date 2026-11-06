@@ -809,13 +809,17 @@ fn database<P: Prompt + ?Sized, S: Services + ?Sized>(
         1,
         "PostgreSQL 16+. Local download needs no Docker; or point at a server you already run.",
     );
-    let default_mode = if ctx.c("PELTY_LOCAL_PG", "") == "true" || ctx.c("PELTY_LOCAL_PG", "") == "1"
-    {
-        0
-    } else {
-        1
-    };
-    let mode = p.select("How will PeltyCMS reach PostgreSQL?", &DB_MODES, default_mode)?;
+    let default_mode =
+        if ctx.c("PELTY_LOCAL_PG", "") == "true" || ctx.c("PELTY_LOCAL_PG", "") == "1" {
+            0
+        } else {
+            1
+        };
+    let mode = p.select(
+        "How will PeltyCMS reach PostgreSQL?",
+        &DB_MODES,
+        default_mode,
+    )?;
     if mode == 0 {
         return database_local(p, svc, ctx, a);
     }

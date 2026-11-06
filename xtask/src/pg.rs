@@ -19,7 +19,10 @@ const VOLUME: &str = "peltycms-dev-pgdata";
 fn pg_cfg(ctx: &Ctx) -> PgConfig {
     PgConfig {
         root: ctx.root.clone(),
-        home: ctx.get("PG_HOME").or_else(|| ctx.get("PELTY_PG_HOME")).map(PathBuf::from),
+        home: ctx
+            .get("PG_HOME")
+            .or_else(|| ctx.get("PELTY_PG_HOME"))
+            .map(PathBuf::from),
         run_as: ctx.get("PG_USER"),
         pg_ver: ctx.get("PG_VER"),
         auth: Auth::Trust,
@@ -94,11 +97,8 @@ pub fn start(ctx: &Ctx, db: &DbUrl) -> R {
             return pelty_pg::start(&cfg, db);
         }
     }
-    pelty_pg::start(&cfg, db).map_err(|e| {
-        format!(
-            "{e}\n  Or start Docker Desktop, or set PELTY_DEV_PG=docker"
-        )
-    })
+    pelty_pg::start(&cfg, db)
+        .map_err(|e| format!("{e}\n  Or start Docker Desktop, or set PELTY_DEV_PG=docker"))
 }
 
 fn is_root() -> bool {
