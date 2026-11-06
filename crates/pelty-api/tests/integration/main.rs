@@ -49,6 +49,7 @@ mod campaign_schedule_flow;
 mod campaigns_flow;
 mod captcha_sso_flow;
 mod catalog_flow;
+mod checkout_config_proration_flow;
 mod client_extras_flow;
 mod client_group_pricing;
 mod client_group_rules_flow;

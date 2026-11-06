@@ -10,6 +10,7 @@ use pelty_database::addons::{self, AddonInput, FieldInput};
 use pelty_database::catalog::{self, OptionInput, Price, ProductInput};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use sqlx;
 use uuid::Uuid;
 
 pub fn router() -> Router<AppState> {
@@ -32,6 +33,10 @@ pub fn router() -> Router<AppState> {
             axum::routing::delete(delete_option),
         )
         .route("/catalog/products/{id}/extras", get(product_extras))
+        .route(
+            "/catalog/products/{id}/checkout-config",
+            post(checkout_config),
+        )
         .route(
             "/admin/catalog/addons",
             get(admin_addons).post(create_addon),
@@ -237,6 +242,83 @@ pub async fn product_extras(
     Ok(Json(
         json!({ "addons": addons::list(&s.pool, Some(id), true).await?, "fields": addons::fields(&s.pool, id, true).await? }),
     ))
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CheckoutConfigBody {
+    /// Current answers keyed by custom-field id (UUID string) or module key.
+    #[serde(default)]
+    pub selected: Value,
+}
+
+/// Module-driven checkout form for the current selection (filters / reshapes
+/// module fields via [`ProvisioningModule::checkout_config`]). Non-module
+/// product fields are always included.
+#[utoipa::path(post, path = "/api/v1/catalog/products/{id}/checkout-config", request_body = CheckoutConfigBody, responses((status = 200), (status = 404)))]
+pub async fn checkout_config(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    Json(b): Json<CheckoutConfigBody>,
+) -> ApiResult<Json<Value>> {
+    let fields = addons::fields(&s.pool, id, true).await?;
+    let meta: Option<(Option<String>, Value)> = sqlx::query_as(
+        "SELECT module, module_config FROM products WHERE id = $1 AND status = 'active'",
+    )
+    .bind(id)
+    .fetch_optional(&s.pool)
+    .await
+    .map_err(pelty_database::db_err)?;
+    let Some((module, product_config)) = meta else {
+        return Err(AppError::NotFound.into());
+    };
+    // Map field id → module_key for resolving selected answers.
+    let keys: Vec<(Uuid, Option<String>)> =
+        sqlx::query_as("SELECT id, module_key FROM product_custom_fields WHERE product_id = $1")
+            .bind(id)
+            .fetch_all(&s.pool)
+            .await
+            .map_err(pelty_database::db_err)?;
+    let id_to_key: std::collections::HashMap<Uuid, String> = keys
+        .iter()
+        .filter_map(|(fid, k)| k.as_ref().map(|k| (*fid, k.clone())))
+        .collect();
+    let mut selected_by_key = serde_json::Map::new();
+    if let Some(obj) = b.selected.as_object() {
+        for (k, v) in obj {
+            if let Ok(uid) = Uuid::parse_str(k) {
+                if let Some(mk) = id_to_key.get(&uid) {
+                    selected_by_key.insert(mk.clone(), v.clone());
+                    continue;
+                }
+            }
+            selected_by_key.insert(k.clone(), v.clone());
+        }
+    }
+    let selected = Value::Object(selected_by_key);
+    let allowed: Option<std::collections::HashSet<String>> = module
+        .as_deref()
+        .and_then(|m| s.provisioning.get(m))
+        .map(|m| {
+            m.checkout_config(&product_config, &selected)
+                .into_iter()
+                .map(|f| f.key)
+                .collect()
+        });
+    let visible: Vec<_> = fields
+        .into_iter()
+        .filter(|f| match &allowed {
+            None => true, // no module → keep all admin fields
+            Some(keys) => {
+                // Non-module fields (no key mapping) always show; module ones filter.
+                match id_to_key.get(&f.id) {
+                    Some(mk) => keys.contains(mk),
+                    None => true,
+                }
+            }
+        })
+        .collect();
+    Ok(Json(json!({ "fields": visible, "selected": selected })))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/catalog/addons", responses((status = 200), (status = 403)))]

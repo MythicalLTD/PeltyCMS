@@ -1,4 +1,5 @@
 import { Link, useParams } from "react-router";
+import { PluginSlot } from "@/components/plugin-ui/PluginSlot";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeftIcon, HardDrivesIcon } from "@phosphor-icons/react";
 import { PageHeader } from "@/components/PageHeader";
@@ -106,6 +107,7 @@ export function ClientServicePage() {
           <div className="lg:col-span-2"><ServiceModuleCard service={data} /></div>
         </div>
       </Replaceable>
+      <PluginSlot slot="client.service.detail" ctx={{ service_id: id }} />
     </div>
   );
 }
