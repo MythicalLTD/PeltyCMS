@@ -53,6 +53,14 @@ struct OCheckout {
     pattern: String,
     #[serde(default)]
     required: bool,
+    #[serde(default)]
+    visible_when: Option<OWhen>,
+}
+
+#[derive(Deserialize)]
+struct OWhen {
+    key: String,
+    value: String,
 }
 
 #[derive(Deserialize)]
@@ -113,6 +121,10 @@ fn mod_desc(addon: &WasmAddon) -> Result<ModDesc, WasmError> {
                     choices: Box::leak(ch.into_boxed_slice()),
                     pattern: leak(c.pattern),
                     required: c.required,
+                    visible_when: c.visible_when.map(|w| pelty_provisioning::FieldWhen {
+                        key: leak(w.key),
+                        value: leak(w.value),
+                    }),
                 }
             })
             .collect(),

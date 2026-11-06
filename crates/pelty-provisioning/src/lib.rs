@@ -100,6 +100,13 @@ pub struct ModuleInfo {
     pub actions: Vec<&'static str>,
 }
 
+/// Show a checkout field only when another field currently holds `value`.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct FieldWhen {
+    pub key: &'static str,
+    pub value: &'static str,
+}
+
 /// A field the client fills in at checkout for products using this module
 /// (e.g. a hostname or a CSR). Synced into the product's custom fields; the
 /// value reaches the module as `ServiceCtx::custom_fields[key]`.
@@ -114,6 +121,36 @@ pub struct CheckoutField {
     /// Optional POSIX regex the value must match.
     pub pattern: &'static str,
     pub required: bool,
+    /// When set, the field is omitted from [`ProvisioningModule::checkout_config`]
+    /// unless `selected[key] == value`. Still synced into the product catalog.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub visible_when: Option<FieldWhen>,
+}
+
+/// Owned checkout field returned by [`ProvisioningModule::checkout_config`].
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct DynamicCheckoutField {
+    pub key: String,
+    pub name: String,
+    pub description: String,
+    pub kind: String,
+    pub choices: Vec<String>,
+    pub pattern: String,
+    pub required: bool,
+}
+
+impl From<&CheckoutField> for DynamicCheckoutField {
+    fn from(f: &CheckoutField) -> Self {
+        Self {
+            key: f.key.into(),
+            name: f.name.into(),
+            description: f.description.into(),
+            kind: f.kind.into(),
+            choices: f.choices.iter().map(|c| (*c).to_string()).collect(),
+            pattern: f.pattern.into(),
+            required: f.required,
+        }
+    }
 }
 
 pub trait ProvisioningModule: Send + Sync {
@@ -121,6 +158,28 @@ pub trait ProvisioningModule: Send + Sync {
     /// Fields asked at checkout for this module's products.
     fn checkout_fields(&self) -> Vec<CheckoutField> {
         Vec::new()
+    }
+    /// Dynamic checkout form for the current selection (WHMCS-style
+    /// `getCheckoutConfig`). Default filters [`checkout_fields`] by
+    /// [`CheckoutField::visible_when`]. Modules may override to add or
+    /// reshape fields from `product_config` / `selected`.
+    fn checkout_config(
+        &self,
+        _product_config: &Value,
+        selected: &Value,
+    ) -> Vec<DynamicCheckoutField> {
+        self.checkout_fields()
+            .into_iter()
+            .filter(|f| match &f.visible_when {
+                None => true,
+                Some(w) => selected
+                    .get(w.key)
+                    .and_then(|v| v.as_str())
+                    .map(|v| v == w.value)
+                    .unwrap_or(false),
+            })
+            .map(|f| DynamicCheckoutField::from(&f))
+            .collect()
     }
     fn test_connection<'a>(&'a self, server: &'a ServerConn) -> BoxFuture<'a, ProvisionResult<()>>;
     fn create<'a>(
@@ -421,5 +480,104 @@ mod tests {
         assert_eq!(cfg_u64(&v, "disk").unwrap(), 2048);
         assert!(cfg_u64(&v, "bad").is_err());
         assert_eq!(cfg_u64_or(&v, "swap", 0).unwrap(), 0);
+    }
+}
+
+#[cfg(test)]
+mod checkout_config_tests {
+    use super::*;
+    use serde_json::json;
+
+    struct Demo;
+    impl ProvisioningModule for Demo {
+        fn info(&self) -> ModuleInfo {
+            ModuleInfo {
+                id: "demo",
+                name: "Demo",
+                server_fields: vec![],
+                product_fields: vec![],
+                actions: vec![],
+            }
+        }
+        fn checkout_fields(&self) -> Vec<CheckoutField> {
+            vec![
+                CheckoutField {
+                    key: "os",
+                    name: "OS",
+                    description: "",
+                    kind: "select",
+                    choices: &["linux", "windows"],
+                    pattern: "",
+                    required: true,
+                    visible_when: None,
+                },
+                CheckoutField {
+                    key: "license",
+                    name: "Windows license",
+                    description: "",
+                    kind: "text",
+                    choices: &[],
+                    pattern: "",
+                    required: true,
+                    visible_when: Some(FieldWhen {
+                        key: "os",
+                        value: "windows",
+                    }),
+                },
+            ]
+        }
+        fn test_connection<'a>(&'a self, _: &'a ServerConn) -> BoxFuture<'a, ProvisionResult<()>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn create<'a>(
+            &'a self,
+            _: &'a ServerConn,
+            _: &'a ServiceCtx,
+        ) -> BoxFuture<'a, ProvisionResult<Created>> {
+            Box::pin(async { Err(ProvisionError::Config("n/a".into())) })
+        }
+        fn suspend<'a>(
+            &'a self,
+            _: &'a ServerConn,
+            _: &'a ServiceCtx,
+        ) -> BoxFuture<'a, ProvisionResult<()>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn unsuspend<'a>(
+            &'a self,
+            _: &'a ServerConn,
+            _: &'a ServiceCtx,
+        ) -> BoxFuture<'a, ProvisionResult<()>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn terminate<'a>(
+            &'a self,
+            _: &'a ServerConn,
+            _: &'a ServiceCtx,
+        ) -> BoxFuture<'a, ProvisionResult<()>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn change_package<'a>(
+            &'a self,
+            _: &'a ServerConn,
+            _: &'a ServiceCtx,
+        ) -> BoxFuture<'a, ProvisionResult<()>> {
+            Box::pin(async { Ok(()) })
+        }
+    }
+
+    #[test]
+    fn visible_when_filters_license() {
+        let m = Demo;
+        let linux = m.checkout_config(&json!({}), &json!({"os": "linux"}));
+        assert_eq!(
+            linux.iter().map(|f| f.key.as_str()).collect::<Vec<_>>(),
+            ["os"]
+        );
+        let win = m.checkout_config(&json!({}), &json!({"os": "windows"}));
+        assert_eq!(
+            win.iter().map(|f| f.key.as_str()).collect::<Vec<_>>(),
+            ["os", "license"]
+        );
     }
 }

@@ -10,13 +10,18 @@
 //! * Cancellation: client request (`immediate` or `end_of_period`),
 //!   approved or rejected by staff; end-of-period cancellations stop
 //!   renewals after `cancel_at` and complete in [`sweep`].
+//! * Configurable-option change: same upgrade/downgrade proration rules,
+//!   but the product stays the same and `services.config` is rewritten.
+use crate::catalog::{self, ConfigValue};
 use crate::db_err;
 use crate::invoices::{self, Invoice, NewItem};
 use pelty_billing::{cycle, lifecycle, proration};
 use pelty_core::{AppError, AppResult};
 use rust_decimal::Decimal;
 use serde::Serialize;
+use serde_json::Value;
 use sqlx::{FromRow, PgPool};
+use std::collections::HashMap;
 use time::{Date, OffsetDateTime};
 use uuid::Uuid;
 
@@ -422,7 +427,9 @@ pub async fn after_payment(pool: &PgPool, invoice_id: Uuid) -> AppResult<Vec<Uui
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    apply_all(pool, ids).await
+    let mut out = apply_all(pool, ids).await?;
+    out.extend(after_payment_options(pool, invoice_id).await?);
+    Ok(out)
 }
 
 async fn apply_all(pool: &PgPool, ids: Vec<Uuid>) -> AppResult<Vec<Uuid>> {
@@ -674,6 +681,21 @@ pub async fn sweep(pool: &PgPool, today: Date) -> AppResult<(Vec<Uuid>, Vec<Uuid
     .await
     .map_err(db_err)?;
     changed.extend(apply_all(pool, paid).await?);
+    let opt_due: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM service_option_changes WHERE status = 'scheduled' AND effective_date <= $1",
+    )
+    .bind(today)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    changed.extend(apply_all_options(pool, opt_due).await?);
+    let opt_paid: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT c.id FROM service_option_changes c JOIN invoices v ON v.id = c.invoice_id WHERE c.status = 'awaiting_payment' AND v.status = 'paid'",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    changed.extend(apply_all_options(pool, opt_paid).await?);
     let cancel: Vec<Uuid> = sqlx::query_scalar(
         "UPDATE cancellation_requests SET status = 'completed', completed_at = now()
          WHERE status = 'approved' AND effective_date <= $1 RETURNING service_id",
@@ -683,4 +705,344 @@ pub async fn sweep(pool: &PgPool, today: Date) -> AppResult<(Vec<Uuid>, Vec<Uuid
     .await
     .map_err(db_err)?;
     Ok((changed, cancel))
+}
+
+// --- Configurable option changes (mid-cycle proration) --------------------
+
+#[derive(Debug, Clone, FromRow, Serialize)]
+pub struct OptionChange {
+    pub id: Uuid,
+    pub service_id: Uuid,
+    pub old_config: Value,
+    pub new_config: Value,
+    pub old_amount: Decimal,
+    pub new_amount: Decimal,
+    pub credit: Decimal,
+    pub charge: Decimal,
+    pub period_start: Option<Date>,
+    pub period_end: Option<Date>,
+    pub invoice_id: Option<Uuid>,
+    pub status: String,
+    pub effective_date: Option<Date>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub applied_at: Option<OffsetDateTime>,
+}
+
+const OPT_COLS: &str =
+    "id, service_id, old_config, new_config, old_amount, new_amount, credit, charge, \
+    period_start, period_end, invoice_id, status, effective_date, created_at, applied_at";
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OptionQuote {
+    pub kind: &'static str,
+    pub old_amount: Decimal,
+    pub new_amount: Decimal,
+    pub due_now: Decimal,
+    pub proration: Option<proration::Proration>,
+    pub effective_date: Option<Date>,
+    pub labels: Vec<String>,
+}
+
+fn parse_config(v: &Value) -> AppResult<HashMap<Uuid, ConfigValue>> {
+    serde_json::from_value(v.clone()).map_err(|_| AppError::Validation("error.invalid_option"))
+}
+
+async fn amount_for_config(
+    pool: &PgPool,
+    sid: Uuid,
+    s: &Svc,
+    config: &HashMap<Uuid, ConfigValue>,
+) -> AppResult<(Decimal, Vec<String>)> {
+    let mut tx = pool.begin().await.map_err(db_err)?;
+    let q = catalog::quote(&mut tx, s.product_id, &s.cycle, &s.currency, config).await?;
+    tx.rollback().await.ok();
+    let addons: Decimal = sqlx::query_scalar(
+        "SELECT COALESCE(sum(recurring_amount), 0) FROM service_addons WHERE service_id = $1 AND status = 'active'",
+    )
+    .bind(sid)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
+    Ok((q.amount + addons, q.labels))
+}
+
+/// Quote a mid-cycle change of configurable options for an active service.
+pub async fn quote_options(
+    pool: &PgPool,
+    sid: Uuid,
+    new_config: &Value,
+    today: Date,
+) -> AppResult<OptionQuote> {
+    let s = load(pool, sid).await?;
+    changeable(&s)?;
+    let cfg = parse_config(new_config)?;
+    let (new_amount, labels) = amount_for_config(pool, sid, &s, &cfg).await?;
+    let exp = exponent(pool, &s.currency).await?;
+    let period = current_period(pool, sid, &s, today).await?;
+    let ahead = match period {
+        Some((_, end)) => billed_ahead(pool, sid, end).await?,
+        None => 0,
+    };
+    if new_amount > s.amount {
+        let p =
+            period.and_then(|(a, b)| proration::prorate(s.amount, new_amount, a, b, today, exp));
+        let due = p.as_ref().map(|p| p.net).unwrap_or_default()
+            + (new_amount - s.amount) * Decimal::from(ahead);
+        Ok(OptionQuote {
+            kind: "upgrade",
+            old_amount: s.amount,
+            new_amount,
+            due_now: due,
+            proration: p,
+            effective_date: None,
+            labels,
+        })
+    } else {
+        Ok(OptionQuote {
+            kind: "downgrade",
+            old_amount: s.amount,
+            new_amount,
+            due_now: Decimal::ZERO,
+            proration: None,
+            effective_date: s.next_due,
+            labels,
+        })
+    }
+}
+
+pub async fn get_option_change(pool: &PgPool, id: Uuid) -> AppResult<Option<OptionChange>> {
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {OPT_COLS} FROM service_option_changes WHERE id = $1"
+    )))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)
+}
+
+pub async fn option_changes_for(pool: &PgPool, sid: Uuid) -> AppResult<Vec<OptionChange>> {
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {OPT_COLS} FROM service_option_changes WHERE service_id = $1 ORDER BY created_at DESC"
+    )))
+    .bind(sid)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
+}
+
+/// Request a configurable-option change. Upgrades invoice the prorated
+/// difference; downgrades schedule for `next_due` and rewrite the recurring
+/// amount immediately (same pattern as plan changes).
+pub async fn request_option_change(
+    pool: &PgPool,
+    sid: Uuid,
+    new_config: Value,
+    by: Option<Uuid>,
+    today: Date,
+    due_days: i64,
+) -> AppResult<(OptionChange, Option<Invoice>)> {
+    let s = load(pool, sid).await?;
+    let quote = quote_options(pool, sid, &new_config, today).await?;
+    let old_config: Value = sqlx::query_scalar("SELECT config FROM services WHERE id = $1")
+        .bind(sid)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
+    if parse_config(&new_config)? == parse_config(&old_config)? {
+        return Err(AppError::Validation("error.invalid_option"));
+    }
+
+    let mut tx = pool.begin().await.map_err(db_err)?;
+    sqlx::query("SELECT 1 FROM services WHERE id = $1 FOR UPDATE")
+        .bind(sid)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
+    // Block when a plan change is already open.
+    let plan_open: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM service_changes WHERE service_id = $1 AND status IN ('awaiting_payment','scheduled'))",
+    )
+    .bind(sid)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(db_err)?;
+    if plan_open {
+        return Err(AppError::Conflict("error.change_pending"));
+    }
+
+    let id = Uuid::new_v4();
+    let mut invoice = None;
+    let status = if quote.kind == "upgrade" {
+        let p = quote
+            .proration
+            .clone()
+            .ok_or(AppError::Conflict("error.service_not_changeable"))?;
+        let (start, end) = current_period(pool, sid, &s, today)
+            .await?
+            .ok_or(AppError::Conflict("error.service_not_changeable"))?;
+        let ahead = billed_ahead(pool, sid, end).await?;
+        let mut items = vec![
+            NewItem {
+                description: format!("{} options upgrade ({today}, {end})", s.name),
+                quantity: Decimal::ONE,
+                unit_price: p.charge,
+                tax_rate: Decimal::ZERO,
+                service_id: None,
+                period: None,
+                auto_tax: true,
+            },
+            NewItem {
+                description: format!("{}, unused options ({today}, {end})", s.name),
+                quantity: Decimal::ONE,
+                unit_price: -p.credit,
+                tax_rate: Decimal::ZERO,
+                service_id: None,
+                period: None,
+                auto_tax: true,
+            },
+        ];
+        if ahead > 0 {
+            items.push(NewItem {
+                description: format!("{} options (billed periods after {end})", s.name),
+                quantity: Decimal::from(ahead),
+                unit_price: quote.new_amount - s.amount,
+                tax_rate: Decimal::ZERO,
+                service_id: None,
+                period: None,
+                auto_tax: true,
+            });
+        }
+        let inv = invoices::create_draft(&mut tx, s.customer_id, &s.currency, None).await?;
+        invoices::add_items(&mut tx, inv, &s.currency, &items).await?;
+        let fin = invoices::finalize(&mut tx, inv, due_days).await?;
+        sqlx::query(
+            "INSERT INTO service_option_changes (id, service_id, old_config, new_config, old_amount, new_amount, credit, charge,
+                period_start, period_end, invoice_id, status, requested_by)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'awaiting_payment',$12)",
+        )
+        .bind(id)
+        .bind(sid)
+        .bind(&old_config)
+        .bind(&new_config)
+        .bind(s.amount)
+        .bind(quote.new_amount)
+        .bind(p.credit)
+        .bind(p.charge)
+        .bind(start)
+        .bind(end)
+        .bind(inv)
+        .bind(by)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| unique_conflict(e, "error.change_pending"))?;
+        let paid = fin.status == "paid";
+        invoice = Some(fin);
+        if paid {
+            "paid"
+        } else {
+            "awaiting_payment"
+        }
+    } else {
+        let eff = s
+            .next_due
+            .ok_or(AppError::Conflict("error.service_not_changeable"))?;
+        sqlx::query(
+            "INSERT INTO service_option_changes (id, service_id, old_config, new_config, old_amount, new_amount, status, effective_date, requested_by)
+             VALUES ($1,$2,$3,$4,$5,$6,'scheduled',$7,$8)",
+        )
+        .bind(id)
+        .bind(sid)
+        .bind(&old_config)
+        .bind(&new_config)
+        .bind(s.amount)
+        .bind(quote.new_amount)
+        .bind(eff)
+        .bind(by)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| unique_conflict(e, "error.change_pending"))?;
+        sqlx::query("UPDATE services SET recurring_amount = $2, updated_at = now() WHERE id = $1")
+            .bind(sid)
+            .bind(quote.new_amount)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        "scheduled"
+    };
+    if status == "paid" {
+        apply_option(&mut tx, id).await?;
+    }
+    tx.commit().await.map_err(db_err)?;
+    let c = get_option_change(pool, id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    Ok((c, invoice))
+}
+
+pub async fn cancel_option_change(pool: &PgPool, sid: Uuid) -> AppResult<()> {
+    let r = sqlx::query(
+        "UPDATE service_option_changes SET status = 'cancelled'
+         WHERE service_id = $1 AND status IN ('awaiting_payment','scheduled')",
+    )
+    .bind(sid)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
+    if r.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+    // Restore recurring amount for a cancelled scheduled downgrade from the change row.
+    // (Upgrade invoices stay; staff void separately.)
+    Ok(())
+}
+
+async fn apply_option(tx: &mut invoices::Tx<'_>, change: Uuid) -> AppResult<Option<Uuid>> {
+    let r: Option<(Uuid, Value, Decimal)> = sqlx::query_as(
+        "UPDATE service_option_changes SET status = 'applied', applied_at = now()
+         WHERE id = $1 AND status IN ('awaiting_payment','scheduled')
+         RETURNING service_id, new_config, new_amount",
+    )
+    .bind(change)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    let Some((sid, config, amount)) = r else {
+        return Ok(None);
+    };
+    sqlx::query(
+        "UPDATE services SET config = $2, recurring_amount = $3, updated_at = now() WHERE id = $1",
+    )
+    .bind(sid)
+    .bind(config)
+    .bind(amount)
+    .execute(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    Ok(Some(sid))
+}
+
+async fn apply_all_options(pool: &PgPool, ids: Vec<Uuid>) -> AppResult<Vec<Uuid>> {
+    let mut out = Vec::new();
+    for id in ids {
+        let mut tx = pool.begin().await.map_err(db_err)?;
+        if let Some(sid) = apply_option(&mut tx, id).await? {
+            out.push(sid);
+        }
+        tx.commit().await.map_err(db_err)?;
+    }
+    Ok(out)
+}
+
+pub async fn after_payment_options(pool: &PgPool, invoice_id: Uuid) -> AppResult<Vec<Uuid>> {
+    let ids: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT c.id FROM service_option_changes c JOIN invoices v ON v.id = c.invoice_id
+         WHERE c.invoice_id = $1 AND c.status = 'awaiting_payment' AND v.status = 'paid'",
+    )
+    .bind(invoice_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    apply_all_options(pool, ids).await
 }
