@@ -504,7 +504,10 @@ mod checkout_config_tests {
         fn checkout_config(&self, _: &Value, selected: &Value) -> Vec<DynamicCheckoutField> {
             self.checkout_fields()
                 .into_iter()
-                .filter(|f| f.key != "license" || selected.get("os").and_then(|v| v.as_str()) == Some("windows"))
+                .filter(|f| {
+                    f.key != "license"
+                        || selected.get("os").and_then(|v| v.as_str()) == Some("windows")
+                })
                 .map(|f| DynamicCheckoutField::from(&f))
                 .collect()
         }
