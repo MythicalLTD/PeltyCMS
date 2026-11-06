@@ -29,7 +29,9 @@ const KNOWN: &[&str] = &[
     "x86_64-unknown-linux-gnu",
     "x86_64-unknown-linux-musl",
     "aarch64-unknown-linux-gnu",
+    "aarch64-unknown-linux-musl",
     "x86_64-pc-windows-msvc",
+    "aarch64-pc-windows-msvc",
     "x86_64-pc-windows-gnu",
     "aarch64-apple-darwin",
     "x86_64-apple-darwin",
@@ -41,16 +43,20 @@ struct Opts {
     local: bool,
     targets: Option<Vec<String>>,
     skip_assets: bool,
+    /// Only re-write SHA256SUMS / .sig / manifest / changelog from archives
+    /// already in `dist/<version>/` (CI merge step after matrix builds).
+    assemble: bool,
 }
 
 fn parse(args: &[String]) -> R<Opts> {
-    let usage = "usage: cargo xtask release <version> [--local | --targets t1,t2] [--publish] [--skip-assets]";
+    let usage = "usage: cargo xtask release <version> [--local | --targets t1,t2] [--publish] [--skip-assets] [--assemble]";
     let mut o = Opts {
         version: String::new(),
         publish: false,
         local: false,
         targets: None,
         skip_assets: false,
+        assemble: false,
     };
     let mut it = args.iter();
     while let Some(a) = it.next() {
@@ -58,6 +64,7 @@ fn parse(args: &[String]) -> R<Opts> {
             "--publish" => o.publish = true,
             "--local" => o.local = true,
             "--skip-assets" => o.skip_assets = true,
+            "--assemble" => o.assemble = true,
             "--targets" => {
                 o.targets = Some(
                     it.next()
@@ -78,6 +85,9 @@ fn parse(args: &[String]) -> R<Opts> {
         return Err(format!(
             "{usage}\n(version must look like 1.2.3 or 1.2.3-rc.1)"
         ));
+    }
+    if o.assemble && (o.publish || o.local || o.targets.is_some()) {
+        return Err("--assemble cannot be combined with --publish, --local, or --targets".into());
     }
     Ok(o)
 }
@@ -354,6 +364,17 @@ fn archive(
 
 pub fn release(ctx: &Ctx, args: &[String]) -> R {
     let o = parse(args)?;
+    let key = signing_key()?;
+    if o.assemble {
+        if key.is_none() {
+            println!(
+                "[release] no signing key ({KEY_ENV}): SHA256SUMS will not be signed"
+            );
+        }
+        let dist = assemble(ctx, &o.version, key.as_ref())?;
+        println!("[release] assembled {}", dist.display());
+        return Ok(());
+    }
     let host = host()?;
     let installed = installed_targets();
     let wanted: Vec<String> = match (&o.targets, o.local) {
@@ -372,7 +393,6 @@ pub fn release(ctx: &Ctx, args: &[String]) -> R {
     if plan.is_empty() {
         return Err("no target can be built on this machine".into());
     }
-    let key = signing_key()?;
     if o.publish {
         if !git(ctx, &["status", "--porcelain"])?.is_empty() {
             return Err("--publish needs a clean working tree".into());
@@ -439,6 +459,97 @@ pub fn release(ctx: &Ctx, args: &[String]) -> R {
     publish(ctx, &o.version, &dist)
 }
 
+fn list_archives(dist: &Path, version: &str) -> R<Vec<(String, String)>> {
+    let prefix = format!("pelty-server-{version}-");
+    let mut out = vec![];
+    for e in std::fs::read_dir(dist)
+        .map_err(|e| e.to_string())?
+        .flatten()
+    {
+        let name = e.file_name().to_string_lossy().to_string();
+        let target = name
+            .strip_prefix(&prefix)
+            .and_then(|t| t.strip_suffix(".tar.gz").or_else(|| t.strip_suffix(".zip")));
+        if let Some(t) = target {
+            out.push((t.to_string(), name));
+        }
+    }
+    out.sort();
+    Ok(out)
+}
+
+fn write_sums_manifest(
+    dist: &Path,
+    version: &str,
+    notes: &str,
+    archives: &[(String, String)],
+    key: Option<&ring::signature::Ed25519KeyPair>,
+) -> R {
+    let mut assets = vec![];
+    for (target, name) in archives {
+        let bytes = std::fs::read(dist.join(name)).map_err(|e| e.to_string())?;
+        assets.push(serde_json::json!({
+            "target": target,
+            "name": name,
+            "sha256": sha256_hex(&bytes),
+            "size": bytes.len()
+        }));
+        println!("[release] {name}");
+    }
+    if assets.is_empty() {
+        return Err(format!("no pelty-server-{version}-* archives in {}", dist.display()));
+    }
+    let sums: String = assets
+        .iter()
+        .map(|a| {
+            format!(
+                "{}  {}\n",
+                a["sha256"].as_str().unwrap(),
+                a["name"].as_str().unwrap()
+            )
+        })
+        .collect();
+    std::fs::write(dist.join("SHA256SUMS"), &sums).map_err(|e| e.to_string())?;
+    if let Some(k) = key {
+        std::fs::write(
+            dist.join("SHA256SUMS.sig"),
+            format!("{}\n", b64(k.sign(sums.as_bytes()).as_ref())),
+        )
+        .map_err(|e| e.to_string())?;
+    } else {
+        let _ = std::fs::remove_file(dist.join("SHA256SUMS.sig"));
+    }
+    let manifest = serde_json::json!({
+        "version": version,
+        "tag": format!("v{version}"),
+        "notes": notes,
+        "assets": assets
+    });
+    std::fs::write(
+        dist.join("manifest.json"),
+        serde_json::to_string_pretty(&manifest).unwrap(),
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Rebuild checksums / signature / manifest for archives already in `dist/<version>/`.
+fn assemble(
+    ctx: &Ctx,
+    version: &str,
+    key: Option<&ring::signature::Ed25519KeyPair>,
+) -> R<PathBuf> {
+    let dist = ctx.root.join("dist").join(version);
+    if !dist.is_dir() {
+        return Err(format!("{} is missing", dist.display()));
+    }
+    let archives = list_archives(&dist, version)?;
+    let notes = changelog(ctx, version)?;
+    std::fs::write(dist.join("CHANGELOG.md"), &notes).map_err(|e| e.to_string())?;
+    write_sums_manifest(&dist, version, &notes, &archives, key)?;
+    Ok(dist)
+}
+
 fn build_and_package(
     ctx: &Ctx,
     o: &Opts,
@@ -480,11 +591,9 @@ fn build_and_package(
         (ctx.root.join("LICENSE"), "LICENSE"),
         (notes_file, "CHANGELOG.md"),
     ];
-    let mut assets = vec![];
-    for (target, name) in kept {
-        let bytes = std::fs::read(dist.join(&name)).map_err(|e| e.to_string())?;
+    let mut archives = kept;
+    for (_target, name) in &archives {
         println!("[release] keeping {name} (already in {})", dist.display());
-        assets.push(serde_json::json!({ "target": target, "name": name, "sha256": sha256_hex(&bytes), "size": bytes.len() }));
     }
     for (target, sub) in plan {
         println!("[release] building pelty-server for {target}");
@@ -515,35 +624,11 @@ fn build_and_package(
             &extras,
             windows,
         )?;
-        let bytes = std::fs::read(&a).map_err(|e| e.to_string())?;
         let name = a.file_name().unwrap().to_string_lossy().to_string();
-        assets.push(serde_json::json!({ "target": target, "name": name, "sha256": sha256_hex(&bytes), "size": bytes.len() }));
-        println!("[release] {name}");
+        archives.push((target.clone(), name));
     }
-    let sums: String = assets
-        .iter()
-        .map(|a| {
-            format!(
-                "{}  {}\n",
-                a["sha256"].as_str().unwrap(),
-                a["name"].as_str().unwrap()
-            )
-        })
-        .collect();
-    std::fs::write(dist.join("SHA256SUMS"), &sums).map_err(|e| e.to_string())?;
-    if let Some(k) = key {
-        std::fs::write(
-            dist.join("SHA256SUMS.sig"),
-            format!("{}\n", b64(k.sign(sums.as_bytes()).as_ref())),
-        )
-        .map_err(|e| e.to_string())?;
-    }
-    let manifest = serde_json::json!({ "version": o.version, "tag": format!("v{}", o.version), "notes": notes, "assets": assets });
-    std::fs::write(
-        dist.join("manifest.json"),
-        serde_json::to_string_pretty(&manifest).unwrap(),
-    )
-    .map_err(|e| e.to_string())?;
+    archives.sort();
+    write_sums_manifest(&dist, &o.version, &notes, &archives, key)?;
     Ok(dist)
 }
 

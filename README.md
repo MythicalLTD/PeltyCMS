@@ -8,6 +8,26 @@ addons from **Admin → Addons**.
 
 **Status:** under active development. Not a public release yet.
 
+Release tags are **v-prefixed SemVer** (`v1.0.0`, `v1.0.0-rc.1`) — not bare
+`1.0.0` like older MythicalDash cuts. Nightlies publish every day from
+`develop` as `v0.1.0-nightly.YYYYMMDD` (plus a floating `nightly` release /
+image). In **Admin → Updates** pick the Stable or Nightly channel; Docker
+hosts get a pull command, binary hosts get `pelty-server update`.
+
+```text
+ghcr.io/mythicalltd/peltycms:v1.0.0
+ghcr.io/mythicalltd/peltycms:latest      # stable only
+ghcr.io/mythicalltd/peltycms:nightly
+```
+
+Release archives (also what `pelty-server update` downloads):
+
+| Platform | Archive |
+|----------|---------|
+| Linux x64 / ARM64 | `pelty-server-<v>-{x86_64,aarch64}-unknown-linux-{gnu,musl}.tar.gz` |
+| Windows x64 / ARM64 | `pelty-server-<v>-{x86_64,aarch64}-pc-windows-msvc.zip` |
+| macOS Intel / Apple Silicon | `pelty-server-<v>-{x86_64,aarch64}-apple-darwin.tar.gz` |
+
 ## Licensing (how money and Free Tier work)
 
 PeltyCMS is **source-available**, not OSI Open Source.

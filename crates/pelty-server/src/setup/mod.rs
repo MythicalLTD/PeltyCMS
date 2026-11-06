@@ -1764,22 +1764,42 @@ pub fn summary(a: &Answers) -> String {
     s
 }
 
+/// One-click admin URL printed after setup (`GET /api/v1/auth/setup-login`).
+pub fn setup_login_url(public_url: &str, token: &str) -> String {
+    format!(
+        "{}/api/v1/auth/setup-login?token={token}",
+        public_url.trim_end_matches('/')
+    )
+}
+
 /// Boxed "what now" text printed after setup.
-pub fn next_steps(public_url: &str, admin_email: Option<&str>, root: &Path) -> String {
-    let rows = [
+pub fn next_steps(
+    public_url: &str,
+    admin_email: Option<&str>,
+    login_token: Option<&str>,
+    root: &Path,
+) -> String {
+    let mut rows = vec![
         "Next steps".to_string(),
         format!("Open        {public_url}"),
-        match admin_email {
-            Some(e) => format!("Sign in as  {e}"),
-            None => "Admin       console: admin create <email> --name <name>".into(),
-        },
-        "Console     type `help` while the server runs (stop, status, admin ...)".into(),
-        format!(
-            "Config      {} and eula.txt",
-            root.join(bootstrap::ENV_FILE).display()
-        ),
-        "Change it   pelty-server setup   (or edit .env and restart)".into(),
     ];
+    match (admin_email, login_token) {
+        (Some(e), Some(tok)) => {
+            rows.push(format!("Sign in as  {e}"));
+            rows.push(format!("Quick login {}", setup_login_url(public_url, tok)));
+            rows.push("            one-time link · expires in 1 hour".into());
+        }
+        (Some(e), None) => rows.push(format!("Sign in as  {e}")),
+        (None, _) => {
+            rows.push("Admin       console: admin create <email> --name <name>".into())
+        }
+    }
+    rows.push("Console     type `help` while the server runs (stop, status, admin ...)".into());
+    rows.push(format!(
+        "Config      {} and eula.txt",
+        root.join(bootstrap::ENV_FILE).display()
+    ));
+    rows.push("Change it   pelty-server setup   (or edit .env and restart)".into());
     let w = rows.iter().map(|r| r.chars().count()).max().unwrap_or(0);
     let line = |l: char, r: char| format!("{l}{}{r}", "─".repeat(w + 2));
     let mut s = format!("\n{}\n", line('┌', '┐'));
@@ -1974,8 +1994,9 @@ pub fn languages(dir: &Path) -> Vec<String> {
 // after migrate
 
 /// Apply the database part of the plan (after migrations). Failures are
-/// reported and do not stop the server.
-pub async fn apply(pool: &pelty_database::Pool, plan: &Plan) {
+/// reported and do not stop the server. Returns a one-time setup-login token
+/// when an administrator was created.
+pub async fn apply(pool: &pelty_database::Pool, plan: &Plan) -> Option<String> {
     // Wizard / headless already required EULA; mirror that into admin license status.
     match pelty_database::license::accept_from_setup(pool).await {
         Ok(()) => println!("[PeltyCMS] setup: License and EULA recorded for this deployment"),
@@ -1987,6 +2008,7 @@ pub async fn apply(pool: &pelty_database::Pool, plan: &Plan) {
             Err(e) => println!("[PeltyCMS] setup warning: company settings not saved: {e}"),
         }
     }
+    let mut login_token = None;
     if let Some(admin) = &plan.admin {
         let auth = pelty_auth::AuthService {
             pool: pool.clone(),
@@ -1999,6 +2021,19 @@ pub async fn apply(pool: &pelty_database::Pool, plan: &Plan) {
                 if admin.generated {
                     println!("[PeltyCMS]   password: {}   <- shown only now; store it in a password manager", admin.password);
                 }
+                let tok = pelty_auth::token::generate();
+                match pelty_database::user_tokens::issue(
+                    pool,
+                    u.id,
+                    pelty_database::user_tokens::SETUP_LOGIN,
+                    &pelty_auth::token::hash(&tok),
+                    time::Duration::hours(1),
+                )
+                .await
+                {
+                    Ok(()) => login_token = Some(tok),
+                    Err(e) => println!("[PeltyCMS] setup warning: quick-login link not created: {e}"),
+                }
             }
             Err(e) => println!("[PeltyCMS] setup warning: {e} (use `admin create` or `admin reset-password` in the console)"),
         }
@@ -2009,6 +2044,7 @@ pub async fn apply(pool: &pelty_database::Pool, plan: &Plan) {
             Err(e) => println!("[PeltyCMS] setup warning: billing hour not saved: {e}"),
         }
     }
+    login_token
 }
 
 async fn apply_site(pool: &pelty_database::Pool, s: &Site) -> Result<(), String> {

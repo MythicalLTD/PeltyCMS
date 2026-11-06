@@ -14,7 +14,20 @@ function mount(status: number, body: unknown) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(<QueryClientProvider client={qc}><I18nProvider><UpdateBanner /></I18nProvider></QueryClientProvider>);
 }
-const base = { enabled: true, url: "", current: "0.1.0", latest: "0.2.0", release_url: "https://github.com/x/r", notes: "", published_at: null, checked_at: null, error: null };
+const base = {
+  enabled: true,
+  channel: "stable" as const,
+  url: "",
+  current: "0.1.0",
+  latest: "0.2.0",
+  release_url: "https://github.com/x/r",
+  notes: "",
+  published_at: null,
+  checked_at: null,
+  error: null,
+  install: "binary" as const,
+  update_command: "pelty-server update --yes --version 0.2.0",
+};
 
 describe("UpdateBanner", () => {
   it("shows the new version with a safe external link", async () => {

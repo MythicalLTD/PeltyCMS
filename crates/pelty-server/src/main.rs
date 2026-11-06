@@ -479,8 +479,9 @@ async fn apply_addons(state: &AppState, plan: &setup::Plan) {
 async fn finish_setup(cfg: &Config, plan: Option<setup::Plan>) -> Result<bool, BoxErr> {
     let pool = setup_db(cfg).await?;
     let ask = plan.as_ref().is_some_and(|p| p.ask_start);
+    let mut login_token = None;
     if let Some(p) = &plan {
-        setup::apply(&pool, p).await;
+        login_token = setup::apply(&pool, p).await;
         if p.captcha.is_some() || !p.gateways.is_empty() {
             // Addons need the app state (addon catalog, gateway registry); build one briefly.
             let i18n = I18n::load(&cfg.locales_dir, &cfg.default_locale)?;
@@ -498,6 +499,7 @@ async fn finish_setup(cfg: &Config, plan: Option<setup::Plan>) -> Result<bool, B
             plan.as_ref()
                 .and_then(|p| p.admin.as_ref())
                 .map(|a| a.email.as_str()),
+            login_token.as_deref(),
             &root
         )
     );
@@ -528,13 +530,14 @@ async fn serve(
     let console_on = console_flag.unwrap_or(stdin_tty);
     let pool = setup_db(&cfg).await?;
     if let Some(p) = &plan {
-        setup::apply(&pool, p).await;
+        let login_token = setup::apply(&pool, p).await;
         let root = std::env::current_dir().unwrap_or_default();
         println!(
             "{}",
             setup::next_steps(
                 &cfg.public_url,
                 p.admin.as_ref().map(|a| a.email.as_str()),
+                login_token.as_deref(),
                 &root
             )
         );

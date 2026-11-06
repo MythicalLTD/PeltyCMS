@@ -30,7 +30,7 @@ const COMMANDS: &[(&str, &str)] = &[
     ("seed", "Load demo data into a running server (PELTY_URL, ADMIN_EMAIL, ADMIN_PASSWORD, CLIENT_PASSWORD)"),
     ("seed-extra", "More demo data for newer features (run after seed; same env)"),
     ("build", "Release build: addon zips, docs, frontend, server binary"),
-    ("release", "release <version> [--local | --targets a,b] [--publish]: dry run builds + packages dist/<version>/ (archives, SHA256SUMS + signature, manifest.json, changelog); --publish tags and creates the GitHub Release"),
+    ("release", "release <version> [--local | --targets a,b] [--publish] [--assemble]: dry run builds + packages dist/<version>/ (archives, SHA256SUMS + signature, manifest.json, changelog); --assemble only re-sums existing archives (CI); --publish tags and creates the GitHub Release"),
     ("release-keygen", "release-keygen [path]: new ed25519 release signing key (default ~/.config/peltycms/release-signing.key); prints the public key for crates/pelty-server/release-key.pub"),
     ("docs", "Generate the user docs (target/docs) and developer docs (target/docs/developers), with coverage report"),
     ("addons", "Build every WASM addon into extensions/addons/dist/*.zip (or only: addons <dir>...)"),

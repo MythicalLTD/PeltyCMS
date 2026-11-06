@@ -1,5 +1,8 @@
+# Draft release notes for the next stable cut. Tags are always v-prefixed
+# SemVer (v1.0.0). Next public line is v1.x — do not continue MythicalDash 3.x.
 name-template: "v$RESOLVED_VERSION"
 tag-template: "v$RESOLVED_VERSION"
+prerelease-identifier: rc
 categories:
   - title: Features
     labels: [feature, enhancement]

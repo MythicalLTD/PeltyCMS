@@ -12,6 +12,7 @@ use utoipa::OpenApi;
         super::health::readyz,
         super::auth::register,
         super::auth::login,
+        super::auth::setup_login,
         super::auth::logout,
         super::auth::me,
         super::auth::list_sessions,

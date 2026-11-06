@@ -1,0 +1,69 @@
+# Daily prerelease from develop. Creates v0.1.0-nightly.YYYYMMDD (and retargets
+# the floating `nightly` release + ghcr.io/mythicalltd/peltycms:nightly).
+# Admin → Updates → Nightly follows these builds; Stable keeps GitHub Latest.
+name: Nightly
+
+on:
+  schedule:
+    # 03:00 UTC every day
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.decide.outputs.should_run }}
+      version: ${{ steps.decide.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Decide version
+        id: decide
+        run: |
+          set -euo pipefail
+          day="$(date -u +%Y%m%d)"
+          version="0.1.0-nightly.${day}"
+          tag="v${version}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "Tag ${tag} already exists; skipping"
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Skip when develop has not moved since the previous nightly tag.
+          prev="$(git tag -l 'v0.1.0-nightly.*' --sort=-creatordate | head -n1 || true)"
+          if [ -n "$prev" ]; then
+            ahead="$(git rev-list --count "${prev}..HEAD" 2>/dev/null || echo 0)"
+            if [ "$ahead" = "0" ]; then
+              echo "No new commits since ${prev}; skipping"
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "develop is ${ahead} commit(s) ahead of ${prev}"
+          else
+            echo "No previous nightly tag; publishing first nightly"
+          fi
+
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+          echo "Will publish ${tag}"
+
+  release:
+    name: Release
+    needs: plan
+    if: needs.plan.outputs.should_run == 'true'
+    uses: ./.github/workflows/release.yml
+    with:
+      version: ${{ needs.plan.outputs.version }}
+      floating_tag: nightly
+    secrets: inherit

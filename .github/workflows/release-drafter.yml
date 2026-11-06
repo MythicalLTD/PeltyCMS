@@ -1,5 +1,6 @@
-# Optional: keeps a draft release notes page in sync with merged PRs on develop.
-# Labels on PRs (feature, fix, docs, …) feed the categories below.
+# Keeps a draft release notes page in sync with merged PRs on develop.
+# Next stable tag is v1.0.0+ (v-prefixed). Label a PR `major` / `minor` / `rc`
+# as needed; publishing the draft (or pushing the tag) runs the Release workflow.
 name: Release drafter
 
 on:
@@ -16,6 +17,34 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: release-drafter/release-drafter@v6
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # MythicalDash left 3.x tags/releases on this repo. Until the first PeltyCMS
+      # v1* tag exists, force the draft to v1.0.0 so we do not draft v3.5.x.
+      - name: Resolve draft version
+        id: ver
+        run: |
+          set -euo pipefail
+          if git tag -l 'v1.*' | grep -q .; then
+            echo "force=false" >> "$GITHUB_OUTPUT"
+            echo "Using release-drafter version resolver (v1* tags present)"
+          else
+            echo "force=true" >> "$GITHUB_OUTPUT"
+            echo "No v1* tags yet; drafting v1.0.0"
+          fi
+
+      - name: Draft v1.0.0
+        if: steps.ver.outputs.force == 'true'
+        uses: release-drafter/release-drafter@v6
+        with:
+          version: "1.0.0"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Draft next version
+        if: steps.ver.outputs.force != 'true'
+        uses: release-drafter/release-drafter@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

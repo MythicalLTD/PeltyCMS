@@ -61,7 +61,8 @@ ENV PELTY_BIND=0.0.0.0:8080 \
     PELTY_THEMES_DIR=/app/themes \
     PELTY_PLUGINS_DIR=/app/plugins \
     PELTY_DOCS_DIR=/app/docs \
-    PELTY_LOG_JSON=true
+    PELTY_LOG_JSON=true \
+    PELTY_DOCKER=true
 USER pelty
 EXPOSE 8080
 # /dev/tcp is a bash feature; debian's /bin/sh (dash) does not support it.

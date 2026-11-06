@@ -8,6 +8,8 @@ use uuid::Uuid;
 
 pub const PASSWORD_RESET: &str = "password_reset";
 pub const EMAIL_VERIFY: &str = "email_verify";
+/// One-click sign-in after `pelty-server setup` (short TTL, single use).
+pub const SETUP_LOGIN: &str = "setup_login";
 
 /// Store a new token, invalidating earlier unused ones of the same purpose.
 pub async fn issue(

@@ -654,8 +654,21 @@ fn strength_and_next_steps() {
     assert_eq!(strength("abcdefgh1234"), "fair");
     assert_eq!(strength("Abcdefgh1234-x"), "good");
     assert_eq!(strength("Correct-Horse-Battery-Staple-9"), "strong");
-    let s = next_steps("https://x.test", Some("a@x.test"), Path::new("/srv/pelty"));
-    assert!(s.contains("https://x.test") && s.contains("a@x.test") && s.contains("/srv/pelty"));
+    let s = next_steps(
+        "https://x.test",
+        Some("a@x.test"),
+        Some("tok_abc"),
+        Path::new("/srv/pelty"),
+    );
+    assert!(
+        s.contains("https://x.test")
+            && s.contains("a@x.test")
+            && s.contains("/srv/pelty")
+            && s.contains("/api/v1/auth/setup-login?token=tok_abc")
+            && s.contains("one-time")
+    );
+    let plain = next_steps("https://x.test", Some("a@x.test"), None, Path::new("/srv/pelty"));
+    assert!(plain.contains("a@x.test") && !plain.contains("setup-login"));
     let widths: Vec<usize> = console::strip_ansi_codes(&s)
         .lines()
         .filter(|l| !l.is_empty())

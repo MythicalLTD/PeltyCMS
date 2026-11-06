@@ -88,13 +88,29 @@ async fn get(c: &reqwest::Client, url: &str, binary: bool) -> Result<Vec<u8>, St
 
 /// Fetch the release (latest, or `version`) from `feed`.
 pub async fn fetch(feed: &str, version: Option<&str>) -> Result<Release, String> {
+    fetch_channel(feed, updates::Channel::Stable, version).await
+}
+
+/// Fetch a release for `channel` (stable Latest, or newest nightly from a list).
+pub async fn fetch_channel(
+    feed: &str,
+    channel: updates::Channel,
+    version: Option<&str>,
+) -> Result<Release, String> {
     let url = match version {
-        Some(v) => updates::feed_for_version(feed, v).ok_or("this feed URL has no per-version form (use .../releases/latest or .../latest/manifest.json)")?,
+        Some(v) => updates::feed_for_version(feed, v).ok_or(
+            "this feed URL has no per-version form (use .../releases/latest or .../latest/manifest.json)",
+        )?,
         None => feed.to_string(),
     };
     let body = get(&client()?, &url, false).await?;
-    updates::parse_feed(&String::from_utf8_lossy(&body), &url)
-        .map_err(|e| format!("{url}: unreadable release feed ({e})"))
+    let text = String::from_utf8_lossy(&body);
+    let r = if version.is_some() {
+        updates::parse_feed(&text, &url)
+    } else {
+        updates::pick_release(&text, &url, channel)
+    };
+    r.map_err(|e| format!("{url}: unreadable release feed ({e})"))
 }
 
 fn sha256_hex(b: &[u8]) -> String {
@@ -246,19 +262,41 @@ pub async fn run(
     say: &mut (dyn FnMut(String) + Send),
 ) -> Result<(), String> {
     if crate::in_container() && !o.check {
-        return Err("running in a container: pull the new image instead (docker compose pull && docker compose up -d)".into());
+        let tag = if updates::is_nightly_version(updates::CURRENT) {
+            "nightly"
+        } else {
+            "latest"
+        };
+        return Err(format!(
+            "running in a container: pull the new image instead (`docker pull {}:{tag} && docker compose up -d`)",
+            updates::DOCKER_IMAGE
+        ));
     }
-    let feed = match pool {
-        Some(p) => updates::config_in(p)
-            .await
-            .map(|c| c.1)
-            .unwrap_or_else(|_| updates::env_url().unwrap_or_else(|| updates::DEFAULT_URL.into())),
-        None => updates::env_url().unwrap_or_else(|| updates::DEFAULT_URL.into()),
+    let cfg = match pool {
+        Some(p) => updates::config_in(p).await.unwrap_or(updates::CheckConfig {
+            enabled: true,
+            channel: if updates::is_nightly_version(updates::CURRENT) {
+                updates::Channel::Nightly
+            } else {
+                updates::Channel::Stable
+            },
+            custom_url: String::new(),
+        }),
+        None => updates::CheckConfig {
+            enabled: true,
+            channel: if updates::is_nightly_version(updates::CURRENT) {
+                updates::Channel::Nightly
+            } else {
+                updates::Channel::Stable
+            },
+            custom_url: String::new(),
+        },
     };
-    let r = fetch(&feed, o.version.as_deref()).await?;
+    let feed = cfg.fetch_url();
+    let r = fetch_channel(&feed, cfg.channel, o.version.as_deref()).await?;
     let newer = updates::is_newer(&r.version, updates::CURRENT);
     say(format!(
-        "installed {} ({TARGET}); {} v{}{}",
+        "installed {} ({TARGET}); {} v{}{} [{}]",
         updates::CURRENT,
         if o.version.is_some() {
             "requested"
@@ -266,7 +304,8 @@ pub async fn run(
             "latest"
         },
         r.version,
-        if newer { " is newer" } else { "" }
+        if newer { " is newer" } else { "" },
+        cfg.channel.as_str()
     ));
     if o.check {
         if newer && r.archive_for(TARGET).is_none() {

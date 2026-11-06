@@ -7,6 +7,10 @@
 #   appdata volume (/data/.env). Back that volume up together with the database.
 # Optional: PELTY_SMTP_URL, PELTY_MAIL_FROM, PELTY_COOKIE_SECURE (default true here),
 #   PELTY_AUTH_RATE_PER_MINUTE, PELTY_PROVISION_ALLOW_LINK_LOCAL (keep unset).
+# Published images (also used by Admin → Updates):
+#   ghcr.io/mythicalltd/peltycms:latest   # stable
+#   ghcr.io/mythicalltd/peltycms:nightly  # develop tip (prerelease)
+#   ghcr.io/mythicalltd/peltycms:v1.0.0   # pinned tag
 # First admin: docker compose run --rm app admin create you@example.com
 # Server console (help, status, addons, admin, ...): uncomment stdin_open/tty
 #   below, then `docker attach <container>`; detach with Ctrl+P Ctrl+Q.
@@ -24,6 +28,9 @@ services:
       interval: 5s
       retries: 10
   app:
+    # Prefer a published tag in production, e.g.:
+    #   image: ghcr.io/mythicalltd/peltycms:latest
+    #   image: ghcr.io/mythicalltd/peltycms:nightly
     build: .
     restart: unless-stopped
     depends_on:

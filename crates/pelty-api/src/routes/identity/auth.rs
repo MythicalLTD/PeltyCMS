@@ -2,7 +2,7 @@
 use crate::error::{ApiError, ApiResult};
 use crate::extract::{client_ip, CurrentUser, SESSION_COOKIE};
 use crate::AppState;
-use axum::extract::{FromRequestParts, Path, State};
+use axum::extract::{FromRequestParts, Path, Query, State};
 use axum::http::request::Parts;
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -19,6 +19,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/auth/register", post(register))
         .route("/auth/login", post(login))
+        .route("/auth/setup-login", get(setup_login))
         .route("/auth/logout", post(logout))
         .route("/auth/me", get(me))
         .route(
@@ -203,6 +204,76 @@ pub async fn login(
         .into_response());
     }
     session_response(&s, &g, &headers, user).await
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct SetupLoginQuery {
+    pub token: String,
+}
+
+fn see_other(to: &str) -> Response {
+    let mut r = StatusCode::SEE_OTHER.into_response();
+    if let Ok(v) = HeaderValue::from_str(to) {
+        r.headers_mut().insert(header::LOCATION, v);
+    }
+    r
+}
+
+/// One-click sign-in from the post-setup CLI link. Single-use, 1h TTL.
+#[utoipa::path(
+    get,
+    path = "/api/v1/auth/setup-login",
+    params(("token" = String, Query, description = "One-time setup login token")),
+    responses((status = 303, description = "Session cookie set; redirect to /admin"), (status = 422), (status = 429))
+)]
+pub async fn setup_login(
+    State(s): State<AppState>,
+    g: AuthGuard,
+    headers: HeaderMap,
+    Query(q): Query<SetupLoginQuery>,
+) -> ApiResult<Response> {
+    let hash = pelty_auth::token::hash(q.token.trim());
+    let uid = pelty_database::user_tokens::consume(
+        &s.pool,
+        pelty_database::user_tokens::SETUP_LOGIN,
+        &hash,
+    )
+    .await?
+    .ok_or(AppError::Validation("error.invalid_token"))?;
+    let user = pelty_database::users::find(&s.pool, uid)
+        .await?
+        .ok_or(AppError::Validation("error.invalid_token"))?;
+    if !user.is_active {
+        return Err(AppError::Validation("error.invalid_token").into());
+    }
+    let roles = pelty_database::users::roles(&s.pool, uid).await?;
+    if !roles.iter().any(|r| r == "admin") {
+        return Err(AppError::Validation("error.invalid_token").into());
+    }
+    if crate::duo::applies(&s, user.id).await? {
+        let challenge = crate::routes::mfa::start_challenge(&s, user.id).await?;
+        return Ok(see_other(&format!("/login?mfa_challenge={challenge}&duo=1")));
+    }
+    let methods = pelty_database::mfa::login_methods(&s.pool, user.id).await?;
+    if !methods.is_empty() {
+        let challenge = crate::routes::mfa::start_challenge(&s, user.id).await?;
+        return Ok(see_other(&format!("/login?mfa_challenge={challenge}")));
+    }
+    pelty_database::audit::record(
+        &s.pool,
+        Some(user.id),
+        "auth.setup_login",
+        None,
+        g.ip(),
+        json!({}),
+    )
+    .await?;
+    let r = session_response(&s, &g, &headers, user).await?;
+    let mut out = see_other("/admin");
+    for c in r.headers().get_all(header::SET_COOKIE) {
+        out.headers_mut().append(header::SET_COOKIE, c.clone());
+    }
+    Ok(out)
 }
 
 /// Issue a session after all factors passed and set the cookies.

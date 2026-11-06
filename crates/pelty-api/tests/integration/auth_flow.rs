@@ -365,3 +365,64 @@ async fn imported_whmcs_hash_logs_in_and_is_rehashed() {
     assert!(h.starts_with("$argon2id$"), "rehashed on login: {h}");
     assert_eq!(login("Bob-Old-Pass").await, StatusCode::OK);
 }
+
+#[tokio::test]
+async fn setup_login_link_signs_admin_in_once() {
+    let (app, state) = app().await;
+    let e = email();
+    let user = state
+        .auth
+        .register(
+            pelty_auth::RegisterInput {
+                email: &e,
+                password: "Very-Long-Pass-123",
+                display_name: "Setup Admin",
+            },
+            "admin",
+            None,
+        )
+        .await
+        .expect("admin");
+    let tok = pelty_auth::token::generate();
+    pelty_database::user_tokens::issue(
+        &state.pool,
+        user.id,
+        pelty_database::user_tokens::SETUP_LOGIN,
+        &pelty_auth::token::hash(&tok),
+        time::Duration::hours(1),
+    )
+    .await
+    .expect("token");
+    let r = call(
+        &app,
+        "GET",
+        &format!("/api/v1/auth/setup-login?token={tok}"),
+        None,
+        &[],
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::SEE_OTHER, "{:?}", r.body);
+    let cookie = r
+        .cookies
+        .iter()
+        .find(|c| c.starts_with("pelty_session="))
+        .expect("session cookie")
+        .split(';')
+        .next()
+        .unwrap()
+        .to_string();
+    let me = call(&app, "GET", "/api/v1/auth/me", None, &[("cookie", &cookie)]).await;
+    assert_eq!(me.status, StatusCode::OK);
+    assert_eq!(me.body["email"], e);
+    assert_eq!(me.body["roles"], json!(["admin"]));
+    let again = call(
+        &app,
+        "GET",
+        &format!("/api/v1/auth/setup-login?token={tok}"),
+        None,
+        &[],
+    )
+    .await;
+    assert_eq!(again.status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(again.body["error"]["code"], "error.invalid_token");
+}
