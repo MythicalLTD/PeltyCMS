@@ -110,7 +110,7 @@ pub async fn list_rules(
     RequirePermission(_u, _): RequirePermission<perms::NotificationsManage>,
 ) -> ApiResult<Json<Value>> {
     Ok(Json(
-        json!({ "items": at::list_rules(&s.pool).await?, "events": at::EVENTS, "providers": at::PROVIDERS }),
+        json!({ "items": at::list_rules(&s.pool).await?, "events": at::EVENTS, "critical": at::CRITICAL_EVENTS, "providers": at::PROVIDERS }),
     ))
 }
 
