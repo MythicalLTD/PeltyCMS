@@ -172,23 +172,47 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
           df -h
 
-      - name: Install zig + cargo-zigbuild
+      # pip ziglang 0.17+ only ships `python-zig` (not `zig`); cargo-zigbuild needs `zig` on PATH.
+      - name: Install Zig
         if: matrix.zig
-        run: |
-          set -euo pipefail
-          pip install --user ziglang
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          cargo install cargo-zigbuild --locked
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.14.1
+
+      - name: Install cargo-zigbuild
+        if: matrix.zig
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
 
       - name: Install cargo-xwin
         if: matrix.xwin
-        run: cargo install cargo-xwin --locked
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-xwin
+
+      # ring's cc crate must use clang-cl for aarch64-pc-windows-msvc; plain clang
+      # misparses MSVC /imsvc include flags when cross-building from Linux.
+      - name: Windows ARM cross compiler env
+        if: matrix.xwin
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y clang lld llvm
+          echo "CC_aarch64_pc_windows_msvc=clang-cl" >> "$GITHUB_ENV"
+          echo "CXX_aarch64_pc_windows_msvc=clang-cl" >> "$GITHUB_ENV"
+          echo "AR_aarch64_pc_windows_msvc=llvm-lib" >> "$GITHUB_ENV"
 
       - name: Package archives
         shell: bash
         run: |
           set -euo pipefail
           test -f frontend/dist/index.html
+          if [ "${{ matrix.zig }}" = "true" ]; then
+            command -v zig
+            command -v cargo-zigbuild
+            zig version
+          fi
           cargo xtask release "${{ needs.meta.outputs.version }}" \
             --skip-assets \
             --targets "${{ matrix.targets }}"
