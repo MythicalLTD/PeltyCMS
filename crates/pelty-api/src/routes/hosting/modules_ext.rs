@@ -339,12 +339,49 @@ pub async fn client_panel(
         None
     };
     let usage = if active { usage_of(&s, id).await } else { None };
+    let actions = if active {
+        client_actions(m.as_ref(), &t.product_config)
+    } else {
+        vec![]
+    };
+    // Module-declared client area (tabs + action meta), with optional product
+    // config override under `client_area` (WHMCS-style per-product panels).
+    let mut area = m.client_area();
+    area.actions.retain(|a| actions.iter().any(|x| x == &a.id));
+    if let Some(over) = t.product_config.get("client_area") {
+        area = pelty_provisioning::parse_override(over, area);
+        area.actions.retain(|a| actions.iter().any(|x| x == &a.id));
+    }
+    // Serialize action meta with owned strings so overrides can rename labels.
+    let action_meta: Vec<Value> = area
+        .actions
+        .iter()
+        .map(|a| {
+            let label = t
+                .product_config
+                .pointer(&format!("/client_area/action_labels/{}", a.id))
+                .and_then(|v| v.as_str())
+                .unwrap_or(a.label);
+            json!({
+                "id": a.id,
+                "label": label,
+                "description": a.description,
+                "danger": a.danger,
+                "fields": a.fields.iter().map(|f| json!({
+                    "key": f.key, "label": f.label, "kind": f.kind,
+                    "required": f.required, "choices": f.choices,
+                })).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
     Ok(Json(json!({
         "module": t.module,
         "module_name": m.info().name,
         "status": svc.status,
         "provision_status": mx::provision_status(&s.pool, id).await?,
-        "actions": if active { client_actions(m.as_ref(), &t.product_config) } else { vec![] },
+        "actions": actions,
+        "action_meta": action_meta,
+        "tabs": area.tabs,
         "sso": active,
         "usage": usage,
         "data": data,
@@ -375,11 +412,42 @@ pub async fn client_action(
     if !client_actions(m.as_ref(), &t.product_config).contains(&action.as_str()) {
         return Err(AppError::Validation("error.invalid_module_action").into());
     }
-    // Customers can only pass a password; nothing else reaches the module.
-    let params = match body.map(|b| b.0).and_then(|v| v.get("password").cloned()) {
-        Some(Value::String(p)) => json!({ "password": p }),
-        _ => json!({}),
-    };
+    // Customers may only pass fields declared on the action (password by
+    // default for change_password / reset_password; others from action_meta).
+    let allowed_keys: Vec<&str> = m
+        .client_area()
+        .actions
+        .iter()
+        .find(|a| a.id == action)
+        .map(|a| a.fields.iter().map(|f| f.key).collect())
+        .unwrap_or_else(|| {
+            if matches!(action.as_str(), "change_password" | "reset_password") {
+                vec!["password"]
+            } else {
+                vec![]
+            }
+        });
+    let raw = body.map(|b| b.0).unwrap_or(json!({}));
+    let mut params = serde_json::Map::new();
+    if let Some(obj) = raw.as_object() {
+        for k in allowed_keys {
+            if let Some(v) = obj.get(k) {
+                match v {
+                    Value::String(s) if s.len() <= 512 => {
+                        params.insert(k.to_string(), Value::String(s.clone()));
+                    }
+                    Value::Number(n) => {
+                        params.insert(k.to_string(), Value::Number(n.clone()));
+                    }
+                    Value::Bool(b) => {
+                        params.insert(k.to_string(), Value::Bool(*b));
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    let params = Value::Object(params);
     let out = run_custom(&s, id, &action, &params, u.user_id, "client").await?;
     audit::record(
         &s.pool,
