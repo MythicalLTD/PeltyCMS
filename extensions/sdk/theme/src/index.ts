@@ -133,6 +133,16 @@ export class PeltyClient {
     return this.request("GET", "/themes/active");
   }
 
+  /** Activate a packaged theme by id (requires `settings.manage`). */
+  async setActiveTheme(id: string): Promise<void> {
+    // Mutating routes need a current CSRF header; refresh from /auth/me first.
+    const me = await this.me();
+    if (!me?.csrf_token) {
+      throw new PeltyError(401, "error.unauthorized", "not signed in");
+    }
+    await this.request("PUT", "/admin/themes/active", { id });
+  }
+
   languages(): Promise<{ languages: Language[]; current: string }> {
     return this.request("GET", "/i18n");
   }

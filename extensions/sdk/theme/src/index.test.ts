@@ -30,6 +30,24 @@ describe("theme sdk", () => {
     await expect(c.sessions()).rejects.toBeInstanceOf(PeltyError);
   });
 
+  it("activates a theme with csrf", async () => {
+    const seen: RequestInit[] = [];
+    const c = new PeltyClient({
+      fetch: fakeFetch(
+        {
+          "GET /api/v1/auth/me": [200, { id: "1", csrf_token: "tok", permissions: ["settings.manage"] }],
+          "PUT /api/v1/admin/themes/active": [204, null],
+        },
+        seen,
+      ),
+    });
+    await c.setActiveTheme("default");
+    expect(seen[0]!.method).toBe("GET");
+    expect(seen[1]!.method).toBe("PUT");
+    expect((seen[1]!.headers as Record<string, string>)["x-csrf-token"]).toBe("tok");
+    expect(JSON.parse(String(seen[1]!.body))).toEqual({ id: "default" });
+  });
+
   it("i18n falls back per key to en", async () => {
     const c = new PeltyClient({
       fetch: fakeFetch({

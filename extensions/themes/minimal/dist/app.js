@@ -6,6 +6,9 @@ const api = new PeltyClient();
 const app = document.getElementById("app");
 let i18n;
 
+/** Built-in theme that ships the full staff/client SPA. */
+const DEFAULT_THEME_ID = "default";
+
 const el = (tag, attrs = {}, ...kids) => {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) k.startsWith("on") ? n.addEventListener(k.slice(2), v) : n.setAttribute(k, v);
@@ -45,11 +48,35 @@ function loginView() {
 
 function dashboardView(me) {
   const t = i18n.t;
-  app.replaceChildren(
+  const kids = [
     el("header", {}, el("h1", {}, t("dashboard.welcome", { name: me.display_name || me.email })), langSelect()),
     el("p", {}, me.email),
-    el("button", { onclick: async () => { await api.logout(); render(); } }, t("nav.logout")),
-  );
+  ];
+  // Full-frontend themes replace /admin; staff need an escape hatch back to Pelty.
+  if (me.permissions?.includes("settings.manage")) {
+    const err = el("p", { class: "err", role: "alert" });
+    const restore = t("admin.themes.restore_default");
+    // Catalog may lag a restart; keep a readable English fallback.
+    const restoreLabel = restore === "admin.themes.restore_default" ? "Restore Pelty theme" : restore;
+    kids.push(
+      err,
+      el("button", {
+        type: "button",
+        class: "secondary",
+        onclick: async () => {
+          err.textContent = "";
+          try {
+            await api.setActiveTheme(DEFAULT_THEME_ID);
+            location.assign("/");
+          } catch (x) {
+            err.textContent = x.message || t("error.internal");
+          }
+        },
+      }, restoreLabel),
+    );
+  }
+  kids.push(el("button", { onclick: async () => { await api.logout(); render(); } }, t("nav.logout")));
+  app.replaceChildren(...kids);
 }
 
 async function render() {
