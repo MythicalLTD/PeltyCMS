@@ -1083,7 +1083,7 @@ pub async fn admin_create_invoice(
             l.unit_price = p;
         }
     }
-    let due = b.due_days.map(|d| i64::from(d)).unwrap_or(DUE_DAYS);
+    let due = b.due_days.map(i64::from).unwrap_or(DUE_DAYS);
     let mut tx = s.pool.begin().await.map_err(pelty_database::db_err)?;
     let id = invoices::create_draft(&mut tx, b.customer_id, &cur, None).await?;
     invoices::add_items(&mut tx, id, &cur, &lines).await?;
