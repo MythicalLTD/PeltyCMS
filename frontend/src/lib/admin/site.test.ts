@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyBrand, moveBlock, newBlock, safeHref, BLOCK_TYPES } from "./site";
+import { applyBrand, cells, cyclesOf, moveBlock, newBlock, productLanding, safeHref, BLOCK_TYPES } from "./site";
 
 describe("site", () => {
   it("moves blocks within bounds", () => {
@@ -33,5 +33,16 @@ describe("site", () => {
     expect(cls.dark).toBe(false);
     applyBrand({ primary_color: "#59b5d3", font: "inter", default_mode: "system" }, root, true);
     expect(cls.dark).toBe(true);
+  });
+});
+
+describe("landing helpers", () => {
+  it("orders cycles and builds a landing page", () => {
+    expect(cyclesOf([{ prices: [{ currency: "EUR", cycle: "annual" }, { currency: "EUR", cycle: "monthly" }, { currency: "USD", cycle: "quarterly" }] }], "EUR")).toEqual(["monthly", "annual"]);
+    expect(cells("✓, —,x")).toEqual(["✓", "—", "x"]);
+    const pg = productLanding("VPS Hosting!", ["p1"]);
+    expect(pg.slug).toBe("vps-hosting");
+    expect(pg.blocks.map((b) => b.type)).toEqual(["hero", "features", "products", "comparison", "faq", "cta"]);
+    expect(pg.blocks[2]?.props.product_ids).toEqual(["p1"]);
   });
 });

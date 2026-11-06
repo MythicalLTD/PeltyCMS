@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { arr, isInternal, safeHref, str, type Block } from "@/lib/admin/site";
+import { arr, cells, cyclesOf, isInternal, safeHref, str, type Block } from "@/lib/admin/site";
+import { useState } from "react";
 import { fromPrice } from "@/lib/store/storefront";
 import type { CatalogProduct } from "@/pages/client/services/Order";
 import { cn } from "@/lib/utils";
@@ -27,8 +28,8 @@ function SmartLink({ href, children, variant = "default", size = "lg" }: { href:
   );
 }
 
-function Section({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <section className={cn("mx-auto w-full max-w-6xl px-4 py-12 md:py-16", className)}>{children}</section>;
+function Section({ children, className, id }: { children: React.ReactNode; className?: string; id?: string }) {
+  return <section id={id} className={cn("mx-auto w-full max-w-6xl scroll-mt-20 px-4 py-12 md:py-16", className)}>{children}</section>;
 }
 
 function Heading({ title, subtitle }: { title: string; subtitle?: string }) {
@@ -210,8 +211,98 @@ function Stats({ p }: { p: Record<string, unknown> }) {
   );
 }
 
+/** Hand-picked products with a billing-cycle switch; buttons deep-link the cycle. */
+function Products({ p }: { p: Record<string, unknown> }) {
+  const { t, tCode, lang } = useI18n();
+  const { data } = useQuery({ queryKey: ["catalog"], queryFn: () => api<Catalog>("/catalog") });
+  const ids = arr<string>(p.product_ids);
+  const products = ids.map((id) => data?.products.find((x) => x.id === id || x.slug === id)).filter((x): x is NonNullable<typeof x> => !!x);
+  const currency = products[0]?.prices[0]?.currency ?? "EUR";
+  const cycles = cyclesOf(products, currency);
+  const [pick, setPick] = useState<string | null>(null);
+  const want = pick ?? str(p.default_cycle);
+  const cycle = cycles.includes(want) ? want : cycles[0] ?? "";
+  const highlight = Number(p.highlight ?? -1);
+  return (
+    <Section id="plans">
+      <Heading title={str(p.title)} subtitle={str(p.subtitle)} />
+      {p.cycle_toggle !== false && cycles.length > 1 && (
+        <div className="mb-8 flex justify-center">
+          <fieldset className="inline-flex rounded-full border bg-muted p-1" data-testid="cycle-toggle">
+            <legend className="sr-only">{t("billing.cycle")}</legend>
+            {cycles.map((c) => (
+              <label key={c} className={cn("cursor-pointer rounded-full px-4 py-1.5 text-sm", c === cycle ? "bg-background font-medium shadow-xs" : "text-muted-foreground")}>
+                <input type="radio" name={`cycle-${ids.join("-")}`} className="sr-only" checked={c === cycle} onChange={() => setPick(c)} />{tCode(`cycle.${c}`)}
+              </label>
+            ))}
+          </fieldset>
+        </div>
+      )}
+      {products.length === 0 ? <p className="text-center text-sm text-muted-foreground">{t("site.no_plans")}</p> : (
+        <div className={cn("grid gap-4 sm:grid-cols-2", products.length >= 3 && "lg:grid-cols-3", products.length >= 4 && "xl:grid-cols-4")}>
+          {products.map((pr, i) => {
+            const price = pr.prices.find((x) => x.currency === currency && x.cycle === cycle) ?? fromPrice(pr.prices, currency);
+            const hot = i === highlight;
+            const bullets = pr.description.split("\n").map((l) => l.replace(/^[-*•]\s*/, "").trim()).filter(Boolean).slice(0, 8);
+            return (
+              <Card key={pr.id} data-testid="landing-product" className={cn("relative shadow-xs", hot && "border-primary ring-1 ring-primary")}>
+                <CardContent className="flex h-full flex-col gap-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold">{pr.name}</p>
+                    {hot && <Badge>{str(p.badge) || t("site.popular")}</Badge>}
+                  </div>
+                  {price && (
+                    <div>
+                      <p className="flex items-baseline gap-1">
+                        <span className="text-3xl font-bold tabular-nums">{money(price.amount, price.currency, lang)}</span>
+                        <span className="text-sm text-muted-foreground">/ {tCode(`cycle.${price.cycle}`)}</span>
+                      </p>
+                      {Number(price.setup_fee) > 0 && <p className="text-xs text-muted-foreground">+ {money(price.setup_fee, price.currency, lang)} {t("site.setup_fee")}</p>}
+                    </div>
+                  )}
+                  <ul className="flex flex-col gap-2 text-sm">
+                    {bullets.map((b, j) => <li key={j} className="flex gap-2"><CheckIcon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />{b}</li>)}
+                  </ul>
+                  <Button asChild className="mt-auto" variant={hot ? "default" : "outline"}><Link to={`/store/p/${pr.id}${price ? `?cycle=${price.cycle}` : ""}`}>{str(p.cta_label) || t("site.order_now")}</Link></Button>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function mark(v: string): React.ReactNode {
+  return (v === "✓" || /^(yes|da|ja|oui|si|true)$/i.test(v) ? <CheckIcon className="mx-auto size-4 text-primary" aria-label={v} /> : v === "—" || v === "-" || /^(no|nu|nein|non|false)$/i.test(v) ? <span className="text-muted-foreground">—</span> : v);
+}
+
+/** Feature matrix: one column per plan, values comma-separated per row. */
+function Comparison({ p }: { p: Record<string, unknown> }) {
+  const plans = cells(p.plans).filter(Boolean);
+  const rows = arr<Record<string, unknown>>(p.rows);
+  if (!plans.length) return null;
+  return (
+    <Section>
+      <Heading title={str(p.title)} subtitle={str(p.subtitle)} />
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-sm" data-testid="comparison">
+          <thead className="bg-muted/50"><tr><th className="p-3 text-left font-medium"><span className="sr-only">{str(p.title)}</span></th>{plans.map((pl) => <th key={pl} className="p-3 text-center font-semibold">{pl}</th>)}</tr></thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const vals = cells(r.values);
+              return <tr key={i} className="border-t"><td className="p-3 font-medium">{str(r.feature)}</td>{plans.map((pl, j) => <td key={pl} className="p-3 text-center tabular-nums">{mark(vals[j] ?? "")}</td>)}</tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Section>
+  );
+}
+
 const RENDER: Record<Block["type"], (x: { p: Record<string, unknown> }) => React.ReactNode> = {
-  hero: Hero, features: Features, pricing: Pricing, faq: Faq, cta: Cta, text: Text, image: ImageBlock, stats: Stats,
+  hero: Hero, features: Features, pricing: Pricing, faq: Faq, cta: Cta, text: Text, image: ImageBlock, stats: Stats, products: Products, comparison: Comparison,
 };
 
 /** Native renderer for declarative page blocks; unknown types are skipped. */

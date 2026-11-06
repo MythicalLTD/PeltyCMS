@@ -128,7 +128,9 @@ export function StoreProductPage() {
   const product = data?.products.find((p) => p.id === id);
   const extras = useQuery({ queryKey: ["catalog", "extras", id], queryFn: () => api<Extras>(`/catalog/products/${id}/extras`), enabled: !!product });
   const cycles = product ? product.prices.filter((p) => p.currency === currency) : [];
-  const [cycle, setCycle] = useState("");
+  const loc = useLocation();
+  const wanted = new URLSearchParams(loc.search).get("cycle") ?? "";
+  const [cycle, setCycle] = useState(wanted);
   const [config, setConfig] = useState<ConfigSel>({});
   const [addons, setAddons] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
