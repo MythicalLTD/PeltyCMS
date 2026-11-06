@@ -308,7 +308,7 @@ fn archive(
     stem: &str,
     bin: &Path,
     bin_name: &str,
-    extras: &[(PathBuf, &str)],
+    extras: &[(PathBuf, String)],
     zip: bool,
 ) -> R<PathBuf> {
     let files: Vec<(PathBuf, String, bool)> =
@@ -317,7 +317,7 @@ fn archive(
                 extras
                     .iter()
                     .filter(|(p, _)| p.is_file())
-                    .map(|(p, n)| (p.clone(), n.to_string(), false)),
+                    .map(|(p, n)| (p.clone(), n.clone(), false)),
             )
             .collect();
     if zip {
@@ -582,12 +582,22 @@ fn build_and_package(
     let notes = changelog(ctx, &o.version)?;
     std::fs::write(dist.join("CHANGELOG.md"), &notes).map_err(|e| e.to_string())?;
     let notes_file = dist.join("CHANGELOG.md");
-    let extras: Vec<(PathBuf, &str)> = vec![
+    let mut extras: Vec<(PathBuf, String)> = [
         (ctx.root.join("README.md"), "README.md"),
         (ctx.root.join("EULA.md"), "EULA.md"),
         (ctx.root.join("LICENSE"), "LICENSE"),
         (notes_file, "CHANGELOG.md"),
-    ];
+    ]
+    .into_iter()
+    .map(|(p, n)| (p, n.to_string()))
+    .collect();
+    // UI translations next to the binary (same set the binary can seed on first run).
+    for name in ["de.json", "en.json", "es.json", "fr.json", "nl.json", "ro.json"] {
+        extras.push((
+            ctx.root.join("locales").join(name),
+            format!("locales/{name}"),
+        ));
+    }
     let mut archives = kept;
     for (_target, name) in &archives {
         println!("[release] keeping {name} (already in {})", dist.display());
@@ -700,8 +710,8 @@ mod tests {
             &d.join("bin"),
             "pelty-server",
             &[
-                (d.join("README.md"), "README.md"),
-                (d.join("nope"), "LICENSE"),
+                (d.join("README.md"), "README.md".into()),
+                (d.join("nope"), "LICENSE".into()),
             ],
             false,
         )

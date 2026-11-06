@@ -9,9 +9,14 @@ use std::path::{Path, PathBuf};
 /// Name of the generated config file (read on every start).
 pub const ENV_FILE: &str = ".env";
 const ENV_TEMPLATE: &str = include_str!("env.template");
-/// Default translations, written when the locales folder has no `en.json`.
+/// Shipped UI translations. Missing files are written on every start (never
+/// overwritten), so bare release binaries get the full set, not only en/ro.
 const LOCALES: &[(&str, &str)] = &[
+    ("de.json", include_str!("../../../../locales/de.json")),
     ("en.json", include_str!("../../../../locales/en.json")),
+    ("es.json", include_str!("../../../../locales/es.json")),
+    ("fr.json", include_str!("../../../../locales/fr.json")),
+    ("nl.json", include_str!("../../../../locales/nl.json")),
     ("ro.json", include_str!("../../../../locales/ro.json")),
 ];
 
@@ -167,7 +172,7 @@ pub fn ensure_dirs(root: &Path, get: &dyn Fn(&str) -> Option<String>, r: &mut Re
     }
     let loc_rel = get("PELTY_LOCALES_DIR").unwrap_or_else(|| "locales".into());
     let loc = at(root, &loc_rel);
-    if loc.is_dir() && !loc.join("en.json").exists() {
+    if loc.is_dir() {
         for (name, body) in LOCALES {
             match write_new(&loc.join(name), body) {
                 Ok(true) => r
@@ -239,7 +244,9 @@ mod tests {
         ] {
             assert!(d.join(p).is_dir(), "{p}");
         }
-        assert!(d.join("locales/en.json").is_file());
+        for name in ["de.json", "en.json", "es.json", "fr.json", "nl.json", "ro.json"] {
+            assert!(d.join("locales").join(name).is_file(), "{name}");
+        }
         let key = vars
             .iter()
             .find(|(k, _)| k == "PELTY_ENCRYPTION_KEY")

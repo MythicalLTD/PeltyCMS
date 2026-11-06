@@ -43,7 +43,12 @@ fn first_start_bootstraps_and_stops_at_eula() {
     for p in [
         ".env",
         "eula.txt",
+        "locales/de.json",
         "locales/en.json",
+        "locales/es.json",
+        "locales/fr.json",
+        "locales/nl.json",
+        "locales/ro.json",
         "data/addons",
         "extensions/themes",
         "extensions/plugins",
