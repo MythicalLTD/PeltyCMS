@@ -100,13 +100,6 @@ pub struct ModuleInfo {
     pub actions: Vec<&'static str>,
 }
 
-/// Show a checkout field only when another field currently holds `value`.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-pub struct FieldWhen {
-    pub key: &'static str,
-    pub value: &'static str,
-}
-
 /// A field the client fills in at checkout for products using this module
 /// (e.g. a hostname or a CSR). Synced into the product's custom fields; the
 /// value reaches the module as `ServiceCtx::custom_fields[key]`.
@@ -121,10 +114,6 @@ pub struct CheckoutField {
     /// Optional POSIX regex the value must match.
     pub pattern: &'static str,
     pub required: bool,
-    /// When set, the field is omitted from [`ProvisioningModule::checkout_config`]
-    /// unless `selected[key] == value`. Still synced into the product catalog.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub visible_when: Option<FieldWhen>,
 }
 
 /// Owned checkout field returned by [`ProvisioningModule::checkout_config`].
@@ -160,24 +149,15 @@ pub trait ProvisioningModule: Send + Sync {
         Vec::new()
     }
     /// Dynamic checkout form for the current selection (WHMCS-style
-    /// `getCheckoutConfig`). Default filters [`checkout_fields`] by
-    /// [`CheckoutField::visible_when`]. Modules may override to add or
-    /// reshape fields from `product_config` / `selected`.
+    /// `getCheckoutConfig`). Default returns [`checkout_fields`]; modules
+    /// may override to filter/reshape from `product_config` / `selected`.
     fn checkout_config(
         &self,
         _product_config: &Value,
-        selected: &Value,
+        _selected: &Value,
     ) -> Vec<DynamicCheckoutField> {
         self.checkout_fields()
             .into_iter()
-            .filter(|f| match &f.visible_when {
-                None => true,
-                Some(w) => selected
-                    .get(w.key)
-                    .and_then(|v| v.as_str())
-                    .map(|v| v == w.value)
-                    .unwrap_or(false),
-            })
             .map(|f| DynamicCheckoutField::from(&f))
             .collect()
     }
@@ -509,7 +489,6 @@ mod checkout_config_tests {
                     choices: &["linux", "windows"],
                     pattern: "",
                     required: true,
-                    visible_when: None,
                 },
                 CheckoutField {
                     key: "license",
@@ -519,12 +498,15 @@ mod checkout_config_tests {
                     choices: &[],
                     pattern: "",
                     required: true,
-                    visible_when: Some(FieldWhen {
-                        key: "os",
-                        value: "windows",
-                    }),
                 },
             ]
+        }
+        fn checkout_config(&self, _: &Value, selected: &Value) -> Vec<DynamicCheckoutField> {
+            self.checkout_fields()
+                .into_iter()
+                .filter(|f| f.key != "license" || selected.get("os").and_then(|v| v.as_str()) == Some("windows"))
+                .map(|f| DynamicCheckoutField::from(&f))
+                .collect()
         }
         fn test_connection<'a>(&'a self, _: &'a ServerConn) -> BoxFuture<'a, ProvisionResult<()>> {
             Box::pin(async { Ok(()) })
