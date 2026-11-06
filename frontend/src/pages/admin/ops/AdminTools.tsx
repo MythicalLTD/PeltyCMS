@@ -101,48 +101,58 @@ export function AdminMyNotesPage() {
   );
 }
 
-interface RulesResp { items: NotificationRule[]; events: string[]; providers: string[] }
+interface RulesResp { items: NotificationRule[]; events: string[]; critical?: string[]; providers: string[] }
 
-function RuleDialog({ events, onDone }: { events: string[]; onDone: () => void }) {
+function RuleDialog({ events, critical = [], rule, onDone }: { events: string[]; critical?: string[]; rule?: NotificationRule; onDone: () => void }) {
   const { t, tCode } = useI18n();
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [provider, setProvider] = useState<string>("slack");
+  const [name, setName] = useState(rule?.name ?? "");
+  const [provider, setProvider] = useState<string>(rule?.provider ?? "slack");
   const [url, setUrl] = useState("");
-  const [target, setTarget] = useState("");
-  const [sel, setSel] = useState<string[]>([]);
+  const [target, setTarget] = useState(rule?.target ?? "");
+  const [sel, setSel] = useState<string[]>(rule?.events ?? critical);
   const [err, setErr] = useState<string | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const pf = providerFields(provider);
   const create = useMutation({
-    mutationFn: () => api<{ id: string; secret: string | null }>("/admin/notification-rules", { method: "POST", body: { name, provider, url: pf.url ? url : "", target: pf.target ? target : "", events: sel, enabled: true } }),
-    onSuccess: (r) => { setName(""); setUrl(""); setTarget(""); setSel([]); setErr(null); onDone(); if (r.secret) setSecret(r.secret); else setOpen(false); },
+    mutationFn: () => rule
+      ? api<{ id: string; secret: string | null }>(`/admin/notification-rules/${rule.id}`, { method: "PUT", body: { name, provider, url: pf.url ? url : "", target: pf.target ? target : "", events: sel, enabled: rule.enabled } }).then(() => ({ id: rule.id, secret: null }))
+      : api<{ id: string; secret: string | null }>("/admin/notification-rules", { method: "POST", body: { name, provider, url: pf.url ? url : "", target: pf.target ? target : "", events: sel, enabled: true } }),
+    onSuccess: (r) => { if (!rule) { setName(""); setUrl(""); setTarget(""); setSel(critical); } setErr(null); onDone(); if (r.secret) setSecret(r.secret); else setOpen(false); },
     onError: (e) => setErr(e instanceof ApiError ? e.code : "error.internal"),
   });
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setSecret(null); }}>
-      <DialogTrigger asChild><Button><PlusIcon />{t("notify.add")}</Button></DialogTrigger>
+      <DialogTrigger asChild>{rule ? <Button variant="outline" size="sm">{t("common.edit")}</Button> : <Button><PlusIcon />{t("notify.add")}</Button>}</DialogTrigger>
       <DialogContent className="max-h-[90dvh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{t("notify.add")}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{rule ? rule.name : t("notify.add")}</DialogTitle></DialogHeader>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2"><Label htmlFor="nr-name">{t("notify.name")}</Label><Input id="nr-name" value={name} onChange={(e) => setName(e.target.value)} /></div>
           <div className="flex flex-col gap-2">
             <Label>{t("notify.provider")}</Label>
-            <Select value={provider} onValueChange={setProvider}>
+            <Select value={provider} onValueChange={setProvider} disabled={!!rule}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{NOTIFY_PROVIDERS.map((p) => <SelectItem key={p} value={p}>{tCode(`notify.provider.${p}`)}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           {secret && <Alert><AlertTitle>{t("notify.secret_once")}</AlertTitle><AlertDescription><code className="break-all font-mono text-xs">{secret}</code></AlertDescription></Alert>}
-          {pf.url && <div className="flex flex-col gap-2"><Label htmlFor="nr-url">{provider === "telegram" ? t("notify.url_telegram") : provider === "sms_webhook" ? t("notify.url_sms") : t("notify.url")}</Label><Input id="nr-url" type="url" placeholder="https://" value={url} onChange={(e) => setUrl(e.target.value)} /></div>}
+          {pf.url && <div className="flex flex-col gap-2"><Label htmlFor="nr-url">{provider === "telegram" ? t("notify.url_telegram") : provider === "sms_webhook" ? t("notify.url_sms") : t("notify.url")}</Label><Input id="nr-url" type="url" placeholder={rule ? `${rule.url_masked ?? "https://"} (${t("notify.keep_url")})` : "https://"} value={url} onChange={(e) => setUrl(e.target.value)} /></div>}
           {pf.target && <div className="flex flex-col gap-2"><Label htmlFor="nr-target">{tCode(`notify.target_${provider}`)}</Label><Input id="nr-target" value={target} onChange={(e) => setTarget(e.target.value)} /></div>}
           <div className="flex flex-col gap-2">
-            <Label>{t("notify.events")}</Label>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label>{t("notify.events")}</Label>
+              <div className="flex gap-1">
+                {critical.length > 0 && <Button type="button" variant="outline" size="sm" data-testid="notify-critical" onClick={() => setSel(critical)}>{t("notify.preset_critical")}</Button>}
+                <Button type="button" variant="ghost" size="sm" onClick={() => setSel(events)}>{t("notify.preset_all")}</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setSel([])}>{t("notify.preset_none")}</Button>
+              </div>
+            </div>
             <div className="grid gap-2 sm:grid-cols-2">
               {events.map((ev) => (
                 <label key={ev} className="flex min-h-11 items-center gap-2 text-sm md:min-h-0">
                   <Checkbox checked={sel.includes(ev)} onCheckedChange={(c) => setSel((s) => (c ? [...s, ev] : s.filter((x) => x !== ev)))} />
                   {tCode(`notify.event.${ev}`)}
+                  {critical.includes(ev) && <Badge variant="destructive" className="ml-auto text-[10px]">{t("notify.critical")}</Badge>}
                 </label>
               ))}
             </div>
@@ -164,13 +174,13 @@ export function AdminNotificationsPage() {
   const del = useMutation({ mutationFn: (id: string) => api(`/admin/notification-rules/${id}`, { method: "DELETE" }), onSuccess: refresh });
   const test = useMutation({ mutationFn: (id: string) => api(`/admin/notification-rules/${id}/test`, { method: "POST" }), onSuccess: () => { toast.success(t("notify.test_queued")); refresh(); }, onError: (e) => toast.error(e instanceof ApiError ? e.message : String(e)) });
   const toggle = useMutation({
-    mutationFn: (r: NotificationRule) => api(`/admin/notification-rules/${r.id}`, { method: "PUT", body: { name: r.name, provider: r.provider, url: r.url_masked, events: r.events, enabled: !r.enabled } }),
+    mutationFn: (r: NotificationRule) => api(`/admin/notification-rules/${r.id}`, { method: "PUT", body: { name: r.name, provider: r.provider, url: "", target: r.target ?? "", events: r.events, enabled: !r.enabled } }),
     onSuccess: refresh,
     onError: () => toast.error(t("notify.toggle_needs_url")),
   });
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title={t("notify.title")} description={t("notify.description")} actions={q.data && <RuleDialog events={q.data.events} onDone={refresh} />} />
+      <PageHeader title={t("notify.title")} description={t("notify.description")} actions={q.data && <RuleDialog events={q.data.events} critical={q.data.critical} onDone={refresh} />} />
       {!q.data ? <Skeleton className="h-32" /> : q.data.items.length === 0 ? <EmptyState title={t("notify.empty")} /> : (
         <div className="grid gap-3">
           {q.data.items.map((r) => (
@@ -183,7 +193,8 @@ export function AdminNotificationsPage() {
                   <div className="mt-2 flex flex-wrap gap-1">{r.events.map((e) => <Badge key={e} variant="outline">{tCode(`notify.event.${e}`)}</Badge>)}</div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Switch checked={r.enabled} disabled aria-label={t("notify.enabled")} />
+                  <Switch checked={r.enabled} disabled={toggle.isPending} onCheckedChange={() => toggle.mutate(r)} aria-label={t("notify.enabled")} />
+                  {q.data && <RuleDialog key={`${r.id}-${r.events.join()}`} events={q.data.events} critical={q.data.critical} rule={r} onDone={refresh} />}
                   <Button variant="outline" size="sm" onClick={() => test.mutate(r.id)}>{t("notify.test")}</Button>
                   <DeliveriesDialog rule={r} />
                   <Button variant="ghost" size="icon" className="size-11 md:size-9" aria-label={t("common.delete")} onClick={() => del.mutate(r.id)}><TrashIcon /></Button>
@@ -193,7 +204,6 @@ export function AdminNotificationsPage() {
           ))}
         </div>
       )}
-      <span className="hidden">{toggle.isPending}</span>
     </div>
   );
 }

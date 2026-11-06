@@ -4,7 +4,7 @@ import { PageSkeleton } from "@/components/PageSkeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  ArrowDownIcon, ArrowSquareOutIcon, ArrowUpIcon, FloppyDiskIcon, PencilSimpleIcon, PlusIcon, TrashIcon,
+  ArrowDownIcon, ArrowSquareOutIcon, ArrowUpIcon, FloppyDiskIcon, PencilSimpleIcon, PlusIcon, RocketLaunchIcon, TrashIcon,
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,11 +15,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { api, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import {
-  BLOCK_TYPES, FONTS, moveBlock, newBlock, normalizeConfig, normalizePages, SOCIAL_NETWORKS,
+  BLOCK_TYPES, FONTS, moveBlock, newBlock, normalizeConfig, normalizePages, productLanding, SOCIAL_NETWORKS,
   type Block, type FooterColumn, type SiteConfig, type SiteLink, type SitePage,
 } from "@/lib/admin/site";
 
@@ -162,16 +163,48 @@ function FieldInput({ name, value, onChange }: { name: string; value: unknown; o
   );
 }
 
+interface CatalogLite { products: { id: string; name: string; prices: { currency: string; cycle: string; amount: string }[] }[] }
+
+/** Ordered product picker for the products block (order = card order). */
+function ProductPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const { t } = useI18n();
+  const q = useQuery({ queryKey: ["catalog"], queryFn: () => api<CatalogLite>("/catalog") });
+  const all = q.data?.products ?? [];
+  return (
+    <div className="flex flex-col gap-2" data-testid="product-picker">
+      <Label>{t("site.admin.products_pick")}</Label>
+      <div className="flex flex-wrap gap-2">
+        {value.map((id, i) => {
+          const pr = all.find((x) => x.id === id);
+          return (
+            <Badge key={id} variant="secondary" className="gap-1 py-1">
+              {i + 1}. {pr?.name ?? id}
+              <button type="button" aria-label={t("site.admin.up")} disabled={i === 0} onClick={() => onChange(moveBlock(value, i, i - 1))}><ArrowUpIcon size={12} /></button>
+              <button type="button" aria-label={t("common.delete")} onClick={() => onChange(value.filter((x) => x !== id))}><TrashIcon size={12} /></button>
+            </Badge>
+          );
+        })}
+      </div>
+      <div className="grid max-h-40 gap-1 overflow-y-auto rounded-md border p-2 sm:grid-cols-2">
+        {all.filter((x) => !value.includes(x.id)).map((x) => (
+          <button key={x.id} type="button" className="flex items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-muted" onClick={() => onChange([...value, x.id])}><PlusIcon size={14} />{x.name}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function BlockEditor({ block, onChange }: { block: Block; onChange: (b: Block) => void }) {
   const { t } = useI18n();
   const p = block.props;
   const setP = (k: string, v: unknown) => onChange({ ...block, props: { ...p, [k]: v } });
   return (
     <div className="flex flex-col gap-3">
+      {block.type === "products" && <ProductPicker value={Array.isArray(p.product_ids) ? (p.product_ids as string[]) : []} onChange={(v) => setP("product_ids", v)} />}
       <div className="grid gap-3 sm:grid-cols-2">
         {Object.entries(p).filter(([, v]) => !Array.isArray(v)).map(([k, v]) => <FieldInput key={k} name={k} value={v} onChange={(nv) => setP(k, nv)} />)}
       </div>
-      {Object.entries(p).filter(([, v]) => Array.isArray(v)).map(([k, v]) => {
+      {Object.entries(p).filter(([k, v]) => Array.isArray(v) && k !== "product_ids").map(([k, v]) => {
         const rows = v as Row[];
         const template: Row = Object.fromEntries(Object.keys(rows[0] ?? { title: "" }).map((x) => [x, ""]));
         return (
@@ -257,6 +290,32 @@ function PageEditor({ page, onDone }: { page: SitePage | null; onDone: () => voi
   );
 }
 
+/** "Product landing page" wizard: name + products → hero, features, plans, comparison, FAQ, CTA (draft). */
+function LandingTemplateDialog({ onCreated }: { onCreated: (p: SitePage) => void }) {
+  const { t } = useI18n();
+  const err = useErr();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [ids, setIds] = useState<string[]>([]);
+  const create = useMutation({
+    mutationFn: () => api<SitePage>("/admin/site/pages", { method: "POST", body: { ...productLanding(name, ids), published: false, show_in_nav: false, sort_order: 0 } }),
+    onSuccess: (pg) => { setOpen(false); setName(""); setIds([]); toast.success(t("common.saved")); onCreated(normalizePages([pg])[0] ?? pg); },
+    onError: err,
+  });
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild><Button variant="outline" data-testid="landing-template"><RocketLaunchIcon />{t("site.admin.landing_template")}</Button></DialogTrigger>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto">
+        <DialogHeader><DialogTitle>{t("site.admin.landing_template")}</DialogTitle></DialogHeader>
+        <p className="text-sm text-muted-foreground">{t("site.admin.landing_hint")}</p>
+        <div className="flex flex-col gap-2"><Label htmlFor="lt-name">{t("site.admin.page_title")}</Label><Input id="lt-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="VPS Hosting" /></div>
+        <ProductPicker value={ids} onChange={setIds} />
+        <DialogFooter><Button disabled={!name.trim() || create.isPending} onClick={() => create.mutate()}>{t("site.admin.create_draft")}</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function PagesTab() {
   const { t } = useI18n();
   const qc = useQueryClient();
@@ -271,7 +330,10 @@ function PagesTab() {
   if (editing) return <PageEditor page={editing === "new" ? null : editing} onDone={() => setEditing(null)} />;
   return (
     <div className="flex flex-col gap-3">
-      <Button className="self-end" onClick={() => setEditing("new")}><PlusIcon />{t("site.admin.new_page")}</Button>
+      <div className="flex flex-wrap justify-end gap-2">
+        <LandingTemplateDialog onCreated={(pg) => { void qc.invalidateQueries({ queryKey: ["admin", "site", "pages"] }); setEditing(pg); }} />
+        <Button onClick={() => setEditing("new")}><PlusIcon />{t("site.admin.new_page")}</Button>
+      </div>
       {(q.data ?? []).map((p) => (
         <Card key={p.id}>
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center">

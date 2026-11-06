@@ -120,6 +120,7 @@ pub use config::license;
 pub use config::settings;
 pub use config::setup_wizard;
 pub use config::site;
+pub use config::theme_customization;
 pub use config::translations;
 pub mod extensibility;
 pub use extensibility::addon_kv;

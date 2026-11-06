@@ -29,5 +29,8 @@
     "font-sans": "\"Manrope Variable\", Manrope, system-ui, sans-serif",
     "font-mono": "\"JetBrains Mono Variable\", ui-monospace, monospace",
     "spacing": "0.25rem"
+  },
+  "templates": {
+    "layout": "templates/layout.css"
   }
 }

@@ -453,7 +453,8 @@ fn dev_section(slug: &str) -> &'static str {
         | "addon-upgrades"
         | "addon-testing"
         | "addon-compatibility"
-        | "addon-security-review" => "Guides",
+        | "addon-security-review"
+        | "hooks-and-slots" => "Guides",
         "api" | "configuration" | "cli" | "migrations" | "settings-keys" | "email-templates"
         | "scheduled-tasks" | "coverage" => "Platform reference",
         _ => "Extension reference",

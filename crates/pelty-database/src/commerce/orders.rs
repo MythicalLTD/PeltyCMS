@@ -528,7 +528,7 @@ pub async fn approve(
         .await
         .map_err(db_err)?;
         sqlx::query(
-            "UPDATE services s SET custom_fields = oi.custom_fields,
+            "UPDATE services s SET custom_fields = oi.custom_fields, config = oi.config,
                  recurring_amount = GREATEST(s.recurring_amount + COALESCE((SELECT sum(recurring_amount) FROM service_addons WHERE service_id = s.id), 0) - $3, 0)
              FROM order_items oi WHERE s.id = $1 AND oi.id = $2",
         )

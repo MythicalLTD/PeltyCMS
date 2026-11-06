@@ -10,12 +10,12 @@ export interface SiteConfig {
   default_mode: "dark" | "light" | "system"; homepage: string; nav: SiteLink[]; footer_columns: FooterColumn[];
   footer_text: string; social: SocialLink[]; copyright: string; show_store_in_nav: boolean; client_dashboard_widgets: string[];
 }
-export type BlockType = "hero" | "features" | "pricing" | "faq" | "cta" | "text" | "image" | "stats";
+export type BlockType = "hero" | "features" | "pricing" | "faq" | "cta" | "text" | "image" | "stats" | "products" | "comparison";
 export interface Block { id?: string; type: BlockType; props: Record<string, unknown> }
 export interface SitePage { id: string; slug: string; title: string; description: string; blocks: Block[]; published: boolean; show_in_nav: boolean; sort_order: number }
 export interface PublicSite { config: SiteConfig; nav_pages: { slug: string; title: string }[] }
 
-export const BLOCK_TYPES: BlockType[] = ["hero", "features", "pricing", "faq", "cta", "text", "image", "stats"];
+export const BLOCK_TYPES: BlockType[] = ["hero", "features", "pricing", "products", "comparison", "faq", "cta", "text", "image", "stats"];
 export const FONTS: Record<SiteConfig["font"], string> = {
   manrope: '"Manrope Variable", Manrope, system-ui, sans-serif',
   inter: "Inter, system-ui, sans-serif",
@@ -38,6 +38,8 @@ export function newBlock(type: BlockType): Block {
     text: { title: "", body: "Text" },
     image: { src: "", alt: "", caption: "" },
     stats: { items: [{ value: "", label: "Metric label" }] },
+    products: { title: "Choose your plan", subtitle: "", product_ids: [], cycle_toggle: true, default_cycle: "monthly", highlight: -1, badge: "Most popular", cta_label: "Order now" },
+    comparison: { title: "Compare plans", plans: "Starter, Pro, Business", rows: [{ feature: "NVMe storage", values: "10 GB, 50 GB, 200 GB" }, { feature: "Daily backups", values: "—, ✓, ✓" }] },
   };
   return { id, type, props: props[type] };
 }
@@ -109,4 +111,32 @@ export function normalizePages(raw: unknown): SitePage[] {
     id: str(p.id), slug: str(p.slug), title: str(p.title), description: str(p.description),
     blocks: arr<Block>(p.blocks).filter((b) => b && typeof b === "object").map((b) => ({ ...b, props: b.props && typeof b.props === "object" ? b.props : {} })), published: !!p.published, show_in_nav: !!p.show_in_nav, sort_order: Number(p.sort_order ?? 0),
   }));
+}
+
+/** Cycles offered by any of `products` in `currency`, in billing order. */
+export const CYCLE_ORDER = ["monthly", "quarterly", "semiannual", "annual", "biennial", "triennial", "one_time"];
+export function cyclesOf(products: { prices: { currency: string; cycle: string }[] }[], currency: string): string[] {
+  const set = new Set(products.flatMap((p) => p.prices.filter((x) => x.currency === currency).map((x) => x.cycle)));
+  return [...set].toSorted((a, b) => (CYCLE_ORDER.indexOf(a) + 99) % 99 - (CYCLE_ORDER.indexOf(b) + 99) % 99);
+}
+
+/** Comma list → trimmed cells ("✓, —" → ["✓", "—"]). */
+export const cells = (s: unknown): string[] => str(s).split(",").map((x) => x.trim());
+
+const preset = (type: BlockType, props: Record<string, unknown>): Block => { const n = newBlock(type); return { ...n, props: { ...n.props, ...props } }; };
+
+/** Ready-made landing page for one or more products (admin "from template"). */
+export function productLanding(name: string, productIds: string[]): { title: string; slug: string; description: string; blocks: Block[] } {
+  const slug = name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "landing";
+  return {
+    title: name, slug, description: `${name}: plans and pricing`,
+    blocks: [
+      preset("hero", { eyebrow: "", title: name, subtitle: "Fast, reliable and supported 24/7.", primary_label: "See plans", primary_href: "#plans", secondary_label: "Contact sales", secondary_href: "/contact" }),
+      preset("features", { title: "Why choose us", columns: 3, items: [{ icon: "Lightning", title: "Fast", text: "NVMe storage and modern CPUs." }, { icon: "ShieldCheck", title: "Secure", text: "DDoS protection and daily backups." }, { icon: "Headset", title: "Supported", text: "Real humans, around the clock." }] }),
+      preset("products", { title: "Plans", product_ids: productIds }),
+      preset("comparison", {}),
+      preset("faq", { title: "FAQ", items: [{ q: "Can I upgrade later?", a: "Yes, upgrades are prorated automatically." }, { q: "Is there a setup fee?", a: "Only where shown on the plan." }] }),
+      preset("cta", { title: "Ready to get started?", text: "Deploy in minutes.", label: "Order now", href: "/store" }),
+    ],
+  };
 }

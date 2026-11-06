@@ -11,4 +11,5 @@ pub mod license;
 pub mod settings;
 pub mod setup_wizard;
 pub mod site;
+pub mod theme_customization;
 pub mod translations;

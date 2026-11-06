@@ -14,6 +14,8 @@ import { Switch } from "@/components/ui/switch";
 import { api, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import type { TranslationKey } from "@/lib/i18n-core";
+import { EmailBlockEditor } from "@/components/admin/EmailBlockEditor";
+import { defaultDesign, fromHtml, toHtml, toText, type EmailDesign } from "@/lib/admin/emailBlocks";
 
 interface LocaleTpl { locale: string; subject: string; body: string; html: string; customized: boolean }
 interface Tpl { name: string; vars: string[]; locales: LocaleTpl[]; category: string; enabled: boolean; always_on: boolean }
@@ -56,7 +58,9 @@ export function AdminEmailTemplatesPage() {
   const [html, setHtml] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
-  const [seenCurrent, setSeenCurrent] = useState(current);
+  const [mode, setMode] = useState<"visual" | "code">("visual");
+  const [design, setDesign] = useState<EmailDesign | null>(null);
+  const [seenCurrent, setSeenCurrent] = useState<LocaleTpl | undefined>(undefined);
   if (current !== seenCurrent) {
     setSeenCurrent(current);
     if (current) {
@@ -64,8 +68,12 @@ export function AdminEmailTemplatesPage() {
       setBody(current.body);
       setHtml(current.html ?? "");
       setPreview(null);
+      const d = fromHtml(current.html ?? "");
+      setDesign(d);
+      setMode(d || !current.html ? "visual" : "code");
     }
   }
+  const editDesign = (d: EmailDesign) => { setDesign(d); setHtml(toHtml(d)); };
   const fail = (e: unknown) => { setError(e instanceof ApiError ? tCode(e.code) : t("error.internal")); };
   const ok = (m: string) => { setError(null); toast.success(m); void qc.invalidateQueries({ queryKey: ["admin", "email-templates"] }); };
   const path = `/admin/email-templates/${name}/${locale}`;
@@ -81,6 +89,14 @@ export function AdminEmailTemplatesPage() {
   const insertVar = (v: string) => {
     setBody((b) => `${b}{{${v}}}`);
   };
+  // Live preview (server-rendered with sample data) while designing.
+  const previewKey = `${subject}\u0000${body}\u0000${html}`;
+  useEffect(() => {
+    if (mode !== "visual" || !design) return;
+    const h = setTimeout(() => prev.mutate(), 700);
+    return () => clearTimeout(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewKey, mode]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -139,20 +155,47 @@ export function AdminEmailTemplatesPage() {
                   ))}
                 </p>
               </div>
+              <Tabs value={mode} onValueChange={(v) => setMode(v as "visual" | "code")}>
+                <TabsList>
+                  <TabsTrigger value="visual" data-testid="mode-visual">{t("email_editor.visual")}</TabsTrigger>
+                  <TabsTrigger value="code" data-testid="mode-code">{t("email_editor.code")}</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              {mode === "visual" ? (
+                design ? (
+                  <div className="grid gap-4 *:min-w-0 2xl:grid-cols-2">
+                    <EmailBlockEditor design={design} vars={tpl?.vars ?? []} onChange={editDesign} />
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium">{t("email_editor.live_preview")}</p>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => setBody(toText(design))}>{t("email_editor.text_from_blocks")}</Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{t("email_editor.sample_hint")}</p>
+                      {preview ? <><p className="text-sm">{preview.subject}</p><HtmlPreview html={preview.html} title={t("admin.email.preview")} /></> : <div className="h-[28rem] animate-pulse rounded-md border bg-muted" />}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-start gap-2 rounded-md border border-dashed p-4">
+                    <p className="text-sm text-muted-foreground">{html.trim() ? t("email_editor.custom_html_warning") : t("email_editor.start_hint")}</p>
+                    <Button type="button" data-testid="start-visual" onClick={() => editDesign(defaultDesign(tpl?.vars))}>{t("email_editor.start")}</Button>
+                  </div>
+                )
+              ) : (
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="tpl-html">{t("admin.email.html")}</Label>
-                <Textarea
-                  id="tpl-html"
-                  rows={14}
-                  maxLength={100000}
-                  className="font-mono text-xs"
-                  value={html}
-                  onChange={(e) => setHtml(e.target.value)}
-                  placeholder={t("admin.email.html_placeholder")}
-                  spellCheck={false}
-                />
-                <p className="text-xs text-muted-foreground">{t("admin.email.html_hint")}</p>
-              </div>
+                  <Label htmlFor="tpl-html">{t("admin.email.html")}</Label>
+                  <Textarea
+                    id="tpl-html"
+                    rows={14}
+                    maxLength={100000}
+                    className="font-mono text-xs"
+                    value={html}
+                    onChange={(e) => setHtml(e.target.value)}
+                    placeholder={t("admin.email.html_placeholder")}
+                    spellCheck={false}
+                  />
+                  <p className="text-xs text-muted-foreground">{t("admin.email.html_hint")}</p>
+                </div>
+              )}
               <div className="flex flex-wrap items-center gap-2">
                 <Button type="submit" disabled={save.isPending}>{t("common.save")}</Button>
                 <Button type="button" variant="outline" onClick={() => prev.mutate()} disabled={prev.isPending}>{t("admin.email.preview")}</Button>
@@ -160,7 +203,7 @@ export function AdminEmailTemplatesPage() {
                 {current?.customized && <Button type="button" variant="ghost" onClick={() => revert.mutate()}>{t("admin.email.revert")}</Button>}
               </div>
             </form>
-            {preview && (
+            {preview && mode === "code" && (
               <div data-testid="tpl-preview" className="mt-4 flex flex-col gap-3 rounded-md border p-3">
                 <p className="text-sm font-medium">{preview.subject}</p>
                 <pre className="whitespace-pre-wrap break-words font-sans text-sm text-muted-foreground">{preview.text}</pre>

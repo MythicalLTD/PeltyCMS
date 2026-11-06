@@ -15,7 +15,16 @@ use uuid::Uuid;
 
 pub const CONFIG_KEY: &str = "site.config";
 pub const BLOCK_TYPES: &[&str] = &[
-    "hero", "features", "pricing", "faq", "cta", "text", "image", "stats",
+    "hero",
+    "features",
+    "pricing",
+    "faq",
+    "cta",
+    "text",
+    "image",
+    "stats",
+    "products",
+    "comparison",
 ];
 pub const FONTS: &[&str] = &["manrope", "inter", "system"];
 pub const MODES: &[&str] = &["dark", "light", "system"];
@@ -504,6 +513,11 @@ mod tests {
         )
         .is_ok());
         assert!(validate_blocks(&json!([{"type": "script", "props": {}}])).is_err());
+        assert!(validate_blocks(&json!([
+            {"type": "products", "props": {"product_ids": ["a"], "cta_label": "Order"}},
+            {"type": "comparison", "props": {"plans": "A, B", "rows": [{"feature": "SSD", "values": "yes, yes"}]}}
+        ]))
+        .is_ok());
         assert!(validate_blocks(&json!([{"type": "hero"}])).is_err());
         assert!(
             validate_blocks(&json!([{"type": "cta", "props": {"href": "javascript:x"}}])).is_err()

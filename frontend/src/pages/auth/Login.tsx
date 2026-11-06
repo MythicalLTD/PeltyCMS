@@ -10,6 +10,7 @@ import { useAuthActions, isStaff } from "@/lib/auth";
 import type { Me } from "@/lib/api";
 import { ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { ThemeRegion } from "@/components/theme/ThemeSlot";
 import { Captcha } from "@/components/Captcha";
 import { SsoButtons } from "@/components/account/SsoButtons";
 import { FingerprintIcon } from "@phosphor-icons/react";
@@ -111,7 +112,7 @@ export function LoginPage() {
   };
 
   return (
-    <Card>
+    <ThemeRegion slot="login"><Card>
       <CardHeader>
         <h1 className="text-2xl font-semibold tracking-tight">{t("auth.login.title")}</h1>
         <p className="text-sm text-muted-foreground">{t("auth.login.subtitle")}</p>
@@ -139,6 +140,6 @@ export function LoginPage() {
           </p>
         </form>
       </CardContent>
-    </Card>
+    </Card></ThemeRegion>
   );
 }
