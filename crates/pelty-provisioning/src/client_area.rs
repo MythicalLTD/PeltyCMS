@@ -191,7 +191,10 @@ mod tests {
     fn default_includes_usage_and_actions() {
         let a = default_area(&["start", "stop", "change_password"], true);
         assert_eq!(a.tabs.len(), 4);
-        assert!(a.actions.iter().any(|x| x.id == "change_password" && !x.fields.is_empty()));
+        assert!(a
+            .actions
+            .iter()
+            .any(|x| x.id == "change_password" && !x.fields.is_empty()));
         assert!(a.actions.iter().any(|x| x.id == "stop" && x.danger));
     }
 

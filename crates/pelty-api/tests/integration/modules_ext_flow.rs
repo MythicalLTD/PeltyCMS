@@ -418,9 +418,19 @@ async fn client_panel_exposes_tabs_and_action_meta() {
     .await;
     assert_eq!(panel.status, StatusCode::OK, "{:?}", panel.body);
     let tabs = panel.body["tabs"].as_array().unwrap();
-    assert!(tabs.iter().any(|t| t["id"] == "help" && t["kind"] == "view"), "{tabs:?}");
-    assert!(tabs.iter().any(|t| t["view"]["text"] == "Bind on first check."));
+    assert!(
+        tabs.iter()
+            .any(|t| t["id"] == "help" && t["kind"] == "view"),
+        "{tabs:?}"
+    );
+    assert!(tabs
+        .iter()
+        .any(|t| t["view"]["text"] == "Bind on first check."));
     let meta = panel.body["action_meta"].as_array().unwrap();
     assert!(meta.iter().any(|a| a["id"] == "reissue"), "{meta:?}");
-    assert!(panel.body["actions"].as_array().unwrap().iter().any(|a| a == "reissue"));
+    assert!(panel.body["actions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|a| a == "reissue"));
 }

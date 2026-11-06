@@ -5,8 +5,8 @@
 //! persistence live in the job queue (`pelty-api::worker`).
 //! Every module describes its server and product settings with a declarative
 //! field schema, so the admin UI renders them natively without module code.
-pub mod http;
 pub mod client_area;
+pub mod http;
 pub mod licensing;
 pub mod registrar;
 pub mod registrars;
@@ -15,7 +15,9 @@ pub mod template;
 pub mod util;
 pub mod wire;
 
-pub use client_area::{default_area, parse_override, ClientActionField, ClientActionMeta, ClientArea, ClientAreaTab};
+pub use client_area::{
+    default_area, parse_override, ClientActionField, ClientActionMeta, ClientArea, ClientAreaTab,
+};
 
 use serde::Serialize;
 use serde_json::Value;

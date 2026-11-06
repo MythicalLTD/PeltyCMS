@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { api, ApiError } from "@/lib/api";
 import type { Service } from "@/lib/billing/billing";
 import { useI18n } from "@/lib/i18n";
+import type { TranslationKey } from "@/lib/i18n-core";
 import { UsageList } from "@/pages/admin/infra/ModuleExtras";
 
 interface ActionField { key: string; label: string; kind: string; required: boolean; choices: string[] }
@@ -61,7 +62,7 @@ function useModulePanel(service: Service, enabled: boolean) {
 
 function DataList({ data, initial_password, t, tCode, copy }: {
   data: Record<string, unknown>; initial_password: string | null;
-  t: (k: string) => string; tCode: (k: string) => string; copy: (v: string) => void;
+  t: (k: TranslationKey, vars?: Record<string, string | number>) => string; tCode: (code: string) => string; copy: (v: string) => void;
 }) {
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
@@ -92,8 +93,8 @@ function ActionForms({ meta, forms, setField, run, t, tCode }: {
   forms: Record<string, Record<string, string>>;
   setField: (a: string, f: string, v: string) => void;
   run: { mutate: (a: string) => void; isPending: boolean };
-  t: (k: string, v?: Record<string, string | number>) => string;
-  tCode: (k: string) => string;
+  t: (k: TranslationKey, vars?: Record<string, string | number>) => string;
+  tCode: (code: string) => string;
 }) {
   return (
     <div className="grid gap-4">
