@@ -15,8 +15,13 @@ pub const PROVIDERS: [&str; 7] = [
     "sms_webhook",
     "sms_email",
 ];
-pub const EVENTS: [&str; 11] = [
+pub const EVENTS: [&str; 16] = [
     "order.created",
+    "payment.succeeded",
+    "payment.failed",
+    "payment.disputed",
+    "order.fraud_review",
+    "order.fraud_rejected",
     "invoice.paid",
     "invoice.overdue",
     "ticket.opened",
@@ -269,6 +274,34 @@ fn validate(b: &RuleBody) -> AppResult<()> {
     Ok(())
 }
 
+/// Events a hosting company almost always wants pinged about (the admin
+/// "critical events" preset): new order, payment, ticket, failed
+/// provisioning and fraud flags.
+pub const CRITICAL_EVENTS: [&str; 7] = [
+    "order.created",
+    "payment.succeeded",
+    "payment.failed",
+    "ticket.opened",
+    "service.provision_failed",
+    "order.fraud_review",
+    "order.fraud_rejected",
+];
+
+/// Embed colour per event severity (Discord int / Slack hex).
+pub fn severity_color(event: &str) -> u32 {
+    match event {
+        "payment.failed"
+        | "payment.disputed"
+        | "service.provision_failed"
+        | "order.fraud_rejected" => 0xE5484D,
+        "order.fraud_review" | "invoice.overdue" | "service.suspended" | "domain.expiring" => {
+            0xF5A524
+        }
+        "payment.succeeded" | "invoice.paid" | "order.created" => 0x30A46C,
+        _ => 0x3E63DD,
+    }
+}
+
 /// URL is masked in listings (it is a bearer secret for Slack/Discord/Teams).
 pub async fn list_rules(pool: &PgPool) -> AppResult<Value> {
     let v: Option<Value> = sqlx::query_scalar("SELECT json_agg(r ORDER BY r.created_at) FROM (SELECT id, name, provider,
@@ -287,6 +320,35 @@ pub async fn create_rule(pool: &PgPool, b: &RuleBody, by: Uuid) -> AppResult<Uui
 }
 
 pub async fn update_rule(pool: &PgPool, id: Uuid, b: &RuleBody) -> AppResult<()> {
+    // Listings only expose a masked URL (`https://host/…`); an empty or
+    // masked URL on update keeps the stored one so staff can toggle a rule or
+    // change its events without re-entering the webhook secret.
+    let mut b2;
+    let b = if b.url.is_empty() || b.url.ends_with('…') {
+        let cur: Option<String> =
+            sqlx::query_scalar("SELECT url FROM notification_rules WHERE id=$1")
+                .bind(id)
+                .fetch_optional(pool)
+                .await
+                .map_err(db_err)?;
+        let Some(cur) = cur else {
+            return Err(AppError::NotFound);
+        };
+        b2 = RuleBody {
+            name: b.name.clone(),
+            provider: b.provider.clone(),
+            url: b.url.clone(),
+            target: b.target.clone(),
+            events: b.events.clone(),
+            enabled: b.enabled,
+        };
+        if b.provider != "sms_email" {
+            b2.url = cur;
+        }
+        &b2
+    } else {
+        b
+    };
     validate(b)?;
     let r = sqlx::query("UPDATE notification_rules SET name=$2, provider=$3, url=$4, target=$5, events=$6, enabled=$7, updated_at=now() WHERE id=$1")
         .bind(id).bind(b.name.trim()).bind(&b.provider).bind(&b.url).bind(b.target.trim()).bind(&b.events).bind(b.enabled)
@@ -398,8 +460,14 @@ pub fn payload(provider: &str, event: &str, text: &str, url: Option<&str>) -> Va
         None => text.to_string(),
     };
     match provider {
-        "slack" => json!({ "text": format!("*{event}*: {line}") }),
-        "discord" => json!({ "content": format!("**{event}**: {line}") }),
+        "slack" => json!({
+            "text": format!("*{event}*: {line}"),
+            "attachments": [{ "color": format!("#{:06X}", severity_color(event)), "title": event, "text": line }],
+        }),
+        "discord" => json!({
+            "content": format!("**{event}**: {line}"),
+            "embeds": [{ "title": event, "description": line, "color": severity_color(event) }],
+        }),
         "teams" => {
             json!({ "@type": "MessageCard", "@context": "https://schema.org/extensions", "summary": event, "title": event, "text": line })
         }
@@ -452,6 +520,16 @@ pub async fn customer_summary(pool: &PgPool, id: Uuid) -> AppResult<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn critical_events_are_subscribable() {
+        assert!(CRITICAL_EVENTS.iter().all(|e| EVENTS.contains(e)));
+        assert_eq!(severity_color("payment.failed"), 0xE5484D);
+        let d = payload("discord", "order.created", "order_id=1", None);
+        assert_eq!(d["embeds"][0]["color"], 0x30A46C);
+        let sl = payload("slack", "payment.failed", "x", None);
+        assert_eq!(sl["attachments"][0]["color"], "#E5484D");
+    }
+
     #[test]
     fn payload_shapes() {
         assert_eq!(

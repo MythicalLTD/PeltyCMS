@@ -336,3 +336,101 @@ async fn groups_licensing_custom_actions_and_log() {
     .await;
     assert_eq!(v4.body["status"], "suspended");
 }
+
+#[tokio::test]
+async fn client_panel_exposes_tabs_and_action_meta() {
+    let (app, st) = app().await;
+    let admin = sess(&app, &st, "admin").await;
+    let cust = sess(&app, &st, "customer").await;
+    let mk = |name: &str| {
+        json!({
+            "name": name,
+            "module": "licensing",
+            "base_url": "https://lic.example.com",
+            "api_key": SECRET,
+            "max_services": 5
+        })
+    };
+    let a = call(
+        &app,
+        "POST",
+        "/api/v1/admin/servers",
+        Some(mk("LicA")),
+        &admin.h(),
+    )
+    .await;
+    assert_eq!(a.status, StatusCode::OK, "{:?}", a.body);
+    let sid_server = a.body["id"].as_str().unwrap();
+    let (pid, oid, ch) = seed_product(&app, &admin).await;
+    let pm = call(
+        &app,
+        "PUT",
+        &format!("/api/v1/admin/products/{pid}/module"),
+        Some(json!({
+            "module": "licensing",
+            "server_id": sid_server,
+            "config": {
+                "key_prefix": "PC",
+                "client_actions": ["reissue"],
+                "client_area": {
+                    "tabs": [
+                        {"id": "license", "title": "License", "kind": "data"},
+                        {"id": "help", "title": "Help", "kind": "view", "view": {"type": "text", "text": "Bind on first check."}},
+                        {"id": "actions", "title": "Actions", "kind": "actions"}
+                    ]
+                }
+            }
+        })),
+        &admin.h(),
+    )
+    .await;
+    assert_eq!(pm.status, StatusCode::OK, "{:?}", pm.body);
+
+    let o = call(
+        &app,
+        "POST",
+        "/api/v1/client/orders",
+        Some(json!({"currency":"EUR","items":[{"product_id":pid,"cycle":"monthly","config":{oid: ch[0]}}]})),
+        &cust.h(),
+    )
+    .await;
+    assert_eq!(o.status, StatusCode::OK, "{:?}", o.body);
+    let order_id = o.body["order"]["id"].as_str().unwrap();
+    let ap = call(
+        &app,
+        "POST",
+        &format!("/api/v1/admin/orders/{order_id}/approve"),
+        None,
+        &admin.h(),
+    )
+    .await;
+    assert_eq!(ap.status, StatusCode::OK, "{:?}", ap.body);
+    let svc = ap.body["services"][0].as_str().unwrap().to_string();
+    let _ = drain(&st, svc.parse().unwrap()).await;
+
+    let panel = call(
+        &app,
+        "GET",
+        &format!("/api/v1/client/services/{svc}/module"),
+        None,
+        &cust.h(),
+    )
+    .await;
+    assert_eq!(panel.status, StatusCode::OK, "{:?}", panel.body);
+    let tabs = panel.body["tabs"].as_array().unwrap();
+    assert!(
+        tabs.iter()
+            .any(|t| t["id"] == "help" && t["kind"] == "view"),
+        "{tabs:?}"
+    );
+    assert!(tabs
+        .iter()
+        .any(|t| t["view"]["text"] == "Bind on first check."));
+    let meta = panel.body["action_meta"].as_array().unwrap();
+    assert!(meta.iter().any(|a| a["id"] == "reissue"), "{meta:?}");
+    assert!(panel.body["actions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|a| a == "reissue"));
+}
