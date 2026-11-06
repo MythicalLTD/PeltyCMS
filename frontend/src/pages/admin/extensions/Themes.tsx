@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,6 +77,7 @@ export function AdminThemesPage() {
       </div>
       {active && custom && (
         <ThemeEditor
+          key={JSON.stringify(custom)}
           base={active}
           initial={custom}
           onSaved={async () => {
@@ -112,11 +113,6 @@ function ThemeEditor({
   );
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setTokens({ ...initial.tokens });
-    setCss(initial.custom_css);
-    setScheme(initial.color_scheme === "dark" || initial.color_scheme === "light" ? initial.color_scheme : "inherit");
-  }, [initial]);
 
   const draft: Theme = useMemo(() => ({
     ...base,
