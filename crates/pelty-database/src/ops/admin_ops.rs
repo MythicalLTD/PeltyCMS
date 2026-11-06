@@ -92,6 +92,113 @@ pub async fn save_prefs(pool: &PgPool, user: Uuid, p: &Prefs) -> AppResult<()> {
     Ok(())
 }
 
+/// Client dashboard widgets the client can reorder, hide and resize.
+pub const CLIENT_WIDGETS: [&str; 8] = [
+    "quick_actions",
+    "quotes",
+    "addons",
+    "stats",
+    "spend_chart",
+    "recent_invoices",
+    "home",
+    "upcoming",
+];
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct ClientWidget {
+    pub id: String,
+    #[serde(default = "yes")]
+    pub visible: bool,
+    /// `full` (whole row) or `half` (two per row on wide screens).
+    #[serde(default = "full")]
+    pub size: String,
+}
+fn yes() -> bool {
+    true
+}
+fn full() -> String {
+    "full".into()
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct ClientLayout {
+    pub widgets: Vec<ClientWidget>,
+}
+
+/// Default order (what the dashboard showed before layouts existed).
+pub fn default_client_layout() -> ClientLayout {
+    ClientLayout {
+        widgets: CLIENT_WIDGETS
+            .iter()
+            .map(|id| ClientWidget {
+                id: (*id).into(),
+                visible: true,
+                size: if matches!(*id, "spend_chart" | "recent_invoices") {
+                    "half".into()
+                } else {
+                    "full".into()
+                },
+            })
+            .collect(),
+    }
+}
+
+/// Known, unique ids and valid sizes; widgets added in later versions are
+/// appended so a saved layout never loses them.
+pub fn normalize_client_layout(l: &ClientLayout) -> AppResult<ClientLayout> {
+    let mut seen = std::collections::HashSet::new();
+    if l.widgets.len() > CLIENT_WIDGETS.len()
+        || l.widgets.iter().any(|w| {
+            !CLIENT_WIDGETS.contains(&w.id.as_str())
+                || !seen.insert(w.id.clone())
+                || !matches!(w.size.as_str(), "full" | "half")
+        })
+    {
+        return Err(AppError::Validation("error.validation"));
+    }
+    let mut out = l.clone();
+    for d in default_client_layout().widgets {
+        if !seen.contains(&d.id) {
+            out.widgets.push(d);
+        }
+    }
+    Ok(out)
+}
+
+pub async fn client_layout(pool: &PgPool, user: Uuid) -> AppResult<ClientLayout> {
+    let v: Option<Value> =
+        sqlx::query_scalar("SELECT widgets FROM client_dashboard_layouts WHERE user_id = $1")
+            .bind(user)
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?;
+    Ok(
+        v.and_then(|w| serde_json::from_value::<Vec<ClientWidget>>(w).ok())
+            .and_then(|widgets| normalize_client_layout(&ClientLayout { widgets }).ok())
+            .unwrap_or_else(default_client_layout),
+    )
+}
+
+pub async fn save_client_layout(
+    pool: &PgPool,
+    user: Uuid,
+    l: &ClientLayout,
+) -> AppResult<ClientLayout> {
+    let l = normalize_client_layout(l)?;
+    sqlx::query("INSERT INTO client_dashboard_layouts (user_id, widgets) VALUES ($1,$2) ON CONFLICT (user_id) DO UPDATE SET widgets=$2, updated_at=now()")
+        .bind(user).bind(json!(l.widgets)).execute(pool).await.map_err(db_err)?;
+    Ok(l)
+}
+
+pub async fn reset_client_layout(pool: &PgPool, user: Uuid) -> AppResult<()> {
+    sqlx::query("DELETE FROM client_dashboard_layouts WHERE user_id = $1")
+        .bind(user)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
+    Ok(())
+}
+
 const STAFF: &str = "EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id AND r.name <> 'customer')";
 
 /// Staff sign-ins (each session is one login), newest first.
@@ -254,6 +361,28 @@ pub async fn delete_backup(pool: &PgPool, id: Uuid) -> AppResult<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn client_layout_rules() {
+        let d = super::default_client_layout();
+        assert_eq!(d.widgets.len(), super::CLIENT_WIDGETS.len());
+        let mut l = super::ClientLayout {
+            widgets: vec![d.widgets[3].clone(), d.widgets[0].clone()],
+        };
+        let n = super::normalize_client_layout(&l).unwrap();
+        assert_eq!(n.widgets[0].id, "stats");
+        assert_eq!(n.widgets.len(), super::CLIENT_WIDGETS.len());
+        l.widgets.push(l.widgets[0].clone());
+        assert!(super::normalize_client_layout(&l).is_err());
+        let bad = super::ClientLayout {
+            widgets: vec![super::ClientWidget {
+                id: "x".into(),
+                visible: true,
+                size: "full".into(),
+            }],
+        };
+        assert!(super::normalize_client_layout(&bad).is_err());
+    }
+
     use super::*;
 
     #[test]

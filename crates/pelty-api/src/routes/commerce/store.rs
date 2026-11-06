@@ -36,6 +36,10 @@ pub fn router() -> Router<AppState> {
             put(update_contact).delete(remove_contact),
         )
         .route("/client/email-preferences", get(get_prefs).put(put_prefs))
+        .route(
+            "/client/dashboard/layout",
+            get(get_layout).put(put_layout).delete(reset_layout),
+        )
         .route("/client/login-history", get(login_history))
         .route("/client/access", get(client_access))
 }
@@ -600,6 +604,37 @@ pub async fn remove_contact(
 }
 
 // prefs and history
+
+/// The caller's client dashboard layout (order, hidden widgets, sizes).
+#[utoipa::path(get, path = "/api/v1/client/dashboard/layout", responses((status = 200, body = pelty_database::admin_ops::ClientLayout)))]
+pub async fn get_layout(
+    State(s): State<AppState>,
+    u: CurrentUser,
+) -> ApiResult<Json<pelty_database::admin_ops::ClientLayout>> {
+    Ok(Json(
+        pelty_database::admin_ops::client_layout(&s.pool, u.user_id).await?,
+    ))
+}
+
+#[utoipa::path(put, path = "/api/v1/client/dashboard/layout", request_body = pelty_database::admin_ops::ClientLayout, responses((status = 200), (status = 422)))]
+pub async fn put_layout(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    Json(b): Json<pelty_database::admin_ops::ClientLayout>,
+) -> ApiResult<Json<pelty_database::admin_ops::ClientLayout>> {
+    Ok(Json(
+        pelty_database::admin_ops::save_client_layout(&s.pool, u.user_id, &b).await?,
+    ))
+}
+
+#[utoipa::path(delete, path = "/api/v1/client/dashboard/layout", responses((status = 200)))]
+pub async fn reset_layout(
+    State(s): State<AppState>,
+    u: CurrentUser,
+) -> ApiResult<Json<pelty_database::admin_ops::ClientLayout>> {
+    pelty_database::admin_ops::reset_client_layout(&s.pool, u.user_id).await?;
+    Ok(Json(pelty_database::admin_ops::default_client_layout()))
+}
 
 #[utoipa::path(get, path = "/api/v1/client/email-preferences", responses((status = 200)))]
 pub async fn get_prefs(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Json<EmailPrefs>> {
