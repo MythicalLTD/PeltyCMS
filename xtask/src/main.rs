@@ -124,15 +124,13 @@ fn help() {
 /// Docs share the same profile as `xtask build` (`release-fast`) so pelty-api
 /// is not compiled twice under different LTO settings.
 fn docs(ctx: &Ctx) -> R {
-    util::run(
-        ctx.cargo().args([
-            "run",
-            "--profile",
-            "release-fast",
-            "-p",
-            "pelty-docs",
-            "--",
-            "target/docs",
-        ]),
-    )
+    util::run(ctx.cargo().args([
+        "run",
+        "--profile",
+        "release-fast",
+        "-p",
+        "pelty-docs",
+        "--",
+        "target/docs",
+    ]))
 }

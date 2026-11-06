@@ -252,7 +252,9 @@ pub async fn setup_login(
     }
     if crate::duo::applies(&s, user.id).await? {
         let challenge = crate::routes::mfa::start_challenge(&s, user.id).await?;
-        return Ok(see_other(&format!("/login?mfa_challenge={challenge}&duo=1")));
+        return Ok(see_other(&format!(
+            "/login?mfa_challenge={challenge}&duo=1"
+        )));
     }
     let methods = pelty_database::mfa::login_methods(&s.pool, user.id).await?;
     if !methods.is_empty() {

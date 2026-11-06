@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   ArrowSquareOutIcon,
   CheckCircleIcon,
@@ -68,6 +68,33 @@ function param(search: URLSearchParams, ...keys: string[]): string | null {
     if (value !== null && value !== "") return value;
   }
   return null;
+}
+
+/** Mythic may double/triple-encode query values; peel up to three layers. */
+function decode(value: string): string {
+  let out = value;
+  for (let i = 0; i < 3; i++) {
+    try {
+      const next = decodeURIComponent(out);
+      if (next === out) break;
+      out = next;
+    } catch {
+      break;
+    }
+  }
+  return out;
+}
+
+async function clearPending(qc: QueryClient, kind: "cancel" | "error"): Promise<void> {
+  try {
+    await api("/admin/addons/registry/oauth2/callback", {
+      method: "POST",
+      body: { status: kind === "cancel" ? "cancelled" : "error" },
+    });
+    void qc.invalidateQueries({ queryKey: ["admin", "addons", "registry", "settings"] });
+  } catch {
+    /* ignore: pending window expires on its own */
+  }
 }
 
 export function AdminMarketplacePage() {
@@ -351,44 +378,18 @@ export function AdminMarketplaceFinishPage() {
     ran.current = true;
 
     const finish = async () => {
-      const decode = (value: string) => {
-        let out = value;
-        for (let i = 0; i < 3; i++) {
-          try {
-            const next = decodeURIComponent(out);
-            if (next === out) break;
-            out = next;
-          } catch {
-            break;
-          }
-        }
-        return out;
-      };
-
       const status = (param(search, "status") || "").toLowerCase();
       const errorParam = param(search, "error", "error_message", "error_description");
       const denied = (errorParam || "").toLowerCase() === "access_denied";
 
-      const clearPending = async (kind: "cancel" | "error") => {
-        try {
-          await api("/admin/addons/registry/oauth2/callback", {
-            method: "POST",
-            body: { status: kind === "cancel" ? "cancelled" : "error" },
-          });
-          void qc.invalidateQueries({ queryKey: ["admin", "addons", "registry", "settings"] });
-        } catch {
-          /* ignore: pending window expires on its own */
-        }
-      };
-
       if (status === "cancelled" || status === "cancel" || denied) {
-        await clearPending("cancel");
+        await clearPending(qc, "cancel");
         setPhase("cancelled");
         setError(t("addons.market.finish.cancelled_desc"));
         return;
       }
       if (status === "error" || errorParam) {
-        await clearPending("error");
+        await clearPending(qc, "error");
         setPhase("error");
         setError(errorParam ? decode(errorParam) : t("addons.market.finish.failed"));
         return;

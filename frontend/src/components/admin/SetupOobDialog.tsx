@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -153,14 +153,18 @@ export function SetupOobDialog() {
     from_name: "",
   });
   const [loaded, setLoaded] = useState(false);
+  const [smtpHydrateKey, setSmtpHydrateKey] = useState<string | null>(null);
+  const [siteHydrateKey, setSiteHydrateKey] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Wait until the blocking license gate is gone so the two dialogs never stack.
-    if (lic.data?.show_accept_gate) return;
-    if (!wizard.data?.show || open) return;
+  // Wait until the blocking license gate is gone so the two dialogs never stack.
+  // Adjust open/phase during render (not in an effect) to avoid cascading commits.
+  const wantOpen = !!wizard.data?.show && !lic.data?.show_accept_gate;
+  if (wantOpen && !open) {
     setOpen(true);
-    setPhase(firstOpenPhase(wizard.data));
-  }, [wizard.data, open, lic.data?.show_accept_gate]);
+    setPhase(firstOpenPhase(wizard.data!));
+  } else if (!wantOpen && open) {
+    setOpen(false);
+  }
 
   const gs = useQuery({
     queryKey: ["admin", "general-settings"],
@@ -213,8 +217,7 @@ export function SetupOobDialog() {
     enabled: open && phase === "site",
   });
 
-  useEffect(() => {
-    if (!gs.data || loaded) return;
+  if (gs.data && !loaded) {
     const g = gs.data.settings;
     setCompany(g.general.company_name);
     setEmail(g.general.email);
@@ -222,11 +225,12 @@ export function SetupOobDialog() {
     setDomain(g.general.domain);
     setSystemUrl(g.system_urls.system_url);
     setLoaded(true);
-  }, [gs.data, loaded]);
+  }
 
-  useEffect(() => {
-    if (!smtpQ.data) return;
+  const nextSmtpKey = smtpQ.data ? `${smtpQ.dataUpdatedAt}:${email}:${company}` : null;
+  if (smtpQ.data && nextSmtpKey !== smtpHydrateKey) {
     const d = smtpQ.data;
+    setSmtpHydrateKey(nextSmtpKey);
     setSmtp((prev) => ({
       ...prev,
       enabled: d.enabled,
@@ -237,14 +241,15 @@ export function SetupOobDialog() {
       from_address: d.from_address || email,
       from_name: d.from_name || company,
     }));
-  }, [smtpQ.data, email, company]);
+  }
 
-  useEffect(() => {
-    if (!siteQ.data) return;
+  const nextSiteKey = siteQ.data ? `${siteQ.dataUpdatedAt}:${companyLogo}` : null;
+  if (siteQ.data && nextSiteKey !== siteHydrateKey) {
+    setSiteHydrateKey(nextSiteKey);
     setSiteName(siteQ.data.site_name);
     setTagline(siteQ.data.tagline);
     setSiteLogo(siteQ.data.logo_url || companyLogo);
-  }, [siteQ.data, companyLogo]);
+  }
 
   const fail = (e: unknown) => toast.error(e instanceof ApiError ? tCode(e.code) : t("error.internal"));
 

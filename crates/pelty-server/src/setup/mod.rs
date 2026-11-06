@@ -1790,9 +1790,7 @@ pub fn next_steps(
             rows.push("            one-time link · expires in 1 hour".into());
         }
         (Some(e), None) => rows.push(format!("Sign in as  {e}")),
-        (None, _) => {
-            rows.push("Admin       console: admin create <email> --name <name>".into())
-        }
+        (None, _) => rows.push("Admin       console: admin create <email> --name <name>".into()),
     }
     rows.push("Console     type `help` while the server runs (stop, status, admin ...)".into());
     rows.push(format!(

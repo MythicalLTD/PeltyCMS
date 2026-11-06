@@ -367,9 +367,7 @@ pub fn release(ctx: &Ctx, args: &[String]) -> R {
     let key = signing_key()?;
     if o.assemble {
         if key.is_none() {
-            println!(
-                "[release] no signing key ({KEY_ENV}): SHA256SUMS will not be signed"
-            );
+            println!("[release] no signing key ({KEY_ENV}): SHA256SUMS will not be signed");
         }
         let dist = assemble(ctx, &o.version, key.as_ref())?;
         println!("[release] assembled {}", dist.display());
@@ -497,7 +495,10 @@ fn write_sums_manifest(
         println!("[release] {name}");
     }
     if assets.is_empty() {
-        return Err(format!("no pelty-server-{version}-* archives in {}", dist.display()));
+        return Err(format!(
+            "no pelty-server-{version}-* archives in {}",
+            dist.display()
+        ));
     }
     let sums: String = assets
         .iter()
@@ -534,11 +535,7 @@ fn write_sums_manifest(
 }
 
 /// Rebuild checksums / signature / manifest for archives already in `dist/<version>/`.
-fn assemble(
-    ctx: &Ctx,
-    version: &str,
-    key: Option<&ring::signature::Ed25519KeyPair>,
-) -> R<PathBuf> {
+fn assemble(ctx: &Ctx, version: &str, key: Option<&ring::signature::Ed25519KeyPair>) -> R<PathBuf> {
     let dist = ctx.root.join("dist").join(version);
     if !dist.is_dir() {
         return Err(format!("{} is missing", dist.display()));

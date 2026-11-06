@@ -125,8 +125,11 @@ impl PartialOrd for Ver {
 impl Ord for Ver {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         use std::cmp::Ordering::*;
-        match (self.major.cmp(&other.major), self.minor.cmp(&other.minor), self.patch.cmp(&other.patch))
-        {
+        match (
+            self.major.cmp(&other.major),
+            self.minor.cmp(&other.minor),
+            self.patch.cmp(&other.patch),
+        ) {
             (Equal, Equal, Equal) => match (&self.pre, &other.pre) {
                 (None, None) => Equal,
                 (None, Some(_)) => Greater,
@@ -626,7 +629,10 @@ mod tests {
         assert!(!is_newer("garbage", "0.1.0"));
         assert!(is_newer("0.10.0", "0.9.9"));
         assert!(is_newer("0.1.0-nightly.20261107", "0.1.0-nightly.20261106"));
-        assert!(!is_newer("0.1.0-nightly.20261106", "0.1.0-nightly.20261107"));
+        assert!(!is_newer(
+            "0.1.0-nightly.20261106",
+            "0.1.0-nightly.20261107"
+        ));
         assert!(is_newer("0.1.0", "0.1.0-nightly.20261107"));
         assert!(is_nightly_version("v0.1.0-nightly.20261106"));
         assert!(!is_nightly_version("0.1.0-rc.1"));

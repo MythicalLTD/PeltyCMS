@@ -667,7 +667,12 @@ fn strength_and_next_steps() {
             && s.contains("/api/v1/auth/setup-login?token=tok_abc")
             && s.contains("one-time")
     );
-    let plain = next_steps("https://x.test", Some("a@x.test"), None, Path::new("/srv/pelty"));
+    let plain = next_steps(
+        "https://x.test",
+        Some("a@x.test"),
+        None,
+        Path::new("/srv/pelty"),
+    );
     assert!(plain.contains("a@x.test") && !plain.contains("setup-login"));
     let widths: Vec<usize> = console::strip_ansi_codes(&s)
         .lines()

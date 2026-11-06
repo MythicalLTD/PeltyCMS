@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Field, FormError } from "@/components/Field";
 import { api, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { ThemeRegion } from "@/components/theme/ThemeSlot";
 import { Captcha } from "@/components/Captcha";
 import { SsoButtons } from "@/components/account/SsoButtons";
 
@@ -35,26 +36,28 @@ export function RegisterPage() {
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <h1 className="text-2xl font-semibold tracking-tight">{t("auth.register.title")}</h1>
-        <p className="text-sm text-muted-foreground">{t("auth.register.subtitle")}</p>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
-          <FormError message={error} />
-          <Field id="display_name" autoComplete="name" label={t("field.display_name")} placeholder={t("field.name_placeholder")} {...register("display_name")} />
-          <Field id="email" type="email" autoComplete="email" label={t("field.email")} placeholder={t("field.email_placeholder")} error={formState.errors.email && t("validation.email")} {...register("email")} />
-          <Field id="password" type="password" autoComplete="new-password" label={t("field.password")} placeholder="••••••••••••" hint={t("field.password_rules")} error={formState.errors.password && t("validation.password_min")} {...register("password")} />
-          <Captcha form="register" />
-          <Button type="submit" disabled={formState.isSubmitting}>{t("auth.register.submit")}</Button>
-          <SsoButtons />
-          <p className="text-center text-sm text-muted-foreground">
-            {t("auth.register.have_account")}{" "}
-            <Link to="/login" className="text-primary hover:underline">{t("auth.register.login_link")}</Link>
-          </p>
-        </form>
-      </CardContent>
-    </Card>
+    <ThemeRegion slot="register">
+      <Card>
+        <CardHeader>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("auth.register.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("auth.register.subtitle")}</p>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+            <FormError message={error} />
+            <Field id="display_name" autoComplete="name" label={t("field.display_name")} placeholder={t("field.name_placeholder")} {...register("display_name")} />
+            <Field id="email" type="email" autoComplete="email" label={t("field.email")} placeholder={t("field.email_placeholder")} error={formState.errors.email && t("validation.email")} {...register("email")} />
+            <Field id="password" type="password" autoComplete="new-password" label={t("field.password")} placeholder="••••••••••••" hint={t("field.password_rules")} error={formState.errors.password && t("validation.password_min")} {...register("password")} />
+            <Captcha form="register" />
+            <Button type="submit" disabled={formState.isSubmitting}>{t("auth.register.submit")}</Button>
+            <SsoButtons />
+            <p className="text-center text-sm text-muted-foreground">
+              {t("auth.register.have_account")}{" "}
+              <Link to="/login" className="text-primary hover:underline">{t("auth.register.login_link")}</Link>
+            </p>
+          </form>
+        </CardContent>
+      </Card>
+    </ThemeRegion>
   );
 }

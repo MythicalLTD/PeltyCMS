@@ -23,7 +23,8 @@ export function AuthLayout() {
           <LanguageSwitcher />
         </header>
         <main className="flex flex-1 items-center justify-center py-6 md:pb-20">
-          <div className="w-full max-w-md *:data-[slot=card]:border-0 *:data-[slot=card]:bg-transparent *:data-[slot=card]:shadow-none sm:*:data-[slot=card]:border sm:*:data-[slot=card]:bg-card sm:*:data-[slot=card]:shadow-sm lg:*:data-[slot=card]:border-0 lg:*:data-[slot=card]:bg-transparent lg:*:data-[slot=card]:shadow-none">
+          {/* Keep Card chrome on every auth page (login wraps Card in ThemeRegion). */}
+          <div className="w-full max-w-md">
             <Outlet />
           </div>
         </main>

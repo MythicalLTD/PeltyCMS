@@ -1057,7 +1057,10 @@ pub async fn registry_oauth2_callback(
     let has_pair = !cfg.panel_public_key.is_empty() && !cfg.panel_private_key.is_empty();
     if has_pair
         && (!constant_time_eq(cfg.panel_public_key.as_bytes(), identity_public.as_bytes())
-            || !constant_time_eq(cfg.panel_private_key.as_bytes(), identity_private.as_bytes()))
+            || !constant_time_eq(
+                cfg.panel_private_key.as_bytes(),
+                identity_private.as_bytes(),
+            ))
         && !oauth_pending_recent(&cfg.oauth_pending_at)
     {
         return Err(AppError::Forbidden.into());
