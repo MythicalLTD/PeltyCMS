@@ -115,31 +115,49 @@ jobs:
           path: frontend/dist
           retention-days: 2
 
+  # One job per target so Linux (and macOS) targets build in parallel instead of
+  # serializing four zig builds on a single runner.
   package:
     name: Package (${{ matrix.name }})
     needs: [meta, frontend]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 180
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: linux
+          - name: linux-x64-gnu
             os: ubuntu-latest
-            targets: x86_64-unknown-linux-gnu,x86_64-unknown-linux-musl,aarch64-unknown-linux-gnu,aarch64-unknown-linux-musl
+            target: x86_64-unknown-linux-gnu
+            zig: false
+          - name: linux-x64-musl
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            zig: true
+          - name: linux-arm64-gnu
+            os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            zig: true
+          - name: linux-arm64-musl
+            os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
             zig: true
           - name: windows-x64
             os: windows-latest
-            targets: x86_64-pc-windows-msvc
+            target: x86_64-pc-windows-msvc
             zig: false
           # Native ARM64 Windows (cargo-xwin from Linux breaks ring/aws-lc on /imsvc).
           - name: windows-arm64
             os: windows-11-arm
-            targets: aarch64-pc-windows-msvc
+            target: aarch64-pc-windows-msvc
             zig: false
-          - name: macos
+          - name: macos-arm64
             os: macos-latest
-            targets: aarch64-apple-darwin,x86_64-apple-darwin
+            target: aarch64-apple-darwin
+            zig: false
+          - name: macos-x64
+            os: macos-latest
+            target: x86_64-apple-darwin
             zig: false
     steps:
       - uses: actions/checkout@v4
@@ -156,7 +174,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.targets }}
+          targets: ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -181,7 +199,7 @@ jobs:
         with:
           tool: cargo-zigbuild
 
-      - name: Package archives
+      - name: Package archive
         shell: bash
         run: |
           set -euo pipefail
@@ -193,7 +211,7 @@ jobs:
           fi
           cargo xtask release "${{ needs.meta.outputs.version }}" \
             --skip-assets \
-            --targets "${{ matrix.targets }}"
+            --targets "${{ matrix.target }}"
 
       - uses: actions/upload-artifact@v4
         with:
