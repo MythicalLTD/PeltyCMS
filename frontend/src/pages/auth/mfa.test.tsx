@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { I18nProvider } from "@/lib/i18n";
 import { LoginPage } from "./Login";
+import { Verify2faPage } from "./Verify2fa";
 
 // jsdom lacks elementFromPoint; input-otp calls it from a timer.
 if (!document.elementFromPoint) document.elementFromPoint = () => null;
@@ -15,6 +16,7 @@ let verifyFails = false;
 beforeEach(() => {
   calls = [];
   verifyFails = false;
+  sessionStorage.clear();
   globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
@@ -33,7 +35,11 @@ function wrap() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}><I18nProvider><MemoryRouter initialEntries={["/login"]}>
-      <Routes><Route path="/login" element={<LoginPage />} /><Route path="/" element={<p>client home</p>} /></Routes>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/auth/verify-2fa" element={<Verify2faPage />} />
+        <Route path="/" element={<p>client home</p>} />
+      </Routes>
     </MemoryRouter></I18nProvider></QueryClientProvider>,
   );
 }

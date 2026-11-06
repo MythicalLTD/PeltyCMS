@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
@@ -79,7 +80,7 @@ export function TwoFactorCard() {
       {data?.enabled && <CardContent className="text-sm text-muted-foreground">{t("mfa.remaining", { count: data.backup_codes_remaining })}</CardContent>}
       <CardFooter className="flex flex-wrap gap-2">
         {data && !data.enabled && (data.available
-          ? <Button className="min-h-11 md:min-h-9" onClick={() => start.mutate()} disabled={start.isPending}>{t("mfa.setup")}</Button>
+          ? <><Button className="min-h-11 md:min-h-9" onClick={() => start.mutate()} disabled={start.isPending}>{t("mfa.setup")}</Button><Button asChild variant="outline" className="min-h-11 md:min-h-9"><Link to="/auth/setup-2fa">{t("mfa.setup_page")}</Link></Button></>
           : <p className="text-sm text-muted-foreground">{tCode("error.mfa_unavailable")}</p>)}
         {data?.enabled && <>
           <Button variant="outline" className="min-h-11 md:min-h-9" onClick={() => { reset(); setConfirm("regen"); }}>{t("mfa.regenerate")}</Button>
