@@ -1,0 +1,9 @@
+/* Theme layout override: tighten the auth card and tint the store hero. */
+[data-theme-slot="login"] {
+  max-width: 28rem;
+  margin-inline: auto;
+}
+[data-theme-slot="store-hero"] {
+  border-radius: var(--radius, 0.5rem);
+  box-shadow: 0 1px 0 color-mix(in oklab, var(--border) 80%, transparent);
+}
