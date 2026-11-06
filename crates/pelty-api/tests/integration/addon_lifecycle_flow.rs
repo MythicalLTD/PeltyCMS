@@ -172,7 +172,10 @@ async fn lifecycle_events_and_mixins() {
     )
     .await;
     assert_eq!(r.status, StatusCode::OK, "{:?}", r.body);
-    let l = wait_for(&app, &alice, "finished:ok", 1).await;
+    // Observe-only phases run in separate background tasks: finished may
+    // become visible before after, so wait for both rather than assuming order.
+    wait_for(&app, &alice, "finished:ok", 1).await;
+    let l = wait_for(&app, &alice, "phase:after", 1).await;
     for k in [
         "phase:before",
         "phase:during",
