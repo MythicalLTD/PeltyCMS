@@ -89,6 +89,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
+          # Addon crates live as PeltyCMS/addon-* submodules under extensions/addons.
+          submodules: recursive
 
       - uses: pnpm/action-setup@v4
         with:
@@ -148,6 +150,8 @@ jobs:
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
           fetch-depth: 0
+          # Addon crates live as PeltyCMS/addon-* submodules under extensions/addons.
+          submodules: recursive
 
       - uses: actions/download-artifact@v4
         with:
@@ -206,6 +210,8 @@ jobs:
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
           fetch-depth: 0
+          # Addon crates live as PeltyCMS/addon-* submodules under extensions/addons.
+          submodules: recursive
 
       - uses: dtolnay/rust-toolchain@stable
 

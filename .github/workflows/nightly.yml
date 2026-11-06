@@ -25,6 +25,7 @@ jobs:
         with:
           ref: develop
           fetch-depth: 0
+          submodules: recursive
 
       - name: Decide version
         id: decide
