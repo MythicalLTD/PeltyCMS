@@ -142,6 +142,16 @@ fn url_ok(u: &str) -> bool {
         || (u.starts_with("https://") && u.len() <= 300 && !u.contains(char::is_whitespace))
 }
 
+/// Logos may be absolute HTTPS or a same-origin media upload path.
+fn logo_url_ok(u: &str) -> bool {
+    url_ok(u)
+        || (u.starts_with("/api/v1/media/")
+            && u.len() <= 300
+            && !u.contains(char::is_whitespace)
+            && !u.contains("..")
+            && u[14..].chars().all(|c| c.is_ascii_hexdigit() || c == '-'))
+}
+
 fn email_ok(e: &str) -> bool {
     e.is_empty()
         || (e.len() <= 254
@@ -157,7 +167,7 @@ pub fn validate(s: &GeneralSettings) -> AppResult<()> {
         && g.pay_to_text.len() <= 2000
         && email_ok(&g.email)
         && url_ok(&g.domain)
-        && url_ok(&g.logo_url)
+        && logo_url_ok(&g.logo_url)
         && (g.records_per_page == 0 || (10..=500).contains(&g.records_per_page))
         && [&u.system_url, &u.terms_url, &u.privacy_url, &u.support_url]
             .iter()

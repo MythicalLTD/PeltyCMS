@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { CustomCodeOff } from "@/components/admin/GeneralRuntime";
 import { LicenseAcceptGate } from "@/components/admin/LicenseGate";
+import { SetupOobDialog } from "@/components/admin/SetupOobDialog";
 import { SquaresFourIcon } from "@phosphor-icons/react";
 import { setThemeChromeEnabled } from "@/lib/theme";
 import { Shell } from "./Shell";
@@ -22,6 +23,7 @@ export function AdminLayout() {
       <ThemeChromeOff />
       <ReauthDialog />
       <LicenseAcceptGate />
+      <SetupOobDialog />
       <Shell slot="admin.nav" scope="admin" section="nav.admin" footer={{ to: "/", label: "nav.client_area", icon: SquaresFourIcon }} />
     </>
   );

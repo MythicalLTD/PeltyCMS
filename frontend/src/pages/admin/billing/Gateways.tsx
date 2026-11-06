@@ -44,7 +44,8 @@ export function buildConfig(settings: SettingField[], form: Record<string, strin
   return { config };
 }
 
-function toForm(g: Gateway): Record<string, string | boolean> {
+/** Map gateway server config into flat form values for `buildConfig` (same shape as the admin gateway dialog). */
+export function gatewayFormFromConfig(g: Gateway): Record<string, string | boolean> {
   const f: Record<string, string | boolean> = {};
   for (const s of g.settings) {
     const v = g.config[s.key];
@@ -60,7 +61,7 @@ function SettingsDialog({ g, onClose }: { g: Gateway; onClose: () => void }) {
   const { t, tCode } = useI18n();
   const qc = useQueryClient();
   const [enabled, setEnabled] = useState(g.enabled);
-  const [form, setForm] = useState(() => toForm(g));
+  const [form, setForm] = useState(() => gatewayFormFromConfig(g));
   const [refs, setRefs] = useState<[string, string][]>(() => Object.entries(g.secrets).map(([k, v]) => [k, v.env ?? ""]));
   const [err, setErr] = useState<string | null>(null);
   const save = useMutation({

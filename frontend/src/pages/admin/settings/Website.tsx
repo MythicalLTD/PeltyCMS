@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ImageUrlField, isImageFieldName } from "@/components/admin/ImageUrlField";
 import { api, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -78,7 +79,7 @@ function SettingsTab() {
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-2"><Label htmlFor="s-name">{t("site.admin.site_name")}</Label><Input id="s-name" value={c.site_name} onChange={(e) => set("site_name", e.target.value)} /></div>
           <div className="flex flex-col gap-2"><Label htmlFor="s-tag">{t("site.admin.tagline")}</Label><Input id="s-tag" value={c.tagline} onChange={(e) => set("tagline", e.target.value)} /></div>
-          <div className="flex flex-col gap-2"><Label htmlFor="s-logo">{t("site.admin.logo_url")}</Label><Input id="s-logo" placeholder="/brand/logo.png" value={c.logo_url} onChange={(e) => set("logo_url", e.target.value)} /></div>
+          <ImageUrlField id="s-logo" label={t("site.admin.logo_url")} value={c.logo_url} onChange={(url) => set("logo_url", url)} preferPath placeholder="/brand/logo.png" hint={t("media.hint")} />
           <div className="flex flex-col gap-2">
             <Label htmlFor="s-color">{t("site.admin.primary_color")}</Label>
             <div className="flex gap-2">
@@ -153,6 +154,18 @@ type Row = Record<string, unknown>;
 function FieldInput({ name, value, onChange }: { name: string; value: unknown; onChange: (v: unknown) => void }) {
   const id = useId();
   if (typeof value === "boolean") return <div className="flex items-center gap-2"><Switch id={id} checked={value} onCheckedChange={onChange} /><Label htmlFor={id}>{name}</Label></div>;
+  if (typeof value === "string" && isImageFieldName(name)) {
+    return (
+      <ImageUrlField
+        id={id}
+        label={name}
+        value={value}
+        onChange={onChange}
+        preferPath
+        className="sm:col-span-2"
+      />
+    );
+  }
   const isNum = typeof value === "number";
   const Comp = LONG.has(name) ? Textarea : Input;
   return (

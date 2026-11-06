@@ -16,6 +16,9 @@ describe("emailBlocks", () => {
     expect(html).toContain('href="#"');
     expect(safeUrl("{{invoice_url}}")).toBe("{{invoice_url}}");
     expect(safeUrl("https://x.test")).toBe("https://x.test");
+    expect(safeUrl("/api/v1/media/550e8400-e29b-41d4-a716-446655440000")).toBe(
+      "/api/v1/media/550e8400-e29b-41d4-a716-446655440000",
+    );
   });
   it("moves blocks and inserts merge fields at the caret", () => {
     expect(move([1, 2, 3], 0, 2)).toEqual([2, 3, 1]);

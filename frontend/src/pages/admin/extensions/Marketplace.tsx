@@ -5,6 +5,7 @@ import {
   ArrowSquareOutIcon,
   CheckCircleIcon,
   DownloadSimpleIcon,
+  InfoIcon,
   LinkSimpleIcon,
   LinkSimpleBreakIcon,
   SpinnerGapIcon,
@@ -16,6 +17,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { MarkdownSafe, plainFromMarkdown } from "@/components/MarkdownSafe";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,6 +44,8 @@ type RegistrySettings = {
   panel_public_key?: string;
   panel_private_key?: string;
   panel_linked?: boolean;
+  /** True while MythicCloud OAuth was started recently and the callback has not completed. */
+  oauth_pending?: boolean;
   team_uuid?: string;
   team_name?: string;
   mythic_user_id?: string;
@@ -146,6 +150,7 @@ export function AdminMarketplacePage() {
   });
 
   const linked = !!cfg.data?.panel_linked;
+  const oauthPending = !!cfg.data?.oauth_pending && !linked;
   const items = (idx.data?.items ?? []).filter((i) => {
     const free = i.is_free !== false;
     if (price === "free" && !free) return false;
@@ -177,13 +182,22 @@ export function AdminMarketplacePage() {
               <StorefrontIcon className="size-3.5" />
               {t("addons.market.mythical_only")}
             </Badge>
-            {linked ? (
+            {oauthPending ? (
+              <Badge variant="secondary">{t("addons.market.oauth_pending")}</Badge>
+            ) : linked ? (
               <Badge variant="outline">{t("addons.market.panel_linked")}</Badge>
             ) : (
               <Badge variant="muted">{t("addons.market.panel_unlinked")}</Badge>
             )}
           </div>
           <p className="text-sm text-muted-foreground">{t("addons.market.panel_hint")}</p>
+          {oauthPending && (
+            <Alert>
+              <InfoIcon />
+              <AlertTitle>{t("addons.market.oauth_pending")}</AlertTitle>
+              <AlertDescription>{t("addons.market.oauth_pending_hint")}</AlertDescription>
+            </Alert>
+          )}
           {linked && (cfg.data?.team_name || cfg.data?.team_uuid) ? (
             <p className="text-sm">
               {t("addons.market.linked_as", {
@@ -194,15 +208,17 @@ export function AdminMarketplacePage() {
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
-              disabled={connect.isPending || disconnect.isPending}
+              disabled={connect.isPending || disconnect.isPending || oauthPending}
               onClick={() => connect.mutate()}
             >
               <LinkSimpleIcon />
               {connect.isPending
                 ? t("addons.market.oauth_starting")
-                : linked
-                  ? t("addons.market.reconnect")
-                  : t("addons.market.connect")}
+                : oauthPending
+                  ? t("addons.market.oauth_pending")
+                  : linked
+                    ? t("addons.market.reconnect")
+                    : t("addons.market.connect")}
             </Button>
             {linked ? (
               <Button
@@ -335,20 +351,50 @@ export function AdminMarketplaceFinishPage() {
     ran.current = true;
 
     const finish = async () => {
-      const status = (param(search, "status") || "").toLowerCase();
-      const errorParam = param(search, "error", "error_message");
+      const decode = (value: string) => {
+        let out = value;
+        for (let i = 0; i < 3; i++) {
+          try {
+            const next = decodeURIComponent(out);
+            if (next === out) break;
+            out = next;
+          } catch {
+            break;
+          }
+        }
+        return out;
+      };
 
-      if (status === "cancelled" || status === "cancel") {
+      const status = (param(search, "status") || "").toLowerCase();
+      const errorParam = param(search, "error", "error_message", "error_description");
+      const denied = (errorParam || "").toLowerCase() === "access_denied";
+
+      const clearPending = async (kind: "cancel" | "error") => {
+        try {
+          await api("/admin/addons/registry/oauth2/callback", {
+            method: "POST",
+            body: { status: kind === "cancel" ? "cancelled" : "error" },
+          });
+          void qc.invalidateQueries({ queryKey: ["admin", "addons", "registry", "settings"] });
+        } catch {
+          /* ignore: pending window expires on its own */
+        }
+      };
+
+      if (status === "cancelled" || status === "cancel" || denied) {
+        await clearPending("cancel");
         setPhase("cancelled");
         setError(t("addons.market.finish.cancelled_desc"));
         return;
       }
       if (status === "error" || errorParam) {
+        await clearPending("error");
         setPhase("error");
-        setError(errorParam ? decodeURIComponent(errorParam) : t("addons.market.finish.failed"));
+        setError(errorParam ? decode(errorParam) : t("addons.market.finish.failed"));
         return;
       }
 
+      // Keys may already live on the server from oauth2/link; only team + user are required here.
       const body: Record<string, string> = { status: status || "success" };
       const optional: Array<[string, string | null]> = [
         ["public_identity_key", param(search, "public_identity_key", "panel_public_key")],
@@ -358,19 +404,13 @@ export function AdminMarketplaceFinishPage() {
         ["team_uuid", param(search, "team_uuid", "team")],
         ["team_name", param(search, "team_name")],
         ["team_slug", param(search, "team_slug")],
-        ["cloud_api_key", param(search, "cloud_api_key")],
-        ["cloud_api_secret", param(search, "cloud_api_secret")],
       ];
       for (const [key, value] of optional) {
         if (!value) continue;
-        try {
-          body[key] = decodeURIComponent(value);
-        } catch {
-          body[key] = value;
-        }
+        body[key] = decode(value);
       }
 
-      if (!body.public_identity_key || !body.private_key || !body.mythic_user_id || !body.team_uuid) {
+      if (!body.mythic_user_id || !body.team_uuid) {
         setPhase("error");
         setError(t("addons.market.finish.missing_params"));
         return;

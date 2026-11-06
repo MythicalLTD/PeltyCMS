@@ -221,16 +221,17 @@ fn frontend_pnpm(ctx: &Ctx, args: &[&str]) -> R {
     util::run(&mut c)
 }
 
-/// Release build: addons, docs, frontend, server binary.
+/// Local release-ish build: addons, docs, frontend, server binary.
+/// Uses `release-fast` (thin LTO). Ship archives with `cargo xtask release`.
 pub fn build(ctx: &Ctx) -> R {
     build_assets(ctx)?;
-    println!("\n==> Building pelty-server release binary");
+    println!("\n==> Building pelty-server (profile release-fast)");
     util::run(
         ctx.cargo()
-            .args(["build", "--release", "-p", "pelty-server"]),
+            .args(["build", "--profile", "release-fast", "-p", "pelty-server"]),
     )?;
     println!(
-        "\n==> Build complete: target/release/pelty-server{}",
+        "\n==> Build complete: target/release-fast/pelty-server{}",
         std::env::consts::EXE_SUFFIX
     );
     Ok(())

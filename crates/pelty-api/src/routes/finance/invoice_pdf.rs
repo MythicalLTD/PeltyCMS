@@ -36,10 +36,26 @@ pub(crate) async fn logo(s: &AppState) -> Option<pdf::Logo> {
         .ok()
         .map(|g| g.general.logo_url)
         .unwrap_or_default();
-    let local = url.strip_prefix('/').filter(|p| {
-        !p.is_empty() && !p.starts_with('/') && !p.split('/').any(|c| c == ".." || c.is_empty())
-    });
     let mut candidates = Vec::new();
+    if let Some(id) = url
+        .strip_prefix("/api/v1/media/")
+        .or_else(|| {
+            url.split_once("/api/v1/media/")
+                .map(|(_, rest)| rest.trim_end_matches('/'))
+        })
+        .map(|id| id.split(['?', '#']).next().unwrap_or(id).trim())
+        .filter(|id| !id.is_empty() && !id.contains('/') && !id.contains(".."))
+    {
+        if let Some(p) = crate::routes::media::file_for(id) {
+            candidates.push(p);
+        }
+    }
+    let local = url.strip_prefix('/').filter(|p| {
+        !p.is_empty()
+            && !p.starts_with('/')
+            && !p.starts_with("api/")
+            && !p.split('/').any(|c| c == ".." || c.is_empty())
+    });
     if let Some(p) = local {
         candidates.push(dir.join(p));
     }

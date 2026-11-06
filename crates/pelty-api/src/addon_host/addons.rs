@@ -734,12 +734,20 @@ struct RegistrySettings {
     oauth_pending_at: String,
 }
 
+/// True only when a Mythic team is bound and both panel identity keys are present.
+fn panel_is_linked(cfg: &RegistrySettings) -> bool {
+    !cfg.team_uuid.trim().is_empty()
+        && !cfg.panel_public_key.is_empty()
+        && !cfg.panel_private_key.is_empty()
+}
+
 fn registry_public_json(cfg: &RegistrySettings) -> Value {
     json!({
         "url": cfg.url,
         "panel_public_key": cfg.panel_public_key,
         "panel_private_key": if cfg.panel_private_key.is_empty() { "" } else { "********" },
-        "panel_linked": !cfg.panel_public_key.is_empty() && !cfg.panel_private_key.is_empty(),
+        "panel_linked": panel_is_linked(cfg),
+        "oauth_pending": oauth_pending_recent(&cfg.oauth_pending_at) && !panel_is_linked(cfg),
         "team_uuid": cfg.team_uuid,
         "team_name": cfg.team_name,
         "mythic_user_id": cfg.mythic_user_id,
@@ -841,21 +849,36 @@ async fn put_registry_settings(
     } else {
         incoming_priv.chars().take(400).collect::<String>()
     };
+    let keys_cleared = panel_public_key.is_empty() || panel_private_key.is_empty();
     let cfg = RegistrySettings {
         url: url.clone(),
         panel_public_key: panel_public_key.clone(),
         panel_private_key: panel_private_key.clone(),
-        team_uuid: prev.team_uuid,
-        mythic_user_id: prev.mythic_user_id,
-        team_name: prev.team_name,
-        linked_at: if panel_public_key.is_empty() || panel_private_key.is_empty() {
+        team_uuid: if keys_cleared {
             String::new()
-        } else if prev.linked_at.is_empty() {
-            now_rfc3339()
+        } else {
+            prev.team_uuid
+        },
+        mythic_user_id: if keys_cleared {
+            String::new()
+        } else {
+            prev.mythic_user_id
+        },
+        team_name: if keys_cleared {
+            String::new()
+        } else {
+            prev.team_name
+        },
+        linked_at: if keys_cleared {
+            String::new()
         } else {
             prev.linked_at
         },
-        oauth_pending_at: prev.oauth_pending_at,
+        oauth_pending_at: if keys_cleared {
+            String::new()
+        } else {
+            prev.oauth_pending_at
+        },
     };
     save_registry(&s, &cfg).await?;
     pelty_database::audit::record(
@@ -866,7 +889,7 @@ async fn put_registry_settings(
         u.ip.as_deref(),
         json!({
             "url": url,
-            "panel_linked": !panel_public_key.is_empty() && !panel_private_key.is_empty(),
+            "panel_linked": panel_is_linked(&cfg),
         }),
     )
     .await?;
@@ -874,7 +897,12 @@ async fn put_registry_settings(
 }
 
 /// FeatherPanel-shaped MythicCloud OAuth start: mint panel identity keys, redirect to Mythic consent.
-async fn registry_oauth2_link(
+#[utoipa::path(
+    get,
+    path = "/api/v1/admin/addons/registry/oauth2/link",
+    responses((status = 200), (status = 403), (status = 409), (status = 500))
+)]
+pub async fn registry_oauth2_link(
     State(s): State<AppState>,
     RequirePermission(u, _): RequirePermission<perms::PluginsManage>,
 ) -> ApiResult<Json<Value>> {
@@ -896,13 +924,19 @@ async fn registry_oauth2_link(
         .filter(|n| !n.is_empty())
         .unwrap_or("PeltyCMS")
         .to_string();
-    let logo_url = general
-        .as_ref()
-        .map(|g| g.general.logo_url.trim())
-        .filter(|u| u.starts_with("https://"))
-        .unwrap_or("")
-        .to_string();
     let panel_url = s.cfg.public_url.trim_end_matches('/').to_string();
+    let logo_raw = general
+        .as_ref()
+        .map(|g| g.general.logo_url.trim().to_string())
+        .unwrap_or_default();
+    // Mythic consent page needs an absolute logo URL; lift same-origin media paths.
+    let logo_url = if logo_raw.starts_with("https://") || logo_raw.starts_with("http://") {
+        logo_raw
+    } else if logo_raw.starts_with('/') {
+        format!("{panel_url}{logo_raw}")
+    } else {
+        String::new()
+    };
     let callback_url = format!("{panel_url}/admin/marketplace/finish");
     let oauth_base = DEFAULT_MYTHIC_OAUTH_URL;
     let mut params = vec![
@@ -929,7 +963,8 @@ async fn registry_oauth2_link(
         "addon.registry_oauth_started",
         None,
         u.ip.as_deref(),
-        json!({ "panel_url": panel_url }),
+        // Never log the OAuth URL: it carries panel private_key query params.
+        json!({ "panel_url": panel_url, "callback_url": callback_url }),
     )
     .await?;
 
@@ -940,43 +975,59 @@ async fn registry_oauth2_link(
     })))
 }
 
-#[derive(Deserialize, Default)]
-struct OAuthCallbackBody {
+#[derive(Debug, Clone, Deserialize, Serialize, Default, utoipa::ToSchema)]
+pub struct OAuthCallbackBody {
     #[serde(default)]
-    status: String,
+    pub status: String,
     #[serde(default)]
-    public_identity_key: String,
+    pub public_identity_key: String,
     #[serde(default)]
-    panel_public_key: String,
+    pub panel_public_key: String,
     #[serde(default)]
-    private_key: String,
+    pub private_key: String,
     #[serde(default)]
-    panel_private_key: String,
+    pub panel_private_key: String,
     #[serde(default)]
-    mythic_user_id: String,
+    pub mythic_user_id: String,
     #[serde(default)]
-    user_uuid: String,
+    pub user_uuid: String,
     #[serde(default)]
-    authorizer_user_id: String,
+    pub authorizer_user_id: String,
     #[serde(default)]
-    user_id: String,
+    pub user_id: String,
     #[serde(default)]
-    team_uuid: String,
+    pub team_uuid: String,
     #[serde(default)]
-    team_name: String,
+    pub team_name: String,
     #[serde(default)]
-    team_slug: String,
+    pub team_slug: String,
 }
 
 /// Mythic OAuth finish: persist identity keys + team link (same contract as FeatherPanel).
-async fn registry_oauth2_callback(
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/addons/registry/oauth2/callback",
+    request_body = OAuthCallbackBody,
+    responses((status = 200), (status = 400), (status = 403), (status = 422))
+)]
+pub async fn registry_oauth2_callback(
     State(s): State<AppState>,
     RequirePermission(u, _): RequirePermission<perms::PluginsManage>,
     Json(body): Json<OAuthCallbackBody>,
 ) -> ApiResult<Json<Value>> {
     let status = body.status.trim().to_ascii_lowercase();
     if matches!(status.as_str(), "error" | "cancelled" | "cancel") {
-        return Err(AppError::Validation("error.addon_registry_oauth_cancelled").into());
+        // Drop the soft lock so reconnect is not stuck until the 30m window expires.
+        let mut cfg = load_registry(&s).await?;
+        if !cfg.oauth_pending_at.is_empty() {
+            cfg.oauth_pending_at.clear();
+            save_registry(&s, &cfg).await?;
+        }
+        return Ok(Json(json!({
+            "cancelled": true,
+            "panel_linked": panel_is_linked(&cfg),
+            "oauth_pending": false,
+        })));
     }
 
     let mut identity_public = first_nonempty([&body.public_identity_key, &body.panel_public_key]);
@@ -1044,11 +1095,16 @@ async fn registry_oauth2_callback(
         "team_name": cfg.team_name,
         "mythic_user_id": cfg.mythic_user_id,
         "linked_at": cfg.linked_at,
-        "panel_linked": true,
+        "panel_linked": panel_is_linked(&cfg),
     })))
 }
 
-async fn registry_oauth2_disconnect(
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/addons/registry/oauth2/disconnect",
+    responses((status = 200), (status = 403))
+)]
+pub async fn registry_oauth2_disconnect(
     State(s): State<AppState>,
     RequirePermission(u, _): RequirePermission<perms::PluginsManage>,
 ) -> ApiResult<Json<Value>> {
@@ -1221,7 +1277,7 @@ async fn registry_install(
         .ok_or(AppError::NotFound)?;
     if !item.is_free {
         let cfg = load_registry(&s).await?;
-        if cfg.panel_public_key.is_empty() || cfg.panel_private_key.is_empty() {
+        if !panel_is_linked(&cfg) {
             return Err(AppError::Conflict("error.addon_registry_panel_required").into());
         }
     }

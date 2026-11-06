@@ -15,8 +15,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { ImageUrlField } from "@/components/admin/ImageUrlField";
 import { api, ApiError } from "@/lib/api";
-import { httpsOrEmpty, type CustomCode, type GeneralSettings } from "@/lib/admin/general";
+import { httpsOrEmpty, logoUrlOk, type CustomCode, type GeneralSettings } from "@/lib/admin/general";
 import { useI18n } from "@/lib/i18n";
 
 type Section = keyof GeneralSettings;
@@ -49,7 +50,13 @@ export function AdminGeneralSettingsPage() {
   if (!s || !q.data) return <Skeleton className="h-64" />;
   const opts = (key: string, k: { select: string[] }) => k.select.length ? k.select : key === "default_order_form" ? q.data!.order_forms : q.data!.date_formats;
   const set = (sec: Section, key: string, v: unknown) => setS({ ...s, [sec]: { ...s[sec], [key]: v } } as GeneralSettings);
-  const invalid = (Object.keys(FIELDS) as Section[]).some((sec) => FIELDS[sec].some(([k, kind]) => kind === "url" && !httpsOrEmpty(String((s[sec] as Record<string, unknown>)[k] ?? ""))));
+  const invalid = (Object.keys(FIELDS) as Section[]).some((sec) =>
+    FIELDS[sec].some(([k, kind]) => {
+      if (kind !== "url") return false;
+      const v = String((s[sec] as Record<string, unknown>)[k] ?? "");
+      return k === "logo_url" ? !logoUrlOk(v) : !httpsOrEmpty(v);
+    }),
+  );
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title={t("general.title")} description={t("general.description")} actions={<Button disabled={invalid || save.isPending} onClick={() => save.mutate(s)}>{t("common.save")}</Button>} />
@@ -68,6 +75,20 @@ export function AdminGeneralSettingsPage() {
                 const v = (s[sec] as Record<string, unknown>)[key];
                 const label = tCode(`general.f.${sec}.${key}`);
                 if (kind === "bool") return <div key={key} className="flex items-center justify-between gap-4 rounded-md border p-3 md:col-span-2"><Label htmlFor={id}>{label}</Label><Switch id={id} checked={Boolean(v)} onCheckedChange={(x) => set(sec, key, x)} /></div>;
+                if (key === "logo_url") {
+                  return (
+                    <ImageUrlField
+                      key={key}
+                      id={id}
+                      className="md:col-span-2"
+                      label={label}
+                      value={String(v ?? "")}
+                      onChange={(url) => set(sec, key, url)}
+                      preferPath
+                      hint={t("media.hint")}
+                    />
+                  );
+                }
                 return (
                   <div key={key} className={`flex flex-col gap-2 ${kind === "textarea" ? "md:col-span-2" : ""}`}>
                     <Label htmlFor={id}>{label}</Label>
