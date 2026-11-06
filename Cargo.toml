@@ -59,6 +59,14 @@ codegen-units = 1
 panic = "abort"
 strip = "symbols"
 
+# Local `cargo xtask build` / docs: thin LTO so you are not waiting 30 minutes.
+# `cargo xtask release` keeps the fat profile above for shippable archives.
+[profile.release-fast]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+strip = "none"
+
 # WASM addons are compiled by cranelift at load time; an unoptimised
 # cranelift makes every debug build / test start very slow.
 # xtask unpacks the dev PostgreSQL download; unoptimized xz decoding is slow.

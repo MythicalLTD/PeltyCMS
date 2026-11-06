@@ -874,7 +874,12 @@ async fn put_registry_settings(
 }
 
 /// FeatherPanel-shaped MythicCloud OAuth start: mint panel identity keys, redirect to Mythic consent.
-async fn registry_oauth2_link(
+#[utoipa::path(
+    get,
+    path = "/api/v1/admin/addons/registry/oauth2/link",
+    responses((status = 200), (status = 403), (status = 409), (status = 500))
+)]
+pub async fn registry_oauth2_link(
     State(s): State<AppState>,
     RequirePermission(u, _): RequirePermission<perms::PluginsManage>,
 ) -> ApiResult<Json<Value>> {
@@ -896,13 +901,19 @@ async fn registry_oauth2_link(
         .filter(|n| !n.is_empty())
         .unwrap_or("PeltyCMS")
         .to_string();
-    let logo_url = general
-        .as_ref()
-        .map(|g| g.general.logo_url.trim())
-        .filter(|u| u.starts_with("https://"))
-        .unwrap_or("")
-        .to_string();
     let panel_url = s.cfg.public_url.trim_end_matches('/').to_string();
+    let logo_raw = general
+        .as_ref()
+        .map(|g| g.general.logo_url.trim().to_string())
+        .unwrap_or_default();
+    // Mythic consent page needs an absolute logo URL; lift same-origin media paths.
+    let logo_url = if logo_raw.starts_with("https://") || logo_raw.starts_with("http://") {
+        logo_raw
+    } else if logo_raw.starts_with('/') {
+        format!("{panel_url}{logo_raw}")
+    } else {
+        String::new()
+    };
     let callback_url = format!("{panel_url}/admin/marketplace/finish");
     let oauth_base = DEFAULT_MYTHIC_OAUTH_URL;
     let mut params = vec![
@@ -929,7 +940,8 @@ async fn registry_oauth2_link(
         "addon.registry_oauth_started",
         None,
         u.ip.as_deref(),
-        json!({ "panel_url": panel_url }),
+        // Never log the OAuth URL: it carries panel private_key query params.
+        json!({ "panel_url": panel_url, "callback_url": callback_url }),
     )
     .await?;
 
@@ -940,7 +952,7 @@ async fn registry_oauth2_link(
     })))
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, utoipa::ToSchema)]
 struct OAuthCallbackBody {
     #[serde(default)]
     status: String,
@@ -969,7 +981,12 @@ struct OAuthCallbackBody {
 }
 
 /// Mythic OAuth finish: persist identity keys + team link (same contract as FeatherPanel).
-async fn registry_oauth2_callback(
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/addons/registry/oauth2/callback",
+    responses((status = 200), (status = 400), (status = 403), (status = 422))
+)]
+pub async fn registry_oauth2_callback(
     State(s): State<AppState>,
     RequirePermission(u, _): RequirePermission<perms::PluginsManage>,
     Json(body): Json<OAuthCallbackBody>,
@@ -1048,7 +1065,12 @@ async fn registry_oauth2_callback(
     })))
 }
 
-async fn registry_oauth2_disconnect(
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/addons/registry/oauth2/disconnect",
+    responses((status = 200), (status = 403))
+)]
+pub async fn registry_oauth2_disconnect(
     State(s): State<AppState>,
     RequirePermission(u, _): RequirePermission<perms::PluginsManage>,
 ) -> ApiResult<Json<Value>> {

@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { ImageUrlField } from "@/components/admin/ImageUrlField";
 import { ListCard } from "@/components/ListPage";
 import { FormError } from "@/components/Field";
 import { api, ApiError } from "@/lib/api";
@@ -149,7 +150,14 @@ function MaterialDialog({ initial }: { initial?: Material }) {
             <div className="flex flex-col gap-1.5"><Label htmlFor="m-s">{t("affiliate.sort_order")}</Label><Input id="m-s" type="number" value={d.sort_order} onChange={(e) => setD({ ...d, sort_order: Number(e.target.value) })} /></div>
           </div>
           <div className="flex flex-col gap-1.5"><Label htmlFor="m-t">{t("affiliate.material_title")}</Label><Input id="m-t" value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} /></div>
-          {d.kind === "banner" && <div className="flex flex-col gap-1.5"><Label htmlFor="m-i">{t("affiliate.image_url")}</Label><Input id="m-i" type="url" value={d.image_url} onChange={(e) => setD({ ...d, image_url: e.target.value })} /></div>}
+          {d.kind === "banner" && (
+            <ImageUrlField
+              id="m-i"
+              label={t("affiliate.image_url")}
+              value={d.image_url}
+              onChange={(url) => setD({ ...d, image_url: url })}
+            />
+          )}
           <div className="flex flex-col gap-1.5"><Label htmlFor="m-b">{t("affiliate.material_body")}</Label><Textarea id="m-b" rows={4} value={d.body} onChange={(e) => setD({ ...d, body: e.target.value })} /><p className="text-xs text-muted-foreground">{t("affiliate.material_body_help")}</p></div>
           <div className="flex items-center gap-2"><Switch id="m-a" checked={d.active} onCheckedChange={(v) => setD({ ...d, active: v })} /><Label htmlFor="m-a">{t("affiliate.material_active")}</Label></div>
           <FormError message={save.error} />
