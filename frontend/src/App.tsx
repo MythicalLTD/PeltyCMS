@@ -104,6 +104,7 @@ const AdminNoticeboardPage = lazy(() => import("@/pages/admin/support/Noticeboar
 const AdminKycPage = lazy(() => import("@/pages/admin/clients/Kyc").then((m) => ({ default: m.AdminKycPage })));
 const ClientVerificationPage = lazy(() => import("@/pages/client/account/Verification").then((m) => ({ default: m.ClientVerificationPage })));
 const AdminMarketplacePage = lazy(() => import("@/pages/admin/extensions/Marketplace").then((m) => ({ default: m.AdminMarketplacePage })));
+const AdminMarketplaceFinishPage = lazy(() => import("@/pages/admin/extensions/Marketplace").then((m) => ({ default: m.AdminMarketplaceFinishPage })));
 const AdminVendorCatalogPage = lazy(() => import("@/pages/admin/extensions/VendorCatalog").then((m) => ({ default: m.AdminVendorCatalogPage })));
 const AdminProjectsPage = lazy(() => import("@/pages/admin/support/Projects").then((m) => ({ default: m.AdminProjectsPage })));
 const AdminProjectDetailPage = lazy(() => import("@/pages/admin/support/Projects").then((m) => ({ default: m.AdminProjectDetailPage })));
@@ -349,6 +350,7 @@ export function App() {
         <Route path="todos" element={<AdminTodosPage />} />
         <Route path="projects" element={<AdminProjectsPage />} />
         <Route path="marketplace" element={<AdminMarketplacePage />} />
+        <Route path="marketplace/finish" element={<AdminMarketplaceFinishPage />} />
         <Route path="vendor-catalog" element={<AdminVendorCatalogPage />} />
         <Route path="kyc" element={<AdminKycPage />} />
         <Route path="getting-started" element={<AdminGettingStartedPage />} />

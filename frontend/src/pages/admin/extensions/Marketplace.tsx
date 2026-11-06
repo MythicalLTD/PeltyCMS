@@ -1,10 +1,21 @@
 import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowSquareOutIcon, DownloadSimpleIcon, StorefrontIcon } from "@phosphor-icons/react";
+import {
+  ArrowSquareOutIcon,
+  CheckCircleIcon,
+  DownloadSimpleIcon,
+  LinkSimpleIcon,
+  LinkSimpleBreakIcon,
+  SpinnerGapIcon,
+  StorefrontIcon,
+  WarningCircleIcon,
+} from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { EmptyState } from "@/components/EmptyState";
+import { MarkdownSafe, plainFromMarkdown } from "@/components/MarkdownSafe";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,9 +33,20 @@ const STATE_LABEL: Record<string, TranslationKey> = {
   builtin: "addons.market.state.builtin",
 };
 
-/** Official MythicalSystems marketplace — the only addon store in PeltyCMS. */
+/** Official MythicalSystems marketplace, the only addon store in PeltyCMS. */
 export const MYTHICAL_REGISTRY_URL = "https://market.mythicalsystems.org/api/pelty/addons/registry.json";
 export const MYTHICAL_MARKET_HOME = "https://market.mythicalsystems.org";
+
+type RegistrySettings = {
+  url: string;
+  panel_public_key?: string;
+  panel_private_key?: string;
+  panel_linked?: boolean;
+  team_uuid?: string;
+  team_name?: string;
+  mythic_user_id?: string;
+  linked_at?: string;
+};
 
 function useErr() {
   const { t, tCode } = useI18n();
@@ -36,6 +58,14 @@ function isMythicalUrl(url: string): boolean {
   return u === MYTHICAL_REGISTRY_URL || u.includes("market.mythicalsystems.org/api/pelty/");
 }
 
+function param(search: URLSearchParams, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = search.get(key);
+    if (value !== null && value !== "") return value;
+  }
+  return null;
+}
+
 export function AdminMarketplacePage() {
   const { t, tCode } = useI18n();
   const qc = useQueryClient();
@@ -43,13 +73,8 @@ export function AdminMarketplacePage() {
   const locked = useRef(false);
   const cfg = useQuery({
     queryKey: ["admin", "addons", "registry", "settings"],
-    queryFn: () =>
-      api<{ url: string; panel_public_key?: string; panel_private_key?: string; panel_linked?: boolean }>(
-        "/admin/addons/registry/settings",
-      ),
+    queryFn: () => api<RegistrySettings>("/admin/addons/registry/settings"),
   });
-  const [pubKey, setPubKey] = useState<string | null>(null);
-  const [privKey, setPrivKey] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [price, setPrice] = useState<"all" | "free" | "paid">("all");
 
@@ -85,20 +110,22 @@ export function AdminMarketplacePage() {
     retry: false,
   });
 
-  const save = useMutation({
-    mutationFn: () =>
-      api<{ url: string; panel_linked?: boolean }>("/admin/addons/registry/settings", {
-        method: "PUT",
-        body: {
-          url: MYTHICAL_REGISTRY_URL,
-          panel_public_key: pubValue,
-          panel_private_key: privValue,
-        },
-      }),
+  const connect = useMutation({
+    mutationFn: () => api<{ oauth2_url: string }>("/admin/addons/registry/oauth2/link"),
+    onSuccess: (data) => {
+      if (!data.oauth2_url) {
+        toast.error(t("error.internal"));
+        return;
+      }
+      window.location.href = data.oauth2_url;
+    },
+    onError: onErr,
+  });
+
+  const disconnect = useMutation({
+    mutationFn: () => api<RegistrySettings>("/admin/addons/registry/oauth2/disconnect", { method: "POST" }),
     onSuccess: () => {
       toast.success(t("common.saved"));
-      setPubKey(null);
-      setPrivKey(null);
       void qc.invalidateQueries({ queryKey: ["admin", "addons", "registry"] });
       void qc.invalidateQueries({ queryKey: ["admin", "addons", "registry", "settings"] });
     },
@@ -118,14 +145,13 @@ export function AdminMarketplacePage() {
     onError: onErr,
   });
 
-  const pubValue = pubKey ?? cfg.data?.panel_public_key ?? "";
-  const privValue = privKey ?? cfg.data?.panel_private_key ?? "";
+  const linked = !!cfg.data?.panel_linked;
   const items = (idx.data?.items ?? []).filter((i) => {
     const free = i.is_free !== false;
     if (price === "free" && !free) return false;
     if (price === "paid" && free) return false;
     if (!q.trim()) return true;
-    const hay = `${i.name} ${i.id} ${i.description} ${i.author}`.toLowerCase();
+    const hay = `${i.name} ${i.id} ${plainFromMarkdown(i.description ?? "")} ${i.author}`.toLowerCase();
     return hay.includes(q.trim().toLowerCase());
   });
 
@@ -137,7 +163,8 @@ export function AdminMarketplacePage() {
         actions={
           <Button variant="outline" asChild>
             <a href={MYTHICAL_MARKET_HOME} target="_blank" rel="noreferrer noopener">
-              <ArrowSquareOutIcon />{t("addons.market.open_mythical")}
+              <ArrowSquareOutIcon />
+              {t("addons.market.open_mythical")}
             </a>
           </Button>
         }
@@ -146,34 +173,51 @@ export function AdminMarketplacePage() {
       <Card>
         <CardContent className="grid gap-3 pt-6">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="default"><StorefrontIcon className="size-3.5" />{t("addons.market.mythical_only")}</Badge>
-            {cfg.data?.panel_linked ? (
+            <Badge variant="default">
+              <StorefrontIcon className="size-3.5" />
+              {t("addons.market.mythical_only")}
+            </Badge>
+            {linked ? (
               <Badge variant="outline">{t("addons.market.panel_linked")}</Badge>
             ) : (
               <Badge variant="muted">{t("addons.market.panel_unlinked")}</Badge>
             )}
           </div>
           <p className="text-sm text-muted-foreground">{t("addons.market.panel_hint")}</p>
-          <form
-            className="grid gap-3 md:grid-cols-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              save.mutate();
-            }}
-          >
-            <div className="flex min-w-0 flex-col gap-2">
-              <Label htmlFor="panel-pub">{t("addons.market.panel_public")}</Label>
-              <Input id="panel-pub" value={pubValue} onChange={(e) => setPubKey(e.target.value)} placeholder="FCPUB-…" autoComplete="off" />
-            </div>
-            <div className="flex min-w-0 flex-col gap-2">
-              <Label htmlFor="panel-priv">{t("addons.market.panel_private")}</Label>
-              <Input id="panel-priv" type="password" value={privValue} onChange={(e) => setPrivKey(e.target.value)} placeholder="FCPRIV-…" autoComplete="off" />
-            </div>
-            <div className="md:col-span-2">
-              <Button type="submit" disabled={save.isPending}>{t("common.save")}</Button>
-            </div>
-          </form>
-          <p className="break-all font-mono text-xs text-muted-foreground">{MYTHICAL_REGISTRY_URL}</p>
+          {linked && (cfg.data?.team_name || cfg.data?.team_uuid) ? (
+            <p className="text-sm">
+              {t("addons.market.linked_as", {
+                team: cfg.data.team_name || cfg.data.team_uuid || "",
+              })}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              disabled={connect.isPending || disconnect.isPending}
+              onClick={() => connect.mutate()}
+            >
+              <LinkSimpleIcon />
+              {connect.isPending
+                ? t("addons.market.oauth_starting")
+                : linked
+                  ? t("addons.market.reconnect")
+                  : t("addons.market.connect")}
+            </Button>
+            {linked ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={disconnect.isPending || connect.isPending}
+                onClick={() => {
+                  if (window.confirm(t("addons.market.disconnect_confirm"))) disconnect.mutate();
+                }}
+              >
+                <LinkSimpleBreakIcon />
+                {t("addons.market.disconnect")}
+              </Button>
+            ) : null}
+          </div>
         </CardContent>
       </Card>
 
@@ -183,11 +227,13 @@ export function AdminMarketplacePage() {
           <Input id="mk-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("addons.search")} />
         </div>
         <div className="flex flex-wrap gap-2">
-          {([
-            ["all", "addons.market.filter_all"],
-            ["free", "addons.market.filter_free"],
-            ["paid", "addons.market.filter_paid"],
-          ] as const).map(([p, label]) => (
+          {(
+            [
+              ["all", "addons.market.filter_all"],
+              ["free", "addons.market.filter_free"],
+              ["paid", "addons.market.filter_paid"],
+            ] as const
+          ).map(([p, label]) => (
             <Button key={p} size="sm" variant={price === p ? "default" : "outline"} onClick={() => setPrice(p)}>
               {t(label)}
             </Button>
@@ -220,26 +266,29 @@ export function AdminMarketplacePage() {
                     <div className="min-w-0">
                       <p className="break-words font-medium">{i.name}</p>
                       <p className="truncate font-mono text-xs text-muted-foreground">
-                        {i.id} · v{i.version}{i.author ? ` · ${i.author}` : ""}
+                        {i.id} · v{i.version}
+                        {i.author ? ` · ${i.author}` : ""}
                       </p>
                     </div>
                   </div>
-                  <Badge variant={st === "update" ? "default" : "outline"}>{t(STATE_LABEL[st] ?? "addons.market.state.new")}</Badge>
+                  <Badge variant={st === "update" ? "default" : "outline"}>
+                    {t(STATE_LABEL[st] ?? "addons.market.state.new")}
+                  </Badge>
                 </div>
-                {i.description && <p className="line-clamp-3 text-sm text-muted-foreground">{i.description}</p>}
+                {i.description ? <MarkdownSafe source={i.description} clamp={4} /> : null}
                 <div className="flex flex-wrap gap-1.5">
                   <Badge variant="outline">{tCode(`addons.kind.${i.kind}`)}</Badge>
                   <Badge variant={free ? "muted" : "default"}>
-                    {free ? t("addons.market.free") : (i.price ? `${i.price}` : t("addons.market.paid"))}
+                    {free ? t("addons.market.free") : i.price ? `${i.price}` : t("addons.market.paid")}
                   </Badge>
                 </div>
                 <div className="mt-auto flex flex-wrap gap-2 pt-1">
                   {(st === "new" || st === "update") && (
                     <Button
                       size="sm"
-                      disabled={install.isPending || (!free && !cfg.data?.panel_linked)}
+                      disabled={install.isPending || (!free && !linked)}
                       onClick={() => install.mutate(i)}
-                      title={!free && !cfg.data?.panel_linked ? t("addons.market.panel_hint") : undefined}
+                      title={!free && !linked ? t("addons.market.panel_hint") : undefined}
                     >
                       <DownloadSimpleIcon />
                       {st === "update" ? t("addons.market.update") : t("addons.market.download")}
@@ -248,14 +297,16 @@ export function AdminMarketplacePage() {
                   {!free && i.purchase_url?.startsWith("https://") && (
                     <Button size="sm" variant="outline" asChild>
                       <a href={i.purchase_url} target="_blank" rel="noreferrer noopener">
-                        <ArrowSquareOutIcon />{t("addons.market.buy")}
+                        <ArrowSquareOutIcon />
+                        {t("addons.market.buy")}
                       </a>
                     </Button>
                   )}
                   {i.homepage?.startsWith("https://") && (
                     <Button size="sm" variant="ghost" asChild>
                       <a href={i.homepage} target="_blank" rel="noreferrer noopener">
-                        <ArrowSquareOutIcon />{t("addons.market.homepage")}
+                        <ArrowSquareOutIcon />
+                        {t("addons.market.homepage")}
                       </a>
                     </Button>
                   )}
@@ -265,6 +316,113 @@ export function AdminMarketplacePage() {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/** Mythic OAuth finish callback (same query contract as FeatherPanel cloud-management/finish). */
+export function AdminMarketplaceFinishPage() {
+  const { t, tCode } = useI18n();
+  const navigate = useNavigate();
+  const [search] = useSearchParams();
+  const qc = useQueryClient();
+  const ran = useRef(false);
+  const [phase, setPhase] = useState<"loading" | "success" | "error" | "cancelled">("loading");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (ran.current) return;
+    ran.current = true;
+
+    const finish = async () => {
+      const status = (param(search, "status") || "").toLowerCase();
+      const errorParam = param(search, "error", "error_message");
+
+      if (status === "cancelled" || status === "cancel") {
+        setPhase("cancelled");
+        setError(t("addons.market.finish.cancelled_desc"));
+        return;
+      }
+      if (status === "error" || errorParam) {
+        setPhase("error");
+        setError(errorParam ? decodeURIComponent(errorParam) : t("addons.market.finish.failed"));
+        return;
+      }
+
+      const body: Record<string, string> = { status: status || "success" };
+      const optional: Array<[string, string | null]> = [
+        ["public_identity_key", param(search, "public_identity_key", "panel_public_key")],
+        ["private_key", param(search, "private_key", "panel_private_key")],
+        ["mythic_user_id", param(search, "mythic_user_id", "user_uuid", "authorizer_user_id", "user_id")],
+        ["user_uuid", param(search, "user_uuid")],
+        ["team_uuid", param(search, "team_uuid", "team")],
+        ["team_name", param(search, "team_name")],
+        ["team_slug", param(search, "team_slug")],
+        ["cloud_api_key", param(search, "cloud_api_key")],
+        ["cloud_api_secret", param(search, "cloud_api_secret")],
+      ];
+      for (const [key, value] of optional) {
+        if (!value) continue;
+        try {
+          body[key] = decodeURIComponent(value);
+        } catch {
+          body[key] = value;
+        }
+      }
+
+      if (!body.public_identity_key || !body.private_key || !body.mythic_user_id || !body.team_uuid) {
+        setPhase("error");
+        setError(t("addons.market.finish.missing_params"));
+        return;
+      }
+
+      try {
+        await api("/admin/addons/registry/oauth2/callback", { method: "POST", body });
+        setPhase("success");
+        void qc.invalidateQueries({ queryKey: ["admin", "addons", "registry"] });
+        void qc.invalidateQueries({ queryKey: ["admin", "addons", "registry", "settings"] });
+        window.setTimeout(() => navigate("/admin/marketplace", { replace: true }), 1600);
+      } catch (e) {
+        setPhase("error");
+        setError(e instanceof ApiError ? tCode(e.code) : t("addons.market.finish.failed"));
+      }
+    };
+
+    void finish();
+  }, [search, navigate, t, tCode, qc]);
+
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center p-6">
+      <Card className="w-full max-w-md">
+        <CardContent className="grid gap-4 pt-8 text-center">
+          <div className="flex justify-center">
+            {phase === "loading" && <SpinnerGapIcon className="size-12 animate-spin text-primary" />}
+            {phase === "success" && <CheckCircleIcon className="size-12 text-success" weight="fill" />}
+            {(phase === "error" || phase === "cancelled") && (
+              <WarningCircleIcon className="size-12 text-destructive" weight="fill" />
+            )}
+          </div>
+          <div className="grid gap-1">
+            <h1 className="text-xl font-semibold tracking-tight">
+              {phase === "loading" && t("addons.market.finish.processing")}
+              {phase === "success" && t("addons.market.finish.success")}
+              {phase === "error" && t("addons.market.finish.failed")}
+              {phase === "cancelled" && t("addons.market.finish.cancelled")}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {phase === "loading" && t("addons.market.finish.processing_desc")}
+              {phase === "success" && t("addons.market.finish.success_desc")}
+              {(phase === "error" || phase === "cancelled") &&
+                (error || t("addons.market.finish.cancelled_desc"))}
+            </p>
+          </div>
+          {phase !== "loading" && (
+            <Button asChild>
+              <Link to="/admin/marketplace">{t("addons.market.finish.back")}</Link>
+            </Button>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

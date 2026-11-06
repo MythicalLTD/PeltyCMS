@@ -121,10 +121,13 @@ fn help() {
     println!("\nShortcuts (.cargo/config.toml): cargo dev, cargo stop, cargo addons, cargo seed");
 }
 
-/// `cargo run -q -p pelty-docs -- target/docs` (same invocation the website's docs-sync uses).
+/// `cargo run --release -p pelty-docs -- target/docs`.
+/// Release on purpose: `xtask build` then builds `pelty-server --release`, and
+/// pelty-docs depends on pelty-api. Dev-profile docs would recompile the whole
+/// API stack a second time in debug (ring/rustls/sqlx/…) for nothing.
 fn docs(ctx: &Ctx) -> R {
     util::run(
         ctx.cargo()
-            .args(["run", "-p", "pelty-docs", "--", "target/docs"]),
+            .args(["run", "--release", "-p", "pelty-docs", "--", "target/docs"]),
     )
 }

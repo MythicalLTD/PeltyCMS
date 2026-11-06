@@ -18,6 +18,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ConfirmAction } from "@/components/ConfirmAction";
+import { MarkdownSafe } from "@/components/MarkdownSafe";
 import { api, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { UploadAddonButton, MarketplaceButton } from "./AddonPackages";
@@ -76,7 +77,7 @@ export function AdminAddonsPage({ embedded = false }: { embedded?: boolean } = {
                   </div>
                   <Badge variant={a.status === "enabled" ? "default" : a.status === "disabled" ? "outline" : "muted"}>{t(`addons.status.${a.status}`)}</Badge>
                 </div>
-                <p className="text-sm text-muted-foreground">{describe(a, tCode)}</p>
+                <MarkdownSafe source={describe(a, tCode)} clamp={3} />
                 <div className="flex flex-wrap gap-1.5">
                   <Badge variant="outline">{t(`addons.kind.${a.kind}`)}</Badge>
                   <Badge variant="muted">{t(`addons.source.${a.source}`)}</Badge>

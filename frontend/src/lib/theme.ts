@@ -76,23 +76,45 @@ export function applyTheme(theme: Theme, root: StyleRoot): number {
   return applied;
 }
 
+let cachedTheme: Theme | null = null;
+
+/**
+ * Apply design tokens everywhere, but keep packaged stylesheet + custom CSS off
+ * `/admin` so a client-area theme cannot wipe the staff shell.
+ */
+export function setThemeChromeEnabled(enabled: boolean) {
+  const theme = cachedTheme;
+  document.getElementById("pelty-theme-css")?.remove();
+  document.querySelectorAll("link[data-pelty-theme-slot]").forEach((n) => n.remove());
+  if (!enabled || !theme) {
+    applyCustomCss("");
+    return;
+  }
+  if (theme.stylesheet_url) {
+    const link = document.createElement("link");
+    link.id = "pelty-theme-css";
+    link.rel = "stylesheet";
+    link.href = theme.stylesheet_url;
+    document.head.appendChild(link);
+  }
+  applyCustomCss(theme.custom_css ?? "");
+  applyTemplateStyles(theme.templates ?? {});
+}
+
 export async function loadActiveTheme(): Promise<Theme | null> {
   try {
     const theme = await api<Theme | null>("/themes/active");
-    if (!theme) return null;
-    applyTheme(theme, document.documentElement);
-    document.getElementById("pelty-theme-css")?.remove();
-    if (theme.stylesheet_url) {
-      const link = document.createElement("link");
-      link.id = "pelty-theme-css";
-      link.rel = "stylesheet";
-      link.href = theme.stylesheet_url;
-      document.head.appendChild(link);
+    cachedTheme = theme;
+    if (!theme) {
+      setThemeChromeEnabled(false);
+      return null;
     }
-    applyCustomCss(theme.custom_css ?? "");
-    applyTemplateStyles(theme.templates ?? {});
+    applyTheme(theme, document.documentElement);
+    const onAdmin = typeof location !== "undefined" && location.pathname.startsWith("/admin");
+    setThemeChromeEnabled(!onAdmin);
     return theme;
   } catch {
+    cachedTheme = null;
     return null;
   }
 }
