@@ -288,6 +288,11 @@ const TEMPLATES: &[(&str, &str, &str)] = &[
         include_str!("../templates/developers/addon-compatibility.md"),
     ),
     (
+        "hooks-and-slots",
+        "Guides",
+        include_str!("../templates/developers/hooks-and-slots.md"),
+    ),
+    (
         "addon-security-review",
         "Guides",
         include_str!("../templates/developers/addon-security-review.md"),

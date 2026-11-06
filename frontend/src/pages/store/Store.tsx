@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { PluginSlot } from "@/components/plugin-ui/PluginSlot";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
@@ -417,6 +418,7 @@ export function CheckoutPage() {
             </Card>
           );
         })}
+        <PluginSlot slot="client.checkout.step" ctx={{ currency: view?.preview?.currency ?? "", gateway: chosen ?? "" }} />
         <Card>
           <CardHeader><CardTitle>{t("store.payment_method")}</CardTitle></CardHeader>
           <CardContent>

@@ -5,6 +5,7 @@
 //! persistence live in the job queue (`pelty-api::worker`).
 //! Every module describes its server and product settings with a declarative
 //! field schema, so the admin UI renders them natively without module code.
+pub mod client_area;
 pub mod http;
 pub mod licensing;
 pub mod registrar;
@@ -13,6 +14,10 @@ pub mod sso;
 pub mod template;
 pub mod util;
 pub mod wire;
+
+pub use client_area::{
+    default_area, parse_override, ClientActionField, ClientActionMeta, ClientArea, ClientAreaTab,
+};
 
 use serde::Serialize;
 use serde_json::Value;
@@ -203,6 +208,13 @@ pub trait ProvisioningModule: Send + Sync {
     /// Names of extra actions this module supports (custom buttons).
     fn custom_actions(&self) -> &'static [&'static str] {
         &[]
+    }
+    /// WHMCS-style client area: tabs + rich action metadata. Default builds
+    /// Overview / Details / Usage / Actions from [`Self::custom_actions`].
+    fn client_area(&self) -> crate::client_area::ClientArea {
+        // Modules that implement `usage` still report via the live call; the
+        // default always offers a Usage tab so the panel layout is stable.
+        crate::client_area::default_area(self.custom_actions(), true)
     }
     /// Run one extra action. `params` carries user input (e.g. a new
     /// password or an image id). Returns module-specific output (a console
