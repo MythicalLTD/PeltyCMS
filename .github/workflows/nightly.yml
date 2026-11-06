@@ -66,4 +66,5 @@ jobs:
     with:
       version: ${{ needs.plan.outputs.version }}
       floating_tag: nightly
+      checkout_ref: develop
     secrets: inherit

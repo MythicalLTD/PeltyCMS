@@ -10,7 +10,8 @@ COPY frontend/ ./
 COPY locales/ /src/locales/
 RUN pnpm run build
 
-FROM rust:1.97-bookworm AS build
+# Track latest stable like CI (`dtolnay/rust-toolchain@stable`); MSRV is in Cargo.toml.
+FROM rust:1-bookworm AS build
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
@@ -38,7 +39,8 @@ RUN cargo build --release --locked -p pelty-server -p pelty-docs \
  && ./target/release/pelty-docs /src/target/docs
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* \
+# bash is required for HEALTHCHECK (/dev/tcp); debian-slim's /bin/sh is dash.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates bash && rm -rf /var/lib/apt/lists/* \
  && useradd --system --uid 10001 pelty \
  && mkdir /data && chown pelty:pelty /data
 COPY --from=build /src/target/release/pelty-server /usr/local/bin/pelty-server
