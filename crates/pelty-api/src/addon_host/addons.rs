@@ -937,7 +937,11 @@ pub async fn registry_oauth2_link(
     } else {
         String::new()
     };
-    let callback_url = format!("{panel_url}/admin/marketplace/finish");
+    // Mythic OAuth appends FeatherPanel's finish path onto callback_url/redirect_url
+    // (`/admin/cloud-management/finish`). Pass the panel root only — not a full finish URL —
+    // or redirects become `/admin/marketplace/finish/admin/cloud-management/finish` (404).
+    let callback_url = panel_url.clone();
+    let finish_url = format!("{panel_url}/admin/cloud-management/finish");
     let oauth_base = DEFAULT_MYTHIC_OAUTH_URL;
     let mut params = vec![
         ("panel_url", panel_url.as_str()),
@@ -964,7 +968,7 @@ pub async fn registry_oauth2_link(
         None,
         u.ip.as_deref(),
         // Never log the OAuth URL: it carries panel private_key query params.
-        json!({ "panel_url": panel_url, "callback_url": callback_url }),
+        json!({ "panel_url": panel_url, "callback_url": callback_url, "finish_url": finish_url }),
     )
     .await?;
 
@@ -972,6 +976,7 @@ pub async fn registry_oauth2_link(
         "oauth2_url": oauth2_url,
         "oauth_base_url": oauth_base,
         "callback_url": callback_url,
+        "finish_url": finish_url,
     })))
 }
 

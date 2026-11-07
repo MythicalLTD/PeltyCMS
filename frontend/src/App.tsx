@@ -350,6 +350,8 @@ export function App() {
         <Route path="todos" element={<AdminTodosPage />} />
         <Route path="projects" element={<AdminProjectsPage />} />
         <Route path="marketplace" element={<AdminMarketplacePage />} />
+        {/* Mythic OAuth appends FeatherPanel's path onto the panel root callback. */}
+        <Route path="cloud-management/finish" element={<AdminMarketplaceFinishPage />} />
         <Route path="marketplace/finish" element={<AdminMarketplaceFinishPage />} />
         <Route path="vendor-catalog" element={<AdminVendorCatalogPage />} />
         <Route path="kyc" element={<AdminKycPage />} />

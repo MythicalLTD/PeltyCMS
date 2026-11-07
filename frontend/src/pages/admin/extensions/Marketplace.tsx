@@ -363,7 +363,11 @@ export function AdminMarketplacePage() {
   );
 }
 
-/** Mythic OAuth finish callback (same query contract as FeatherPanel cloud-management/finish). */
+/**
+ * Mythic OAuth finish callback.
+ * Served at `/admin/cloud-management/finish` (FeatherPanel-compatible path Mythic appends)
+ * and `/admin/marketplace/finish` (Pelty alias). Same query contract either way.
+ */
 export function AdminMarketplaceFinishPage() {
   const { t, tCode } = useI18n();
   const navigate = useNavigate();
