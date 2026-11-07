@@ -27,6 +27,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       rust: ${{ steps.filter.outputs.rust }}
       docker: ${{ steps.filter.outputs.docker }}
+      workflow_scripts: ${{ steps.filter.outputs.workflow_scripts }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -36,6 +37,7 @@ jobs:
             frontend:
               - 'frontend/**'
               - 'locales/**'
+              - '.github/workflows/ci.yml'
             rust:
               - 'Cargo.toml'
               - 'Cargo.lock'
@@ -46,13 +48,33 @@ jobs:
               - 'locales/**'
               - '.cargo/**'
               - 'Makefile'
+              - 'scripts/test-ci-linker.sh'
               - '.github/workflows/ci.yml'
+            workflow_scripts:
+              - '.github/workflows/**'
+              - 'scripts/release-archives.sh'
+              - 'scripts/test-release-archives.sh'
             # Full image is already built on nightly/release. CI only rechecks
             # when packaging inputs change (or the PR has the `docker` label).
             docker:
               - 'Dockerfile'
               - '.dockerignore'
               - 'docker-compose.yml'
+              - '.github/workflows/ci.yml'
+
+  workflow-scripts:
+    name: Workflow shell (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.workflow_scripts == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test portable release archive discovery (no publishing)
+        run: /bin/bash scripts/test-release-archives.sh
 
   frontend:
     name: Frontend
@@ -97,6 +119,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
+    env:
+      # Target-scoped flags also cover native cargo/xtask builds, but must not
+      # leak into the child wasm32-wasip2 builds run by xtask or test fixtures.
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -114,8 +141,6 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq clang lld
-          echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=clang" >> "$GITHUB_ENV"
-          echo "RUSTFLAGS=-C link-arg=-fuse-ld=lld" >> "$GITHUB_ENV"
 
       - name: rustfmt
         run: cargo fmt --all -- --check
@@ -129,6 +154,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
+    env:
+      # Target-scoped flags also cover native cargo/xtask builds, but must not
+      # leak into the child wasm32-wasip2 builds run by xtask or test fixtures.
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
     # Integration suite links one large binary (wasmtime + sqlx + addons).
     # Keep disk free and cache the registry/target aggressively.
     services:
@@ -182,8 +212,9 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq poppler-utils clang lld
-          echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=clang" >> "$GITHUB_ENV"
-          echo "RUSTFLAGS=-C link-arg=-fuse-ld=lld" >> "$GITHUB_ENV"
+
+      - name: Check native/WASM linker isolation
+        run: bash scripts/test-ci-linker.sh
 
       - name: Build WASM addons
         run: |

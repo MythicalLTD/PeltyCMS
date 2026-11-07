@@ -9,6 +9,14 @@ use tokio_tungstenite::{
 };
 use uuid::Uuid;
 
+// These two tests change the same persisted chat settings and feature flag.
+// SuiteGate permits tests within one module to run concurrently; without this
+// lock one test can restore live_chat=false between another test's websocket
+// upgrade and token validation, correctly revoking that connection mid-handshake.
+// Keep all authentication/replay assertions intact and isolate only the shared
+// settings lifecycle, rather than retrying a failed connection or delaying it.
+static SETTINGS_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 async fn next_json(
     socket: &mut tokio_tungstenite::WebSocketStream<
         tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
@@ -29,6 +37,7 @@ async fn next_json(
 
 #[tokio::test]
 async fn live_chat_settings_assignment_and_atomic_conversion() {
+    let _settings_guard = SETTINGS_LOCK.lock().await;
     let (app, s) = app().await;
     let admin = sess(&app, &s, "admin").await;
     let customer = sess(&app, &s, "customer").await;
@@ -317,6 +326,7 @@ async fn live_chat_redis_message_hints_cross_instances() {
 
 #[tokio::test]
 async fn live_chat_websocket_origin_auth_and_replay() {
+    let _settings_guard = SETTINGS_LOCK.lock().await;
     let (app, s) = app().await;
     let admin = sess(&app, &s, "admin").await;
     let customer = sess(&app, &s, "customer").await;

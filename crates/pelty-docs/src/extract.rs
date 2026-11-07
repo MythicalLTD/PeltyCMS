@@ -438,6 +438,19 @@ mod tests {
         );
     }
     #[test]
+    fn local_postgres_env_settings_are_documented() {
+        let vars = env_vars();
+        for (name, detail) in [
+            ("PELTY_LOCAL_PG", "true or 1"),
+            ("PELTY_LOCAL_PG_PORT", "5432"),
+            ("PELTY_PG_HOME", "data/pg"),
+        ] {
+            let setting = vars.iter().find(|v| v.name == name).expect(name);
+            assert!(setting.doc.contains(detail), "{name}: {}", setting.doc);
+        }
+    }
+
+    #[test]
     fn env_vars_come_from_code() {
         let v = env_vars();
         let bind = v.iter().find(|e| e.name == "PELTY_BIND").unwrap();
