@@ -2,8 +2,13 @@
 # (Intel + Apple Silicon). Packages via `cargo xtask release`, publishes a
 # GitHub Release, and pushes the Docker image to GHCR.
 #
+# Progressive publish: open a (pre)release as soon as packaging starts, then each
+# matrix job uploads its archive the moment it finishes — so downloads are
+# available without waiting for the full ~1–3h matrix. Checksums, floating
+# `nightly`, and Docker land in the final Publish job. Prereleases never become
+# GitHub "latest"; stable stays draft until Publish undrafts it.
+#
 # Tags are always v-prefixed SemVer (v1.0.0, v1.0.0-rc.1, v0.1.0-nightly.DATE).
-# Prereleases never become GitHub "latest" and never get the :latest Docker tag.
 name: Release
 
 on:
@@ -36,6 +41,7 @@ on:
 permissions:
   contents: write
   packages: write
+  actions: read
 
 concurrency:
   group: release-${{ inputs.version || github.ref_name }}
@@ -54,7 +60,14 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
       prerelease: ${{ steps.meta.outputs.prerelease }}
       floating: ${{ steps.meta.outputs.floating }}
+      # Pin once so a 3h matrix does not drift to a newer develop tip mid-run.
+      sha: ${{ steps.meta.outputs.sha }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 1
+
       - name: Resolve version
         id: meta
         run: |
@@ -69,6 +82,7 @@ jobs:
             exit 1
           fi
           floating="${{ inputs.floating_tag }}"
+          sha="$(git rev-parse HEAD)"
           {
             echo "version=$raw"
             echo "tag=v$raw"
@@ -78,8 +92,58 @@ jobs:
               echo "prerelease=false"
             fi
             echo "floating=${floating}"
+            echo "sha=${sha}"
           } >> "$GITHUB_OUTPUT"
-          echo "Publishing PeltyCMS v$raw"
+          echo "Publishing PeltyCMS v$raw @ ${sha}"
+
+  # Open the GitHub Release early (prerelease, or draft for stable) so matrix
+  # jobs can upload archives as they finish. Do NOT pass --target (see Publish).
+  open-release:
+    name: Open release
+    needs: meta
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.meta.outputs.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Create progressive release shell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ needs.meta.outputs.tag }}"
+          sha="${{ needs.meta.outputs.sha }}"
+          pre="${{ needs.meta.outputs.prerelease }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release ${tag} already exists; matrix will upload into it"
+            exit 0
+          fi
+          if ! git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            git tag "$tag" "$sha"
+            git push origin "refs/tags/${tag}"
+          fi
+          {
+            echo "# PeltyCMS ${tag}"
+            echo
+            echo "🚧 **Building** — platform archives appear below as each CI job finishes."
+            echo "SHA256SUMS / manifest.json / Docker land when Publish completes."
+            echo
+            echo "This is a **prerelease** (or draft) and is never GitHub Latest until Publish undrafts a stable tag."
+          } > "$RUNNER_TEMP/building-notes.md"
+          args=(--title "PeltyCMS ${tag} (building…)" --notes-file "$RUNNER_TEMP/building-notes.md")
+          if [ "$pre" = "true" ]; then
+            args+=(--prerelease)
+          else
+            # Stable: stay draft so we never briefly own "Latest" with a partial set.
+            args+=(--draft)
+          fi
+          gh release create "$tag" "${args[@]}"
+          echo "Opened ${tag} for progressive uploads"
 
   frontend:
     name: Frontend assets
@@ -88,8 +152,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.checkout_ref || github.sha }}
-          # Addon crates live as PeltyCMS/addon-* submodules under extensions/addons.
+          ref: ${{ needs.meta.outputs.sha }}
           submodules: recursive
 
       - uses: pnpm/action-setup@v4
@@ -119,9 +182,12 @@ jobs:
   # serializing four zig builds on a single runner.
   package:
     name: Package (${{ matrix.name }})
-    needs: [meta, frontend]
+    needs: [meta, frontend, open-release]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
+    permissions:
+      contents: write
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -162,7 +228,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.checkout_ref || github.sha }}
+          ref: ${{ needs.meta.outputs.sha }}
           fetch-depth: 0
           # Addon crates live as PeltyCMS/addon-* submodules under extensions/addons.
           submodules: recursive
@@ -176,9 +242,12 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      # Registry/git only. Target dirs are multi-GB per matrix cell and were
+      # blowing the free 10 GiB Actions cache quota (evicting CI lint/test caches).
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: release-${{ matrix.name }}
+          cache-targets: false
 
       - name: Free disk (Linux)
         if: runner.os == 'Linux'
@@ -220,16 +289,44 @@ jobs:
           if-no-files-found: error
           retention-days: 2
 
+      # Progressive: archive is downloadable as soon as this target finishes.
+      - name: Upload archive to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ needs.meta.outputs.tag }}"
+          ver="${{ needs.meta.outputs.version }}"
+          mapfile -t files < <(find "dist/${ver}" -maxdepth 1 -type f -name 'pelty-server-*' | sort)
+          test "${#files[@]}" -gt 0
+          # Retry: Open release may still be propagating, or another upload races.
+          for i in 1 2 3 4 5; do
+            if gh release upload "$tag" "${files[@]}" --clobber; then
+              echo "Uploaded ${files[*]##*/} → ${tag}"
+              exit 0
+            fi
+            echo "upload attempt ${i} failed; retrying…"
+            sleep $((i * 5))
+          done
+          echo "Failed to upload to ${tag}" >&2
+          exit 1
+
   publish:
     name: Publish
     needs: [meta, package]
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    permissions:
+      contents: write
+      packages: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.checkout_ref || github.sha }}
+          ref: ${{ needs.meta.outputs.sha }}
           fetch-depth: 0
+          fetch-tags: true
           # Addon crates live as PeltyCMS/addon-* submodules under extensions/addons.
           submodules: recursive
 
@@ -265,47 +362,49 @@ jobs:
           ls -la "dist/${{ needs.meta.outputs.version }}"
           cargo xtask release "${{ needs.meta.outputs.version }}" --assemble
 
-      - name: Publish GitHub Release
+      # Finalize the progressive release: checksums + real notes. Stable leaves
+      # draft here. Never use --target (needs workflows:write vs main).
+      - name: Finalize GitHub Release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           ver="${{ needs.meta.outputs.version }}"
           tag="${{ needs.meta.outputs.tag }}"
           dist="dist/${ver}"
           notes="${dist}/CHANGELOG.md"
-          mapfile -t files < <(find "$dist" -maxdepth 1 -type f ! -name 'CHANGELOG.md' | sort)
-          pre_args=()
+          # Meta files only — archives were uploaded per-target already.
+          mapfile -t meta_files < <(find "$dist" -maxdepth 1 -type f \
+            \( -name 'SHA256SUMS*' -o -name 'manifest.json' \) | sort)
+          test "${#meta_files[@]}" -gt 0
+          gh release upload "$tag" "${meta_files[@]}" --clobber
+          edit_args=(--title "PeltyCMS ${tag}" --notes-file "$notes")
           if [ "${{ needs.meta.outputs.prerelease }}" = "true" ]; then
-            pre_args+=(--prerelease)
-          fi
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" "${files[@]}" --clobber
-            gh release edit "$tag" --title "PeltyCMS ${tag}" --notes-file "$notes" "${pre_args[@]}"
+            edit_args+=(--prerelease)
           else
-            gh release create "$tag" "${files[@]}" \
-              --title "PeltyCMS ${tag}" \
-              --notes-file "$notes" \
-              --target "${{ github.sha }}" \
-              "${pre_args[@]}"
+            # Promote draft → published Latest only when the full set is ready.
+            edit_args+=(--draft=false)
           fi
+          gh release edit "$tag" "${edit_args[@]}"
+          echo "Finalized ${tag}"
 
       - name: Retarget floating prerelease tag
         if: needs.meta.outputs.floating != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           float="${{ needs.meta.outputs.floating }}"
           ver="${{ needs.meta.outputs.version }}"
           tag="${{ needs.meta.outputs.tag }}"
+          sha="${{ needs.meta.outputs.sha }}"
           dist="dist/${ver}"
           notes="${dist}/CHANGELOG.md"
           mapfile -t files < <(find "$dist" -maxdepth 1 -type f ! -name 'CHANGELOG.md' | sort)
           if gh release view "$float" >/dev/null 2>&1; then
             gh release delete "$float" --yes --cleanup-tag || gh release delete "$float" --yes
           fi
-          git tag -f "$float" "${{ github.sha }}"
+          git tag -f "$float" "$sha"
           git push -f origin "refs/tags/${float}"
           {
             echo "## PeltyCMS Nightly"
@@ -325,10 +424,10 @@ jobs:
             echo
             cat "$notes"
           } > "$RUNNER_TEMP/nightly-notes.md"
+          # No --target — tag already points at sha.
           gh release create "$float" "${files[@]}" \
             --title "PeltyCMS Nightly (${tag})" \
             --notes-file "$RUNNER_TEMP/nightly-notes.md" \
-            --target "${{ github.sha }}" \
             --prerelease
 
       - name: Set up Docker Buildx

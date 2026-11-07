@@ -50,14 +50,17 @@ pub async fn app_with(rate: u32) -> (Router, AppState) {
     state.set_http(std::sync::Arc::new(pelty_payments::NoTransport));
     state.init().await.expect("init");
     registrars(&state.registrars);
-    // Fresh installs start with no addons; integration tests use them all
-    // (the bundled WASM addons from `cargo xtask addons`).
+    // Install builtins once per process. Later tests pick them up via
+    // `init` → `load_enabled` (re-running install recompiled every WASM addon).
     {
-        static SEED: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-        let _g = SEED.lock().await;
-        pelty_api::addons::install_builtins(&state)
-            .await
-            .expect("addons");
+        static SEED: tokio::sync::OnceCell<()> = tokio::sync::OnceCell::const_new();
+        let seed_state = state.clone();
+        SEED.get_or_init(|| async move {
+            pelty_api::addons::install_builtins(&seed_state)
+                .await
+                .expect("addons");
+        })
+        .await;
     }
     (pelty_api::router(state.clone()), state)
 }

@@ -8,10 +8,22 @@ on:
     # 03:00 UTC every day
     - cron: "0 3 * * *"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Override SemVer without v (empty = 0.1.0-nightly.YYYYMMDD)"
+        required: false
+        type: string
+        default: ""
+      force:
+        description: "Rebuild even if today's tag already has checksums"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
   packages: write
+  actions: read
 
 jobs:
   plan:
@@ -25,25 +37,47 @@ jobs:
         with:
           ref: develop
           fetch-depth: 0
+          fetch-tags: true
           submodules: recursive
 
       - name: Decide version
         id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           day="$(date -u +%Y%m%d)"
-          version="0.1.0-nightly.${day}"
+          override="${{ inputs.version }}"
+          force="${{ inputs.force }}"
+          if [ -n "${override:-}" ]; then
+            version="${override#v}"
+          else
+            version="0.1.0-nightly.${day}"
+          fi
           tag="v${version}"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
-          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-            echo "Tag ${tag} already exists; skipping"
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-            exit 0
+          # Skip only when today's nightly was fully finalized (checksums present).
+          # A progressive "building…" shell without SHA256SUMS means a prior run
+          # died mid-matrix — continue so remaining/rebuilt archives can upload.
+          # workflow_dispatch can pass force=true to rebuild anyway.
+          if [ "${force}" != "true" ] && gh release view "$tag" >/dev/null 2>&1; then
+            if gh release view "$tag" --json assets \
+              --jq '[.assets[].name] | any(.=="SHA256SUMS" or .=="manifest.json")' \
+              | grep -qx true; then
+              echo "Release ${tag} already finalized; skipping"
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Release ${tag} exists but is incomplete; will continue progressive upload"
           fi
 
           # Skip when develop has not moved since the previous nightly tag.
           prev="$(git tag -l 'v0.1.0-nightly.*' --sort=-creatordate | head -n1 || true)"
+          if [ -z "$prev" ]; then
+            prev="$(gh release list --limit 50 --json tagName \
+              --jq '[.[].tagName | select(startswith("v0.1.0-nightly."))] | first' || true)"
+          fi
           if [ -n "$prev" ]; then
             ahead="$(git rev-list --count "${prev}..HEAD" 2>/dev/null || echo 0)"
             if [ "$ahead" = "0" ]; then
@@ -63,6 +97,10 @@ jobs:
     name: Release
     needs: plan
     if: needs.plan.outputs.should_run == 'true'
+    permissions:
+      contents: write
+      packages: write
+      actions: read
     uses: ./.github/workflows/release.yml
     with:
       version: ${{ needs.plan.outputs.version }}
