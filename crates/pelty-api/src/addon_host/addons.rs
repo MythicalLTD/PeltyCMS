@@ -434,6 +434,7 @@ pub async fn install_builtins(s: &AppState) -> AppResult<()> {
                 .collect()
         })
         .unwrap_or_default();
+    let mut to_activate = Vec::new();
     for e in catalog(s) {
         if e.source != "builtin" && !bundled.contains(&e.manifest.id) {
             continue;
@@ -448,7 +449,15 @@ pub async fn install_builtins(s: &AppState) -> AppResult<()> {
             })?;
         }
         reg::set_enabled(&s.pool, &e.manifest.id, true).await?;
-        crate::wasm_addons::activate(s, &e).await?;
+        to_activate.push(e);
+    }
+    let mut set = tokio::task::JoinSet::new();
+    for e in to_activate {
+        let s = s.clone();
+        set.spawn(async move { crate::wasm_addons::activate(&s, &e).await });
+    }
+    while let Some(joined) = set.join_next().await {
+        joined.map_err(|e| AppError::Internal(e.to_string()))??;
     }
     Ok(())
 }

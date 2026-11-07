@@ -247,6 +247,7 @@ pub async fn deactivate_row(s: &AppState, row: &reg::InstalledAddon) -> AppResul
 /// Startup: adopt rows from the built-in era, then load every enabled WASM addon.
 pub async fn load_enabled(s: &AppState) -> AppResult<()> {
     let cat = addons::catalog(s);
+    let mut pending = Vec::new();
     for row in reg::list(&s.pool).await? {
         let Some(e) = cat.iter().find(|e| e.manifest.id == row.id) else {
             continue;
@@ -270,9 +271,25 @@ pub async fn load_enabled(s: &AppState) -> AppResult<()> {
             continue;
         }
         if row.enabled {
-            if let Err(err) = activate(s, e).await {
-                tracing::error!(id = %row.id, error = %err, "wasm addon not loaded");
+            pending.push(e.clone());
+        }
+    }
+    // Compile/describe is CPU-heavy; do it in parallel (registries are RwLock-safe).
+    let mut set = tokio::task::JoinSet::new();
+    for e in pending {
+        let s = s.clone();
+        set.spawn(async move {
+            let id = e.manifest.id.clone();
+            (id, activate(&s, &e).await)
+        });
+    }
+    while let Some(joined) = set.join_next().await {
+        match joined {
+            Ok((id, Err(err))) => {
+                tracing::error!(id = %id, error = %err, "wasm addon not loaded");
             }
+            Ok(_) => {}
+            Err(err) => tracing::error!(error = %err, "wasm addon load task failed"),
         }
     }
     Ok(())

@@ -16,10 +16,70 @@ env:
   # Shared Postgres for Rust integration tests (see crates/pelty-api/tests).
   TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/peltycms_test
   DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/peltycms_test
+  # Persist wasmtime compiled modules across steps/runs (see pelty-wasm).
+  PELTY_WASM_CACHE_DIR: ${{ github.workspace }}/.cache/pelty-wasm
 
 jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      rust: ${{ steps.filter.outputs.rust }}
+      docker: ${{ steps.filter.outputs.docker }}
+      workflow_scripts: ${{ steps.filter.outputs.workflow_scripts }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - 'locales/**'
+              - '.github/workflows/ci.yml'
+            rust:
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'crates/**'
+              - 'xtask/**'
+              - 'migrations/**'
+              - 'extensions/**'
+              - 'locales/**'
+              - '.cargo/**'
+              - 'Makefile'
+              - 'scripts/test-ci-linker.sh'
+              - '.github/workflows/ci.yml'
+            workflow_scripts:
+              - '.github/workflows/**'
+              - 'scripts/release-archives.sh'
+              - 'scripts/test-release-archives.sh'
+            # Full image is already built on nightly/release. CI only rechecks
+            # when packaging inputs change (or the PR has the `docker` label).
+            docker:
+              - 'Dockerfile'
+              - '.dockerignore'
+              - 'docker-compose.yml'
+              - '.github/workflows/ci.yml'
+
+  workflow-scripts:
+    name: Workflow shell (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.workflow_scripts == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test portable release archive discovery (no publishing)
+        run: /bin/bash scripts/test-release-archives.sh
+
   frontend:
     name: Frontend
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -56,7 +116,14 @@ jobs:
 
   rust-lint:
     name: Rust lint
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
+    env:
+      # Target-scoped flags also cover native cargo/xtask builds, but must not
+      # leak into the child wasm32-wasip2 builds run by xtask or test fixtures.
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,6 +137,11 @@ jobs:
         with:
           shared-key: lint
 
+      - name: Faster linker
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clang lld
+
       - name: rustfmt
         run: cargo fmt --all -- --check
 
@@ -79,7 +151,14 @@ jobs:
 
   rust-test:
     name: Rust test
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
+    env:
+      # Target-scoped flags also cover native cargo/xtask builds, but must not
+      # leak into the child wasm32-wasip2 builds run by xtask or test fixtures.
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
     # Integration suite links one large binary (wasmtime + sqlx + addons).
     # Keep disk free and cache the registry/target aggressively.
     services:
@@ -109,37 +188,60 @@ jobs:
         with:
           shared-key: test
           cache-targets: true
+          # Also keep the separate addons WASM target dir warm.
+          cache-directories: target/addons
+
+      - name: Cache addon zips + wasmtime modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            extensions/addons/dist
+            .cache/pelty-wasm
+          key: addons-wasm-${{ hashFiles('extensions/addons/**/Cargo.toml', 'extensions/addons/**/Cargo.lock', 'extensions/addons/**/addon.json', 'extensions/addons/**/src/**', 'Cargo.lock') }}
+          restore-keys: |
+            addons-wasm-
 
       - name: Free disk
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
           df -h
 
-      - name: Wait for Postgres
+      # Service healthcheck covers Postgres. poppler is for PDF assertions;
+      # clang/lld cuts link time on the fat pelty-api test binary.
+      - name: Install CI deps
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client poppler-utils
-          for i in $(seq 1 60); do
-            pg_isready -h 127.0.0.1 -p 5432 -U postgres && exit 0
-            sleep 1
-          done
-          echo "Postgres did not become ready" >&2
-          exit 1
+          sudo apt-get install -y -qq poppler-utils clang lld
+
+      - name: Check native/WASM linker isolation
+        run: bash scripts/test-ci-linker.sh
 
       - name: Build WASM addons
-        run: cargo xtask addons
+        run: |
+          mkdir -p "$PELTY_WASM_CACHE_DIR" extensions/addons/dist
+          # Hit path: dist already populated from cache and sources unchanged.
+          if compgen -G "extensions/addons/dist/*.zip" > /dev/null; then
+            echo "Reusing cached addon zips ($(ls extensions/addons/dist/*.zip | wc -l) files)"
+          fi
+          cargo xtask addons
 
       - name: Test workspace
-        run: cargo test --workspace --locked
+        # Skip doctests: they re-compile crates and add little signal in CI.
+        run: cargo test --workspace --locked --lib --bins --tests
         env:
           # Quiet sqlx noise in CI logs.
           RUST_LOG: error,sqlx=off
 
   docker:
     name: Docker
+    needs: changes
+    # Build only when packaging inputs change (or a PR is labeled `docker`).
+    if: |
+      always() &&
+      needs.changes.result == 'success' &&
+      (needs.changes.outputs.docker == 'true' ||
+       contains(github.event.pull_request.labels.*.name, 'docker'))
     runs-on: ubuntu-latest
-    # Image build is slow; run on develop pushes and on PRs that touch packaging.
-    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'docker')
     steps:
       - uses: actions/checkout@v4
         with:
@@ -151,5 +253,13 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
           df -h
 
+      - uses: docker/setup-buildx-action@v3
+
       - name: Build image
-        run: docker build -t peltycms:ci .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: peltycms:ci
+          cache-from: type=gha,scope=peltycms-ci-docker
+          cache-to: type=gha,mode=max,scope=peltycms-ci-docker
