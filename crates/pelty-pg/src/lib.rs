@@ -55,6 +55,7 @@ impl Config {
     /// Build from the process environment and an install root.
     pub fn from_env(root: impl Into<PathBuf>) -> Self {
         let root = root.into();
+        // Local PostgreSQL binaries and data directory; falls back to PG_HOME, then data/pg.
         let home = std::env::var("PELTY_PG_HOME")
             .ok()
             .or_else(|| std::env::var("PG_HOME").ok())
@@ -71,6 +72,7 @@ impl Config {
                 .ok()
                 .as_deref()
                 .and_then(|u| DbUrl::parse(u).ok()),
+            // Manage a local PostgreSQL sidecar when true or 1; disabled by default.
             std::env::var("PELTY_LOCAL_PG").ok(),
         ) {
             (Some(db), _) if !db.password.is_empty() => Auth::Password {

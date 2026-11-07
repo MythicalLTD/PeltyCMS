@@ -298,7 +298,10 @@ jobs:
           set -euo pipefail
           tag="${{ needs.meta.outputs.tag }}"
           ver="${{ needs.meta.outputs.version }}"
-          mapfile -t files < <(find "dist/${ver}" -maxdepth 1 -type f -name 'pelty-server-*' | sort)
+          # macOS ships Bash 3.2, which has no mapfile builtin.
+          source scripts/release-archives.sh
+          collect_release_archives "dist/${ver}"
+          files=("${RELEASE_ARCHIVES[@]}")
           test "${#files[@]}" -gt 0
           # Retry: Open release may still be propagating, or another upload races.
           for i in 1 2 3 4 5; do

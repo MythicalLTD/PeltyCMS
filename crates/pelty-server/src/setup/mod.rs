@@ -874,6 +874,7 @@ fn database_local<P: Prompt + ?Sized, S: Services + ?Sized>(
     let port = ask(
         p,
         "Local PostgreSQL port",
+        // Setup wizard local PostgreSQL port (default 5432); serve follows DATABASE_URL.
         &ctx.c("PELTY_LOCAL_PG_PORT", "5432"),
         valid_port,
     )?;

@@ -27,6 +27,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       rust: ${{ steps.filter.outputs.rust }}
       docker: ${{ steps.filter.outputs.docker }}
+      workflow_scripts: ${{ steps.filter.outputs.workflow_scripts }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -49,6 +50,10 @@ jobs:
               - 'Makefile'
               - 'scripts/test-ci-linker.sh'
               - '.github/workflows/ci.yml'
+            workflow_scripts:
+              - '.github/workflows/**'
+              - 'scripts/release-archives.sh'
+              - 'scripts/test-release-archives.sh'
             # Full image is already built on nightly/release. CI only rechecks
             # when packaging inputs change (or the PR has the `docker` label).
             docker:
@@ -56,6 +61,20 @@ jobs:
               - '.dockerignore'
               - 'docker-compose.yml'
               - '.github/workflows/ci.yml'
+
+  workflow-scripts:
+    name: Workflow shell (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.workflow_scripts == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test portable release archive discovery (no publishing)
+        run: /bin/bash scripts/test-release-archives.sh
 
   frontend:
     name: Frontend
