@@ -39,7 +39,7 @@ pub fn router() -> Router<AppState> {
 }
 
 /// Supported games and their identity fields.
-#[utoipa::path(get, path = "/api/v1/public/game/games", responses((status = 200, body = Vec<games::GameDef>), (status = 404)))]
+#[utoipa::path(get, path = "/api/v1/public/game/games", responses((status = 200, body = super::Items<games::GameDef>), (status = 404)))]
 pub async fn list_games() -> Json<Value> {
     Json(json!({ "items": games::GAMES }))
 }
@@ -67,7 +67,7 @@ pub async fn public_server(
     ))
 }
 
-#[utoipa::path(get, path = "/api/v1/client/game/accounts", responses((status = 200, body = Vec<GameAccount>), (status = 404)))]
+#[utoipa::path(get, path = "/api/v1/client/game/accounts", responses((status = 200, body = super::Items<GameAccount>), (status = 404)))]
 pub async fn my_accounts(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Json<Value>> {
     let c = customer_of(&s, &u).await?;
     Ok(Json(json!({ "items": games::accounts(&s.pool, c).await? })))
@@ -111,7 +111,7 @@ pub async fn unlink(
     Ok(Json(json!({ "ok": true })))
 }
 
-#[utoipa::path(get, path = "/api/v1/admin/game/servers", responses((status = 200, body = Vec<Server>), (status = 403)))]
+#[utoipa::path(get, path = "/api/v1/admin/game/servers", responses((status = 200, body = super::Items<Server>), (status = 403)))]
 pub async fn admin_servers(
     State(s): State<AppState>,
     RequirePermission(_u, _): RequirePermission<perms::ServersManage>,
@@ -247,7 +247,7 @@ pub async fn agent_token(
 }
 
 /// A customer's linked game accounts (staff view).
-#[utoipa::path(get, path = "/api/v1/admin/game/customers/{id}/accounts", responses((status = 200, body = Vec<GameAccount>), (status = 403)))]
+#[utoipa::path(get, path = "/api/v1/admin/game/customers/{id}/accounts", responses((status = 200, body = super::Items<GameAccount>), (status = 403)))]
 pub async fn customer_accounts(
     State(s): State<AppState>,
     RequirePermission(_u, _): RequirePermission<perms::CustomersManage>,

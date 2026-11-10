@@ -74,7 +74,7 @@ fn seal(s: &AppState, key: &str) -> ApiResult<Vec<u8>> {
 
 // ------------------------------------------------------------------ admin
 
-#[utoipa::path(get, path = "/api/v1/admin/digital/products", responses((status = 200, body = Vec<dg::ProductRow>), (status = 403)))]
+#[utoipa::path(get, path = "/api/v1/admin/digital/products", responses((status = 200, body = super::Items<dg::ProductRow>), (status = 403)))]
 pub async fn admin_products(
     State(s): State<AppState>,
     _p: RequirePermission<perms::CatalogManage>,
@@ -136,7 +136,7 @@ pub async fn delete_settings(
     Ok(Json(json!({ "ok": true })))
 }
 
-#[utoipa::path(get, path = "/api/v1/admin/digital/products/{id}/versions", responses((status = 200, body = Vec<dg::Version>)))]
+#[utoipa::path(get, path = "/api/v1/admin/digital/products/{id}/versions", responses((status = 200, body = super::Items<dg::Version>)))]
 pub async fn admin_versions(
     State(s): State<AppState>,
     _p: RequirePermission<perms::CatalogManage>,
@@ -218,7 +218,7 @@ pub async fn delete_version(
     Ok(Json(json!({ "ok": true })))
 }
 
-#[utoipa::path(get, path = "/api/v1/admin/digital/licenses", params(LicenseFilter), responses((status = 200, body = Vec<dg::License>)))]
+#[utoipa::path(get, path = "/api/v1/admin/digital/licenses", params(LicenseFilter), responses((status = 200, body = super::Items<dg::License>)))]
 pub async fn admin_licenses(
     State(s): State<AppState>,
     _p: RequirePermission<perms::CatalogManage>,
@@ -305,6 +305,7 @@ pub async fn create_license(
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[schema(as = LicenseStatusBody)]
 pub struct StatusBody {
     /// active, suspended or revoked.
     pub status: String,
@@ -355,7 +356,7 @@ pub async fn admin_reset(
     Ok(Json(json!({ "removed": n })))
 }
 
-#[utoipa::path(get, path = "/api/v1/admin/digital/grants", responses((status = 200, body = Vec<dg::Grant>)))]
+#[utoipa::path(get, path = "/api/v1/admin/digital/grants", responses((status = 200, body = super::Items<dg::Grant>)))]
 pub async fn admin_grants(
     State(s): State<AppState>,
     _p: RequirePermission<perms::CatalogManage>,

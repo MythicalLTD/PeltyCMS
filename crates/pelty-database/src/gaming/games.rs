@@ -171,6 +171,7 @@ pub fn normalize_identity(field: &str, value: &str) -> Option<String> {
 
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
+#[schema(as = GameServerInput)]
 pub struct ServerInput {
     pub game: String,
     pub name: String,
@@ -244,6 +245,7 @@ impl ServerInput {
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+#[schema(as = GameServer)]
 pub struct Server {
     pub id: Uuid,
     pub game: String,

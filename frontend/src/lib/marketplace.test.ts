@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { creatorNet, creatorSlug, marketConfig } from "./marketplace";
+import { creatorNet, creatorSlug, marketConfig, validAmount, validPercent } from "./marketplace";
 
 describe("marketplace helpers", () => {
   it("computes creator net", () => {
@@ -13,5 +13,15 @@ describe("marketplace helpers", () => {
   });
   it("slugs names", () => {
     expect(creatorSlug("  Carol's Dev Shop! ")).toBe("carol-s-dev-shop");
+    expect(creatorSlug("Renée Co")).toBe("renee-co");
+    expect(creatorSlug(`${"a".repeat(39)} b`)).toBe("a".repeat(39));
+  });
+  it("validates settings numbers", () => {
+    expect(validPercent("12.5")).toBe(true);
+    expect(validPercent("100")).toBe(true);
+    expect(validPercent("101")).toBe(false);
+    expect(validPercent("-1")).toBe(false);
+    expect(validAmount("abc")).toBe(false);
+    expect(validAmount("0")).toBe(true);
   });
 });

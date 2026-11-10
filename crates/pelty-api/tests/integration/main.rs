@@ -14,6 +14,7 @@ mod game_profiles_flow;
 mod game_store_flow;
 mod live_chat_realtime_flow;
 mod modules_flow;
+mod product_reviews_creator_flow;
 mod product_reviews_flow;
 mod redis_shared_flow;
 

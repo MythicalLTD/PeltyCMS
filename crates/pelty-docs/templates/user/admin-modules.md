@@ -72,7 +72,7 @@ Customers link their identities in the client area under Account → **Game acco
 
 Requires **Game profiles**. Open **Products → In-game delivery**.
 
-- **Commands** run when a package is bought (`purchase`), renewed (`renewal`), expires or is suspended/cancelled (`expiry`), refunded (`refund`) or charged back (`chargeback`). Set them per package or globally for every package. Each command can target one server or every server whose store sells the package, can wait until the player is online, and can be delayed.
+- **Commands** run when a package is bought (`purchase`), renewed (`renewal`), expires or is suspended/cancelled (`expiry`), refunded (`refund`) or charged back (`chargeback`). Set them per package or globally for every package. Each command can target one server or every server whose store sells the package, can wait until the player is online, and can be delayed. Servers with transport `none` never receive commands. For "wait until online" over RCON, the queue first asks the server for its player list (`list` on Minecraft, `status` elsewhere) and holds the command, without using an attempt, until the player's name appears. A delivery that is claimed but never answered fails after 10 attempts. After an RCON error, the remaining commands for that server are put back in the queue rather than sent on the same connection.
 - **Placeholders**: `{username}`, `{uuid}`, `{uuid_nodash}`, `{xuid}`, `{steamid}`, `{license}`, `{discord_id}`, `{package}`, `{package_id}`, `{service_id}`, `{order_id}`, `{customer_id}`, `{amount}`, `{currency}`, `{server}`. Unknown placeholders are rejected when you save.
 - **Missing game account**: when a command needs an identity the customer has not linked, the delivery waits (`Waiting for game account`) and is sent automatically as soon as they link it on **Game accounts**.
 - **Queue**: every command is a row with status, attempts and the last error. Failures are retried with backoff (2, 4, 8 … up to 60 minutes, 10 attempts). Retry or cancel rows by hand, or resend a service's commands.
@@ -104,7 +104,7 @@ Call it from the software you sell. Only the fields the product binds are needed
 | `POST /api/v1/public/licenses/validate` | `{"key": "…", "product_id": "…", "domain": "shop.example", "hwid": "…", "activate": true}` | `{"valid": true, "activations": 1, "max_activations": 3, "expires_at": …}` or `{"valid": false, "reason": "…"}` |
 | `POST /api/v1/public/licenses/deactivate` | same identity fields | `{"removed": true}` frees the slot |
 
-Reasons: `not_found`, `wrong_product`, `suspended`, `revoked`, `expired`, `domain_required`, `ip_required`, `hwid_required`, `activation_limit`, `not_activated` (with `"activate": false`). The IP defaults to the caller's address. Repeated unknown keys from one address are rate limited.
+Reasons: `not_found`, `wrong_product`, `suspended`, `revoked`, `expired`, `domain_required`, `ip_required`, `hwid_required`, `activation_limit`, `not_activated` (with `"activate": false`), `license_disabled` (the product's digital settings were removed or licensing is switched off). A license whose service was terminated, cancelled or marked fraud is revoked at the next check, even if the revocation event was missed. The IP defaults to the caller's address. Repeated unknown keys from one address are rate limited.
 
 ## Creator marketplace (`creator_marketplace`)
 

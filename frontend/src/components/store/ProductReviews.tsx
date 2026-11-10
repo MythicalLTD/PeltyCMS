@@ -29,7 +29,7 @@ function ReviewsCard({ productId, className }: { productId: string; className?: 
   const { t, lang } = useI18n();
   const me = useMe();
   const [limit, setLimit] = useState(10);
-  const q = useQuery({ queryKey: ["reviews", productId, limit], queryFn: () => api<Data>(`/public/reviews/products/${productId}?limit=${limit}`) });
+  const q = useQuery({ queryKey: ["reviews", productId, limit], queryFn: () => api<Data>(`/public/reviews/products/${productId}?limit=${limit}`), placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[1] === productId ? prev : undefined) });
   const signedIn = !!me.data;
   const elig = useQuery({ queryKey: ["reviews", productId, "me"], queryFn: () => api<Eligibility>(`/client/reviews/products/${productId}`), enabled: signedIn, retry: false });
   if (!q.data) return null;
@@ -72,7 +72,7 @@ function ReviewsCard({ productId, className }: { productId: string; className?: 
               {r.reply && <div className="mt-1 rounded-md border-l-2 bg-muted/50 p-2 text-sm"><span className="text-xs font-medium text-muted-foreground">{t("reviews.reply_from_seller")}</span><p className="whitespace-pre-line">{r.reply}</p></div>}
             </article>
           ))}
-          {q.data.items.length >= limit && <Button variant="outline" className="justify-self-start" onClick={() => setLimit((l) => l + 10)}>{t("reviews.more")}</Button>}
+          {q.data.items.length >= limit && <Button variant="outline" className="justify-self-start" disabled={q.isPlaceholderData} onClick={() => setLimit((l) => l + 10)}>{t("reviews.more")}</Button>}
           {q.data.questions_open && <><Separator /><Questions productId={productId} signedIn={signedIn} canAsk={!!elig.data?.can_ask} /></>}
         </div>
       </CardContent>

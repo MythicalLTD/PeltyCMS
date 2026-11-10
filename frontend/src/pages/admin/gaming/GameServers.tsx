@@ -21,6 +21,14 @@ import { useI18n } from "@/lib/i18n";
 import type { TranslationKey } from "@/lib/i18n-core";
 
 interface Form { game: string; name: string; slug: string; description: string; host: string; port: string; query_port: string; transport: string; rcon_host: string; rcon_port: string; rcon_password: string; enabled: boolean }
+/** Only the editable keys: the PUT body is checked with deny_unknown_fields. */
+function serverForm(s: GameServer): Form {
+  return {
+    game: s.game, name: s.name, slug: s.slug, description: s.description ?? "", host: s.host ?? "",
+    port: s.port?.toString() ?? "", query_port: s.query_port?.toString() ?? "", transport: s.transport,
+    rcon_host: s.rcon_host ?? "", rcon_port: s.rcon_port?.toString() ?? "", rcon_password: "", enabled: s.enabled,
+  };
+}
 const EMPTY: Form = { game: "minecraft_java", name: "", slug: "", description: "", host: "", port: "", query_port: "", transport: "rcon", rcon_host: "", rcon_port: "", rcon_password: "", enabled: true };
 const num = (s: string) => (s.trim() ? Number(s) : null);
 
@@ -72,7 +80,7 @@ export function AdminGameServersPage() {
                   </CardDescription>
                 </div>
                 <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" aria-label={t("common.edit")} onClick={() => setEdit({ id: s.id, f: { ...EMPTY, ...s, port: s.port?.toString() ?? "", query_port: s.query_port?.toString() ?? "", rcon_port: s.rcon_port?.toString() ?? "", rcon_password: "" } })}><PencilSimpleIcon aria-hidden /></Button>
+                  <Button size="sm" variant="ghost" aria-label={t("common.edit")} onClick={() => setEdit({ id: s.id, f: serverForm(s) })}><PencilSimpleIcon aria-hidden /></Button>
                   <ConfirmAction description={t("game.servers.delete_confirm")} onConfirm={() => del.mutate(s.id)}>
                     <Button size="sm" variant="ghost" aria-label={t("common.delete")}><TrashIcon aria-hidden /></Button>
                   </ConfirmAction>

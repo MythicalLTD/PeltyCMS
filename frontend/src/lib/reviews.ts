@@ -10,6 +10,8 @@ export interface ProductReviews { summary: ReviewSummary; items: PublicReview[];
 export interface Question { id: string; product_id: string; customer_id: string; body: string; status: ReviewStatus; answer: string; answered_by: string | null; answered_at: string | null; created_at: string }
 export interface QuestionRow extends Question { product_name: string; customer_email: string }
 export interface PublicQuestion { id: string; author: string; body: string; answer: string; answered_at: string | null; created_at: string }
+export interface CreatorReview { id: string; product_id: string; product_name: string; author: string; rating: number; title: string; body: string; verified: boolean; reply: string; created_at: string }
+export interface CreatorQuestion { id: string; product_id: string; product_name: string; author: string; body: string; status: ReviewStatus; answer: string; created_at: string }
 export interface Eligibility { purchased: boolean; can_review: boolean; can_ask: boolean; review: Review | null }
 
 export interface ReviewsConfig { require_approval: boolean; verified_only: boolean; questions: boolean }
