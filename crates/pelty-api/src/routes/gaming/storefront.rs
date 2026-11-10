@@ -22,6 +22,8 @@ pub async fn public_layout(State(s): State<AppState>) -> ApiResult<Json<Value>> 
     let cfg = sf::config(&s.pool).await?;
     let community = feature_modules::is_enabled(&s.pool, cm::MODULE).await?;
     let mut widgets = Vec::with_capacity(cfg.widgets.len());
+    // Looked up once, and only when a top-customer widget needs it.
+    let mut default_currency: Option<String> = None;
     for w in &cfg.widgets {
         let v = match w {
             Widget::Text { title, body } => json!({ "type": "text", "title": title, "body": body }),
@@ -29,7 +31,14 @@ pub async fn public_layout(State(s): State<AppState>) -> ApiResult<Json<Value>> 
                 period,
                 show_amount,
             } => {
-                let currency = sf::default_currency(&s.pool).await?;
+                let currency = match &default_currency {
+                    Some(c) => c.clone(),
+                    None => {
+                        let c = sf::default_currency(&s.pool).await?;
+                        default_currency = Some(c.clone());
+                        c
+                    }
+                };
                 let top = sf::top_customer(&s.pool, period, &currency).await?;
                 json!({
                     "type": "top_customer", "period": period, "currency": currency,

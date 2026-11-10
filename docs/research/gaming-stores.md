@@ -38,7 +38,7 @@ Sources (public pages read for this note):
 | Listings start as drafts and are approved by staff before going live | `creator_marketplace`: listings start hidden, admin approves |
 | Download license and usage license; downloads can be revoked on refund/violation | `digital_products`: signed downloads, license keys with activations, auto-revoke on refund/fraud |
 | One review per buyer per product, editable; creator can reply; staff moderation | `product_reviews` (verified-purchase option, approval queue, creator replies, Q&A) |
-| Creator earnings, ledger, payouts | Creator balance, ledger, payout requests; Stripe Connect / PayPal Payouts are **stubs** until credentials are configured |
+| Creator earnings, ledger, payouts | Creator balance, ledger, payout requests. Stripe Connect / PayPal Payouts are **not implemented** (they answer `error.payout_provider_stub` even with credentials); pay creators manually and mark payouts paid |
 | Coupons, sale events, referrals | Coupons exist; sales and creator codes are the gaps above |
 | Discord buyer roles | Gap (same as above) |
 | Hosted test server / 3D preview | Not planned |
