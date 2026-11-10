@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LoadError } from "@/components/LoadError";
 import { api, ApiError } from "@/lib/api";
 import { activationLabel, activationTarget, fileSize, type DigitalVersion, type LicenseView } from "@/lib/digital";
 import { useI18n } from "@/lib/i18n";
@@ -30,6 +31,7 @@ export function DigitalProductsPage() {
     onError: fail,
   });
   const copy = (k: string) => void navigator.clipboard.writeText(k).then(() => toast.success(t("digital.copied")));
+  if ((products.isError && !products.data) || (licenses.isError && !licenses.data)) return <LoadError retry={() => { void products.refetch(); void licenses.refetch(); }} />;
   if (!products.data || !licenses.data) return <Skeleton className="h-48 w-full" />;
   return (
     <div className="flex flex-col gap-6">

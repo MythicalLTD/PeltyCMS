@@ -41,7 +41,7 @@ export function CreatorPage() {
     <div className="flex flex-col gap-6">
       <PageHeader title={t("creator.title")} description={t("creator.description")} />
       {!d.creator ? (d.mode === "admin_only" ? <EmptyState title={t("error.market_closed")} /> : <Apply />) : d.creator.status !== "approved" ? (
-        <Card><CardContent className="pt-6"><Badge variant="outline">{t(`market.st.${d.creator.status}` as TranslationKey)}</Badge> <span className="text-sm text-muted-foreground">{t("creator.waiting")}</span></CardContent></Card>
+        <Card><CardContent className="pt-6"><Badge variant="outline">{t(`market.st.${d.creator.status}` as TranslationKey)}</Badge> <span className="text-sm text-muted-foreground">{t(d.creator.status === "pending" ? "creator.waiting" : d.creator.status === "rejected" ? "creator.rejected_note" : "creator.suspended_note")}</span></CardContent></Card>
       ) : (
         <Tabs defaultValue="overview">
           <TabsList>

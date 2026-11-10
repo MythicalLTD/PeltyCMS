@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LoadError } from "@/components/LoadError";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -61,7 +62,7 @@ function Products() {
         <div className="w-72"><SelectField id="dg-pick" label={t("digital.make_digital")} value={pick} onChange={setPick} options={candidates.map((p) => ({ value: p.id, label: p.name }))} /></div>
         <Button disabled={!pick} onClick={() => setOpen(pick)}><PlusIcon aria-hidden />{t("digital.configure")}</Button>
       </div>
-      {!list.data ? <Skeleton className="h-32 w-full" /> : list.data.items.length === 0 ? <EmptyState title={t("digital.empty")} /> : (
+      {list.isError && !list.data ? <LoadError retry={() => void list.refetch()} /> : !list.data ? <Skeleton className="h-32 w-full" /> : list.data.items.length === 0 ? <EmptyState title={t("digital.empty")} /> : (
         <div className="grid gap-3 md:grid-cols-2">
           {list.data.items.map((p) => (
             <Card key={p.product_id} data-digital={p.product_id}>
@@ -112,7 +113,7 @@ function ProductDialog({ id, name, onClose }: { id: string; name: string; onClos
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader><DialogTitle>{name || t("digital.title")}</DialogTitle></DialogHeader>
-        {!cur.data ? <Skeleton className="h-40 w-full" /> : (
+        {cur.isError && !cur.data ? <LoadError retry={() => void cur.refetch()} /> : !cur.data ? <Skeleton className="h-40 w-full" /> : (
           <div className="flex flex-col gap-4">
             <section className="grid gap-3 rounded-md border p-3" aria-label={t("digital.licensing")}>
               <div className="flex items-center gap-2"><Switch id="dg-lic" checked={f.license_enabled} onCheckedChange={(v) => set({ license_enabled: v })} /><Label htmlFor="dg-lic">{t("digital.license_enabled")}</Label></div>
@@ -187,7 +188,7 @@ function Licenses() {
         <div className="w-48"><SelectField id="dl-status" label={t("digital.status")} value={status} onChange={setStatus} options={[{ value: ALL, label: t("game.delivery.all") }, ...["active", "suspended", "revoked"].map((s) => ({ value: s, label: t(`digital.st.${s}` as TranslationKey) }))]} /></div>
         <Button variant="outline" onClick={() => setIssue({ product_id: products.data?.items[0]?.product_id ?? "", customer_id: "", days: "" })}><KeyIcon aria-hidden />{t("digital.issue")}</Button>
       </div>
-      {!q.data ? <Skeleton className="h-40 w-full" /> : q.data.items.length === 0 ? <EmptyState title={t("digital.no_licenses")} /> : (
+      {q.isError && !q.data ? <LoadError retry={() => void q.refetch()} /> : !q.data ? <Skeleton className="h-40 w-full" /> : q.data.items.length === 0 ? <EmptyState title={t("digital.no_licenses")} /> : (
         <Table>
           <TableHeader><TableRow><TableHead>{t("digital.product")}</TableHead><TableHead>{t("digital.key")}</TableHead><TableHead>{t("digital.activations")}</TableHead><TableHead>{t("digital.status")}</TableHead><TableHead /></TableRow></TableHeader>
           <TableBody>
@@ -240,7 +241,7 @@ function Grants() {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-muted-foreground">{t("digital.grants_hint")}</p>
-      {!q.data ? <Skeleton className="h-32 w-full" /> : q.data.items.length === 0 ? <EmptyState title={t("digital.no_grants")} /> : (
+      {q.isError && !q.data ? <LoadError retry={() => void q.refetch()} /> : !q.data ? <Skeleton className="h-32 w-full" /> : q.data.items.length === 0 ? <EmptyState title={t("digital.no_grants")} /> : (
         <Table>
           <TableHeader><TableRow><TableHead>{t("digital.asset")}</TableHead><TableHead>{t("digital.identity")}</TableHead><TableHead>{t("digital.status")}</TableHead><TableHead /></TableRow></TableHeader>
           <TableBody>

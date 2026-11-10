@@ -43,5 +43,15 @@ export function marketConfig(settings: Record<string, unknown> | undefined): Mar
 
 /** creator slug from a display name. */
 export function creatorSlug(name: string): string {
-  return name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+  return name.normalize("NFKD").replace(/\p{M}+/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "");
+}
+
+const DECIMAL = /^\d{1,12}(\.\d{1,4})?$/;
+/** Non-negative decimal as typed in a settings field. */
+export function validAmount(v: string): boolean {
+  return DECIMAL.test(v.trim());
+}
+/** Decimal between 0 and 100. */
+export function validPercent(v: string): boolean {
+  return validAmount(v) && Number(v) <= 100;
 }

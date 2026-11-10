@@ -9,13 +9,15 @@ import { SelectField } from "@/components/SelectField";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LoadError } from "@/components/LoadError";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, ApiError } from "@/lib/api";
-import { marketConfig, type CreatorRow, type Listing, type MarketConfig, type Payout } from "@/lib/marketplace";
+import { validAmount, validPercent, marketConfig, type CreatorRow, type Listing, type MarketConfig, type Payout } from "@/lib/marketplace";
 import { useI18n } from "@/lib/i18n";
 import type { TranslationKey } from "@/lib/i18n-core";
 import type { ModuleState } from "@/pages/admin/gaming/Modules";
@@ -57,6 +59,7 @@ function Settings() {
   const [draft, setDraft] = useState<MarketConfig | null>(null);
   const f = draft ?? cur;
   const set = (p: Partial<MarketConfig>) => setDraft({ ...f, ...p });
+  const invalid = !validPercent(f.commission_percent) || !validAmount(f.min_payout);
   const save = useMutation({
     mutationFn: () => api("/admin/modules/creator_marketplace", { method: "PUT", body: { enabled: true, settings: f } }),
     onSuccess: () => { setDraft(null); void qc.invalidateQueries({ queryKey: ["admin", "modules"] }); toast.success(t("market.saved")); },
@@ -76,7 +79,8 @@ function Settings() {
         </div>
         <div className="flex items-center gap-2"><Switch id="mk-ac" checked={f.auto_approve_creators} onCheckedChange={(v) => set({ auto_approve_creators: v })} /><Label htmlFor="mk-ac">{t("market.auto_creators")}</Label></div>
         <div className="flex items-center gap-2"><Switch id="mk-al" checked={f.auto_approve_listings} onCheckedChange={(v) => set({ auto_approve_listings: v })} /><Label htmlFor="mk-al">{t("market.auto_listings")}</Label></div>
-        <Button className="self-start" onClick={() => save.mutate()} disabled={save.isPending}>{t("common.save")}</Button>
+        {invalid && <p role="alert" className="text-sm text-destructive">{t("market.settings_invalid")}</p>}
+        <Button className="self-start" onClick={() => save.mutate()} disabled={save.isPending || invalid}>{t("common.save")}</Button>
       </CardContent>
     </Card>
   );
@@ -159,7 +163,10 @@ function Payouts() {
   const q = useQuery({ queryKey: ["admin", "market", "payouts"], queryFn: () => api<{ items: Payout[] }>("/admin/creator-payouts") });
   const refresh = () => void qc.invalidateQueries({ queryKey: ["admin", "market", "payouts"] });
   const send = useMutation({ mutationFn: (id: string) => api(`/admin/creator-payouts/${id}/send`, { method: "POST" }), onSuccess: refresh, onError: fail });
-  const status = useMutation({ mutationFn: ({ id, s }: { id: string; s: string }) => api(`/admin/creator-payouts/${id}/status`, { method: "POST", body: { status: s } }), onSuccess: refresh, onError: fail });
+  const [confirm, setConfirm] = useState<{ id: string; s: "paid" | "rejected"; note: string } | null>(null);
+  const status = useMutation({ mutationFn: ({ id, s, note }: { id: string; s: string; note: string }) => api(`/admin/creator-payouts/${id}/status`, { method: "POST", body: { status: s, note } }), onSuccess: () => { setConfirm(null); refresh(); }, onError: fail });
+  const busy = send.isPending || status.isPending;
+  if (q.isError && !q.data) return <LoadError retry={() => void q.refetch()} />;
   if (!q.data) return <Skeleton className="h-32 w-full" />;
   if (q.data.items.length === 0) return <EmptyState title={t("market.no_payouts")} />;
   return (
@@ -173,9 +180,17 @@ function Payouts() {
             <TableCell>{t(`market.method.${p.method}` as TranslationKey)}</TableCell>
             <TableCell><Badge variant={variant(p.status)}>{t(`market.pst.${p.status}` as TranslationKey)}</Badge></TableCell>
             <TableCell className="text-right">
-              {p.status === "requested" && <Button size="sm" variant="ghost" onClick={() => send.mutate(p.id)}><PaperPlaneTiltIcon aria-hidden />{t("market.send")}</Button>}
-              {["requested", "processing"].includes(p.status) && <Button size="sm" variant="ghost" onClick={() => status.mutate({ id: p.id, s: "paid" })}>{t("market.mark_paid")}</Button>}
-              {["requested", "processing"].includes(p.status) && <Button size="sm" variant="ghost" onClick={() => status.mutate({ id: p.id, s: "rejected" })}>{t("market.reject")}</Button>}
+              {confirm?.id === p.id ? (
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <Input aria-label={t("market.note")} placeholder={confirm.s === "rejected" ? t("market.reject_reason") : t("market.note")} className="h-8 w-56" maxLength={1000} value={confirm.note} onChange={(e) => setConfirm({ ...confirm, note: e.target.value })} />
+                  <Button size="sm" variant={confirm.s === "rejected" ? "destructive" : "default"} disabled={busy || (confirm.s === "rejected" && !confirm.note.trim())} onClick={() => status.mutate({ id: p.id, s: confirm.s, note: confirm.note.trim() })}>{t(confirm.s === "paid" ? "market.confirm_paid" : "market.confirm_reject")}</Button>
+                  <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirm(null)}>{t("common.cancel")}</Button>
+                </div>
+              ) : <>
+                {p.status === "requested" && <Button size="sm" variant="ghost" disabled={busy} onClick={() => send.mutate(p.id)}><PaperPlaneTiltIcon aria-hidden />{t("market.send")}</Button>}
+                {["requested", "processing"].includes(p.status) && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirm({ id: p.id, s: "paid", note: "" })}>{t("market.mark_paid")}</Button>}
+                {["requested", "processing"].includes(p.status) && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirm({ id: p.id, s: "rejected", note: "" })}>{t("market.reject")}</Button>}
+              </>}
             </TableCell>
           </TableRow>
         ))}
