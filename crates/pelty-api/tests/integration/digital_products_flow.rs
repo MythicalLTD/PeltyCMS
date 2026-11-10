@@ -387,19 +387,28 @@ async fn versions_links_and_licenses() {
         check(&app, json!({"key": key, "domain": "shop-b.example"})).await["reason"],
         "revoked"
     );
-    let g = call(
-        &app,
-        "GET",
-        "/api/v1/admin/digital/grants",
-        None,
-        &admin.h(),
-    )
-    .await;
-    assert!(g.body["items"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|x| x["service_id"] == sid.as_str() && x["status"] == "revoked"));
+    // Grants are revoked by the (async) service.terminated handler.
+    let mut revoked = false;
+    for _ in 0..100 {
+        let g = call(
+            &app,
+            "GET",
+            "/api/v1/admin/digital/grants",
+            None,
+            &admin.h(),
+        )
+        .await;
+        revoked = g.body["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|x| x["service_id"] == sid.as_str() && x["status"] == "revoked");
+        if revoked {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert!(revoked, "grant of the terminated service is revoked");
 
     // Staff issue a license by hand; the module off hides everything again.
     let cust = call(
