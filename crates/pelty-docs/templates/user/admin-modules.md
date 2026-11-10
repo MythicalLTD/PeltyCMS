@@ -341,3 +341,18 @@ what they bought, such as a VIP role for a VIP rank, and takes them away again.
   - Every setting and rule change is audited.
 - Turning the module off stops new changes from being queued and hides the
   page. Roles already given stay on Discord.
+
+## Gaming reports
+
+Admin → Reports → *Report library* has a **Gaming & creators** group. Each
+report shows only while its module is on. Like every library report, each one
+covers whole months and exports to CSV.
+
+| Report | Module | What it shows |
+| --- | --- | --- |
+| Sales by game server | `game_profiles` | Paid revenue and items for each server's store packages: new orders by order line (price + setup − discount), renewals by service line. A package sold on two servers counts for both. |
+| In-game deliveries | `game_delivery` | Delivered, failed, pending and waiting-for-player-link commands for each server, by when they were queued. |
+| Creator code usage | `creator_codes` | Orders placed with each code, and how much of their invoices has been paid. |
+| Marketplace sales by creator | `creator_marketplace` | Gross, commission, net and refunds from each creator's ledger. |
+
+Amounts are excluding tax, in each order's currency.

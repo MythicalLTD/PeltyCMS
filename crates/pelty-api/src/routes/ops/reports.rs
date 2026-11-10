@@ -87,13 +87,20 @@ pub struct LibraryQuery {
     pub format: Option<String>,
 }
 
-/// Available reports grouped by category.
+/// Available reports grouped by category. Reports of a feature module that
+/// is off are left out.
 #[utoipa::path(get, path = "/api/v1/admin/reports/library", responses((status = 200), (status = 403)))]
-pub async fn library(_p: RequirePermission<perms::ReportsRead>) -> Json<serde_json::Value> {
-    let items: Vec<_> = pelty_database::report_library::REPORTS.iter()
+pub async fn library(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::ReportsRead>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let on = pelty_database::gaming::modules::enabled(&s.pool).await?;
+    let items: Vec<_> = pelty_database::report_library::REPORTS
+        .iter()
+        .filter(|d| d.module.is_none_or(|m| on.iter().any(|x| x == m)))
         .map(|d| serde_json::json!({ "key": d.key, "category": d.category, "columns": d.columns, "chart": d.chart }))
         .collect();
-    Json(serde_json::json!({ "items": items }))
+    Ok(Json(serde_json::json!({ "items": items })))
 }
 
 /// Run one report over whole months `[from, to]` as JSON or CSV.
@@ -105,6 +112,11 @@ pub async fn run_report(
     Query(q): Query<LibraryQuery>,
 ) -> ApiResult<axum::response::Response> {
     use axum::response::IntoResponse;
+    if let Some(m) = pelty_database::report_library::find(&key).and_then(|d| d.module) {
+        if !pelty_database::gaming::modules::is_enabled(&s.pool, m).await? {
+            return Err(AppError::NotFound.into());
+        }
+    }
     let (from, to) = range(
         &ReportQuery {
             from: q.from.clone(),
