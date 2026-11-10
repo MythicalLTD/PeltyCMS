@@ -89,19 +89,36 @@ pub const REPORTS: &[Def] = &[
     Def { key: "promotions", category: "marketing", columns: &["code", "uses", "discount_total"], chart: Some((0, 1)),
         module: None, sql: "SELECT c.code, count(r.id)::text, COALESCE(sum(r.amount),0)::text FROM coupons c JOIN coupon_redemptions r ON r.coupon_id=c.id
               WHERE r.created_at >= $1 AND r.created_at < $2 GROUP BY 1 ORDER BY count(r.id) DESC" },
-    // First invoices are not linked to services (they exist before
-    // provisioning), so new orders count their order lines and renewals
-    // their service lines.
+    // Paid invoice lines (net of tax, discount lines included), traced to
+    // their origin invoice through `copied_from` so merged/split replacement
+    // invoices still count for the order they came from. Lines from an
+    // order's invoice are shared out over its items by gross weight (first
+    // invoices exist before provisioning, so they carry no service);
+    // renewals are counted by their service line.
     Def { key: "game_server_sales", category: "gaming", columns: &["server", "currency", "amount", "items"], chart: Some((0, 2)), module: Some("game_profiles"),
-        sql: "WITH x AS (
-                SELECT gp.server_id, o.currency, oi.amount + oi.setup_fee - oi.discount AS amt FROM order_items oi
-                JOIN orders o ON o.id=oi.order_id JOIN game_server_products gp ON gp.product_id=oi.product_id
-                WHERE EXISTS (SELECT 1 FROM invoices i WHERE i.order_id=o.id AND i.kind='invoice' AND i.status='paid' AND i.paid_at >= $1 AND i.paid_at < $2)
+        sql: "WITH paid AS (
+                SELECT ii.id AS line_id, ii.amount, ii.service_id, i.currency, o.order_id AS origin_order
+                FROM invoice_items ii JOIN invoices i ON i.id = ii.invoice_id
+                JOIN invoice_items src ON src.id = COALESCE(ii.copied_from, ii.id)
+                JOIN invoices o ON o.id = src.invoice_id
+                WHERE i.status = 'paid' AND i.kind = 'invoice' AND i.paid_at >= $1 AND i.paid_at < $2),
+              order_net AS (
+                SELECT origin_order, currency, sum(amount) AS net FROM paid WHERE origin_order IS NOT NULL GROUP BY 1, 2),
+              weights AS (
+                SELECT oi.id, oi.order_id, oi.product_id,
+                       oi.amount + oi.setup_fee + COALESCE((SELECT sum(a.amount + a.setup_fee) FROM order_item_addons a WHERE a.order_item_id = oi.id), 0) AS w
+                FROM order_items oi WHERE oi.order_id IN (SELECT origin_order FROM order_net)),
+              totals AS (SELECT order_id, sum(w) AS tw FROM weights GROUP BY 1),
+              x AS (
+                SELECT gp.server_id, n.currency, n.net * w.w / t.tw AS amt, 'o' || w.id::text AS k
+                FROM order_net n JOIN weights w ON w.order_id = n.origin_order JOIN totals t ON t.order_id = n.origin_order
+                JOIN game_server_products gp ON gp.product_id = w.product_id
+                WHERE t.tw > 0
                 UNION ALL
-                SELECT gp.server_id, i.currency, ii.amount FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id
-                JOIN services s ON s.id=ii.service_id JOIN game_server_products gp ON gp.product_id=s.product_id
-                WHERE i.order_id IS NULL AND i.status='paid' AND i.kind='invoice' AND i.paid_at >= $1 AND i.paid_at < $2)
-              SELECT gs.name, x.currency, sum(x.amt)::text, count(*)::text FROM x JOIN game_servers gs ON gs.id=x.server_id
+                SELECT gp.server_id, p.currency, p.amount, 'l' || p.line_id::text
+                FROM paid p JOIN services s ON s.id = p.service_id JOIN game_server_products gp ON gp.product_id = s.product_id
+                WHERE p.origin_order IS NULL)
+              SELECT gs.name, x.currency, round(sum(x.amt), 2)::text, count(DISTINCT x.k)::text FROM x JOIN game_servers gs ON gs.id = x.server_id
               GROUP BY gs.id, x.currency ORDER BY sum(x.amt) DESC" },
     Def { key: "game_deliveries", category: "gaming", columns: &["server", "delivered", "failed", "pending", "waiting_identity"], chart: Some((0, 1)), module: Some("game_delivery"),
         sql: "SELECT gs.name, count(*) FILTER (WHERE d.status='delivered')::text, count(*) FILTER (WHERE d.status='failed')::text,

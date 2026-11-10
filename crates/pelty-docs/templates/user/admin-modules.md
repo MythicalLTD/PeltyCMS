@@ -350,7 +350,7 @@ covers whole months and exports to CSV.
 
 | Report | Module | What it shows |
 | --- | --- | --- |
-| Sales by game server | `game_profiles` | Paid revenue and items for each server's store packages: new orders by order line (price + setup − discount), renewals by service line. A package sold on two servers counts for both. |
+| Sales by game server | `game_profiles` | Paid revenue (excluding tax, after every discount) and items for each server's store packages. A new order's paid lines are shared over its items by price, including invoices merged or split from the order's invoice; renewals count by service line. A package sold on two servers counts for both. |
 | In-game deliveries | `game_delivery` | Delivered, failed, pending and waiting-for-player-link commands for each server, by when they were queued. |
 | Creator code usage | `creator_codes` | Orders placed with each code, and how much of their invoices has been paid. |
 | Marketplace sales by creator | `creator_marketplace` | Gross, commission, net and refunds from each creator's ledger. |

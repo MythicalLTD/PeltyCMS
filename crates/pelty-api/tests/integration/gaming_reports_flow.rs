@@ -35,7 +35,7 @@ async fn library_keys(app: &axum::Router, admin: &Sess) -> Vec<String> {
         .collect()
 }
 
-fn run_path(key: &str, extra: &str) -> String {
+pub(crate) fn run_path(key: &str, extra: &str) -> String {
     let now = time::OffsetDateTime::now_utc().date();
     let m = format!("{}-{:02}", now.year(), u8::from(now.month()));
     format!("/api/v1/admin/reports/library/{key}?from={m}&to={m}{extra}")
