@@ -435,7 +435,11 @@ async fn versions_links_and_licenses() {
     })), &admin.h()).await;
     assert_eq!(off.status, StatusCode::OK, "{:?}", off.body);
     assert_eq!(
-        check(&app, json!({"key": m.body["key"], "domain": "shop-c.example"})).await["reason"],
+        check(
+            &app,
+            json!({"key": m.body["key"], "domain": "shop-c.example"})
+        )
+        .await["reason"],
         "license_disabled"
     );
     call(

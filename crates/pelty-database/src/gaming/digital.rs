@@ -637,6 +637,16 @@ pub fn fingerprint(
     Ok((fp, domain, ip, hwid))
 }
 
+/// (license, product, status, max activations, expiry, linked service status).
+type LicenseCheckRow = (
+    Uuid,
+    Uuid,
+    String,
+    i32,
+    Option<OffsetDateTime>,
+    Option<String>,
+);
+
 /// Validates a key and (optionally) records an activation, atomically per license.
 pub async fn validate(pool: &PgPool, c: &Check, fallback_ip: Option<&str>) -> AppResult<Verdict> {
     if normalize_key(&c.key).len() < 10 {
@@ -646,7 +656,7 @@ pub async fn validate(pool: &PgPool, c: &Check, fallback_ip: Option<&str>) -> Ap
     // The linked service's state is read too, so a license whose service was
     // terminated or cancelled is revoked here even if the revocation event
     // was missed (module off at the time, or a failed hook).
-    let row: Option<(Uuid, Uuid, String, i32, Option<OffsetDateTime>, Option<String>)> = sqlx::query_as(
+    let row: Option<LicenseCheckRow> = sqlx::query_as(
         "SELECT l.id, l.product_id, l.status, l.max_activations, l.expires_at, sv.status
            FROM software_licenses l LEFT JOIN services sv ON sv.id = l.service_id
           WHERE l.key_hash = $1 FOR UPDATE OF l",
@@ -659,7 +669,10 @@ pub async fn validate(pool: &PgPool, c: &Check, fallback_ip: Option<&str>) -> Ap
         return Ok(Verdict::no("not_found"));
     };
     if status != "revoked"
-        && matches!(service.as_deref(), Some("terminated" | "cancelled" | "fraud"))
+        && matches!(
+            service.as_deref(),
+            Some("terminated" | "cancelled" | "fraud")
+        )
     {
         sqlx::query("UPDATE software_licenses SET status = 'revoked' WHERE id = $1")
             .bind(id)
@@ -709,7 +722,10 @@ pub async fn validate(pool: &PgPool, c: &Check, fallback_ip: Option<&str>) -> Ap
     }
     // Read on the transaction's connection: a second pool connection while
     // the row lock is held could exhaust the pool under concurrent checks.
-    let Some(s) = settings(&mut *tx, product).await?.filter(|s| s.license_enabled) else {
+    let Some(s) = settings(&mut *tx, product)
+        .await?
+        .filter(|s| s.license_enabled)
+    else {
         return fail(v, "license_disabled");
     };
     let (fp, domain, ip, hwid) = match fingerprint(&s, c, fallback_ip) {

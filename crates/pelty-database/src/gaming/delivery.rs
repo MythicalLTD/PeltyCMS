@@ -259,11 +259,12 @@ pub async fn enqueue(
         return Ok(0);
     }
     let selling = crate::games::servers_for_product(pool, ctx.product_id).await?;
-    let servers: Vec<(Uuid, String, String)> =
-        sqlx::query_as("SELECT id, game, name FROM game_servers WHERE enabled")
-            .fetch_all(pool)
-            .await
-            .map_err(db_err)?;
+    let servers: Vec<(Uuid, String, String)> = sqlx::query_as(
+        "SELECT id, game, name FROM game_servers WHERE enabled AND transport <> 'none'",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
     let mut n = 0;
     for c in &cmds {
         let targets: Vec<&(Uuid, String, String)> = servers
@@ -332,13 +333,13 @@ pub async fn enqueue(
     Ok(n)
 }
 
-/// (delivery, template, game, service, product) of a waiting delivery.
-type WaitingRow = (Uuid, String, String, Option<Uuid>, Option<Uuid>);
+/// (delivery, template, game, server name, service) of a waiting delivery.
+type WaitingRow = (Uuid, String, String, String, Option<Uuid>);
 
 /// Re-render deliveries waiting for a game identity of this customer.
 pub async fn release_waiting(pool: &PgPool, customer: Uuid) -> AppResult<usize> {
     let rows: Vec<WaitingRow> = sqlx::query_as(
-        "SELECT d.id, d.template, s.game, d.service_id, d.product_id FROM game_deliveries d JOIN game_servers s ON s.id = d.server_id
+        "SELECT d.id, d.template, s.game, s.name, d.service_id FROM game_deliveries d JOIN game_servers s ON s.id = d.server_id
          WHERE d.customer_id = $1 AND d.status = 'waiting_identity'",
     )
     .bind(customer)
@@ -346,7 +347,7 @@ pub async fn release_waiting(pool: &PgPool, customer: Uuid) -> AppResult<usize> 
     .await
     .map_err(db_err)?;
     let mut n = 0;
-    for (id, tpl, game, service, _product) in rows {
+    for (id, tpl, game, server_name, service) in rows {
         let mut vars = identity_vars(&crate::games::identity(pool, customer, &game).await?);
         if let Some(ctx) = match service {
             Some(s) => service_ctx(pool, s).await?,
@@ -363,6 +364,7 @@ pub async fn release_waiting(pool: &PgPool, customer: Uuid) -> AppResult<usize> 
             vars.insert("currency".into(), ctx.currency);
         }
         vars.insert("customer_id".into(), customer.to_string());
+        vars.insert("server".into(), server_name);
         if let Ok(cmd) = render(&tpl, &vars) {
             sqlx::query("UPDATE game_deliveries SET status='pending', command=$2, player=$3, last_error='', next_attempt_at=now() WHERE id=$1 AND status='waiting_identity'")
                 .bind(id)
@@ -393,13 +395,46 @@ pub async fn claim_rcon(pool: &PgPool, limit: i64) -> AppResult<Vec<Claimed>> {
         "UPDATE game_deliveries d SET attempts = attempts + 1, next_attempt_at = now() + interval '2 minutes'
          WHERE d.id IN (SELECT d2.id FROM game_deliveries d2 JOIN game_servers s ON s.id = d2.server_id
                         WHERE d2.status = 'pending' AND d2.next_attempt_at <= now() AND s.transport = 'rcon' AND s.enabled
+                          AND d2.attempts < $2
                         ORDER BY d2.next_attempt_at LIMIT $1 FOR UPDATE OF d2 SKIP LOCKED)
          RETURNING d.id, d.server_id, d.command, d.player, d.require_online, d.attempts",
     )
     .bind(limit)
+    .bind(MAX_ATTEMPTS)
     .fetch_all(pool)
     .await
     .map_err(db_err)
+}
+
+/// Mark leased deliveries that used every attempt without an answer (e.g.
+/// an agent that never acknowledged) as failed once their lease ran out.
+pub async fn sweep_exhausted(pool: &PgPool) -> AppResult<u64> {
+    Ok(sqlx::query(
+        "UPDATE game_deliveries SET status = 'failed',
+                last_error = CASE WHEN last_error = '' THEN 'no acknowledgement' ELSE last_error END
+          WHERE status = 'pending' AND attempts >= $1 AND next_attempt_at <= now()",
+    )
+    .bind(MAX_ATTEMPTS)
+    .execute(pool)
+    .await
+    .map_err(db_err)?
+    .rows_affected())
+}
+
+/// Put a claimed but unsent delivery back without charging the attempt.
+pub async fn release(pool: &PgPool, id: Uuid, delay_secs: i64, note: &str) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE game_deliveries SET attempts = GREATEST(attempts - 1, 0), last_error = $3,
+                next_attempt_at = now() + make_interval(secs => $2)
+          WHERE id = $1 AND status = 'pending'",
+    )
+    .bind(id)
+    .bind(delay_secs as f64)
+    .bind(note)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
+    Ok(())
 }
 
 /// Claim due deliveries for an agent. With `online`, commands that need the
@@ -419,6 +454,7 @@ pub async fn claim_agent(
         "UPDATE game_deliveries d SET attempts = attempts + 1, next_attempt_at = now() + interval '2 minutes'
          WHERE d.id IN (SELECT d2.id FROM game_deliveries d2
                         WHERE d2.server_id = $1 AND d2.status = 'pending' AND d2.next_attempt_at <= now()
+                          AND d2.attempts < $4
                           AND (NOT d2.require_online OR lower(d2.player) = ANY($2)
                                OR EXISTS (SELECT 1 FROM customer_game_accounts a WHERE a.customer_id = d2.customer_id AND lower(a.value) = ANY($2)))
                         ORDER BY d2.next_attempt_at LIMIT $3 FOR UPDATE SKIP LOCKED)
@@ -427,6 +463,7 @@ pub async fn claim_agent(
     .bind(server)
     .bind(&online)
     .bind(limit)
+    .bind(MAX_ATTEMPTS)
     .fetch_all(pool)
     .await
     .map_err(db_err)

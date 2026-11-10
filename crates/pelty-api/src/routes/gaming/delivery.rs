@@ -384,6 +384,7 @@ pub async fn process_rcon(s: &AppState) -> pelty_core::AppResult<Value> {
     if !pelty_database::feature_modules::is_enabled(&s.pool, MODULE).await? {
         return Ok(json!({ "skipped": "module disabled" }));
     }
+    gd::sweep_exhausted(&s.pool).await?;
     let claimed = gd::claim_rcon(&s.pool, 200).await?;
     let mut by_server: std::collections::BTreeMap<Uuid, Vec<gd::Claimed>> = Default::default();
     for c in claimed {
@@ -412,7 +413,33 @@ pub async fn process_rcon(s: &AppState) -> pelty_core::AppResult<Value> {
         .await;
         match conn {
             Ok(mut c) => {
+                // Players online, read once when a command needs it.
+                let mut online: Option<String> = None;
+                let mut broken = false;
                 for d in items {
+                    if broken {
+                        // The connection is unusable (a late reply could be
+                        // matched to the next command): retry later, free.
+                        gd::release(&s.pool, d.id, 30, "").await?;
+                        continue;
+                    }
+                    if d.require_online {
+                        if online.is_none() {
+                            match c.exec(online_command(&srv.game)).await {
+                                Ok(r) => online = Some(r),
+                                Err(e) => {
+                                    gd::release(&s.pool, d.id, 30, &e).await?;
+                                    broken = true;
+                                    continue;
+                                }
+                            }
+                        }
+                        if !player_listed(online.as_deref().unwrap_or(""), &d.player) {
+                            gd::release(&s.pool, d.id, 60, "waiting for the player to be online")
+                                .await?;
+                            continue;
+                        }
+                    }
                     match c.exec(&d.command).await {
                         Ok(resp) => {
                             gd::mark_delivered(&s.pool, d.id, None, &resp).await?;
@@ -421,6 +448,7 @@ pub async fn process_rcon(s: &AppState) -> pelty_core::AppResult<Value> {
                         Err(e) => {
                             gd::mark_retry(&s.pool, d.id, None, &e).await?;
                             failed += 1;
+                            broken = true;
                         }
                     }
                 }
@@ -434,6 +462,27 @@ pub async fn process_rcon(s: &AppState) -> pelty_core::AppResult<Value> {
         }
     }
     Ok(json!({ "delivered": ok, "failed": failed }))
+}
+
+/// RCON command that lists online players for a game.
+fn online_command(game: &str) -> &'static str {
+    if game.starts_with("minecraft") {
+        "list"
+    } else {
+        "status"
+    }
+}
+
+/// Whole-word, case-insensitive match of `player` in a player list reply.
+pub(crate) fn player_listed(reply: &str, player: &str) -> bool {
+    let p = player.trim().to_lowercase();
+    if p.is_empty() {
+        return false;
+    }
+    reply
+        .to_lowercase()
+        .split(|c: char| !(c.is_alphanumeric() || c == '_' || c == '.' || c == '-'))
+        .any(|w| w == p)
 }
 
 /// Run the RCON queue in the background right away.
@@ -536,4 +585,22 @@ async fn handle_event(s: &AppState, e: &DomainEvent) -> pelty_core::AppResult<()
         kick(s);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::player_listed;
+
+    #[test]
+    fn online_list_matching() {
+        let mc = "There are 2 of a max of 20 players online: Steve, alex_99";
+        assert!(player_listed(mc, "steve"));
+        assert!(player_listed(mc, "Alex_99"));
+        assert!(!player_listed(mc, "alex"));
+        assert!(!player_listed(mc, ""));
+        assert!(!player_listed(
+            "There are 0 of a max of 20 players online:",
+            "Steve"
+        ));
+    }
 }
