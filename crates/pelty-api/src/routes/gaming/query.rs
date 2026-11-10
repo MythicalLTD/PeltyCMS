@@ -169,13 +169,21 @@ const RAKNET_MAGIC: [u8; 16] = [
     0x00, 0xff, 0xff, 0x00, 0xfe, 0xfe, 0xfe, 0xfe, 0xfd, 0xfd, 0xfd, 0xfd, 0x12, 0x34, 0x56, 0x78,
 ];
 
+/// UDP socket connected to the target, bound to the target's address family
+/// (an IPv4 socket cannot reach an IPv6-only host).
 async fn udp(host: &str, port: u16) -> Result<UdpSocket, String> {
-    let sock = UdpSocket::bind("0.0.0.0:0")
+    let addr = tokio::net::lookup_host((host, port))
         .await
-        .map_err(|e| e.to_string())?;
-    sock.connect((host, port))
-        .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?
+        .next()
+        .ok_or("no address")?;
+    let local = if addr.is_ipv6() {
+        "[::]:0"
+    } else {
+        "0.0.0.0:0"
+    };
+    let sock = UdpSocket::bind(local).await.map_err(|e| e.to_string())?;
+    sock.connect(addr).await.map_err(|e| e.to_string())?;
     Ok(sock)
 }
 
@@ -557,6 +565,29 @@ mod tests {
         task.await.unwrap();
         assert_eq!(s.motd, "Split Srv");
         assert_eq!((s.players, s.max_players), (5, 32));
+    }
+
+    /// IPv6-only targets get an IPv6 socket.
+    #[tokio::test]
+    async fn a2s_over_ipv6() {
+        let Ok(srv) = UdpSocket::bind("[::1]:0").await else {
+            return; // no IPv6 loopback on this machine
+        };
+        let port = srv.local_addr().unwrap().port();
+        let mut whole = vec![0xff, 0xff, 0xff, 0xff, 0x49, 0x11];
+        for s in ["Six", "m", "rust", "Rust"] {
+            whole.extend_from_slice(s.as_bytes());
+            whole.push(0);
+        }
+        whole.extend_from_slice(&[0x00, 0x00, 1, 10, 0, b'd', b'l', 0, 1]);
+        let task = tokio::spawn(async move {
+            let mut b = [0u8; 1400];
+            let (_, peer) = srv.recv_from(&mut b).await.unwrap();
+            srv.send_to(&whole, peer).await.unwrap();
+        });
+        let s = a2s("::1", port).await.unwrap();
+        task.await.unwrap();
+        assert_eq!(s.motd, "Six");
     }
 
     #[test]
