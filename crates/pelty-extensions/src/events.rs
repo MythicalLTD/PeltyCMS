@@ -155,6 +155,10 @@ pub const REGISTRY: &[EventSpec] = &[
     domain("creator.applied", "A customer applied to sell on the marketplace.", &[f("creator_id", "uuid", "Creator"), f("status", "string", "pending or approved")]),
     domain("creator.payout_requested", "A creator requested a payout.", &[f("payout_id", "uuid", "Payout"), f("creator_id", "uuid", "Creator"), f("amount", "decimal", "Amount"), f("currency", "string", "ISO 4217 code")]),
     domain("creator.payout_paid", "A creator payout was marked paid.", &[f("payout_id", "uuid", "Payout"), f("creator_id", "uuid", "Creator"), f("amount", "decimal", "Amount"), f("currency", "string", "ISO 4217 code")]),
+    domain("review.submitted", "A customer submitted or edited a product review.", &[f("review_id", "uuid", "Review"), f("product_id", "uuid", "Product"), f("customer_id", "uuid", "Customer"), f("rating", "int", "1 to 5"), f("status", "string", "pending or approved"), f("verified", "bool", "Customer bought the product")]),
+    domain("review.approved", "Staff approved a product review.", &[f("review_id", "uuid", "Review"), f("product_id", "uuid", "Product"), f("customer_id", "uuid", "Customer"), f("rating", "int", "1 to 5")]),
+    domain("question.asked", "A customer asked a question about a product.", &[f("question_id", "uuid", "Question"), f("product_id", "uuid", "Product"), f("customer_id", "uuid", "Customer")]),
+    domain("question.answered", "Staff or the product's creator answered a question.", &[f("question_id", "uuid", "Question"), f("product_id", "uuid", "Product"), f("customer_id", "uuid", "Customer")]),
     // ---- services ----
     domain("service.created", "A service was created from an order.", &[f("service_id", "uuid", "Service"), f("order_id", "uuid", "Order")]),
     domain("service.provisioned", "A provisioning module action succeeded.", &[f("service_id", "uuid", "Service"), f("action", "string", "`create`, `suspend`, …"), f("module", "string", "Module id")]),

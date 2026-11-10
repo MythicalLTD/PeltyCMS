@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { PluginSlot } from "@/components/plugin-ui/PluginSlot";
+import { ProductReviews } from "@/components/store/ProductReviews";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
@@ -205,6 +206,7 @@ export function StoreProductPage() {
         </CardContent>
         <CardFooter><Button className="w-full" disabled={!price || save.isPending || stockState(product) === "out"} onClick={add}><PlusIcon aria-hidden />{t("cart.add")}</Button></CardFooter>
       </Card>
+      <ProductReviews productId={product.id} className="lg:col-span-2" />
     </div>
   );
 }
