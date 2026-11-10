@@ -109,6 +109,23 @@ async fn store_theme_hero_server_and_marketplace_browse() {
         "no live status without server_community"
     );
     assert!(sf.body["server"].get("rcon_host").is_none());
+    assert_eq!(sf.body["package_ids"], json!([]), "no packages linked yet");
+    let (pid, _, _) = seed_product(&app, &admin).await;
+    let r = call(
+        &app,
+        "PUT",
+        &format!("/api/v1/admin/game/servers/{sid}/products"),
+        Some(json!({"product_ids": [pid]})),
+        &admin.h(),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK, "{:?}", r.body);
+    let sf = call(&app, "GET", "/api/v1/public/storefront", None, &[]).await;
+    assert!(sf.body["package_ids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|x| x == pid.as_str()));
     put_storefront(
         &app,
         &admin,

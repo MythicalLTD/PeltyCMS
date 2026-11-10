@@ -86,12 +86,13 @@ pub async fn public_layout(State(s): State<AppState>) -> ApiResult<Json<Value>> 
         };
         widgets.push(v);
     }
-    let server = hero_server(&s, &cfg, community).await?;
+    let (server, package_ids) = hero_server(&s, &cfg, community).await?;
     Ok(Json(json!({
         "theme": cfg.theme,
         "discord_url": cfg.discord_url,
         "logo_url": cfg.logo_url,
         "server": server,
+        "package_ids": package_ids,
         "hero_title": cfg.hero_title,
         "hero_subtitle": cfg.hero_subtitle,
         "hero_image": cfg.hero_image,
@@ -103,18 +104,30 @@ pub async fn public_layout(State(s): State<AppState>) -> ApiResult<Json<Value>> 
 }
 
 /// The hero's server: the chosen one (or the first enabled), with the live
-/// status when `server_community` checks it. `null` with no enabled server.
-async fn hero_server(s: &AppState, cfg: &sf::Config, community: bool) -> ApiResult<Value> {
+/// status when `server_community` checks it (`null` with no enabled server),
+/// and the packages sold on enabled servers (the store shows only those when
+/// any are linked; empty = the whole catalog).
+async fn hero_server(
+    s: &AppState,
+    cfg: &sf::Config,
+    community: bool,
+) -> ApiResult<(Value, Vec<uuid::Uuid>)> {
     if !feature_modules::is_enabled(&s.pool, "game_profiles").await? {
-        return Ok(Value::Null);
+        return Ok((Value::Null, Vec::new()));
     }
     let servers = gp::servers(&s.pool, true).await?;
+    let mut package_ids: Vec<uuid::Uuid> = Vec::new();
+    for id in servers.iter().flat_map(|x| x.product_ids.iter()) {
+        if !package_ids.contains(id) {
+            package_ids.push(*id);
+        }
+    }
     let Some(srv) = cfg
         .server_id
         .and_then(|id| servers.iter().find(|x| x.id == id))
         .or_else(|| servers.first())
     else {
-        return Ok(Value::Null);
+        return Ok((Value::Null, package_ids));
     };
     let status = if community {
         cm::statuses(&s.pool)
@@ -135,9 +148,12 @@ async fn hero_server(s: &AppState, cfg: &sf::Config, community: bool) -> ApiResu
         Some(p) if !srv.host.is_empty() => format!("{}:{p}", srv.host),
         _ => srv.host.clone(),
     };
-    Ok(json!({
-        "name": srv.name, "slug": srv.slug, "game": srv.game, "address": address, "status": status,
-    }))
+    Ok((
+        json!({
+            "name": srv.name, "slug": srv.slug, "game": srv.game, "address": address, "status": status,
+        }),
+        package_ids,
+    ))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/storefront", responses((status = 200, body = Config), (status = 403)))]
