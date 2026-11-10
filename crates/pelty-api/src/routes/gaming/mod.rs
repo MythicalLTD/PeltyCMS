@@ -4,6 +4,7 @@
 //! Covered by the `modules_flow` integration tests and pelty-docs route inventory tests.
 
 pub mod delivery;
+pub mod digital;
 pub mod games;
 pub mod modules;
 pub mod rcon;

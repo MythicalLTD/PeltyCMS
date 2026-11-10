@@ -84,3 +84,24 @@ Requires **Game profiles**. Open **Products → In-game delivery**.
 | `POST /api/v1/game-agent/ack` | `{"delivered": [id…], "failed": [{"id": …, "error": "…"}]}` | Marks results; failures are retried. |
 
 Send the token as `Authorization: Bearer pga_…`. Every poll/ack is scoped to the token's server.
+
+## Digital products (`digital_products`)
+
+Open **Products → Digital products** and pick a product under **Make a product digital**.
+
+- **Versions**: upload each release (zip, gzip, PDF, text; same size limit as Downloads) with a version label and changelog. Customers who own the product see every version on **Licenses & files**; the public changelog is at `GET /api/v1/public/digital/products/{id}/changelog`.
+- **Secure downloads**: the download button creates a one-off link (`/api/v1/public/digital/download/{token}`) that expires after the product's link lifetime (default 15 minutes) and allows 5 uses. Ownership is checked again when the link is used, so refunded or revoked customers cannot reuse old links.
+- **License keys**: with licensing on, every purchase issues a key (`XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`, stored encrypted). Set the activation limit (0 = unlimited), an optional validity in days, and what an activation is bound to: domain, IP and/or hardware ID. Staff can issue keys by hand, suspend, revoke and reset activations; customers can copy their key and reset their own activations.
+- **Lifecycle**: suspending the service suspends its license, unsuspending reactivates it, and termination, cancellation, refund or chargeback revokes it.
+- **External assets (FiveM escrow)**: set an asset id and each purchase records a grant (with the customer's linked FiveM license when Game profiles is on) and fires `digital.asset_granted`. Cfx.re has no public API for granting escrow assets, so fulfil grants with a webhook/integration or mark them granted by hand; refunds fire `digital.asset_revoked`.
+
+### License API
+
+Call it from the software you sell. Only the fields the product binds are needed.
+
+| Call | Body | Result |
+| --- | --- | --- |
+| `POST /api/v1/public/licenses/validate` | `{"key": "…", "product_id": "…", "domain": "shop.example", "hwid": "…", "activate": true}` | `{"valid": true, "activations": 1, "max_activations": 3, "expires_at": …}` or `{"valid": false, "reason": "…"}` |
+| `POST /api/v1/public/licenses/deactivate` | same identity fields | `{"removed": true}` frees the slot |
+
+Reasons: `not_found`, `wrong_product`, `suspended`, `revoked`, `expired`, `domain_required`, `ip_required`, `hwid_required`, `activation_limit`, `not_activated` (with `"activate": false`). The IP defaults to the caller's address. Repeated unknown keys from one address are rate limited.

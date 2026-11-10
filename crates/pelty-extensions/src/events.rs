@@ -145,6 +145,12 @@ pub const REGISTRY: &[EventSpec] = &[
     domain("payment.failed", "A payment attempt failed.", &[o("invoice_id", "uuid", "Invoice"), o("payment_id", "uuid", "Payment"), o("gateway", "string", "Gateway id"), o("provider_ref", "string", "Gateway reference"), o("autopay", "bool", "Autopay attempt"), o("attempt", "int", "Autopay attempt number")]),
     domain("payment.disputed", "A gateway reported a chargeback or dispute.", &[f("gateway", "string", "Gateway id"), f("provider_ref", "string", "Gateway reference"), o("payment_id", "uuid", "Payment"), o("event_type", "string", "Gateway event type")]),
     domain("payment_method.expiring", "A saved card expires soon.", &[f("payment_method_id", "uuid", "Payment method"), f("customer_id", "uuid", "Customer")]),
+    // ---- digital products ----
+    domain("license.issued", "A software license key was issued (purchase or staff).", &[f("license_id", "uuid", "License"), f("product_id", "uuid", "Product"), f("customer_id", "uuid", "Customer"), o("service_id", "uuid", "Service it belongs to")]),
+    domain("license.revoked", "A software license was revoked (staff, termination, refund or chargeback).", &[o("license_id", "uuid", "License"), o("service_id", "uuid", "Service"), o("reason", "string", "Event that caused it")]),
+    domain("digital.version_released", "A new version of a digital product was uploaded.", &[f("product_id", "uuid", "Product"), f("version_id", "uuid", "Version"), f("version", "string", "Version label")]),
+    domain("digital.asset_granted", "A purchase needs an external asset granted (e.g. FiveM escrow resource).", &[f("grant_id", "uuid", "Grant"), f("asset", "string", "External asset id"), f("identity", "string", "Customer identity for the asset (FiveM license), may be empty"), f("customer_id", "uuid", "Customer"), f("service_id", "uuid", "Service")]),
+    domain("digital.asset_revoked", "An external asset grant was revoked (termination, refund or chargeback).", &[f("grant_id", "uuid", "Grant"), f("asset", "string", "External asset id"), f("identity", "string", "Customer identity"), f("customer_id", "uuid", "Customer"), f("service_id", "uuid", "Service")]),
     // ---- services ----
     domain("service.created", "A service was created from an order.", &[f("service_id", "uuid", "Service"), f("order_id", "uuid", "Order")]),
     domain("service.provisioned", "A provisioning module action succeeded.", &[f("service_id", "uuid", "Service"), f("action", "string", "`create`, `suspend`, …"), f("module", "string", "Module id")]),
