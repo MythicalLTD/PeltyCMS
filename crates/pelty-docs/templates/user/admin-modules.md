@@ -124,6 +124,11 @@ When this module is on, customers can become **creators** and sell their own pro
 | `hold_days` | Days a sale stays on hold before it can be paid out (refund/chargeback window) |
 | `min_payout` | Smallest payout a creator can request |
 | `auto_approve_creators` / `auto_approve_listings` | Skip manual review |
+| `payout_schedule` | `manual` (creators request), `weekly` or `monthly`: the whole available balance is paid out automatically on that day (store timezone) |
+| `payout_weekday` / `payout_monthday` | Day for weekly (1 = Monday … 7 = Sunday) or monthly (1–28) payouts |
+| `payout_approval` | On (default): payouts wait for staff to **Send** them. Off: requests and scheduled payouts go to Stripe/PayPal right away |
+| `payout_methods` | Methods creators may choose (`manual`, `stripe_connect`, `paypal`) |
+| `reverse_transfers_on_refund` | On (default): a refund or chargeback on an already paid-out sale pulls the money back from the creator's Stripe transfers |
 
 **Flow.**
 
@@ -133,10 +138,35 @@ When this module is on, customers can become **creators** and sell their own pro
 4. Refunds and disputes (`order.refunded`, `invoice.refunded`, `payment.disputed`) write a matching negative `refund` entry, so the balance can go negative and is recovered from later sales.
 5. A creator requests a payout from the available balance, and the amount is debited right away. Staff then **Send** it through the provider, or mark it paid, rejected or failed. Rejected or failed payouts are credited back.
 
-**Payout providers.**
+**How money flows (separate charges and transfers).** Buyers always pay *your* store through your normal payment gateways. PeltyCMS does not use Stripe destination charges: a cart can mix several creators and your own products, and buyers may pay with any gateway, so each sale is credited to the creator's ledger (minus commission) and paid out later from your platform balance. Creators get paid by one of three methods, chosen in **Billing → Sell as a creator → Payouts** (staff can override and lock it per creator under **Creators**):
 
 - **Manual** (bank transfer or anything else). **Send** moves the payout to *processing*; you pay outside PeltyCMS and then mark it *paid*.
-- **Stripe Connect** and **PayPal Payouts** are **stubs** in this release. They return `error.payout_provider_unconfigured` until `PELTY_STRIPE_CONNECT_KEY` / `PELTY_PAYPAL_PAYOUTS_CLIENT_ID` and the creator's account details are set. Even then they return `error.payout_provider_stub`, because no money is moved automatically yet. For now, pay those creators manually and mark the payouts paid.
+- **Stripe Connect (Express).** The creator clicks **Connect with Stripe** and finishes Stripe's hosted onboarding (account links with return and refresh URLs back to the dashboard). The connected account id and its status (`onboarding`, `restricted`, `enabled`, `disconnected`) are stored on the creator and kept current by the `account.updated` webhook. Sending a payout creates a Stripe **transfer** from your platform balance to the connected account (idempotent per payout). Stripe then pays out to the creator's bank on the creator's own Stripe schedule; the creator can open their Express dashboard from PeltyCMS. A reversed transfer credits the creator's balance back; a `payout.failed` on the creator's account is shown on the payout and mailed to the creator (the money stays in their Stripe balance).
+- **PayPal Payouts.** The creator saves a PayPal email. Sending creates a PayPal payout batch (one item per payout, idempotent per batch). Item status arrives by webhook and is also polled hourly; `SUCCESS` marks the payout paid, and `FAILED`, `RETURNED`, `BLOCKED`, `REFUNDED`, `REVERSED`, `DENIED` or `CANCELED` mark it failed and credit the amount back. `UNCLAIMED` stays processing until PayPal returns it (after 30 days).
+
+**Refunds after a payout.** When a refund or chargeback pushes a creator's balance below zero and `reverse_transfers_on_refund` is on, PeltyCMS reverses the creator's most recent paid Stripe transfers for up to the missing amount and books a `transfer_reversal` ledger entry. PayPal payouts cannot be pulled back; the negative balance is then recovered from later sales.
+
+**Jobs.** `creator_payouts.sync` runs hourly (retries unsent PayPal batches, polls PayPal, and sends requested Stripe and PayPal payouts when approval is off). `creator_payouts.auto` runs once on the scheduled day and creates a payout for every creator whose available balance is at least `min_payout`. **Run now** on the Payouts tab does the same on demand.
+
+**Going live.** Gateway credentials are read from environment variables on the server (never stored in the database or shown in the UI). Test keys work out of the box; live keys are refused unless `PELTY_CREATOR_PAYOUTS_LIVE=true`.
+
+| Variable | Meaning |
+|---|---|
+| `PELTY_STRIPE_CONNECT_SECRET_KEY` | Secret key of your Stripe platform account with Connect enabled (`sk_test_…` or `sk_live_…`; restricted keys need Connect accounts, account links and transfers write access). `PELTY_STRIPE_CONNECT_KEY` is still read as a fallback |
+| `PELTY_STRIPE_CONNECT_WEBHOOK_SECRET` | Signing secret (`whsec_…`) of a Connect webhook endpoint |
+| `PELTY_PAYPAL_PAYOUTS_CLIENT_ID` / `PELTY_PAYPAL_PAYOUTS_CLIENT_SECRET` | REST app credentials; the PayPal account must have Payouts enabled |
+| `PELTY_PAYPAL_PAYOUTS_MODE` | `sandbox` (default) or `live` |
+| `PELTY_PAYPAL_PAYOUTS_WEBHOOK_ID` | Id of the webhook you create in that PayPal app (used to verify webhook signatures) |
+| `PELTY_CREATOR_PAYOUTS_LIVE` | `true` to allow live Stripe keys and PayPal live mode |
+
+Webhooks to create (the exact URLs are shown on **Admin → Creator marketplace → Payouts**):
+
+- Stripe: `{your site}/api/v1/webhooks/creator-payouts/stripe`, listening to events **on connected accounts** `account.updated`, `account.application.deauthorized`, `payout.failed`, and to your account's `transfer.created`, `transfer.updated`, `transfer.reversed`.
+- PayPal: `{your site}/api/v1/webhooks/creator-payouts/paypal`, with `PAYMENT.PAYOUTS-ITEM.*` and `PAYMENT.PAYOUTSBATCH.*`.
+
+Webhook events are deduplicated, so Stripe or PayPal retries are safe. Without webhooks Stripe statuses refresh when the creator clicks **Refresh status**, and PayPal relies on the hourly poll.
+
+**Gallery and updates.** Creators add up to 12 screenshots (https URLs with captions) per listing; the resource page shows them as a gallery after the listing image. When a creator uploads a new version, every customer who owns the product (and has not opted out of marketing mail) receives an update email linking to their downloads.
 
 Payout administration needs the **Affiliates** permission. Creator and listing review need **Catalog**.
 
@@ -156,9 +186,16 @@ Payout administration needs the **Affiliates** permission. Creator and listing r
 | GET/POST | `/api/v1/client/creator/payouts` | the creator |
 | GET | `/api/v1/admin/creators`, POST `/api/v1/admin/creators/{id}/status` | staff (Catalog) |
 | GET | `/api/v1/admin/creator-listings`, POST `/api/v1/admin/creator-listings/{id}/review` | staff (Catalog) |
+| PUT | `/api/v1/client/creator/payout-settings` | the creator: method and PayPal email |
+| POST | `/api/v1/client/creator/stripe/onboard`, `/stripe/sync`, `/stripe/dashboard` | the creator: Stripe onboarding link, status refresh, Express dashboard link |
+| GET/PUT | `/api/v1/client/creator/listings/{id}/gallery` | the creator |
 | GET | `/api/v1/admin/creator-payouts`, POST `/{id}/send`, POST `/{id}/status` | staff (Affiliates) |
+| GET | `/api/v1/admin/creator-payouts/overview` | staff (Affiliates): provider configuration, test/live, webhook URLs |
+| POST | `/api/v1/admin/creator-payouts/run`, `/send-batch` | staff (Affiliates): create due payouts, send, sync PayPal |
+| PUT | `/api/v1/admin/creators/{id}/payout` | staff (Affiliates): set and lock a creator's method |
+| POST | `/api/v1/webhooks/creator-payouts/stripe`, `/paypal` | Stripe / PayPal (signed) |
 
-Events: `creator.applied`, `creator.payout_requested`, `creator.payout_paid`.
+Events: `creator.applied`, `creator.payout_requested`, `creator.payout_paid`, `creator.payout_failed`.
 
 ## Reviews and Q&A (`product_reviews`)
 
@@ -272,7 +309,7 @@ With the module off, the store keeps its plain look and these endpoints return 4
 | Automatic (default) | Game server store when `gaming_storefront` is on, else the creator marketplace when `creator_marketplace` is on, else the hosting landing. |
 | Hosting landing | Always the hosting homepage (your Website pages) and your own menu. |
 | Game server store | `/` is the store homepage: big server banner (logo, name, copyable address, live players, Discord), quick links (game account, vote, leaderboards, support), category tabs, package cards with images, prices, sale badges and **Add to cart**, and the sidebar widgets (featured package, recent payments, top customer, goal). The menu becomes Store, Vote, Leaderboards (with `server_community`), Marketplace (when that module is on), Discord and Support, plus the cart. `/store` always uses the game store layout. |
-| Creator marketplace | `/` is the marketplace: search, categories (your product groups that hold approved listings), Trending (most sales in the last 30 days), New and Top rated (with `product_reviews`) shelves. Resource pages are at `/marketplace/r/{product}` (image, description, versions and changelog with `digital_products`, reviews and Q&A with `product_reviews`, Buy box, creator card). Creator profiles are at `/creators/{slug}`; `/creators` lists them. The menu becomes Explore, Creators, Store (when the game store is on), Sell (the creator dashboard) and Support. |
+| Creator marketplace | `/` is the marketplace: search, categories (your product groups that hold approved listings), Trending (most sales in the last 30 days), New and Top rated (with `product_reviews`) shelves. Resource pages are at `/marketplace/r/{product}` (image gallery, description, versions and changelog with `digital_products`, reviews and Q&A with `product_reviews`, Buy box, creator card). Creator profiles are at `/creators/{slug}`; `/creators` lists them. The menu becomes Explore, Creators, Store (when the game store is on), Sell (the creator dashboard) and Support. |
 
 When both modules are on, pick which one is the homepage; the other stays in the menu. Choosing a look whose module is off falls back to Automatic.
 
