@@ -37,6 +37,22 @@ pub fn router() -> Router<AppState> {
         .route("/admin/community/sites/{id}/token", post(site_token))
 }
 
+/// The monthly goal (`null` when no goal is set). Shared with the storefront.
+pub async fn goal(pool: &sqlx::PgPool, cfg: &cm::Config) -> pelty_core::AppResult<Option<Value>> {
+    Ok(if cfg.goal_amount > Decimal::ZERO {
+        let raised = cm::month_total(pool, &cfg.goal_currency).await?;
+        let pct = (raised * Decimal::from(100) / cfg.goal_amount)
+            .round()
+            .min(Decimal::from(100));
+        Some(json!({
+            "label": cfg.goal_label, "amount": cfg.goal_amount.to_string(), "currency": cfg.goal_currency,
+            "raised": raised.round_dp(2).to_string(), "percent": pct.to_string().parse::<i64>().unwrap_or(0),
+        }))
+    } else {
+        None
+    })
+}
+
 /// Public page data: server status, vote links, leaderboards and the goal.
 #[utoipa::path(get, path = "/api/v1/public/community", responses((status = 200), (status = 404)))]
 pub async fn public_overview(State(s): State<AppState>) -> ApiResult<Json<Value>> {
@@ -62,18 +78,7 @@ pub async fn public_overview(State(s): State<AppState>) -> ApiResult<Json<Value>
     } else {
         None
     };
-    let goal = if cfg.goal_amount > Decimal::ZERO {
-        let raised = cm::month_total(&s.pool, &cfg.goal_currency).await?;
-        let pct = (raised * Decimal::from(100) / cfg.goal_amount)
-            .round()
-            .min(Decimal::from(100));
-        Some(json!({
-            "label": cfg.goal_label, "amount": cfg.goal_amount.to_string(), "currency": cfg.goal_currency,
-            "raised": raised.round_dp(2).to_string(), "percent": pct.to_string().parse::<i64>().unwrap_or(0),
-        }))
-    } else {
-        None
-    };
+    let goal = goal(&s.pool, &cfg).await?;
     Ok(Json(json!({
         "servers": cm::statuses(&s.pool).await?,
         "sites": sites,

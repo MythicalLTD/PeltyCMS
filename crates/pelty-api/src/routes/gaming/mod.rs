@@ -13,6 +13,7 @@ pub mod payouts;
 pub mod query;
 pub mod rcon;
 pub mod reviews;
+pub mod storefront;
 
 /// `{"items": [...]}` list envelope used by the module APIs.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]

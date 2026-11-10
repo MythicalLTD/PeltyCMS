@@ -27,6 +27,7 @@ macro_rules! public_name {
 /// One sidebar widget, in display order.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+#[schema(as = StorefrontWidget)]
 pub enum Widget {
     /// Plain text box (rules, about, contact). Rendered as text, never HTML.
     Text { title: String, body: String },
@@ -140,11 +141,15 @@ impl Config {
         }
         for w in &self.widgets {
             let ok = match w {
-                Widget::Text { title, body } => short(title, 80) && short(body, 2000) && !body.trim().is_empty(),
+                Widget::Text { title, body } => {
+                    short(title, 80) && short(body, 2000) && !body.trim().is_empty()
+                }
                 Widget::TopCustomer { period, .. } => PERIODS.contains(&period.as_str()),
                 Widget::RecentPayments { limit } => (1..=10).contains(limit),
                 Widget::Discord { invite_url, label } => discord_ok(invite_url) && short(label, 60),
-                Widget::FeaturedPackage { .. } | Widget::ServerStatus { .. } | Widget::Goal {} => true,
+                Widget::FeaturedPackage { .. } | Widget::ServerStatus { .. } | Widget::Goal {} => {
+                    true
+                }
             };
             if !ok {
                 return bad;
@@ -186,7 +191,19 @@ pub async fn save(pool: &PgPool, c: &Config, by: Uuid) -> AppResult<()> {
     Ok(())
 }
 
+/// The store's default currency (`EUR` if none is marked default).
+pub async fn default_currency(pool: &PgPool) -> AppResult<String> {
+    let c: Option<String> = sqlx::query_scalar(
+        "SELECT code::text FROM currencies WHERE is_default AND enabled ORDER BY code LIMIT 1",
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?;
+    Ok(c.unwrap_or_else(|| "EUR".into()))
+}
+
 #[derive(Debug, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+#[schema(as = StorefrontTopCustomer)]
 pub struct TopCustomer {
     pub name: String,
     #[schema(value_type = String)]
@@ -204,7 +221,11 @@ fn since(period: &str) -> &'static str {
 }
 
 /// Highest spender (paid invoices in `currency`) since the start of `period`.
-pub async fn top_customer(pool: &PgPool, period: &str, currency: &str) -> AppResult<Option<TopCustomer>> {
+pub async fn top_customer(
+    pool: &PgPool,
+    period: &str,
+    currency: &str,
+) -> AppResult<Option<TopCustomer>> {
     let sql = format!(
         concat!(
             "SELECT ",
@@ -224,6 +245,7 @@ pub async fn top_customer(pool: &PgPool, period: &str, currency: &str) -> AppRes
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+#[schema(as = StorefrontRecentPayment)]
 pub struct RecentPayment {
     pub name: String,
     /// Product names on the invoice (active products only).
@@ -257,6 +279,7 @@ pub async fn recent_payments(pool: &PgPool, limit: i64) -> AppResult<Vec<RecentP
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+#[schema(as = StorefrontFeatured)]
 pub struct Featured {
     pub id: Uuid,
     pub name: String,
@@ -299,16 +322,30 @@ mod tests {
         assert!(c.validate().is_err());
         c.hero_image = "/uploads/banner.png".into();
         assert!(c.validate().is_ok());
-        c.widgets = vec![Widget::Discord { invite_url: "https://discord.gg/abc-123".into(), label: "Join".into() }];
+        c.widgets = vec![Widget::Discord {
+            invite_url: "https://discord.gg/abc-123".into(),
+            label: "Join".into(),
+        }];
         assert!(c.validate().is_ok());
-        c.widgets = vec![Widget::Discord { invite_url: "https://evil.example/discord.gg/x".into(), label: "x".into() }];
+        c.widgets = vec![Widget::Discord {
+            invite_url: "https://evil.example/discord.gg/x".into(),
+            label: "x".into(),
+        }];
         assert!(c.validate().is_err());
         c.widgets = vec![Widget::RecentPayments { limit: 50 }];
         assert!(c.validate().is_err());
-        c.widgets = vec![Widget::TopCustomer { period: "decade".into(), show_amount: false }];
+        c.widgets = vec![Widget::TopCustomer {
+            period: "decade".into(),
+            show_amount: false,
+        }];
         assert!(c.validate().is_err());
-        c.widgets = vec![Widget::Text { title: "Rules".into(), body: " ".into() }];
+        c.widgets = vec![Widget::Text {
+            title: "Rules".into(),
+            body: " ".into(),
+        }];
         assert!(c.validate().is_err());
-        assert!(serde_json::from_value::<Widget>(json!({"type": "html", "body": "<script>"})).is_err());
+        assert!(
+            serde_json::from_value::<Widget>(json!({"type": "html", "body": "<script>"})).is_err()
+        );
     }
 }
