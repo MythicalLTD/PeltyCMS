@@ -31,6 +31,7 @@ pub const MODES: &[&str] = &["dark", "light", "system"];
 /// Storefront layout: `hosting` is the plan store, `game` the compact package
 /// catalog for game servers.
 pub const STORE_MODES: &[&str] = &["hosting", "game"];
+pub const PUBLIC_MODES: &[&str] = &["auto", "hosting", "store", "marketplace"];
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -95,6 +96,9 @@ pub struct SiteConfig {
     pub store_mode: String,
     /// cfx.re join code of the FiveM server (the part after `cfx.re/join/`).
     pub game_join_code: String,
+    /// Public site look: `auto` follows the enabled modules (game store, then
+    /// creator marketplace, else hosting); the others force one when available.
+    pub public_mode: String,
 }
 
 impl Default for SiteConfig {
@@ -161,6 +165,7 @@ impl Default for SiteConfig {
             ],
             store_mode: "hosting".into(),
             game_join_code: String::new(),
+            public_mode: "auto".into(),
         }
     }
 }
@@ -207,7 +212,9 @@ pub fn validate_config(c: &SiteConfig) -> AppResult<()> {
     if !FONTS.contains(&c.font.as_str()) || !MODES.contains(&c.default_mode.as_str()) {
         return Err(bad);
     }
-    if !STORE_MODES.contains(&c.store_mode.as_str()) {
+    if !STORE_MODES.contains(&c.store_mode.as_str())
+        || !PUBLIC_MODES.contains(&c.public_mode.as_str())
+    {
         return Err(bad);
     }
     if !(c.game_join_code.is_empty() || join_code_ok(&c.game_join_code)) {
@@ -536,6 +543,12 @@ mod tests {
         c.game_join_code.clear();
         c.store_mode = "casino".into();
         assert!(validate_config(&c).is_err());
+        c.store_mode = "game".into();
+        c.public_mode = "marketplace".into();
+        assert!(validate_config(&c).is_ok());
+        c.public_mode = "casino".into();
+        assert!(validate_config(&c).is_err());
+        assert_eq!(SiteConfig::default().public_mode, "auto");
     }
 
     #[test]

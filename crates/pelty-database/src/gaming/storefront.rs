@@ -12,6 +12,8 @@ use uuid::Uuid;
 
 pub const MODULE: &str = "gaming_storefront";
 pub const ACCENTS: &[&str] = &["default", "emerald", "violet", "amber", "rose", "sky"];
+/// Public-site colour presets (store mode); `default` keeps the site brand.
+pub const THEMES: &[&str] = &["default", "minecraft", "fivem", "rust", "dark"];
 pub const PERIODS: &[&str] = &["day", "week", "month", "year", "all"];
 const MAX_WIDGETS: usize = 12;
 
@@ -75,6 +77,18 @@ pub struct Config {
     pub sidebar: String,
     #[serde(default)]
     pub widgets: Vec<Widget>,
+    /// One of [`THEMES`]: colours of the whole public site in store mode.
+    #[serde(default = "default_accent")]
+    pub theme: String,
+    /// Server shown in the hero (address, players); `None` = the first enabled one.
+    #[serde(default)]
+    pub server_id: Option<Uuid>,
+    /// Discord invite for the hero and the store nav; empty for none.
+    #[serde(default)]
+    pub discord_url: String,
+    /// Server logo in the hero (`https://` or `/path`); empty uses the site logo.
+    #[serde(default)]
+    pub logo_url: String,
 }
 
 fn default_accent() -> String {
@@ -100,6 +114,10 @@ impl Default for Config {
                 Widget::RecentPayments { limit: 5 },
                 Widget::ServerStatus { server_id: None },
             ],
+            theme: default_accent(),
+            server_id: None,
+            discord_url: String::new(),
+            logo_url: String::new(),
         }
     }
 }
@@ -136,6 +154,9 @@ impl Config {
             || !["list", "grid"].contains(&self.layout.as_str())
             || !["left", "right"].contains(&self.sidebar.as_str())
             || self.widgets.len() > MAX_WIDGETS
+            || !THEMES.contains(&self.theme.as_str())
+            || !(self.discord_url.is_empty() || discord_ok(&self.discord_url))
+            || !image_ok(&self.logo_url)
         {
             return bad;
         }
@@ -312,6 +333,27 @@ mod tests {
         let c = parse(json!({"accent": "violet", "layout": "grid", "widgets": [{"type": "goal"}]}));
         assert_eq!(c.accent, "violet");
         assert_eq!(c.widgets, vec![Widget::Goal {}]);
+    }
+
+    #[test]
+    fn theme_server_and_links() {
+        let mut c = Config::default();
+        assert_eq!(c.theme, "default");
+        c.theme = "fivem".into();
+        c.discord_url = "https://discord.gg/rp".into();
+        c.logo_url = "/uploads/logo.png".into();
+        assert!(c.validate().is_ok());
+        c.theme = "neon".into();
+        assert!(c.validate().is_err());
+        c.theme = "rust".into();
+        c.discord_url = "https://evil.example/x".into();
+        assert!(c.validate().is_err());
+        c.discord_url = String::new();
+        c.logo_url = "javascript:x".into();
+        assert!(c.validate().is_err());
+        // Settings saved before these fields existed still load.
+        let old = parse(json!({"accent": "violet"}));
+        assert_eq!((old.theme.as_str(), old.server_id), ("default", None));
     }
 
     #[test]

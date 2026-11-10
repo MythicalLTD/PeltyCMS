@@ -108,6 +108,8 @@ use utoipa::OpenApi;
         super::discord_roles::run_now,
         super::marketplace::public_config,
         super::marketplace::public_creators,
+        super::marketplace::public_browse,
+        super::marketplace::public_resource,
         super::marketplace::public_creator,
         super::marketplace::dashboard,
         super::marketplace::apply,

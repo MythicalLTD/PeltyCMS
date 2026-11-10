@@ -836,3 +836,121 @@ mod tests {
         assert!(p.validate().is_ok());
     }
 }
+
+/// One approved listing on the public marketplace (BuiltByBit-style browse).
+#[derive(Debug, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+#[schema(as = MarketplaceListing)]
+pub struct PublicListing {
+    pub product_id: Uuid,
+    pub name: String,
+    pub slug: String,
+    pub description: String,
+    pub image_url: String,
+    pub creator: String,
+    pub creator_slug: String,
+    pub creator_avatar: String,
+    pub category: String,
+    pub category_slug: String,
+    /// All-time paid sales.
+    pub sales: i64,
+    /// Paid sales in the last 30 days (the "trending" order).
+    pub recent_sales: i64,
+    /// Average approved review rating (1–5), `None` without reviews or when
+    /// `product_reviews` is off.
+    pub rating: Option<f64>,
+    pub reviews: i64,
+    #[serde(with = "time::serde::rfc3339")]
+    pub listed_at: OffsetDateTime,
+}
+
+/// Browse order of [`public_listings`].
+pub const SORTS: &[&str] = &["trending", "new", "top_rated", "popular"];
+
+const PUBLIC_LISTING_SQL: &str = "SELECT cp.product_id, p.name, p.slug, p.description, p.image_url,
+        c.display_name AS creator, c.slug AS creator_slug, c.avatar_url AS creator_avatar,
+        g.name AS category, g.slug AS category_slug,
+        (SELECT count(*) FROM creator_ledger l WHERE l.product_id = cp.product_id AND l.kind = 'sale') AS sales,
+        (SELECT count(*) FROM creator_ledger l WHERE l.product_id = cp.product_id AND l.kind = 'sale' AND l.created_at > now() - interval '30 days') AS recent_sales,
+        CASE WHEN $1 THEN (SELECT avg(r.rating)::float8 FROM product_reviews r WHERE r.product_id = cp.product_id AND r.status = 'approved') END AS rating,
+        CASE WHEN $1 THEN (SELECT count(*) FROM product_reviews r WHERE r.product_id = cp.product_id AND r.status = 'approved') ELSE 0 END AS reviews,
+        COALESCE(cp.reviewed_at, cp.submitted_at) AS listed_at
+   FROM creator_products cp JOIN creators c ON c.id = cp.creator_id JOIN products p ON p.id = cp.product_id
+   JOIN product_groups g ON g.id = p.group_id
+  WHERE cp.status = 'approved' AND c.status = 'approved' AND p.status = 'active' AND NOT g.hidden";
+
+/// Approved, active listings matching `q` (name/description/creator) in a
+/// category slug, sorted by one of [`SORTS`] (unknown = trending).
+pub async fn public_listings(
+    pool: &PgPool,
+    ratings: bool,
+    q: &str,
+    category: Option<&str>,
+    sort: &str,
+    limit: i64,
+) -> AppResult<Vec<PublicListing>> {
+    let order = match sort {
+        "new" => "listed_at DESC",
+        "top_rated" => "rating DESC NULLS LAST, reviews DESC, sales DESC",
+        "popular" => "sales DESC, listed_at DESC",
+        _ => "recent_sales DESC, sales DESC, listed_at DESC",
+    };
+    let pattern = format!(
+        "%{}%",
+        q.trim()
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_")
+    );
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT * FROM ({PUBLIC_LISTING_SQL}
+            AND ($2 = '%%' OR p.name ILIKE $2 OR p.description ILIKE $2 OR c.display_name ILIKE $2)
+            AND ($3::text IS NULL OR g.slug = $3)) x
+          ORDER BY {order}, name LIMIT $4"
+    )))
+    .bind(ratings)
+    .bind(pattern)
+    .bind(category)
+    .bind(limit.clamp(1, 100))
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
+}
+
+/// One approved listing, or `NotFound`.
+pub async fn public_listing(
+    pool: &PgPool,
+    ratings: bool,
+    product: Uuid,
+) -> AppResult<PublicListing> {
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "{PUBLIC_LISTING_SQL} AND cp.product_id = $2"
+    )))
+    .bind(ratings)
+    .bind(product)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?
+    .ok_or(AppError::NotFound)
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+#[schema(as = MarketplaceCategory)]
+pub struct Category {
+    pub name: String,
+    pub slug: String,
+    pub listings: i64,
+}
+
+/// Visible product groups that hold at least one approved listing.
+pub async fn public_categories(pool: &PgPool) -> AppResult<Vec<Category>> {
+    sqlx::query_as(
+        "SELECT g.name, g.slug, count(*) AS listings
+           FROM creator_products cp JOIN creators c ON c.id = cp.creator_id JOIN products p ON p.id = cp.product_id
+           JOIN product_groups g ON g.id = p.group_id
+          WHERE cp.status = 'approved' AND c.status = 'approved' AND p.status = 'active' AND NOT g.hidden
+          GROUP BY g.id ORDER BY g.sort_order, g.name",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
+}

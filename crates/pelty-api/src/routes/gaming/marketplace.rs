@@ -34,6 +34,8 @@ pub fn router() -> Router<AppState> {
         .route("/public/creators", get(public_creators))
         .route("/public/creators/{slug}", get(public_creator))
         .route("/public/marketplace", get(public_config))
+        .route("/public/marketplace/listings", get(public_browse))
+        .route("/public/marketplace/listings/{id}", get(public_resource))
         .route(
             "/client/creator",
             get(dashboard).post(apply).put(update_profile),
@@ -85,6 +87,73 @@ async fn approved(s: &AppState, u: &CurrentUser) -> ApiResult<(Creator, mk::Conf
 pub async fn public_config(State(s): State<AppState>) -> ApiResult<Json<Value>> {
     let c = mk::config(&s.pool).await?;
     Ok(Json(json!({ "mode": c.mode })))
+}
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct BrowseQuery {
+    #[serde(default)]
+    pub q: String,
+    pub category: Option<String>,
+    #[serde(default)]
+    pub sort: String,
+    pub limit: Option<i64>,
+}
+
+async fn ratings_on(s: &AppState) -> ApiResult<bool> {
+    Ok(pelty_database::feature_modules::is_enabled(&s.pool, "product_reviews").await?)
+}
+
+/// Marketplace browse: approved listings (search, category, sort) and the
+/// categories that hold any.
+#[utoipa::path(get, path = "/api/v1/public/marketplace/listings", params(BrowseQuery), responses((status = 200), (status = 404)))]
+pub async fn public_browse(
+    State(s): State<AppState>,
+    Query(b): Query<BrowseQuery>,
+) -> ApiResult<Json<Value>> {
+    if b.q.chars().count() > 100 {
+        return Err(AppError::Validation("error.search_query").into());
+    }
+    let ratings = ratings_on(&s).await?;
+    let category = b.category.as_deref().filter(|c| !c.is_empty());
+    let items = mk::public_listings(
+        &s.pool,
+        ratings,
+        &b.q,
+        category,
+        &b.sort,
+        b.limit.unwrap_or(48),
+    )
+    .await?;
+    Ok(Json(json!({
+        "items": items,
+        "categories": mk::public_categories(&s.pool).await?,
+        "ratings": ratings,
+    })))
+}
+
+/// One resource page: the listing, its creator and the creator's other listings.
+#[utoipa::path(get, path = "/api/v1/public/marketplace/listings/{id}", responses((status = 200), (status = 404)))]
+pub async fn public_resource(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
+    let ratings = ratings_on(&s).await?;
+    let l = mk::public_listing(&s.pool, ratings, id).await?;
+    let c = mk::by_slug(&s.pool, &l.creator_slug).await?;
+    let more: Vec<Value> = mk::listings(&s.pool, Some(c.id), Some("approved"))
+        .await?
+        .into_iter()
+        .filter(|x| x.product_id != id && x.product_status == "active")
+        .take(4)
+        .map(|l| json!({ "product_id": l.product_id, "name": l.name, "image_url": l.image_url, "sales": l.sales }))
+        .collect();
+    Ok(Json(json!({
+        "listing": l,
+        "creator": public_profile(&c),
+        "more": more,
+        "ratings": ratings,
+        "digital": pelty_database::feature_modules::is_enabled(&s.pool, "digital_products").await?,
+    })))
 }
 
 fn public_profile(c: &Creator) -> Value {

@@ -134,6 +134,7 @@ mod proforma_flow;
 mod projects_flow;
 mod provisioning_events_flow;
 mod provisioning_flow;
+mod public_modes_flow;
 mod quotes_downloads_flow;
 mod refunds_flow;
 mod registrant_verification_flow;

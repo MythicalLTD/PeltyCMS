@@ -7,7 +7,7 @@ use axum::extract::State;
 use axum::routing::get;
 use axum::{Json, Router};
 use pelty_database::game_storefront::{self as sf, Config, Widget};
-use pelty_database::{audit, community as cm, feature_modules};
+use pelty_database::{audit, community as cm, feature_modules, games as gp};
 use serde_json::{json, Value};
 
 pub fn router() -> Router<AppState> {
@@ -86,7 +86,12 @@ pub async fn public_layout(State(s): State<AppState>) -> ApiResult<Json<Value>> 
         };
         widgets.push(v);
     }
+    let server = hero_server(&s, &cfg, community).await?;
     Ok(Json(json!({
+        "theme": cfg.theme,
+        "discord_url": cfg.discord_url,
+        "logo_url": cfg.logo_url,
+        "server": server,
         "hero_title": cfg.hero_title,
         "hero_subtitle": cfg.hero_subtitle,
         "hero_image": cfg.hero_image,
@@ -95,6 +100,44 @@ pub async fn public_layout(State(s): State<AppState>) -> ApiResult<Json<Value>> 
         "sidebar": cfg.sidebar,
         "widgets": widgets,
     })))
+}
+
+/// The hero's server: the chosen one (or the first enabled), with the live
+/// status when `server_community` checks it. `null` with no enabled server.
+async fn hero_server(s: &AppState, cfg: &sf::Config, community: bool) -> ApiResult<Value> {
+    if !feature_modules::is_enabled(&s.pool, "game_profiles").await? {
+        return Ok(Value::Null);
+    }
+    let servers = gp::servers(&s.pool, true).await?;
+    let Some(srv) = cfg
+        .server_id
+        .and_then(|id| servers.iter().find(|x| x.id == id))
+        .or_else(|| servers.first())
+    else {
+        return Ok(Value::Null);
+    };
+    let status = if community {
+        cm::statuses(&s.pool)
+            .await?
+            .into_iter()
+            .find(|x| x.server_id == srv.id)
+            .map(|x| json!({ "online": x.online, "players": x.players, "max_players": x.max_players }))
+    } else {
+        None
+    };
+    // Minecraft Java clients add 25565 themselves; other games need the port.
+    let port = srv.port.or_else(|| {
+        gp::game(&srv.game)
+            .filter(|g| g.id != "minecraft_java")
+            .map(|g| i32::from(g.default_port))
+    });
+    let address = match port {
+        Some(p) if !srv.host.is_empty() => format!("{}:{p}", srv.host),
+        _ => srv.host.clone(),
+    };
+    Ok(json!({
+        "name": srv.name, "slug": srv.slug, "game": srv.game, "address": address, "status": status,
+    }))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/storefront", responses((status = 200, body = Config), (status = 403)))]
@@ -118,7 +161,7 @@ pub async fn admin_put(
         "storefront.updated",
         None,
         u.ip.as_deref(),
-        json!({ "widgets": c.widgets.len(), "accent": c.accent, "layout": c.layout }),
+        json!({ "widgets": c.widgets.len(), "accent": c.accent, "layout": c.layout, "theme": c.theme }),
     )
     .await?;
     Ok(Json(c))
