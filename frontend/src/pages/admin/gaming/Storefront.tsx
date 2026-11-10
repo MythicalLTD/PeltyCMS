@@ -38,6 +38,9 @@ function Editor({ initial }: { initial: StorefrontConfig }) {
   const catalog = useCatalog();
   const [f, setF] = useState(initial);
   const [adding, setAdding] = useState<WidgetType>("text");
+  // Client-only row keys, kept in step with `widgets` (the server rejects
+  // unknown fields, so widgets carry no id).
+  const [keys, setKeys] = useState(() => initial.widgets.map(() => crypto.randomUUID()));
   const set = (p: Partial<StorefrontConfig>) => setF((x) => ({ ...x, ...p }));
   const setW = (i: number, w: WidgetConfig) => set({ widgets: f.widgets.map((x, j) => (j === i ? w : x)) });
   const products = catalog.data?.products ?? [];
@@ -74,13 +77,13 @@ function Editor({ initial }: { initial: StorefrontConfig }) {
           {f.widgets.length === 0 && <p className="text-sm text-muted-foreground">{t("storefront.no_widgets")}</p>}
           <ol className="flex flex-col gap-3">
             {f.widgets.map((w, i) => (
-              <li key={i} className={`flex flex-col gap-2 rounded-md border p-3 ${widgetValid(w) ? "" : "border-destructive"}`} data-invalid={!widgetValid(w) || undefined}>
+              <li key={keys[i] ?? i} className={`flex flex-col gap-2 rounded-md border p-3 ${widgetValid(w) ? "" : "border-destructive"}`} data-invalid={!widgetValid(w) || undefined}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium">{t(`storefront.widget.${w.type}` as TranslationKey)}</span>
                   <div className="flex">
-                    <Button type="button" size="icon" variant="ghost" aria-label={t("storefront.move_up")} disabled={i === 0} onClick={() => set({ widgets: move(f.widgets, i, -1) })}><ArrowUpIcon aria-hidden /></Button>
-                    <Button type="button" size="icon" variant="ghost" aria-label={t("storefront.move_down")} disabled={i === f.widgets.length - 1} onClick={() => set({ widgets: move(f.widgets, i, 1) })}><ArrowDownIcon aria-hidden /></Button>
-                    <Button type="button" size="icon" variant="ghost" aria-label={t("common.delete")} onClick={() => set({ widgets: f.widgets.filter((_, j) => j !== i) })}><TrashIcon aria-hidden /></Button>
+                    <Button type="button" size="icon" variant="ghost" aria-label={t("storefront.move_up")} disabled={i === 0} onClick={() => { set({ widgets: move(f.widgets, i, -1) }); setKeys((k) => move(k, i, -1)); }}><ArrowUpIcon aria-hidden /></Button>
+                    <Button type="button" size="icon" variant="ghost" aria-label={t("storefront.move_down")} disabled={i === f.widgets.length - 1} onClick={() => { set({ widgets: move(f.widgets, i, 1) }); setKeys((k) => move(k, i, 1)); }}><ArrowDownIcon aria-hidden /></Button>
+                    <Button type="button" size="icon" variant="ghost" aria-label={t("common.delete")} onClick={() => { set({ widgets: f.widgets.filter((_, j) => j !== i) }); setKeys((k) => k.filter((_, j) => j !== i)); }}><TrashIcon aria-hidden /></Button>
                   </div>
                 </div>
                 {needsCommunity(w) && <p className="text-xs text-warning">{t("storefront.needs_community")}</p>}
@@ -91,7 +94,7 @@ function Editor({ initial }: { initial: StorefrontConfig }) {
           <div className="flex flex-wrap items-end gap-2">
             <SelectField id="sf-add" label={t("storefront.add_widget")} value={adding} onChange={(v) => setAdding(v as WidgetType)}
               options={WIDGET_TYPES.map((x) => ({ value: x, label: t(`storefront.widget.${x}` as TranslationKey) }))} />
-            <Button type="button" variant="outline" disabled={f.widgets.length >= 12} onClick={() => set({ widgets: [...f.widgets, newWidget(adding, products[0]?.id)] })}><PlusIcon aria-hidden />{t("storefront.add")}</Button>
+            <Button type="button" variant="outline" disabled={f.widgets.length >= 12} onClick={() => { set({ widgets: [...f.widgets, newWidget(adding, products[0]?.id)] }); setKeys((k) => [...k, crypto.randomUUID()]); }}><PlusIcon aria-hidden />{t("storefront.add")}</Button>
           </div>
         </CardContent>
       </Card>
@@ -123,7 +126,7 @@ function WidgetFields({ w, i, onChange, products }: { w: WidgetConfig; i: number
         </div>
       );
     case "recent_payments":
-      return <Field id={id("limit")} label={t("storefront.limit")} inputMode="numeric" value={String(w.limit)} onChange={(e) => onChange({ ...w, limit: Math.min(10, Math.max(1, Number(e.target.value.replace(/\D/g, "")) || 1)) })} />;
+      return <LimitField id={id("limit")} label={t("storefront.limit")} value={w.limit} onChange={(limit) => onChange({ ...w, limit })} />;
     case "featured_package":
       return products.length === 0 ? <p className="text-sm text-muted-foreground">{t("storefront.no_products")}</p> : (
         <SelectField id={id("product")} label={t("storefront.package")} value={w.product_id} onChange={(v) => onChange({ ...w, product_id: v })}
@@ -139,4 +142,18 @@ function WidgetFields({ w, i, onChange, products }: { w: WidgetConfig; i: number
     default:
       return null;
   }
+}
+
+/** 1–10; the field may be empty while typing and snaps back on blur. */
+function LimitField({ id, label, value, onChange }: { id: string; label: string; value: number; onChange: (n: number) => void }) {
+  const [text, setText] = useState(String(value));
+  return (
+    <Field id={id} label={label} inputMode="numeric" value={text}
+      onChange={(e) => {
+        const d = e.target.value.replace(/\D/g, "").slice(0, 2);
+        setText(d);
+        if (d) onChange(Math.min(10, Math.max(1, Number(d))));
+      }}
+      onBlur={() => setText(String(value))} />
+  );
 }
