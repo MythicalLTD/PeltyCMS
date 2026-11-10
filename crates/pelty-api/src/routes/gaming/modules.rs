@@ -40,6 +40,9 @@ pub const GATES: &[(&str, &str)] = &[
     ("/admin/creators", "creator_marketplace"),
     ("/admin/creator-listings", "creator_marketplace"),
     ("/admin/creator-payouts", "creator_marketplace"),
+    ("/public/reviews", "product_reviews"),
+    ("/client/reviews", "product_reviews"),
+    ("/admin/reviews", "product_reviews"),
 ];
 
 /// Module owning `path` (with or without the `/api/v1` prefix), if any.

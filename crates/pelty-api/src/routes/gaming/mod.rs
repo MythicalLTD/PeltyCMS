@@ -10,3 +10,4 @@ pub mod marketplace;
 pub mod modules;
 pub mod payouts;
 pub mod rcon;
+pub mod reviews;
