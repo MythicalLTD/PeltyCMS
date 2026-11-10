@@ -404,13 +404,34 @@ pub async fn record_vote(
 
 /// Undo a vote whose reward could not be queued, so a retry is not blocked
 /// by the cooldown.
-pub async fn delete_vote(pool: &PgPool, vote: Uuid) -> AppResult<()> {
-    sqlx::query("DELETE FROM votes WHERE id = $1")
-        .bind(vote)
-        .execute(pool)
-        .await
-        .map_err(db_err)?;
-    Ok(())
+/// Returns `None` when the vote was removed. When some of its deliveries were
+/// already queued the vote is kept (a retry would get a new vote id and queue
+/// the reward again) and the number queued is returned.
+pub async fn delete_vote(pool: &PgPool, vote: Uuid) -> AppResult<Option<i64>> {
+    let mut tx = pool.begin().await.map_err(db_err)?;
+    let queued: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM game_deliveries WHERE trigger = 'vote' AND dedupe_key LIKE 'vote:' || $1::text || ':%'",
+    )
+    .bind(vote)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(db_err)?;
+    if queued > 0 {
+        sqlx::query("UPDATE votes SET rewarded = $2 WHERE id = $1")
+            .bind(vote)
+            .bind(i32::try_from(queued).unwrap_or(i32::MAX))
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+    } else {
+        sqlx::query("DELETE FROM votes WHERE id = $1")
+            .bind(vote)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+    }
+    tx.commit().await.map_err(db_err)?;
+    Ok((queued > 0).then_some(queued))
 }
 
 pub async fn set_rewarded(pool: &PgPool, vote: Uuid, n: i32) -> AppResult<()> {

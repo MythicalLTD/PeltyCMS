@@ -60,7 +60,7 @@ export function widgetValid(w: WidgetConfig): boolean {
     case "text": return w.body.trim().length > 0 && w.body.length <= 2000 && w.title.length <= 80;
     case "recent_payments": return Number.isInteger(w.limit) && w.limit >= 1 && w.limit <= 10;
     case "featured_package": return /^[0-9a-f-]{36}$/i.test(w.product_id);
-    case "discord": return /^https:\/\/(discord\.gg|discord\.com\/invite)\/[A-Za-z0-9_-]+$/.test(w.invite_url) && w.label.length <= 60;
+    case "discord": return w.invite_url.length <= 200 && /^https:\/\/(discord\.gg|discord\.com\/invite)\/[A-Za-z0-9_-]+$/.test(w.invite_url) && w.label.length <= 60;
     case "top_customer": return (PERIODS as readonly string[]).includes(w.period);
     default: return true;
   }
