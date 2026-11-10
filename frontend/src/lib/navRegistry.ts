@@ -69,6 +69,7 @@ export const ADMIN_NAV: NavCategory[] = [
     { to: "/admin/game-servers", label: "nav.game_servers", desc: "navdesc.admin_game_servers", icon: GameControllerIcon },
     { to: "/admin/community", label: "nav.community", desc: "navdesc.admin_community", icon: UsersThreeIcon },
     { to: "/admin/storefront", label: "nav.storefront", desc: "navdesc.admin_storefront", icon: PaletteIcon },
+    { to: "/admin/discord-roles", label: "nav.discord_roles", desc: "navdesc.admin_discord_roles", icon: ChatsCircleIcon },
     { to: "/admin/game-delivery", label: "nav.game_delivery", desc: "navdesc.admin_game_delivery", icon: TerminalWindowIcon },
     { to: "/admin/digital-products", label: "nav.digital_products", desc: "navdesc.admin_digital_products", icon: KeyIcon },
     { to: "/admin/creator-market", label: "nav.creator_market", desc: "navdesc.admin_creator_market", icon: StorefrontIcon },

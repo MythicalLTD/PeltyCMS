@@ -311,3 +311,33 @@ support them.
 - Turning the module off hides the field and the pages. Codes entered from then
   on are ignored rather than refused. Orders already placed with a code still
   pay their commission when their invoice is paid.
+
+## Discord roles (`discord_roles`)
+
+Part of the **Gaming** pack. It gives buyers roles on your Discord server for
+what they bought, such as a VIP role for a VIP rank, and takes them away again.
+
+- **Setup** (Admin → Discord roles, needs *Manage settings*):
+  - Create a Discord bot and invite it to your server with the *Manage Roles*
+    permission.
+  - Put the bot's role **above** every role it should give.
+  - Enter the server (guild) ID and the bot token. The token is stored
+    encrypted with the encryption key and is never shown again. Leave the field
+    empty to keep it.
+- **Rules**: up to 10 role IDs per product, and whether roles are removed when
+  the service expires (suspended, terminated or cancelled). Refunds and
+  chargebacks always remove them.
+- **Who gets roles**: buyers are matched by the Discord account linked to
+  their login (Discord sign-in). A buyer who hasn't linked one sees their
+  changes as *Waiting*; these continue on their own once the account is linked.
+- **Keeping roles**: a role is not removed while the same buyer has another
+  active service that gives it.
+- **Queue**: every change is listed with its status.
+  - Rate limits and Discord outages are retried with back-off, up to 8 attempts.
+  - A member who isn't in the server yet is retried every hour.
+  - A missing permission, or a role above the bot, fails with the reason shown.
+  - Failed, skipped and waiting changes can be retried by hand, and *Run now*
+    processes the queue immediately.
+  - Every setting and rule change is audited.
+- Turning the module off stops new changes from being queued and hides the
+  page. Roles already given stay on Discord.
