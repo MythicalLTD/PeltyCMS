@@ -137,7 +137,7 @@ pub async fn delete(pool: &PgPool, id: Uuid) -> AppResult<bool> {
 
 /// The best running sale for a product in `group` (highest percent wins;
 /// sales never stack with each other).
-pub fn best<'a>(sales: &'a [Sale], product: Uuid, group: Uuid) -> Option<&'a Sale> {
+pub fn best(sales: &[Sale], product: Uuid, group: Uuid) -> Option<&Sale> {
     sales
         .iter()
         .filter(|s| s.product_ids.contains(&product) || s.group_ids.contains(&group))

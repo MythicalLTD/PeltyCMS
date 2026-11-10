@@ -293,7 +293,10 @@ pub async fn preview(
         Default::default()
     } else {
         let ids: Vec<Uuid> = items.iter().map(|i| i.product_id).collect();
-        crate::timed_sales::groups(pool, &ids).await?.into_iter().collect()
+        crate::timed_sales::groups(pool, &ids)
+            .await?
+            .into_iter()
+            .collect()
     };
     for it in items {
         let q = catalog::quote(&mut tx, it.product_id, &it.cycle, &currency, &it.config).await?;
@@ -350,7 +353,9 @@ pub async fn preview(
                 .collect(),
             discount: d,
             sale_discount,
-            sale: sale.filter(|_| sale_discount > Decimal::ZERO).map(|x| x.name.clone()),
+            sale: sale
+                .filter(|_| sale_discount > Decimal::ZERO)
+                .map(|x| x.name.clone()),
         });
     }
     drop(tx); // read-only; rolled back
