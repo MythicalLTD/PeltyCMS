@@ -12,3 +12,4 @@ pub mod games;
 pub mod marketplace;
 pub mod modules;
 pub mod reviews;
+pub mod storefront;
