@@ -62,7 +62,7 @@ export function CommunityPage() {
         <Leaderboard title={t("community.top_voters")} icon={<TrophyIcon aria-hidden />} empty={t("community.no_votes")}
           rows={d.top_voters.map((v) => ({ name: v.username, value: t("community.votes", { n: v.votes }) }))} />
         {d.top_donors && <Leaderboard title={t("community.top_donors")} icon={<CrownIcon aria-hidden />} empty={t("community.no_donors")}
-          rows={d.top_donors.map((x) => ({ name: x.name, value: x.total && d.goal ? formatMoney(x.total, d.goal.currency, lang) : x.total ?? "" }))} />}
+          rows={d.top_donors.map((x) => ({ name: x.name, value: x.total && x.currency ? formatMoney(x.total, x.currency, lang) : "" }))} />}
       </div>
     </div>
   );

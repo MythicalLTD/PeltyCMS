@@ -2,7 +2,7 @@
 export interface ServerStatus { server_id: string; name: string; slug: string; game: string; address: string; online: boolean; players: number; max_players: number; version: string; motd: string; sample: string[]; latency_ms: number | null; peak_players: number; checked_at: string | null }
 export interface PublicVoteSite { id: string; name: string; url: string }
 export interface Goal { label: string; amount: string; currency: string; raised: string; percent: number }
-export interface Community { servers: ServerStatus[]; sites: PublicVoteSite[]; top_voters: { username: string; votes: number }[]; top_donors: { name: string; total?: string }[] | null; goal: Goal | null }
+export interface Community { servers: ServerStatus[]; sites: PublicVoteSite[]; top_voters: { username: string; votes: number }[]; top_donors: { name: string; total?: string; currency?: string }[] | null; goal: Goal | null }
 export interface VoteSite { id: string; name: string; url: string; has_token: boolean; server_id: string | null; reward_command: string; require_online: boolean; cooldown_hours: number; enabled: boolean; sort_order: number }
 export interface VoteRow { id: string; site: string; username: string; customer_id: string | null; ip: string; rewarded: number; created_at: string }
 export interface CommunityAdmin { sites: VoteSite[]; votes: VoteRow[]; servers: ServerStatus[]; errors: Record<string, string> }

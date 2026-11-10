@@ -123,6 +123,25 @@ async fn status_votes_leaderboards_and_goal() {
     .await;
     assert_eq!(site.status, StatusCode::OK, "{:?}", site.body);
     let site_id = site.body["id"].as_str().unwrap().to_string();
+    for bad in [
+        "give {usernme} diamond 1",
+        "give {username} 1\nop {username}",
+    ] {
+        let r = call(
+            &app,
+            "POST",
+            "/api/v1/admin/community/sites",
+            Some(json!({"name": "Bad", "url": "https://vote.example/x", "reward_command": bad})),
+            &admin.h(),
+        )
+        .await;
+        assert_eq!(
+            r.status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "{bad}: {:?}",
+            r.body
+        );
+    }
     let vurl = format!("/api/v1/public/community/vote/{site_id}");
     assert_eq!(
         call_from(
@@ -205,6 +224,27 @@ async fn status_votes_leaderboards_and_goal() {
     .await
     .unwrap();
     assert_eq!(cmd, format!("give {player} diamond 1"));
+    // A name with spaces must never add arguments on a Java server: the vote
+    // counts, no command is queued.
+    let multi = call_from(
+        &app,
+        "198.51.100.10",
+        "GET",
+        &format!("{vurl}?username=Bob{tag}%20parent%20add%20admin&token={token}"),
+        None,
+        &[],
+    )
+    .await;
+    assert_eq!(multi.status, StatusCode::OK, "{:?}", multi.body);
+    assert_eq!(multi.body["rewards"], 0);
+    let n: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM game_deliveries WHERE trigger = 'vote' AND server_id = $1::uuid",
+    )
+    .bind(&sid)
+    .fetch_one(&st.pool)
+    .await
+    .unwrap();
+    assert_eq!(n, 1);
 
     // Leaderboards and goal after a paid order.
     let g = call(

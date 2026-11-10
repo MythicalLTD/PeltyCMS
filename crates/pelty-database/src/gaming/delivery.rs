@@ -360,12 +360,17 @@ pub async fn enqueue_vote(pool: &PgPool, r: &VoteReward<'_>) -> AppResult<usize>
     .map_err(db_err)?;
     let mut n = 0;
     for (sid, game, sname) in servers {
+        // The name comes from an outside vote site: never let it add command
+        // arguments. Bedrock gamertags may contain spaces and are quoted.
+        let Some(player) = vote_player_arg(&game, r.username) else {
+            continue;
+        };
         let mut vars = match r.customer {
             Some(c) => identity_vars(&crate::games::identity(pool, c, &game).await?),
             None => BTreeMap::new(),
         };
-        vars.insert("username".into(), r.username.to_string());
-        vars.insert("player".into(), r.username.to_string());
+        vars.insert("username".into(), player.clone());
+        vars.insert("player".into(), player);
         vars.insert("site".into(), r.site.to_string());
         vars.insert("server".into(), sname);
         if let Some(c) = r.customer {
@@ -391,6 +396,26 @@ pub async fn enqueue_vote(pool: &PgPool, r: &VoteReward<'_>) -> AppResult<usize>
         n += q.rows_affected() as usize;
     }
     Ok(n)
+}
+
+/// A vote name as one command argument for `game`: as is without whitespace;
+/// quoted on Bedrock (gamertags may contain spaces); otherwise rejected.
+/// Callers only pass names that passed `community::username_ok`, so the name
+/// holds no quotes or control characters.
+pub fn vote_player_arg(game: &str, name: &str) -> Option<String> {
+    let name = name.trim();
+    if name.is_empty() || name.contains(['"', '\\']) || name.chars().any(char::is_control) {
+        return None;
+    }
+    if !name.chars().any(char::is_whitespace) {
+        return Some(name.to_string());
+    }
+    (game == "minecraft_bedrock").then(|| {
+        format!(
+            "\"{}\"",
+            name.split_whitespace().collect::<Vec<_>>().join(" ")
+        )
+    })
 }
 
 /// (delivery, template, game, server name, service) of a waiting delivery.
@@ -672,6 +697,24 @@ mod tests {
         p.iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect()
+    }
+
+    #[test]
+    fn vote_names_stay_one_argument() {
+        assert_eq!(
+            vote_player_arg("minecraft_java", "Steve").as_deref(),
+            Some("Steve")
+        );
+        assert_eq!(
+            vote_player_arg("minecraft_java", "Bob parent add admin"),
+            None
+        );
+        assert_eq!(vote_player_arg("rust", "a b"), None);
+        assert_eq!(
+            vote_player_arg("minecraft_bedrock", "Cool  Gamer").as_deref(),
+            Some("\"Cool Gamer\"")
+        );
+        assert_eq!(vote_player_arg("minecraft_bedrock", "x\" op"), None);
     }
 
     #[test]

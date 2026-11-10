@@ -18,7 +18,7 @@ const MAX_WIDGETS: usize = 12;
 /// Public display name: first game account, else "First L.", else "Anonymous".
 macro_rules! public_name {
     () => {
-        "COALESCE((SELECT a.value FROM customer_game_accounts a WHERE a.customer_id = c.id ORDER BY a.created_at LIMIT 1),
+        "COALESCE((SELECT a.value FROM customer_game_accounts a WHERE a.customer_id = c.id AND a.field = 'username' ORDER BY a.created_at LIMIT 1),
                   NULLIF(trim(c.first_name || ' ' || left(c.last_name, 1) || CASE WHEN c.last_name <> '' THEN '.' ELSE '' END), ''),
                   'Anonymous')"
     };

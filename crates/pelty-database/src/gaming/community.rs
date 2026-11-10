@@ -157,7 +157,9 @@ pub async fn record_status(
         .await,
         Err(e) => sqlx::query(
             "INSERT INTO game_server_status (server_id, online, error, checked_at) VALUES ($1, false, $2, now())
-             ON CONFLICT (server_id) DO UPDATE SET online = false, players = 0, sample = '{}', latency_ms = NULL, error = $2, checked_at = now()",
+             ON CONFLICT (server_id) DO UPDATE SET online = false, players = 0, sample = '{}', latency_ms = NULL, error = $2, checked_at = now(),
+               peak_players = CASE WHEN date_trunc('month', game_server_status.checked_at) = date_trunc('month', now())
+                                   THEN game_server_status.peak_players ELSE 0 END",
         )
         .bind(server)
         .bind(clip(e, 300))
@@ -228,9 +230,20 @@ impl VoteSiteInput {
             || self.name.chars().count() > 80
             || !url_ok
             || self.reward_command.chars().count() > 1000
+            || self.reward_command.contains(['\r', '\n', '\0'])
             || !(0..=168).contains(&self.cooldown_hours)
         {
             return Err(AppError::Validation("error.vote_site_invalid"));
+        }
+        let vote_vars = ["player", "site", "server"];
+        if crate::game_delivery::placeholders(&self.reward_command)
+            .iter()
+            .any(|p| {
+                !crate::game_delivery::PLACEHOLDERS.contains(&p.as_str())
+                    && !vote_vars.contains(&p.as_str())
+            })
+        {
+            return Err(AppError::Validation("error.game_placeholder_unknown"));
         }
         Ok(())
     }
@@ -360,11 +373,16 @@ pub async fn record_vote(
     if recent && site.cooldown_hours > 0 {
         return Ok(None);
     }
-    // Link to the customer whose game account carries this name.
+    // Link to the customer whose player name (never an ID field) matches, on
+    // the target server's game when the site rewards a single server.
     let customer: Option<Uuid> = sqlx::query_scalar(
-        "SELECT customer_id FROM customer_game_accounts WHERE lower(value) = lower($1) ORDER BY created_at LIMIT 1",
+        "SELECT a.customer_id FROM customer_game_accounts a
+          WHERE a.field = 'username' AND lower(a.value) = lower($1)
+            AND ($2::uuid IS NULL OR a.game = (SELECT game FROM game_servers WHERE id = $2))
+          ORDER BY a.created_at LIMIT 1",
     )
     .bind(name)
+    .bind(site.server_id)
     .fetch_optional(&mut *tx)
     .await
     .map_err(db_err)?;
@@ -382,6 +400,17 @@ pub async fn record_vote(
     .map_err(db_err)?;
     tx.commit().await.map_err(db_err)?;
     Ok(Some((id, customer)))
+}
+
+/// Undo a vote whose reward could not be queued, so a retry is not blocked
+/// by the cooldown.
+pub async fn delete_vote(pool: &PgPool, vote: Uuid) -> AppResult<()> {
+    sqlx::query("DELETE FROM votes WHERE id = $1")
+        .bind(vote)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
+    Ok(())
 }
 
 pub async fn set_rewarded(pool: &PgPool, vote: Uuid, n: i32) -> AppResult<()> {
@@ -448,7 +477,7 @@ pub struct TopDonor {
 /// Paid invoices this month in `currency`, per customer.
 pub async fn top_donors(pool: &PgPool, currency: &str, limit: i64) -> AppResult<Vec<TopDonor>> {
     sqlx::query_as(
-        "SELECT COALESCE((SELECT a.value FROM customer_game_accounts a WHERE a.customer_id = c.id ORDER BY a.created_at LIMIT 1),
+        "SELECT COALESCE((SELECT a.value FROM customer_game_accounts a WHERE a.customer_id = c.id AND a.field = 'username' ORDER BY a.created_at LIMIT 1),
                          NULLIF(trim(c.first_name || ' ' || left(c.last_name, 1) || CASE WHEN c.last_name <> '' THEN '.' ELSE '' END), ''),
                          'Anonymous') AS name,
                 sum(i.total) AS total
