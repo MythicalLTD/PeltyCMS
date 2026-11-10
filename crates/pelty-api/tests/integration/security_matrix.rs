@@ -37,6 +37,15 @@ fn fill(path: &str) -> String {
 #[tokio::test]
 async fn authorization_matrix_over_openapi() {
     let (app, state) = app().await;
+    // Optional modules answer 404 while off; switch them all on so their
+    // routes get the same auth/CSRF checks (suites run one at a time).
+    for m in pelty_database::feature_modules::MODULES {
+        sqlx::query("INSERT INTO feature_modules (id, enabled) VALUES ($1, true) ON CONFLICT (id) DO UPDATE SET enabled = true")
+            .bind(m.id)
+            .execute(&state.pool)
+            .await
+            .unwrap();
+    }
     let spec = call(&app, "GET", "/api/v1/openapi.json", None, &[])
         .await
         .body;
