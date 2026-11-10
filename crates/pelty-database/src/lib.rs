@@ -99,6 +99,7 @@ pub use gaming::digital;
 pub use gaming::games;
 pub use gaming::marketplace;
 pub use gaming::modules as feature_modules;
+pub use gaming::reviews;
 pub mod helpdesk;
 pub use helpdesk::downloads;
 pub use helpdesk::live_chat;
