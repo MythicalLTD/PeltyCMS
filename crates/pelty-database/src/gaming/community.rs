@@ -59,7 +59,7 @@ impl Config {
                 .and_then(Value::as_i64)
                 .unwrap_or(10)
                 .clamp(1, 50),
-            show_donors: b("show_donors", true),
+            show_donors: b("show_donors", false),
             show_donor_amounts: b("show_donor_amounts", false),
         }
     }

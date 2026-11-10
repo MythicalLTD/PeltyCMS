@@ -46,6 +46,7 @@ async fn status_votes_leaderboards_and_goal() {
     let admin = sess(&app, &st, "admin").await;
     let bob = sess(&app, &st, "customer").await;
     let tag = &uuid::Uuid::new_v4().simple().to_string()[..8];
+    let player = format!("Steve{tag}");
     assert_eq!(
         call(&app, "GET", "/api/v1/public/community", None, &[])
             .await
@@ -57,7 +58,7 @@ async fn status_votes_leaderboards_and_goal() {
         &app,
         "PUT",
         "/api/v1/admin/modules/server_community",
-        Some(json!({"enabled": true, "settings": {"goal_amount": "100", "goal_currency": "EUR", "goal_label": "Server costs", "show_donor_amounts": true}})),
+        Some(json!({"enabled": true, "settings": {"goal_amount": "100", "goal_currency": "EUR", "goal_label": "Server costs", "show_donors": true, "show_donor_amounts": true}})),
         &admin.h(),
     )
     .await;
@@ -128,7 +129,7 @@ async fn status_votes_leaderboards_and_goal() {
             &app,
             "198.51.100.9",
             "POST",
-            &format!("{vurl}?username=Steve&token=nope"),
+            &format!("{vurl}?username={player}&token=nope"),
             None,
             &[]
         )
@@ -152,7 +153,7 @@ async fn status_votes_leaderboards_and_goal() {
             &app,
             "198.51.100.9",
             "POST",
-            &format!("{vurl}?username=Steve&token=wrong"),
+            &format!("{vurl}?username={player}&token=wrong"),
             None,
             &[]
         )
@@ -178,7 +179,7 @@ async fn status_votes_leaderboards_and_goal() {
         &app,
         "198.51.100.9",
         "GET",
-        &format!("{vurl}?user=Steve&key={token}"),
+        &format!("{vurl}?user={player}&key={token}"),
         None,
         &[],
     )
@@ -189,7 +190,7 @@ async fn status_votes_leaderboards_and_goal() {
         &app,
         "198.51.100.9",
         "POST",
-        &format!("{vurl}?username=steve&token={token}"),
+        &format!("{vurl}?username={}&token={token}", player.to_lowercase()),
         None,
         &[],
     )
@@ -203,7 +204,7 @@ async fn status_votes_leaderboards_and_goal() {
     .fetch_one(&st.pool)
     .await
     .unwrap();
-    assert_eq!(cmd, "give Steve diamond 1");
+    assert_eq!(cmd, format!("give {player} diamond 1"));
 
     // Leaderboards and goal after a paid order.
     let g = call(
@@ -269,12 +270,27 @@ async fn status_votes_leaderboards_and_goal() {
         .as_array()
         .unwrap()
         .iter()
-        .any(|v| v["username"] == "Steve" && v["votes"] == 1));
+        .any(|v| v["username"] == player.as_str() && v["votes"] == 1));
     let donors = pubv.body["top_donors"].as_array().unwrap();
     assert!(!donors.is_empty() && donors[0]["total"].is_string());
     assert!(
         pubv.body.to_string().find("@").is_none(),
         "no emails on the public page"
+    );
+    let r = call(
+        &app,
+        "PUT",
+        "/api/v1/admin/modules/server_community",
+        Some(json!({"enabled": true, "settings": {"goal_amount": "100"}})),
+        &admin.h(),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK, "{:?}", r.body);
+    let hidden = call(&app, "GET", "/api/v1/public/community", None, &[]).await;
+    assert!(
+        hidden.body["top_donors"].is_null(),
+        "donors are opt-in: {:?}",
+        hidden.body["top_donors"]
     );
 
     let adm = call(&app, "GET", "/api/v1/admin/community", None, &admin.h()).await;
@@ -282,9 +298,15 @@ async fn status_votes_leaderboards_and_goal() {
         .as_array()
         .unwrap()
         .iter()
-        .any(|v| v["username"] == "Steve" && v["rewarded"] == 1));
-    assert_eq!(adm.body["sites"][0]["has_token"], true);
-    assert!(adm.body["sites"][0].get("token_hash").is_none());
+        .any(|v| v["username"] == player.as_str() && v["rewarded"] == 1));
+    let mine = adm.body["sites"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|v| v["id"] == site_id.as_str())
+        .unwrap();
+    assert_eq!(mine["has_token"], true);
+    assert!(mine.get("token_hash").is_none());
     assert_eq!(
         call(&app, "GET", "/api/v1/admin/community", None, &bob.h())
             .await
