@@ -65,6 +65,11 @@ pub const MODULES: &[ModuleDef] = &[
         pack: "commerce",
         requires: &[],
     },
+    ModuleDef {
+        id: "discord_roles",
+        pack: "gaming",
+        requires: &[],
+    },
 ];
 
 pub fn def(id: &str) -> Option<&'static ModuleDef> {
