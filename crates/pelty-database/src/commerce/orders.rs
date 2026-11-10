@@ -109,6 +109,7 @@ pub async fn place_with(
         due_days,
         bundle,
         &[],
+        None,
     )
     .await
 }
@@ -142,6 +143,9 @@ pub async fn place_full(
     due_days: i64,
     bundle: Option<&BundleDiscount>,
     addon_discounts: &[AddonDiscount],
+    // Creator code (module `creator_codes`) credited with this order; linked
+    // in the same transaction so a discounted order always has its link.
+    creator_code: Option<Uuid>,
 ) -> AppResult<(Order, Invoice)> {
     if items.is_empty() || items.len() > MAX_ITEMS {
         return Err(AppError::Validation("error.cart_invalid"));
@@ -395,6 +399,14 @@ pub async fn place_full(
         .fetch_one(&mut *tx)
         .await
         .map_err(db_err)?;
+    if let Some(code) = creator_code {
+        sqlx::query("INSERT INTO creator_code_orders (order_id, code_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
+            .bind(order_id)
+            .bind(code)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+    }
     tx.commit().await.map_err(db_err)?;
     Ok((order, invoice))
 }

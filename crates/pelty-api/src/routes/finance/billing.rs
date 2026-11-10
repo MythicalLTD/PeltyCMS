@@ -297,11 +297,20 @@ pub(crate) async fn place_order(
     }
     let (order, invoice) = s
         .orders()
-        .place_full(cid, currency, items, coupon, DUE_DAYS, bundle, &discounts)
+        .place_full(
+            cid,
+            currency,
+            items,
+            coupon,
+            DUE_DAYS,
+            bundle,
+            &discounts,
+            creator.as_ref().map(|c| c.id),
+        )
         .await?;
     if let Some(c) = &creator {
-        pelty_database::creator_codes::attach(&s.pool, order.id, c.id).await?;
-        audit::record(
+        // Best effort: the order and its creator link are already committed.
+        if let Err(e) = audit::record(
             &s.pool,
             Some(u.user_id),
             "order.creator_code",
@@ -309,7 +318,10 @@ pub(crate) async fn place_order(
             u.ip.as_deref(),
             json!({ "code": c.code, "affiliate_id": c.affiliate_id }),
         )
-        .await?;
+        .await
+        {
+            tracing::warn!(order = %order.id, error = ?e, "creator code audit failed");
+        }
     }
     if !discounts.is_empty() {
         let applied: Vec<Value> = discounts

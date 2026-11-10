@@ -224,6 +224,44 @@ async fn status_votes_leaderboards_and_goal() {
     .await
     .unwrap();
     assert_eq!(cmd, format!("give {player} diamond 1"));
+    // A failed reward undoes the vote only when nothing was queued for it.
+    let rewarded: uuid::Uuid = sqlx::query_scalar(
+        "SELECT id FROM votes WHERE site_id = $1::uuid ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(&site_id)
+    .fetch_one(&st.pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        pelty_database::gaming::community::delete_vote(&st.pool, rewarded)
+            .await
+            .unwrap(),
+        Some(1)
+    );
+    let site = pelty_database::gaming::community::site(&st.pool, site_id.parse().unwrap())
+        .await
+        .unwrap();
+    let (bare, _) = pelty_database::gaming::community::record_vote(
+        &st.pool,
+        &site,
+        &format!("Nobody{tag}"),
+        "198.51.100.11",
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        pelty_database::gaming::community::delete_vote(&st.pool, bare)
+            .await
+            .unwrap(),
+        None
+    );
+    let left: i64 = sqlx::query_scalar("SELECT count(*) FROM votes WHERE id = ANY($1)")
+        .bind(vec![rewarded, bare])
+        .fetch_one(&st.pool)
+        .await
+        .unwrap();
+    assert_eq!(left, 1, "the rewarded vote stays, the bare one is gone");
     // A name with spaces must never add arguments on a Java server: the vote
     // counts, no command is queued.
     let multi = call_from(
