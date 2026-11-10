@@ -146,11 +146,18 @@ pub async fn vote_callback(
     };
     let rewards = match reward(&s, &site, vote, username.trim(), customer).await {
         Ok(n) => n,
-        Err(e) => {
-            // Undo the vote so the site's retry is not refused by the cooldown.
-            cm::delete_vote(&s.pool, vote).await?;
-            return Err(e);
-        }
+        Err(e) => match cm::delete_vote(&s.pool, vote).await? {
+            // Nothing queued: undo the vote so the site's retry is not
+            // refused by the cooldown.
+            None => return Err(e),
+            // Part of the reward is queued: keep the vote and answer OK, as a
+            // retry would queue the reward again under a new vote id.
+            Some(n) => {
+                tracing::warn!(%vote, error = ?e.0, queued = n, "vote reward partly queued");
+                super::delivery::kick(&s);
+                usize::try_from(n).unwrap_or(0)
+            }
+        },
     };
     s.emit(DomainEvent::new(
         "community.voted",

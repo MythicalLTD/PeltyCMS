@@ -8,6 +8,7 @@ describe("storefront", () => {
     expect(widgetValid(newWidget("text"))).toBe(false);
     expect(widgetValid({ type: "discord", invite_url: "https://discord.gg/abc-1", label: "Join" })).toBe(true);
     expect(widgetValid({ type: "discord", invite_url: "https://evil.example/discord.gg/x", label: "" })).toBe(false);
+    expect(widgetValid({ type: "discord", invite_url: `https://discord.gg/${"a".repeat(190)}`, label: "" })).toBe(false);
     expect(widgetValid(newWidget("featured_package"))).toBe(false);
   });
   it("checks hero images", () => {
