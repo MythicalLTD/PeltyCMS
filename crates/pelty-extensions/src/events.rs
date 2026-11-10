@@ -151,6 +151,10 @@ pub const REGISTRY: &[EventSpec] = &[
     domain("digital.version_released", "A new version of a digital product was uploaded.", &[f("product_id", "uuid", "Product"), f("version_id", "uuid", "Version"), f("version", "string", "Version label")]),
     domain("digital.asset_granted", "A purchase needs an external asset granted (e.g. FiveM escrow resource).", &[f("grant_id", "uuid", "Grant"), f("asset", "string", "External asset id"), f("identity", "string", "Customer identity for the asset (FiveM license), may be empty"), f("customer_id", "uuid", "Customer"), f("service_id", "uuid", "Service")]),
     domain("digital.asset_revoked", "An external asset grant was revoked (termination, refund or chargeback).", &[f("grant_id", "uuid", "Grant"), f("asset", "string", "External asset id"), f("identity", "string", "Customer identity"), f("customer_id", "uuid", "Customer"), f("service_id", "uuid", "Service")]),
+    // ---- creator marketplace ----
+    domain("creator.applied", "A customer applied to sell on the marketplace.", &[f("creator_id", "uuid", "Creator"), f("status", "string", "pending or approved")]),
+    domain("creator.payout_requested", "A creator requested a payout.", &[f("payout_id", "uuid", "Payout"), f("creator_id", "uuid", "Creator"), f("amount", "decimal", "Amount"), f("currency", "string", "ISO 4217 code")]),
+    domain("creator.payout_paid", "A creator payout was marked paid.", &[f("payout_id", "uuid", "Payout"), f("creator_id", "uuid", "Creator"), f("amount", "decimal", "Amount"), f("currency", "string", "ISO 4217 code")]),
     // ---- services ----
     domain("service.created", "A service was created from an order.", &[f("service_id", "uuid", "Service"), f("order_id", "uuid", "Order")]),
     domain("service.provisioned", "A provisioning module action succeeded.", &[f("service_id", "uuid", "Service"), f("action", "string", "`create`, `suspend`, …"), f("module", "string", "Module id")]),
