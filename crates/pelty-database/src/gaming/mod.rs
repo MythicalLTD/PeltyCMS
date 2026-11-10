@@ -5,6 +5,7 @@
 //!
 //! Re-exported at the crate root. Covered by the `modules_flow` integration tests.
 
+pub mod community;
 pub mod delivery;
 pub mod digital;
 pub mod games;
