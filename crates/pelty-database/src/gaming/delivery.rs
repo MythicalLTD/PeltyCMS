@@ -332,9 +332,12 @@ pub async fn enqueue(
     Ok(n)
 }
 
+/// (delivery, template, game, service, product) of a waiting delivery.
+type WaitingRow = (Uuid, String, String, Option<Uuid>, Option<Uuid>);
+
 /// Re-render deliveries waiting for a game identity of this customer.
 pub async fn release_waiting(pool: &PgPool, customer: Uuid) -> AppResult<usize> {
-    let rows: Vec<(Uuid, String, String, Option<Uuid>, Option<Uuid>)> = sqlx::query_as(
+    let rows: Vec<WaitingRow> = sqlx::query_as(
         "SELECT d.id, d.template, s.game, d.service_id, d.product_id FROM game_deliveries d JOIN game_servers s ON s.id = d.server_id
          WHERE d.customer_id = $1 AND d.status = 'waiting_identity'",
     )
