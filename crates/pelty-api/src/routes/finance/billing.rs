@@ -262,6 +262,7 @@ async fn addon_discounts(
     Ok(v.into_iter().take(50).collect())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn place_order(
     s: &AppState,
     u: &CurrentUser,

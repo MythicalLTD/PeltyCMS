@@ -19,10 +19,13 @@ import { formatDate, formatMoney } from "@/lib/billing/billing";
 import { referralUrl, type AffiliateDashboard, type Commission, type Payout } from "@/lib/p2";
 import { useI18n } from "@/lib/i18n";
 import { AffiliateMaterials } from "@/pages/client/account/AffiliateMaterials";
+import { CreatorCodeCard } from "@/components/affiliate/CreatorCodeCard";
+import { useModules } from "@/lib/modules";
 
 export function ClientAffiliatePage() {
   const { t, tCode, lang } = useI18n();
   const qc = useQueryClient();
+  const { enabled } = useModules();
   const key = ["client", "affiliate"];
   const { data } = useQuery({ queryKey: key, queryFn: () => api<AffiliateDashboard>("/client/affiliate") });
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +63,7 @@ export function ClientAffiliatePage() {
           <Button variant="outline" onClick={() => { void navigator.clipboard.writeText(url); toast.success(t("affiliate.copied")); }}><CopyIcon aria-hidden />{t("affiliate.copy")}</Button>
         </CardContent>
       </Card>
+      {enabled.has("creator_codes") && <CreatorCodeCard />}
       <div className="grid gap-3 *:min-w-0 sm:grid-cols-3">
         <Stat icon={UsersThreeIcon} label={t("affiliate.referrals")} value={String(data.affiliate.referrals)} />
         {data.balances.length === 0 ? <Stat icon={WalletIcon} tone="success" label={t("affiliate.available")} value={formatMoney("0", "EUR", lang)} /> :

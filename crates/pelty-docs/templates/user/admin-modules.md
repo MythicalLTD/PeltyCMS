@@ -283,3 +283,31 @@ discount, without making a coupon.
   show a separate *Sale* row.
 - Turning the module off stops every sale at once. Saved sales are kept and
   apply again when it is turned back on.
+
+## Creator codes (`creator_codes`)
+
+Part of the **Commerce** pack. It builds on the affiliate program: an affiliate
+picks a short code, such as a streamer's name, and buyers type it at checkout to
+support them.
+
+- **Affiliates** pick or rename their code on their affiliate page. A code is
+  3–24 characters (letters, digits, `_`, `-`), is not case-sensitive, and must
+  be unique. Joining the affiliate program comes first.
+- **Admin → Creator codes** (`/admin/creator-codes`, needs *Manage
+  affiliates*) lists every code with its order count. Here you can give buyers
+  an optional discount (0–50 %, off by default) or switch a code off. Changes
+  are audited (`creator_code.updated`; affiliates' own changes are
+  `creator_code.set`).
+- **Checkout**: the cart has a *Creator code* field. An unknown or switched-off
+  code is reported in the cart and refused at checkout. Buyers can't use their
+  own code. The discount applies to the order's first invoice after coupons,
+  bundles, client-group discounts and sales, and never takes a line below zero.
+  The order is recorded against the code (`order.creator_code` in the audit
+  log).
+- **Commission**: when that first invoice is paid, the creator earns their usual
+  affiliate commission: base rate, tiers and per-product rates, exactly like a
+  referral. For that invoice it replaces the buyer's signup referrer, so only
+  one commission is paid. Renewals keep following the normal referral rules.
+- Turning the module off hides the field and the pages. Codes entered from then
+  on are ignored rather than refused. Orders already placed with a code still
+  pay their commission when their invoice is paid.

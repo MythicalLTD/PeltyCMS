@@ -4,7 +4,7 @@ import { ProductReviews } from "@/components/store/ProductReviews";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
-import { ArrowLeftIcon, CreditCardIcon, PackageIcon, PlusIcon, ShoppingCartIcon, StorefrontIcon, TagIcon, TrashIcon } from "@phosphor-icons/react";
+import { ArrowLeftIcon, CreditCardIcon, PackageIcon, PlusIcon, ShoppingCartIcon, StorefrontIcon, TagIcon, TrashIcon, UserCircleIcon } from "@phosphor-icons/react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +22,7 @@ import { api, ApiError } from "@/lib/api";
 import { useAuthActions, useMe } from "@/lib/auth";
 import { formatMoney } from "@/lib/billing/billing";
 import { useI18n } from "@/lib/i18n";
+import { useModules } from "@/lib/modules";
 import { Captcha } from "@/components/Captcha";
 import { addonPrice, fieldErrors, fromPrice, resetCartId, useStoreCart, type Extras, type StoreLine } from "@/lib/store/storefront";
 import { CountrySelect } from "@/components/geo/CountryRegionFields";
@@ -221,6 +222,7 @@ export function Totals({ view }: { view: NonNullable<ReturnType<typeof useStoreC
       <dt className="text-muted-foreground">{t("store.subtotal")}</dt><dd className="tabular-nums">{m(p.subtotal)}</dd>
       {Number(p.discount) > 0 && <><dt className="text-muted-foreground">{t("order.discount")}</dt><dd className="tabular-nums">−{m(p.discount)}</dd></>}
       {Number(p.sale_discount ?? 0) > 0 && <><dt className="text-muted-foreground">{t("sales.discount")}</dt><dd className="tabular-nums">−{m(p.sale_discount ?? "0")}</dd></>}
+      {Number(p.creator_discount ?? 0) > 0 && <><dt className="text-muted-foreground">{t("creator_code.discount", { code: p.creator_code ?? "" })}</dt><dd className="tabular-nums">−{m(p.creator_discount ?? "0")}</dd></>}
       {Number(p.group_discount) > 0 && <><dt className="text-muted-foreground">{t("store.group_discount")}</dt><dd className="tabular-nums">−{m(p.group_discount)}</dd></>}
       {p.taxes.map((x) => <div key={x.name} className="contents"><dt className="text-muted-foreground">{x.name} ({Number(x.rate)}%){p.inclusive ? ` · ${t("store.tax_included")}` : ""}</dt><dd className="tabular-nums">{m(x.amount)}</dd></div>)}
       <dt className="pt-2 font-medium">{t("order.due_today")}</dt><dd className="pt-2 font-semibold tabular-nums">{m(p.total)}</dd>
@@ -235,6 +237,8 @@ export function CartPage() {
   const nav = useNavigate();
   const { view, loading, save } = useStoreCart(loc.search);
   const [code, setCode] = useState("");
+  const [creator, setCreator] = useState("");
+  const { enabled } = useModules();
   const [error, setError] = useState<string | null>(null);
   const cart = view && !view.cart.order_id ? view.cart : null;
   const update = (patch: Partial<NonNullable<typeof cart>>) => cart && save.mutate({ ...cart, ...patch, locale: lang }, {
@@ -280,6 +284,18 @@ export function CartPage() {
             {cart.coupon && !p?.coupon_error && <Badge variant="secondary" className="w-fit"><TagIcon aria-hidden />{cart.coupon}<button type="button" className="ml-1 underline" onClick={() => update({ coupon: null })}>{t("cart.remove")}</button></Badge>}
             {p?.coupon_error && <p className="text-sm text-destructive">{tCode(p.coupon_error)}</p>}
           </form>
+          {enabled.has("creator_codes") && (
+            <form className="grid gap-2" onSubmit={(e) => { e.preventDefault(); if (creator.trim()) update({ creator_code: creator.trim().toLowerCase() }); }}>
+              <Label htmlFor="creator-code">{t("creator_code.checkout_label")}</Label>
+              <div className="flex gap-2">
+                <Input id="creator-code" className="font-mono" maxLength={24} value={creator} onChange={(e) => setCreator(e.target.value)} />
+                <Button type="submit" variant="outline" disabled={save.isPending || !creator.trim()}>{t("order.apply")}</Button>
+              </div>
+              {cart.creator_code && !p?.creator_error && <Badge variant="secondary" className="w-fit"><UserCircleIcon aria-hidden />{cart.creator_code}<button type="button" className="ml-1 underline" onClick={() => update({ creator_code: null })}>{t("cart.remove")}</button></Badge>}
+              {p?.creator_error && <p className="text-sm text-destructive">{tCode(p.creator_error)}</p>}
+              <p className="text-xs text-muted-foreground">{t("creator_code.checkout_hint")}</p>
+            </form>
+          )}
           <div className="grid gap-2">
             <Label htmlFor="country">{t("store.country")}</Label>
             <CountrySelect id="country" value={cart.country} onChange={(c) => { if (c !== cart.country) update({ country: c }); }} />
