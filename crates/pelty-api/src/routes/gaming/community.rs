@@ -99,7 +99,7 @@ fn same(a: &[u8], b: &[u8]) -> bool {
 
 /// Vote callback for a vote site. Verifies the site token, applies the
 /// cooldown and queues the reward command on the game servers.
-#[utoipa::path(post, path = "/api/v1/public/community/vote/{site}", params(("site" = Uuid, Path), VoteParams), responses((status = 200), (status = 403), (status = 404), (status = 409), (status = 422), (status = 429)))]
+#[utoipa::path(method(get, post), path = "/api/v1/public/community/vote/{site}", params(("site" = Uuid, Path), VoteParams), responses((status = 200), (status = 403), (status = 404), (status = 409), (status = 422), (status = 429)))]
 pub async fn vote_callback(
     State(s): State<AppState>,
     Path(site_id): Path<Uuid>,
