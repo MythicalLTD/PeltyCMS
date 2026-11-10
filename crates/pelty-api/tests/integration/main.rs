@@ -7,6 +7,7 @@
 //! Shared helpers live in `common`. Run one suite: `cargo test -p pelty-api --test integration my_flow::`.
 
 mod common;
+mod creator_marketplace_flow;
 mod digital_products_flow;
 mod game_delivery_flow;
 mod game_profiles_flow;
