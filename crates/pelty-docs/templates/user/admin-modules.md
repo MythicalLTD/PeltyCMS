@@ -250,7 +250,7 @@ Changes how the game store looks when **Settings → Website → Store mode** is
   - **Top customer**: the biggest spender today, this week, month, year or all time. Counts paid invoices in the default currency. Shown by game account name or first name and last initial; the amount only if you switch it on.
   - **Recent payments** (1–10): who bought which packages, by product name only (no invoice details, no emails).
   - **Featured package**: one active product with its image and a link. Hidden products are skipped.
-  - **Server status** and **Monthly goal**: from the [community module](#server-status-voting-and-leaderboards-server_community); they only appear while `server_community` is on.
+  - **Server status** and **Monthly goal**: from the community module (`server_community`, above); they only appear while `server_community` is on.
   - **Discord button**: a `https://discord.gg/…` or `https://discord.com/invite/…` link.
 
 With the module off, the store keeps its plain look and these endpoints return 404.
