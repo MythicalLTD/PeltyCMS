@@ -7,7 +7,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
-export const MODULE_IDS = ["game_profiles", "game_delivery", "server_community", "gaming_storefront", "digital_products", "creator_marketplace", "product_reviews"] as const;
+export const MODULE_IDS = ["game_profiles", "game_delivery", "server_community", "gaming_storefront", "digital_products", "creator_marketplace", "product_reviews", "timed_sales"] as const;
 export type ModuleId = (typeof MODULE_IDS)[number];
 
 /** SPA route prefixes owned by a module (longest prefix wins). */
@@ -22,6 +22,7 @@ export const MODULE_ROUTES: readonly (readonly [string, ModuleId])[] = [
   ["/admin/product-reviews", "product_reviews"],
   ["/admin/community", "server_community"],
   ["/admin/storefront", "gaming_storefront"],
+  ["/admin/sales", "timed_sales"],
   ["/community", "server_community"],
 ];
 

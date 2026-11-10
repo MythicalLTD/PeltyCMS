@@ -259,3 +259,27 @@ With the module off, the store keeps its plain look and these endpoints return 4
 
 - `GET /api/v1/public/storefront` (no login): the banner, accent, layout, sidebar side and the widgets with their live data. Widgets with nothing to show (an unknown product, community off) are left out.
 - `GET|PUT /api/v1/admin/storefront` (**Manage settings**): read or replace the settings. Invalid values return `422 error.storefront_invalid`.
+
+## Timed sales (`timed_sales`)
+
+Part of the **Commerce** pack. Run a time-limited percentage discount on
+chosen products or whole product groups, such as a weekend sale or a launch
+discount, without making a coupon.
+
+- **Admin → Sales** (`/admin/sales`, needs *Manage catalog*): name, percent
+  (above 0 and up to 95), start and end time, and the products and/or groups
+  it covers (1–500 in total). A sale can be switched off without deleting it.
+  Every change is written to the audit log (`sale.created`, `sale.updated`,
+  `sale.deleted`).
+- **Only running sales apply**: enabled, already started and not yet ended.
+  Scheduled sales show nothing until their start time.
+- **No stacking between sales**: when several sales cover one product, the
+  highest percent wins. A sale does stack with a coupon, a bundle or a client
+  group discount. It is applied after them and never takes a line below zero.
+- **First invoice only**: the sale discounts the order's first invoice. Later
+  renewals are charged the normal price.
+- **Store**: the game store shows the old price struck through, a −X% badge
+  and a banner with a countdown to the end of the sale. The cart and checkout
+  show a separate *Sale* row.
+- Turning the module off stops every sale at once. Saved sales are kept and
+  apply again when it is turned back on.

@@ -220,6 +220,7 @@ export function Totals({ view }: { view: NonNullable<ReturnType<typeof useStoreC
     <dl className="grid grid-cols-[1fr_auto] gap-y-1 text-sm">
       <dt className="text-muted-foreground">{t("store.subtotal")}</dt><dd className="tabular-nums">{m(p.subtotal)}</dd>
       {Number(p.discount) > 0 && <><dt className="text-muted-foreground">{t("order.discount")}</dt><dd className="tabular-nums">−{m(p.discount)}</dd></>}
+      {Number(p.sale_discount ?? 0) > 0 && <><dt className="text-muted-foreground">{t("sales.discount")}</dt><dd className="tabular-nums">−{m(p.sale_discount ?? "0")}</dd></>}
       {Number(p.group_discount) > 0 && <><dt className="text-muted-foreground">{t("store.group_discount")}</dt><dd className="tabular-nums">−{m(p.group_discount)}</dd></>}
       {p.taxes.map((x) => <div key={x.name} className="contents"><dt className="text-muted-foreground">{x.name} ({Number(x.rate)}%){p.inclusive ? ` · ${t("store.tax_included")}` : ""}</dt><dd className="tabular-nums">{m(x.amount)}</dd></div>)}
       <dt className="pt-2 font-medium">{t("order.due_today")}</dt><dd className="pt-2 font-semibold tabular-nums">{m(p.total)}</dd>

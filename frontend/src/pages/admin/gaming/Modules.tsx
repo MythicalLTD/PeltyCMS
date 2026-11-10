@@ -11,7 +11,7 @@ import type { TranslationKey } from "@/lib/i18n-core";
 
 export interface ModuleState { id: string; pack: string; requires: string[]; required_by: string[]; enabled: boolean; settings: Record<string, unknown>; updated_at: string | null }
 
-const PACKS = ["gaming", "digital", "marketplace"] as const;
+const PACKS = ["gaming", "digital", "marketplace", "commerce"] as const;
 
 /** Optional domain packs: each module can be switched on independently. */
 export function AdminModulesPage() {

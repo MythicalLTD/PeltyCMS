@@ -192,6 +192,9 @@ pub struct PreviewLine {
     pub labels: Vec<String>,
     pub addons: Vec<PreviewAddon>,
     pub discount: Decimal,
+    /// Running timed sale on this line (first invoice only).
+    pub sale_discount: Decimal,
+    pub sale: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -201,6 +204,7 @@ pub struct Preview {
     pub subtotal: Decimal,
     pub discount: Decimal,
     pub group_discount: Decimal,
+    pub sale_discount: Decimal,
     pub tax: Decimal,
     pub taxes: Vec<TaxPart>,
     pub total: Decimal,
@@ -278,6 +282,22 @@ pub async fn preview(
     let mut amounts: Vec<Decimal> = vec![];
     let mut discount = Decimal::ZERO;
     let mut group = Decimal::ZERO;
+    let mut sale_total = Decimal::ZERO;
+    // Timed sales, clamped like `orders::place_full` (after promo and group).
+    let sales = if crate::feature_modules::is_enabled(pool, crate::timed_sales::MODULE).await? {
+        crate::timed_sales::active(pool).await?
+    } else {
+        vec![]
+    };
+    let product_groups: std::collections::HashMap<Uuid, Uuid> = if sales.is_empty() {
+        Default::default()
+    } else {
+        let ids: Vec<Uuid> = items.iter().map(|i| i.product_id).collect();
+        crate::timed_sales::groups(pool, &ids)
+            .await?
+            .into_iter()
+            .collect()
+    };
     for it in items {
         let q = catalog::quote(&mut tx, it.product_id, &it.cycle, &currency, &it.config).await?;
         let extras =
@@ -289,10 +309,21 @@ pub async fn preview(
             _ => Decimal::ZERO,
         };
         discount += d;
+        let mut group_line = Decimal::ZERO;
         if let Some(pct) = group_pct {
             let base = q.amount - d + extras.iter().map(|a| a.amount).sum::<Decimal>();
-            group += coupons::line_discount("percent", pct, base, exp);
+            group_line = coupons::line_discount("percent", pct, base, exp);
+            group += group_line;
         }
+        let sale = product_groups
+            .get(&q.product_id)
+            .and_then(|g| crate::timed_sales::best(&sales, q.product_id, *g));
+        let sale_discount = sale.map_or(Decimal::ZERO, |x| {
+            (q.amount * x.percent / Decimal::from(100))
+                .round_dp(exp)
+                .min((q.amount - d - group_line).max(Decimal::ZERO))
+        });
+        sale_total += sale_discount;
         amounts.push(q.amount);
         if q.setup_fee > Decimal::ZERO {
             amounts.push(q.setup_fee);
@@ -321,6 +352,10 @@ pub async fn preview(
                 })
                 .collect(),
             discount: d,
+            sale_discount,
+            sale: sale
+                .filter(|_| sale_discount > Decimal::ZERO)
+                .map(|x| x.name.clone()),
         });
     }
     drop(tx); // read-only; rolled back
@@ -333,6 +368,9 @@ pub async fn preview(
     }
     if group > Decimal::ZERO {
         amounts.push(-group);
+    }
+    if sale_total > Decimal::ZERO {
+        amounts.push(-sale_total);
     }
     let cfg = tax::get_settings(pool).await?;
     let reverse = cfg.enabled
@@ -390,6 +428,7 @@ pub async fn preview(
         subtotal,
         discount,
         group_discount: group,
+        sale_discount: sale_total,
         tax: tax_total,
         taxes,
         total: (net + tax_total).max(Decimal::ZERO),

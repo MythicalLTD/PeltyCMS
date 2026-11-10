@@ -11,7 +11,8 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Copy, Serialize, utoipa::ToSchema)]
 pub struct ModuleDef {
     pub id: &'static str,
-    /// Domain pack the module belongs to (`gaming`, `digital`, `marketplace`).
+    /// Domain pack the module belongs to (`gaming`, `digital`, `marketplace`,
+    /// `commerce`).
     pub pack: &'static str,
     /// Modules that must be enabled first.
     pub requires: &'static [&'static str],
@@ -52,6 +53,11 @@ pub const MODULES: &[ModuleDef] = &[
     ModuleDef {
         id: "product_reviews",
         pack: "marketplace",
+        requires: &[],
+    },
+    ModuleDef {
+        id: "timed_sales",
+        pack: "commerce",
         requires: &[],
     },
 ];

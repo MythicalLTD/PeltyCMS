@@ -103,6 +103,7 @@ const AdminLoginHistoryPage = lazy(() => import("@/pages/admin/ops/AdminOps").th
 const AdminBackupsPage = lazy(() => import("@/pages/admin/ops/AdminOps").then((m) => ({ default: m.AdminBackupsPage })));
 const AdminGeneralSettingsPage = lazy(() => import("@/pages/admin/settings/GeneralSettings").then((m) => ({ default: m.AdminGeneralSettingsPage })));
 const AdminDigitalProductsPage = lazy(() => import("@/pages/admin/gaming/DigitalProducts").then((m) => ({ default: m.AdminDigitalProductsPage })));
+const AdminSalesPage = lazy(() => import("@/pages/admin/gaming/Sales").then((m) => ({ default: m.AdminSalesPage })));
 const AdminStorefrontPage = lazy(() => import("@/pages/admin/gaming/Storefront").then((m) => ({ default: m.AdminStorefrontPage })));
 const AdminCommunityPage = lazy(() => import("@/pages/admin/gaming/Community").then((m) => ({ default: m.AdminCommunityPage })));
 const CommunityPage = lazy(() => import("@/pages/site/Community").then((m) => ({ default: m.CommunityPage })));
@@ -372,6 +373,7 @@ export function App() {
         <Route path="game-delivery" element={<RequireModule id="game_delivery"><AdminGameDeliveryPage /></RequireModule>} />
         <Route path="digital-products" element={<RequireModule id="digital_products"><AdminDigitalProductsPage /></RequireModule>} />
         <Route path="creator-market" element={<RequireModule id="creator_marketplace"><AdminCreatorMarketPage /></RequireModule>} />
+        <Route path="sales" element={<RequireModule id="timed_sales"><AdminSalesPage /></RequireModule>} />
         <Route path="storefront" element={<RequireModule id="gaming_storefront"><AdminStorefrontPage /></RequireModule>} />
         <Route path="community" element={<RequireModule id="server_community"><AdminCommunityPage /></RequireModule>} />
         <Route path="product-reviews" element={<RequireModule id="product_reviews"><AdminReviewsPage /></RequireModule>} />

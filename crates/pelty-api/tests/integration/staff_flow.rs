@@ -276,6 +276,16 @@ async fn roles_staff_audit_and_2fa_policy() {
 async fn admin_marks_email_verified() {
     let (app, st) = app().await;
     let admin = sess(&app, &st, "admin").await;
+    // `roles_staff_audit_and_2fa_policy` briefly requires staff 2FA site-wide
+    // while this test runs in parallel; give this admin 2FA so it is unaffected.
+    let aid = uid(&app, &admin).await;
+    sqlx::query(
+        "INSERT INTO user_mfa (user_id, secret_enc, enabled_at) VALUES ($1::uuid, '\\x00', now())",
+    )
+    .bind(&aid)
+    .execute(&st.pool)
+    .await
+    .unwrap();
     let cust = sess(&app, &st, "customer").await;
     let me = call(&app, "GET", "/api/v1/auth/me", None, &cust.h()).await;
     assert_eq!(me.body["email_verified"], json!(false), "{:?}", me.body);
