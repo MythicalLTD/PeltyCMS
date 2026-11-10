@@ -129,6 +129,53 @@ pub async fn disable(pool: &PgPool, id: Uuid) -> AppResult<()> {
     Ok(())
 }
 
+/// What the holder of a code may see before redeeming it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct Balance {
+    /// `active`, `redeemed` or `expired`.
+    pub status: &'static str,
+    pub currency: String,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub balance: Decimal,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub expires_at: Option<OffsetDateTime>,
+}
+
+/// Balance for a code. Unknown and disabled codes are both `None`.
+pub async fn balance(pool: &PgPool, code: &str) -> AppResult<Option<Balance>> {
+    let n = normalize(code);
+    if n.len() != 16 {
+        return Ok(None);
+    }
+    let row: Option<(String, String, Decimal, Option<OffsetDateTime>)> = sqlx::query_as(
+        "SELECT status, currency::text, balance, expires_at FROM gift_cards WHERE code_hash = $1 AND status <> 'disabled'",
+    )
+    .bind(hash(&n))
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?;
+    Ok(row.map(|(st, currency, bal, expires_at)| {
+        let expired = expires_at.is_some_and(|e| e <= OffsetDateTime::now_utc());
+        let status = if st == "redeemed" || bal <= Decimal::ZERO {
+            "redeemed"
+        } else if expired {
+            "expired"
+        } else {
+            "active"
+        };
+        Balance {
+            status,
+            currency,
+            balance: if status == "active" {
+                bal
+            } else {
+                Decimal::ZERO
+            },
+            expires_at,
+        }
+    }))
+}
+
 /// Redeem the full balance into the customer's credit. Unknown, used,
 /// disabled and expired codes all answer the same error.
 pub async fn redeem(pool: &PgPool, customer: Uuid, code: &str) -> AppResult<(String, Decimal)> {

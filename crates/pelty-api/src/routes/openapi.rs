@@ -573,6 +573,7 @@ use utoipa::OpenApi;
         super::invoice_ops::gift_create,
         super::invoice_ops::gift_disable,
         super::invoice_ops::gift_redeem,
+        super::invoice_ops::gift_balance,
         super::currencies::sync_prices,
         super::client_extras::list_notes,
         super::client_extras::add_note,
