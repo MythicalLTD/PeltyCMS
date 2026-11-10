@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowsClockwiseIcon, CheckIcon, LockSimpleIcon, PaperPlaneTiltIcon, PaypalLogoIcon, PlayIcon, StripeLogoIcon, XIcon } from "@phosphor-icons/react";
+import { ArrowsClockwiseIcon, CheckIcon, LockSimpleIcon, PaperPlaneTiltIcon, PaypalLogoIcon, PlayIcon, StripeLogoIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
@@ -222,9 +222,16 @@ function ProviderCard({ id, p, liveEnv }: { id: "stripe" | "paypal"; p: Provider
         </CardTitle>
         {p.live_refused && <CardDescription className="text-destructive">{t("market.provider.live_refused", { env: liveEnv })}</CardDescription>}
       </CardHeader>
-      <CardContent className="grid gap-2 text-xs">
-        <div><span className="text-muted-foreground">{t("market.provider.webhook")}: </span><code className="break-all">{p.webhook_url}</code>{p.configured && !p.webhook_ready && <Badge variant="destructive" className="ml-2 text-[10px]">{t("market.provider.webhook_missing")}</Badge>}</div>
-        <div><span className="text-muted-foreground">{t("market.provider.env")}: </span>{p.env.map((e) => <code key={e} className="mr-1 rounded bg-muted px-1">{e}</code>)}</div>
+      <CardContent className="grid min-w-0 gap-3 text-xs">
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="text-muted-foreground">{t("market.provider.webhook")}</span>
+          <code className="break-all rounded bg-muted px-1.5 py-1">{p.webhook_url}</code>
+          {p.configured && !p.webhook_ready && <p className="flex items-start gap-1 text-destructive"><WarningIcon aria-hidden className="mt-0.5 size-3.5 shrink-0" />{t("market.provider.webhook_missing")}</p>}
+        </div>
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="text-muted-foreground">{t("market.provider.env")}</span>
+          <div className="flex flex-wrap gap-1">{p.env.map((e) => <code key={e} className="break-all rounded bg-muted px-1.5 py-0.5">{e}</code>)}</div>
+        </div>
       </CardContent>
     </Card>
   );
