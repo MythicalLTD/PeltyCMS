@@ -202,6 +202,9 @@ async fn handle(s: &AppState, job: &Job) -> Result<Value, JobError> {
         crate::routes::game_delivery::JOB_KIND => crate::routes::game_delivery::process_rcon(s)
             .await
             .map_err(|e| JobError::Retry(e.to_string())),
+        crate::routes::discord_roles::JOB_KIND => crate::routes::discord_roles::process(s)
+            .await
+            .map_err(|e| JobError::Retry(e.to_string())),
         "test.fail" => Err(JobError::Retry("intentional failure".into())),
         "test.ok" => Ok(json!({ "ok": true })),
         other => Err(JobError::Retry(format!("unknown job kind {other}"))),
@@ -338,6 +341,9 @@ pub async fn schedule_tick(s: &AppState) {
     crate::addon_ext::schedule_jobs(s).await;
     if let Err(e) = crate::routes::game_delivery::schedule(s).await {
         tracing::error!(error = %e, "schedule game delivery failed");
+    }
+    if let Err(e) = crate::routes::discord_roles::schedule(s).await {
+        tracing::error!(error = %e, "schedule discord roles failed");
     }
     if let Err(e) = crate::routes::community::schedule(s).await {
         tracing::error!(error = %e, "schedule community status failed");

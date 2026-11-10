@@ -19,7 +19,7 @@ export function GiftCardBalancePage() {
   const { t, tCode, lang } = useI18n();
   const [code, setCode] = useState("");
   const check = useMutation({
-    mutationFn: () => api<GiftBalance>("/public/gift-cards/balance", { method: "POST", body: { code: code.trim() } }),
+    mutationFn: (submitted: string) => api<GiftBalance>("/public/gift-cards/balance", { method: "POST", body: { code: submitted } }),
   });
   const err = check.error instanceof ApiError
     ? (check.error.status === 404 ? t("error.gift_card_invalid") : tCode(check.error.code))
@@ -33,10 +33,10 @@ export function GiftCardBalancePage() {
           <CardDescription>{t("gift.check_hint")}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <form className="grid gap-2" onSubmit={(e) => { e.preventDefault(); if (code.trim()) check.mutate(); }}>
+          <form className="grid gap-2" onSubmit={(e) => { e.preventDefault(); const c = code.trim(); if (c) check.mutate(c); }}>
             <Label htmlFor="gift-code">{t("gift.code")}</Label>
             <div className="flex gap-2">
-              <Input id="gift-code" className="font-mono uppercase" autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} placeholder="XXXX-XXXX-XXXX-XXXX" />
+              <Input id="gift-code" className="font-mono uppercase" autoComplete="off" value={code} onChange={(e) => { setCode(e.target.value); if (check.data || check.error) check.reset(); }} placeholder="XXXX-XXXX-XXXX-XXXX" />
               <Button type="submit" disabled={check.isPending || !code.trim()}>{t("gift.check")}</Button>
             </div>
           </form>

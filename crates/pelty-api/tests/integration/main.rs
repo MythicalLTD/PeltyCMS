@@ -76,6 +76,7 @@ mod customers_flow;
 mod dashboard_flow;
 mod data_feeds_flow;
 mod dev_docs;
+mod discord_roles_flow;
 mod domain_defaults_flow;
 mod domain_fields_registrar_flow;
 mod domain_pricing_flow;

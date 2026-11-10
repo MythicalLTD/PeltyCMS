@@ -98,6 +98,7 @@ pub use gaming::community;
 pub use gaming::creator_codes;
 pub use gaming::delivery as game_delivery;
 pub use gaming::digital;
+pub use gaming::discord_roles;
 pub use gaming::games;
 pub use gaming::marketplace;
 pub use gaming::modules as feature_modules;

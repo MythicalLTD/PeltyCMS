@@ -109,6 +109,7 @@ pub use gaming::community;
 pub use gaming::creator_codes;
 pub use gaming::delivery as game_delivery;
 pub use gaming::digital;
+pub use gaming::discord_roles;
 pub use gaming::games;
 pub use gaming::marketplace;
 pub use gaming::modules as feature_modules;
@@ -136,6 +137,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(game_storefront::router())
         .merge(timed_sales::router())
         .merge(creator_codes::router())
+        .merge(discord_roles::router())
         .merge(csv_import::router())
         .merge(live_chat::router())
         .merge(crate::addons::router())
