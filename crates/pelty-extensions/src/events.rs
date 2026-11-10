@@ -159,6 +159,7 @@ pub const REGISTRY: &[EventSpec] = &[
     domain("review.approved", "Staff approved a product review.", &[f("review_id", "uuid", "Review"), f("product_id", "uuid", "Product"), f("customer_id", "uuid", "Customer"), f("rating", "int", "1 to 5")]),
     domain("question.asked", "A customer asked a question about a product.", &[f("question_id", "uuid", "Question"), f("product_id", "uuid", "Product"), f("customer_id", "uuid", "Customer")]),
     domain("question.answered", "Staff or the product's creator answered a question.", &[f("question_id", "uuid", "Question"), f("product_id", "uuid", "Product"), f("customer_id", "uuid", "Customer")]),
+    domain("community.voted", "A player voted on a vote site (verified callback).", &[f("vote_id", "uuid", "Vote"), f("site_id", "uuid", "Vote site"), f("username", "string", "Player name"), f("customer_id", "uuid", "Linked customer, if any"), f("rewards", "int", "Reward commands queued")]),
     // ---- services ----
     domain("service.created", "A service was created from an order.", &[f("service_id", "uuid", "Service"), f("order_id", "uuid", "Order")]),
     domain("service.provisioned", "A provisioning module action succeeded.", &[f("service_id", "uuid", "Service"), f("action", "string", "`create`, `suspend`, …"), f("module", "string", "Module id")]),

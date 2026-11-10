@@ -333,6 +333,66 @@ pub async fn enqueue(
     Ok(n)
 }
 
+/// A vote reward to queue (module `server_community`).
+pub struct VoteReward<'a> {
+    pub vote_id: Uuid,
+    pub site: &'a str,
+    pub username: &'a str,
+    pub customer: Option<Uuid>,
+    pub template: &'a str,
+    /// One server, or every enabled server that can receive commands.
+    pub server: Option<Uuid>,
+    pub require_online: bool,
+}
+
+/// Queue a vote reward on the target servers. Returns how many were queued;
+/// servers whose command needs an identity the voter has not linked are skipped.
+pub async fn enqueue_vote(pool: &PgPool, r: &VoteReward<'_>) -> AppResult<usize> {
+    if r.template.trim().is_empty() {
+        return Ok(0);
+    }
+    let servers: Vec<(Uuid, String, String)> = sqlx::query_as(
+        "SELECT id, game, name FROM game_servers WHERE enabled AND transport <> 'none' AND ($1::uuid IS NULL OR id = $1)",
+    )
+    .bind(r.server)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    let mut n = 0;
+    for (sid, game, sname) in servers {
+        let mut vars = match r.customer {
+            Some(c) => identity_vars(&crate::games::identity(pool, c, &game).await?),
+            None => BTreeMap::new(),
+        };
+        vars.insert("username".into(), r.username.to_string());
+        vars.insert("player".into(), r.username.to_string());
+        vars.insert("site".into(), r.site.to_string());
+        vars.insert("server".into(), sname);
+        if let Some(c) = r.customer {
+            vars.insert("customer_id".into(), c.to_string());
+        }
+        let Ok(command) = render(r.template, &vars) else {
+            continue;
+        };
+        let q = sqlx::query(
+            "INSERT INTO game_deliveries (server_id, customer_id, trigger, dedupe_key, template, command, player, require_online, status, next_attempt_at)
+             VALUES ($1,$2,'vote',$3,$4,$5,$6,$7,'pending', now()) ON CONFLICT (dedupe_key) DO NOTHING",
+        )
+        .bind(sid)
+        .bind(r.customer)
+        .bind(format!("vote:{}:{sid}", r.vote_id))
+        .bind(r.template)
+        .bind(&command)
+        .bind(r.username)
+        .bind(r.require_online)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
+        n += q.rows_affected() as usize;
+    }
+    Ok(n)
+}
+
 /// (delivery, template, game, server name, service) of a waiting delivery.
 type WaitingRow = (Uuid, String, String, String, Option<Uuid>);
 

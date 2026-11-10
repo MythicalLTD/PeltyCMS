@@ -105,6 +105,7 @@ pub use ops::exports;
 pub use ops::mass;
 pub use ops::reports;
 pub mod gaming;
+pub use gaming::community;
 pub use gaming::delivery as game_delivery;
 pub use gaming::digital;
 pub use gaming::games;
@@ -128,6 +129,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(digital::router())
         .merge(marketplace::router())
         .merge(reviews::router())
+        .merge(community::router())
         .merge(csv_import::router())
         .merge(live_chat::router())
         .merge(crate::addons::router())

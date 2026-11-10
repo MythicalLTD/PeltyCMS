@@ -196,6 +196,9 @@ async fn handle(s: &AppState, job: &Job) -> Result<Value, JobError> {
         crate::webhooks_out::JOB_KIND => crate::webhooks_out::run_job(s, job).await,
         crate::addon_power::JOB_KIND => crate::addon_ext::run_job(s, &job.payload).await,
         crate::backup::JOB_KIND | "backup.pg_dump" => crate::backup::run_job(s, job).await,
+        crate::routes::community::JOB_KIND => crate::routes::community::refresh(s)
+            .await
+            .map_err(|e| JobError::Retry(e.to_string())),
         crate::routes::game_delivery::JOB_KIND => crate::routes::game_delivery::process_rcon(s)
             .await
             .map_err(|e| JobError::Retry(e.to_string())),
@@ -335,6 +338,9 @@ pub async fn schedule_tick(s: &AppState) {
     crate::addon_ext::schedule_jobs(s).await;
     if let Err(e) = crate::routes::game_delivery::schedule(s).await {
         tracing::error!(error = %e, "schedule game delivery failed");
+    }
+    if let Err(e) = crate::routes::community::schedule(s).await {
+        tracing::error!(error = %e, "schedule community status failed");
     }
     if let Err(e) = crate::routes::store::schedule_recovery(s).await {
         tracing::error!(error = %e, "schedule cart recovery failed");
