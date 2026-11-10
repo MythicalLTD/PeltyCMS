@@ -24,6 +24,16 @@ import {
   type ChatMessage,
 } from "@/lib/support/liveChat";
 
+/** Event that opens the live chat panel from anywhere (support page, nav). */
+export const OPEN_CHAT_EVENT = "pelty:open-chat";
+export function openChat() {
+  window.dispatchEvent(new Event(OPEN_CHAT_EVENT));
+}
+/** Whether live chat is switched on (General settings → Support). */
+export function useLiveChatEnabled(): boolean {
+  return !!usePublicGeneral().data?.support?.live_chat;
+}
+
 export function ChatWidget() {
   const g = usePublicGeneral();
   if (!g.data?.support?.live_chat) return null;
@@ -48,6 +58,11 @@ function ChatPanel() {
   const { t, tCode } = useI18n();
   const loc = useLocation();
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const show = () => setOpen(true);
+    window.addEventListener(OPEN_CHAT_EVENT, show);
+    return () => window.removeEventListener(OPEN_CHAT_EVENT, show);
+  }, []);
   const [creds, setCreds] = useState<ChatCreds | null>(() => (typeof localStorage === "undefined" ? null : loadCreds(localStorage)));
   const [msgs, setMsgs] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<"open" | "closed">("open");

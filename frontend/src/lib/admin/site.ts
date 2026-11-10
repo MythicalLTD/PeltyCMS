@@ -11,6 +11,8 @@ export interface SiteConfig {
   footer_text: string; social: SocialLink[]; copyright: string; show_store_in_nav: boolean; client_dashboard_widgets: string[];
   /** `game` swaps the plan store for the compact game-server package catalog. */
   store_mode: "hosting" | "game"; game_join_code: string;
+  /** Public site look: `auto` follows the enabled modules (see lib/publicMode). */
+  public_mode: "auto" | "hosting" | "store" | "marketplace";
 }
 export type BlockType = "hero" | "features" | "pricing" | "faq" | "cta" | "text" | "image" | "stats" | "products" | "comparison";
 export interface Block { id?: string; type: BlockType; props: Record<string, unknown> }
@@ -89,7 +91,7 @@ export const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : [])
 export const DEFAULT_CONFIG: SiteConfig = {
   site_name: "PeltyCMS", tagline: "", logo_url: "", primary_color: "", font: "manrope", default_mode: "dark", homepage: "home",
   nav: [], footer_columns: [], footer_text: "", social: [], copyright: "", show_store_in_nav: true, client_dashboard_widgets: [],
-  store_mode: "hosting", game_join_code: "",
+  store_mode: "hosting", game_join_code: "", public_mode: "auto",
 };
 
 /** Accepts `{config}` (server shape), a bare config, or null; always returns a complete config. */
@@ -106,6 +108,7 @@ export function normalizeConfig(raw: unknown): SiteConfig {
     copyright: str(c.copyright),
     store_mode: c.store_mode === "game" ? "game" : "hosting",
     game_join_code: str(c.game_join_code),
+    public_mode: (["hosting", "store", "marketplace"] as const).find((m) => m === c.public_mode) ?? "auto",
   };
 }
 

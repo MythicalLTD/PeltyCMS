@@ -19,6 +19,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ImageUrlField, isImageFieldName } from "@/components/admin/ImageUrlField";
 import { JOIN_CODE, parseJoinCode } from "@/lib/store/game";
+import { PUBLIC_MODES, resolveMode, type PublicModeSetting } from "@/lib/publicMode";
+import { useModules } from "@/lib/modules";
 import { api, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -123,6 +125,7 @@ function SettingsTab() {
               </SelectContent>
             </Select>
           </div>
+          <PublicModeField value={c.public_mode} onChange={(v) => set("public_mode", v)} />
           {c.store_mode === "game" && (
             <div className="flex flex-col gap-2">
               <Label htmlFor="s-join">{t("site.admin.game_join_code")}</Label>
@@ -404,6 +407,28 @@ export function AdminWebsitePage() {
         <TabsContent value="settings" className="pt-2"><SettingsTab /></TabsContent>
         <TabsContent value="pages" className="pt-2"><PagesTab /></TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+/** Public site look; store/marketplace need their module, `auto` follows the modules. */
+function PublicModeField({ value, onChange }: { value: PublicModeSetting; onChange: (v: PublicModeSetting) => void }) {
+  const { t } = useI18n();
+  const { enabled } = useModules();
+  const need: Partial<Record<PublicModeSetting, string>> = { store: "gaming_storefront", marketplace: "creator_marketplace" };
+  const active = resolveMode(value, enabled);
+  return (
+    <div className="flex flex-col gap-2 sm:col-span-2">
+      <Label htmlFor="s-public-mode">{t("site.admin.public_mode")}</Label>
+      <Select value={value} onValueChange={(v) => onChange(v as PublicModeSetting)}>
+        <SelectTrigger id="s-public-mode" className="w-full sm:w-80" aria-describedby="s-public-mode-hint"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {PUBLIC_MODES.map((m) => (
+            <SelectItem key={m} value={m} disabled={!!need[m] && !enabled.has(need[m]!) && m !== value}>{t(`site.admin.public_mode_${m}`)}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p id="s-public-mode-hint" className="text-xs text-muted-foreground">{t("site.admin.public_mode_hint", { mode: t(`site.admin.public_mode_${active}`) })}</p>
     </div>
   );
 }

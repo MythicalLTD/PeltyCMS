@@ -7,6 +7,11 @@ import { NotFoundPage } from "@/pages/NotFound";
 import { api, ApiError, isUnreachableError } from "@/lib/api";
 import { useMe } from "@/lib/auth";
 import { usePublicSite, type Block } from "@/lib/admin/site";
+import { usePublicMode } from "@/lib/publicMode";
+import { lazy, Suspense } from "react";
+
+const StoreHomePage = lazy(() => import("@/pages/site/StoreHome").then((m) => ({ default: m.StoreHomePage })));
+const MarketplaceHomePage = lazy(() => import("@/pages/site/Marketplace").then((m) => ({ default: m.MarketplaceHomePage })));
 
 interface PublicPage { slug: string; title: string; description: string; blocks: Block[] }
 
@@ -28,10 +33,17 @@ export function SitePage({ slug: fixed }: { slug?: string }) {
   return <Blocks blocks={q.data.blocks} />;
 }
 
-/** `/`: public homepage for visitors, client dashboard for signed-in users. */
+/**
+ * `/`: the game store or marketplace home when that look is active (for
+ * everyone), else the hosting landing for visitors and the dashboard for
+ * signed-in users.
+ */
 export function HomeGate() {
   const { data: me, isLoading } = useMe();
-  if (isLoading) return <PageSkeleton className="p-8" />;
+  const { mode, loading } = usePublicMode();
+  if (isLoading || loading) return <PageSkeleton className="p-8" />;
+  if (mode === "store") return <Suspense fallback={<PageSkeleton className="p-8" />}><StoreHomePage /></Suspense>;
+  if (mode === "marketplace") return <Suspense fallback={<PageSkeleton className="p-8" />}><MarketplaceHomePage /></Suspense>;
   if (me) return <Navigate to="/dashboard" replace />;
   return <SitePage />;
 }

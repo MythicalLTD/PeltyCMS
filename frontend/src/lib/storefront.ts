@@ -28,7 +28,14 @@ export type WidgetConfig =
   | { type: "goal" }
   | { type: "discord"; invite_url: string; label: string };
 
-export interface StorefrontConfig { hero_title: string; hero_subtitle: string; hero_image: string; accent: string; layout: "list" | "grid"; sidebar: "left" | "right"; widgets: WidgetConfig[] }
+export interface StorefrontConfig {
+  hero_title: string; hero_subtitle: string; hero_image: string; accent: string; layout: "list" | "grid"; sidebar: "left" | "right"; widgets: WidgetConfig[];
+  /** Public-site colour preset in store mode (`default` keeps the site brand). */
+  theme: string; server_id: string | null; discord_url: string; logo_url: string;
+}
+
+/** The hero's server; `status` only while `server_community` checks it. */
+export interface HeroServer { name: string; slug: string; game: string; address: string; status: { online: boolean; players: number; max_players: number } | null }
 
 export type PublicWidget =
   | { type: "text"; title: string; body: string }
@@ -39,7 +46,16 @@ export type PublicWidget =
   | { type: "goal"; goal: Goal }
   | { type: "discord"; invite_url: string; label: string };
 
-export interface PublicStorefront extends Omit<StorefrontConfig, "widgets"> { widgets: PublicWidget[] }
+export interface PublicStorefront extends Omit<StorefrontConfig, "widgets" | "server_id"> {
+  widgets: PublicWidget[]; server: HeroServer | null;
+  /** Products sold on enabled game servers; the store lists only these when any (empty = whole catalog). */
+  package_ids: string[];
+}
+
+/** Discord invite links the server accepts (empty allowed). */
+export function discordUrlValid(u: string): boolean {
+  return u === "" || (u.length <= 200 && /^https:\/\/(discord\.gg|discord\.com\/invite)\/[A-Za-z0-9_-]+$/.test(u));
+}
 
 /** A fresh widget of a type, with the server's valid defaults. */
 export function newWidget(type: WidgetType, productId = ""): WidgetConfig {

@@ -16,7 +16,8 @@ import { api, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import type { TranslationKey } from "@/lib/i18n-core";
 import { useModules } from "@/lib/modules";
-import { ACCENTS, PERIODS, WIDGET_TYPES, heroImageValid, move, newWidget, widgetValid, type StorefrontConfig, type WidgetConfig, type WidgetType } from "@/lib/storefront";
+import { THEMES } from "@/lib/publicMode";
+import { ACCENTS, PERIODS, WIDGET_TYPES, discordUrlValid, heroImageValid, move, newWidget, widgetValid, type StorefrontConfig, type WidgetConfig, type WidgetType } from "@/lib/storefront";
 import { useCatalog } from "@/pages/store/Store";
 
 /** Storefront look: hero, accent, layout and the sidebar widget list. */
@@ -44,7 +45,8 @@ function Editor({ initial }: { initial: StorefrontConfig }) {
   const set = (p: Partial<StorefrontConfig>) => setF((x) => ({ ...x, ...p }));
   const setW = (i: number, w: WidgetConfig) => set({ widgets: f.widgets.map((x, j) => (j === i ? w : x)) });
   const products = catalog.data?.products ?? [];
-  const valid = heroImageValid(f.hero_image) && f.widgets.length <= 12 && f.widgets.every(widgetValid);
+  const servers = useQuery({ queryKey: ["admin", "game-servers"], queryFn: () => api<{ items: { id: string; name: string }[] }>("/admin/game/servers"), enabled: enabled.has("game_profiles") });
+  const valid = heroImageValid(f.hero_image) && heroImageValid(f.logo_url) && discordUrlValid(f.discord_url) && f.widgets.length <= 12 && f.widgets.every(widgetValid);
   const save = useMutation({
     mutationFn: () => api<StorefrontConfig>("/admin/storefront", { method: "PUT", body: f }),
     onSuccess: (c) => { setF(c); qc.setQueryData(["admin", "storefront"], c); void qc.invalidateQueries({ queryKey: ["public", "storefront"] }); toast.success(t("market.saved")); },
@@ -68,7 +70,18 @@ function Editor({ initial }: { initial: StorefrontConfig }) {
             <SelectField id="sf-side" label={t("storefront.sidebar")} value={f.sidebar} onChange={(v) => set({ sidebar: v as StorefrontConfig["sidebar"] })}
               options={[{ value: "right", label: t("storefront.side_right") }, { value: "left", label: t("storefront.side_left") }]} />
           </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <SelectField id="sf-theme" label={t("storefront.theme")} value={f.theme} onChange={(v) => set({ theme: v })}
+              options={THEMES.map((x) => ({ value: x, label: t(`storefront.theme.${x}` as TranslationKey) }))} />
+            <SelectField id="sf-server" label={t("storefront.hero_server")} value={f.server_id ?? "first"} onChange={(v) => set({ server_id: v === "first" ? null : v })}
+              options={[{ value: "first", label: t("storefront.hero_server_first") }, ...(servers.data?.items ?? []).map((x) => ({ value: x.id, label: x.name }))]} />
+          </div>
+          <Field id="sf-logo" label={t("storefront.logo_url")} placeholder="https://… or /uploads/…" value={f.logo_url} onChange={(e) => set({ logo_url: e.target.value.trim() })} />
+          {!heroImageValid(f.logo_url) && <p role="alert" className="text-sm text-destructive">{t("storefront.image_invalid")}</p>}
+          <Field id="sf-discord" label={t("storefront.discord_url")} placeholder="https://discord.gg/…" value={f.discord_url} onChange={(e) => set({ discord_url: e.target.value.trim() })} />
+          {!discordUrlValid(f.discord_url) && <p role="alert" className="text-sm text-destructive">{t("storefront.discord_invalid")}</p>}
           <p className="text-xs text-muted-foreground">{t("storefront.mode_hint")}</p>
+          <p className="text-xs text-muted-foreground">{t("storefront.public_mode_hint")}</p>
         </CardContent>
       </Card>
       <Card>

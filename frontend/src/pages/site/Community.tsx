@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowSquareOutIcon, CopyIcon, CrownIcon, TrophyIcon, UsersThreeIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -20,6 +21,12 @@ export function CommunityPage() {
   const { t, lang } = useI18n();
   const q = useQuery({ queryKey: ["public", "community"], queryFn: () => api<Community>("/public/community"), refetchInterval: 60_000 });
   const [name, setName] = useState("");
+  const { hash } = useLocation();
+  const ready = !!q.data;
+  // `/community#vote` and `#leaderboards` (store nav) jump once the data is in.
+  useEffect(() => {
+    if (ready && hash) document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView({ block: "start" });
+  }, [ready, hash]);
   if (q.isError && !q.data) return <LoadError retry={() => void q.refetch()} />;
   if (!q.data) return <Skeleton className="h-64 w-full" />;
   const d = q.data;
@@ -45,9 +52,9 @@ export function CommunityPage() {
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{d.servers.map((s) => <ServerCard key={s.server_id} s={s} />)}</div>
         )}
       </section>
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div id="leaderboards" className="grid scroll-mt-20 gap-4 lg:grid-cols-3">
         {d.sites.length > 0 && (
-          <Card>
+          <Card id="vote" className="scroll-mt-20">
             <CardHeader><CardTitle>{t("community.vote")}</CardTitle><CardDescription>{t("community.vote_hint")}</CardDescription></CardHeader>
             <CardContent className="flex flex-col gap-3">
               <div className="grid gap-1"><Label htmlFor="cm-name">{t("community.your_name")}</Label><Input id="cm-name" maxLength={64} value={name} onChange={(e) => setName(e.target.value)} /></div>

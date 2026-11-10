@@ -18,6 +18,48 @@ import { GeneralRuntime } from "@/components/admin/GeneralRuntime";
 import { applyBrand, isInternal, safeHref, usePublicSite, type SiteLink } from "@/lib/admin/site";
 import { lineCount, useStoreCart } from "@/lib/store/storefront";
 import { joinUrl } from "@/lib/store/game";
+import { usePublicMode, usePublicTheme, type PublicMode } from "@/lib/publicMode";
+import type { TranslationKey } from "@/lib/i18n-core";
+
+/** Project link for the footer credit. */
+export const PELTY_URL = "https://github.com/MythicalLTD/PeltyCMS";
+
+type Tr = (k: TranslationKey) => string;
+
+/** Header links of the store / marketplace looks (hosting keeps the admin's menu). */
+export function modeNav(mode: PublicMode, t: Tr, o: { enabled: ReadonlySet<string>; discord?: string }): SiteLink[] {
+  const has = (m: string) => o.enabled.has(m);
+  if (mode === "store") {
+    return [
+      { label: t("pub.store"), href: "/store" },
+      ...(has("server_community") ? [{ label: t("pub.vote"), href: "/community#vote" }, { label: t("pub.leaderboards"), href: "/community#leaderboards" }] : []),
+      ...(has("creator_marketplace") ? [{ label: t("pub.marketplace"), href: "/marketplace" }] : []),
+      ...(o.discord ? [{ label: t("pub.discord"), href: o.discord }] : []),
+      { label: t("pub.support"), href: "/support" },
+    ];
+  }
+  if (mode === "marketplace") {
+    return [
+      { label: t("pub.explore"), href: "/marketplace" },
+      { label: t("pub.creators"), href: "/creators" },
+      ...(has("gaming_storefront") ? [{ label: t("pub.store"), href: "/store" }] : []),
+      { label: t("pub.sell"), href: "/creator" },
+      { label: t("pub.support"), href: "/support" },
+    ];
+  }
+  return [];
+}
+
+/** Footer support column, shown in every look. */
+export function supportLinks(t: Tr): SiteLink[] {
+  return [
+    { label: t("pub.support_center"), href: "/support" },
+    { label: t("pub.support_kb"), href: "/kb" },
+    { label: t("pub.support_ticket"), href: "/tickets" },
+    { label: t("pub.support_status"), href: "/status" },
+    { label: t("pub.support_news"), href: "/announcements" },
+  ];
+}
 
 function NavItem({ l, onClick, block }: { l: SiteLink; onClick?: () => void; block?: boolean }) {
   const h = safeHref(l.href);
@@ -40,6 +82,7 @@ export function SiteLayout() {
   const { t } = useI18n();
   const { data: me } = useMe();
   const { data: site } = usePublicSite();
+  const { enabled } = usePublicMode();
   const { view } = useStoreCart();
   const [open, setOpen] = useState(false);
   const [copyrightYear] = useState(() => new Date().getFullYear());
@@ -47,21 +90,34 @@ export function SiteLayout() {
   const n = view?.cart.order_id ? 0 : lineCount(view?.cart);
   const c = site?.config;
   useEffect(() => { if (c) applyBrand(c, document.documentElement, window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false); }, [c]);
-  const join = c?.store_mode === "game" ? joinUrl(c.game_join_code) : null;
+  // After applyBrand, so the store/marketplace colours win.
+  const { mode, storefront: sf } = usePublicTheme(c);
+  const join = c?.store_mode === "game" || mode === "store" ? joinUrl(c?.game_join_code ?? "") : null;
   const connect = join ? (
     <Button asChild variant="outline" size="sm"><a href={join} rel="noopener noreferrer"><PlugsConnectedIcon aria-hidden />{t("game.connect")}</a></Button>
   ) : null;
+  const themed = mode !== "hosting";
+  const base = themed ? modeNav(mode, t, { enabled, discord: sf?.discord_url }) : (c?.nav ?? []);
   const links: SiteLink[] = [
-    ...(c?.nav ?? []),
+    ...base,
+    ...(!themed && !base.some((l) => l.href === "/support") ? [{ label: t("pub.support"), href: "/support" }] : []),
     ...(site?.nav_pages ?? []).map((p) => ({ label: p.title, href: `/page/${p.slug}` })),
   ];
+  // Store/marketplace looks get their own first footer columns; the admin's
+  // columns stay unless every link in them is already shown.
+  const generated = themed ? [{ title: mode === "store" ? t("pub.store") : t("pub.marketplace"), links: base.filter((l) => l.href !== "/support") }] : [];
+  const support = { title: t("pub.support"), links: supportLinks(t) };
+  const shown = new Set([...generated, support].flatMap((col) => col.links.map((l) => l.href)));
+  const columns = themed
+    ? [...generated, support, ...(c?.footer_columns ?? []).filter((col) => col.links.some((l) => !shown.has(l.href) && !l.href.startsWith("/store")))].slice(0, 5)
+    : (c?.footer_columns ?? []);
   const account = me ? (
     <Button asChild size="sm"><Link to="/dashboard"><SquaresFourIcon aria-hidden />{t("store.client_area")}</Link></Button>
   ) : (
     <Button asChild size="sm"><Link to="/login"><SignInIcon aria-hidden />{t("store.sign_in")}</Link></Button>
   );
   return (
-    <div className="flex min-h-svh flex-col">
+    <div className="flex min-h-svh flex-col" data-public-mode={mode}>
       <GeneralRuntime />
       <header className="sticky top-0 z-20 border-b bg-background">
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-2 px-4">
@@ -70,7 +126,7 @@ export function SiteLayout() {
           <div className="ml-auto flex items-center gap-1">
             {connect && <span className="hidden sm:inline-flex">{connect}</span>}
             <Button asChild variant="ghost" size="sm">
-              <NavLink to="/cart" aria-label={t("store.cart")}><ShoppingCartIcon aria-hidden />{n > 0 && <Badge variant="secondary" className="tabular-nums">{n}</Badge>}</NavLink>
+              <NavLink to="/cart" aria-label={t("store.cart")} data-testid="basket"><ShoppingCartIcon aria-hidden />{mode === "store" && <span className="hidden lg:inline">{t("pub.basket")}</span>}{n > 0 && <Badge variant="secondary" className="tabular-nums">{n}</Badge>}</NavLink>
             </Button>
             <span className="hidden md:inline-flex"><LanguageSwitcher /></span>
             <span className="hidden sm:inline-flex">{account}</span>
@@ -96,7 +152,7 @@ export function SiteLayout() {
             <Logo />
             {c?.tagline && <p className="text-sm text-muted-foreground">{c.tagline}</p>}
           </div>
-          {(c?.footer_columns ?? []).map((col, i) => (
+          {columns.map((col, i) => (
             <div key={i} className="flex flex-col gap-2">
               <p className="text-sm font-semibold">{col.title}</p>
               {col.links.map((l, j) => {
@@ -114,6 +170,7 @@ export function SiteLayout() {
             <div className="flex flex-col gap-1 text-xs text-muted-foreground">
               <p>{c?.copyright || `© ${copyrightYear} ${c?.site_name ?? t("app.name")}. ${t("site.rights")}`}</p>
               {c?.footer_text && <p>{c.footer_text}</p>}
+              <p data-testid="powered-by">{t("pub.powered_by")} <a href={PELTY_URL} target="_blank" rel="noopener noreferrer" className="font-medium text-foreground hover:text-primary">PeltyCMS</a></p>
             </div>
             {(c?.social ?? []).length > 0 && (
               <div className="flex flex-wrap gap-1">

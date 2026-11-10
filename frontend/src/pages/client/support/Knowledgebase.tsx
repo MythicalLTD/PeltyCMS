@@ -16,7 +16,8 @@ import type { Announcement, KbArticle, KbCategory, KbListItem } from "@/lib/supp
 
 export function KnowledgebasePage() {
   const { t, lang } = useI18n();
-  const [q, setQ] = useState("");
+  // `/kb?q=…` (the support page search) pre-fills the box.
+  const [q, setQ] = useState(() => (typeof location === "undefined" ? "" : new URLSearchParams(location.search).get("q") ?? "").slice(0, 200));
   const [cat, setCat] = useState<string | null>(null);
   const params = new URLSearchParams({ locale: lang });
   if (q.trim()) params.set("q", q.trim());

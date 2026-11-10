@@ -12,6 +12,7 @@ import { DomainSearchPage } from "@/pages/site/DomainSearch";
 import { ContactPage } from "@/pages/site/Contact";
 import { CartPage, CheckoutPage, StorePage, StoreProductPage } from "@/pages/store/Store";
 import { usePublicSite } from "@/lib/admin/site";
+import { usePublicMode } from "@/lib/publicMode";
 import { RequireModule } from "@/components/RequireModule";
 import { OrderStatusPage } from "@/pages/client/services/OrderStatus";
 import { AccountPage } from "@/pages/client/account/Account";
@@ -183,9 +184,17 @@ const GameStorePage = lazy(() => import("@/pages/store/GameStore").then((m) => (
 /** `/store` renders the layout the site is configured for; the plan store is the fallback. */
 function StoreGate() {
   const { data: site, isLoading } = usePublicSite();
-  if (isLoading) return <Loading />;
-  return site?.config.store_mode === "game" ? <Suspense fallback={<Loading />}><GameStorePage /></Suspense> : <StorePage />;
+  const { mode, loading } = usePublicMode();
+  if (isLoading || loading) return <Loading />;
+  return site?.config.store_mode === "game" || mode === "store" ? <Suspense fallback={<Loading />}><GameStorePage /></Suspense> : <StorePage />;
 }
+
+const MarketplaceHomePage = lazy(() => import("@/pages/site/Marketplace").then((m) => ({ default: m.MarketplaceHomePage })));
+const ResourcePage = lazy(() => import("@/pages/site/Marketplace").then((m) => ({ default: m.ResourcePage })));
+const CreatorProfilePage = lazy(() => import("@/pages/site/Marketplace").then((m) => ({ default: m.CreatorProfilePage })));
+const CreatorsPage = lazy(() => import("@/pages/site/Marketplace").then((m) => ({ default: m.CreatorsPage })));
+const SupportPage = lazy(() => import("@/pages/site/Support").then((m) => ({ default: m.SupportPage })));
+const market = (el: ReactNode) => <Suspense fallback={<Loading />}><RequireModule id="creator_marketplace">{el}</RequireModule></Suspense>;
 
 function GuestPad() {
   const { data: me } = useMe();
@@ -250,9 +259,14 @@ export function App() {
         <Route index element={<HomeGate />} />
         <Route path="/home" element={<SitePage />} />
         <Route path="/page/:slug" element={<SitePage />} />
+        <Route path="/marketplace" element={market(<MarketplaceHomePage />)} />
+        <Route path="/marketplace/r/:id" element={market(<ResourcePage />)} />
+        <Route path="/creators" element={market(<CreatorsPage />)} />
+        <Route path="/creators/:slug" element={market(<CreatorProfilePage />)} />
         <Route element={<StoreContent />}>
           <Route path="/domain-search" element={<DomainSearchPage />} />
           <Route path="/contact" element={<ContactPage />} />
+          <Route path="/support" element={<Suspense fallback={<Loading />}><SupportPage /></Suspense>} />
           <Route path="/gift-card" element={<Suspense fallback={<Loading />}><GiftCardBalancePage /></Suspense>} />
           <Route path="/community" element={<Suspense fallback={<Loading />}><RequireModule id="server_community"><CommunityPage /></RequireModule></Suspense>} />
           <Route path="/store" element={<StoreGate />} />

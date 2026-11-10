@@ -8,6 +8,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { api, ApiError } from "@/lib/api";
 import { StoreWidgets } from "@/components/store/StoreWidgets";
+import { StoreHero } from "@/components/store/StoreHero";
+import { usePublicSite } from "@/lib/admin/site";
 import { useModules } from "@/lib/modules";
 import { accentStyle, type PublicStorefront } from "@/lib/storefront";
 import { salePrice, saleFor, timeLeft, useSales } from "@/lib/sales";
@@ -25,8 +27,19 @@ function Thumb({ src, name }: { src?: string; name: string }) {
   return <span aria-hidden className={`${box} flex items-center justify-center text-lg font-semibold text-muted-foreground`}>{name.trim().charAt(0).toUpperCase()}</span>;
 }
 
+/** Card cover for the grid layout: package art (16:9) with a sale ribbon. */
+function Cover({ src, name, sale }: { src?: string; name: string; sale?: number | string }) {
+  return (
+    <div className="relative col-span-2 -mx-3 -mt-3 mb-1 aspect-video overflow-hidden bg-muted">
+      {src ? <img src={src} alt="" loading="lazy" className="size-full object-cover" />
+        : <span aria-hidden className="flex size-full items-center justify-center bg-gradient-to-br from-primary/30 to-muted text-4xl font-bold text-foreground/70">{name.trim().charAt(0).toUpperCase()}</span>}
+      {sale ? <span className="absolute left-2 top-2 rounded bg-primary px-2 py-0.5 text-xs font-bold text-primary-foreground shadow">−{sale}%</span> : null}
+    </div>
+  );
+}
+
 /** Game-server storefront (`store_mode: "game"`): categories as tabs, packages as a dense list. */
-export function GameStorePage() {
+export function GameStorePage({ home = false }: { home?: boolean }) {
   const { t, tCode, lang } = useI18n();
   const { group } = useParams();
   const { data, isLoading, isError, refetch } = useCatalog();
@@ -40,10 +53,14 @@ export function GameStorePage() {
   const grid = sf?.layout === "grid";
   const sidebar = sf && sf.widgets.length > 0;
   const sales = useSales();
+  const site = usePublicSite();
 
-  const groups = (data?.groups ?? []).filter((g) => data?.products.some((p) => p.group_id === g.id));
+  // A server store lists the servers' packages only (not e.g. marketplace listings in the same catalog).
+  const only = sf?.package_ids?.length ? new Set(sf.package_ids) : null;
+  const catalog = (data?.products ?? []).filter((p) => !only || only.has(p.id));
+  const groups = (data?.groups ?? []).filter((g) => catalog.some((p) => p.group_id === g.id));
   const active = groups.find((g) => g.slug === group) ?? null;
-  const products = (data?.products ?? []).filter((p) => (!active || p.group_id === active.id) && fromPrice(p.prices, currency));
+  const products = catalog.filter((p) => (!active || p.group_id === active.id) && fromPrice(p.prices, currency));
   const cart = view && !view.cart.order_id ? view.cart : null;
   const inCart = (id: string) => cart?.items.filter((l) => l.product_id === id).length ?? 0;
   const count = lineCount(cart);
@@ -61,7 +78,7 @@ export function GameStorePage() {
   const main = (
     <div className="flex min-w-0 flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">{active?.name ?? t("store.title")}</h1>
+        {home ? <h2 className="text-2xl font-semibold tracking-tight">{t("pub.packages")}</h2> : <h1 className="text-2xl font-semibold tracking-tight">{active?.name ?? t("store.title")}</h1>}
         <CurrencySelect />
       </div>
 
@@ -113,9 +130,9 @@ export function GameStorePage() {
             const out = stockState(p) === "out";
             const n = inCart(p.id);
             return (
-              <li key={p.id} className={grid ? "grid grid-cols-[3.5rem_minmax(0,1fr)] content-start gap-x-3 gap-y-2 rounded-md border p-3" : "grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-3 py-3 sm:grid-cols-[3.5rem_minmax(0,1fr)_auto] sm:gap-x-4 sm:px-4"}>
-                <Thumb src={p.image_url} name={p.name} />
-                <div className="min-w-0">
+              <li key={p.id} data-testid="package" className={grid ? "relative grid grid-cols-[3.5rem_minmax(0,1fr)] content-start gap-x-3 gap-y-2 overflow-hidden rounded-lg border bg-card p-3 transition hover:border-primary/60" : "grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-3 py-3 sm:grid-cols-[3.5rem_minmax(0,1fr)_auto] sm:gap-x-4 sm:px-4"}>
+                {grid ? <Cover src={p.image_url} name={p.name} sale={saleFor(sales, p.id, p.group_id)?.percent} /> : <Thumb src={p.image_url} name={p.name} />}
+                <div className={grid ? "col-span-2 min-w-0" : "min-w-0"}>
                   <h2 className="truncate text-base font-medium"><Link to={`/store/p/${p.id}`} className="rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{p.name}</Link></h2>
                   {p.description && <p className="line-clamp-2 text-sm text-muted-foreground sm:line-clamp-1">{p.description}</p>}
                 </div>
@@ -155,15 +172,7 @@ export function GameStorePage() {
   if (!sf) return main;
   return (
     <div className="flex flex-col gap-6" style={accentStyle(sf.accent)} data-accent={sf.accent}>
-      {(sf.hero_title || sf.hero_image) && (
-        <section className="relative overflow-hidden rounded-lg border bg-card">
-          {sf.hero_image && <img src={sf.hero_image} alt="" className="absolute inset-0 size-full object-cover opacity-40" />}
-          <div className="relative flex min-h-36 flex-col justify-end gap-1 p-6">
-            {sf.hero_title && <p className="text-3xl font-bold tracking-tight">{sf.hero_title}</p>}
-            {sf.hero_subtitle && <p className="max-w-2xl text-muted-foreground">{sf.hero_subtitle}</p>}
-          </div>
-        </section>
-      )}
+      {!home && (sf.hero_title || sf.hero_image || sf.server) && <StoreHero sf={sf} siteName={site.data?.config.site_name ?? ""} />}
       {sidebar ? (
         <div className={sf.sidebar === "left" ? "grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]" : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]"}>
           {main}
