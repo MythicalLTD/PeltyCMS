@@ -431,7 +431,7 @@ async fn versions_links_and_licenses() {
     // Licensing switched off for the product: existing keys stop validating.
     let off = call(&app, "PUT", &format!("/api/v1/admin/digital/products/{pid}"), Some(json!({
         "license_enabled": false, "max_activations": 1, "bind_domain": true, "bind_ip": false, "bind_hwid": false,
-        "link_ttl_secs": 5
+        "license_days": null, "link_ttl_secs": 120, "escrow_asset": "cfx-asset-42"
     })), &admin.h()).await;
     assert_eq!(off.status, StatusCode::OK, "{:?}", off.body);
     assert_eq!(
