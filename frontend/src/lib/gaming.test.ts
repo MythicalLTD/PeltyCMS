@@ -12,3 +12,12 @@ describe("gaming helpers", () => {
     expect(address({ host: "", port: 1 })).toBe("");
   });
 });
+
+describe("command placeholders", () => {
+  it("finds and validates placeholders", async () => {
+    const { commandPlaceholders, unknownPlaceholders } = await import("./gaming");
+    expect(commandPlaceholders("lp user {username} parent add {package}")).toEqual(["username", "package"]);
+    expect(unknownPlaceholders("give {username} {nope}", ["username"])).toEqual(["nope"]);
+    expect(unknownPlaceholders("say hi", [])).toEqual([]);
+  });
+});

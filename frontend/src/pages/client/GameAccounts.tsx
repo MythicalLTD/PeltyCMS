@@ -9,7 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, ApiError } from "@/lib/api";
-import type { GameAccount, GameDef } from "@/lib/gaming";
+import type { GameAccount, GameDef, GameDelivery } from "@/lib/gaming";
+import { useModules } from "@/lib/modules";
+import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/lib/i18n";
 import type { TranslationKey } from "@/lib/i18n-core";
 
@@ -28,6 +30,9 @@ export function GameAccountsPage() {
     onError: fail,
   });
   const unlink = useMutation({ mutationFn: (id: string) => api(`/client/game/accounts/${id}`, { method: "DELETE" }), onSuccess: refresh, onError: fail });
+  const { enabled } = useModules();
+  const delivery = enabled.has("game_delivery");
+  const deliveries = useQuery({ queryKey: ["client", "game-deliveries"], enabled: delivery, queryFn: () => api<{ items: GameDelivery[] }>("/client/game/deliveries") });
   if (!games.data || !mine.data) return <Skeleton className="h-48 w-full" />;
   return (
     <div className="flex flex-col gap-6">
@@ -55,6 +60,21 @@ export function GameAccountsPage() {
           </Card>
         ))}
       </div>
+      {delivery && (
+        <Card data-testid="my-deliveries">
+          <CardHeader><CardTitle className="text-base">{t("game.my_deliveries.title")}</CardTitle></CardHeader>
+          <CardContent className="flex flex-col gap-2 text-sm">
+            {(deliveries.data?.items ?? []).length === 0 && <p className="text-muted-foreground">{t("game.my_deliveries.empty")}</p>}
+            {(deliveries.data?.items ?? []).map((d) => (
+              <div key={d.id} className="flex flex-wrap items-center justify-between gap-2 border-b pb-2 last:border-0">
+                <span>{d.package ?? "—"} · {d.server_name}</span>
+                <Badge variant={d.status === "delivered" ? "secondary" : d.status === "failed" ? "destructive" : "outline"}>{t(`game.delivery.st.${d.status}` as TranslationKey)}</Badge>
+              </div>
+            ))}
+            {(deliveries.data?.items ?? []).some((d) => d.status === "waiting_identity") && <output className="text-muted-foreground">{t("game.my_deliveries.waiting_hint")}</output>}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
