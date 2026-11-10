@@ -14,8 +14,15 @@ async fn layout_widgets_and_validation() {
     let admin = sess(&app, &st, "admin").await;
     let bob = sess(&app, &st, "customer").await;
     let tag = &uuid::Uuid::new_v4().simple().to_string()[..8];
-    for (m, p) in [("GET", "/api/v1/public/storefront"), ("GET", "/api/v1/admin/storefront")] {
-        assert_eq!(call(&app, m, p, None, &admin.h()).await.status, StatusCode::NOT_FOUND, "{p}");
+    for (m, p) in [
+        ("GET", "/api/v1/public/storefront"),
+        ("GET", "/api/v1/admin/storefront"),
+    ] {
+        assert_eq!(
+            call(&app, m, p, None, &admin.h()).await.status,
+            StatusCode::NOT_FOUND,
+            "{p}"
+        );
     }
     enable(&app, &admin, &["gaming_storefront"]).await;
 
@@ -24,7 +31,9 @@ async fn layout_widgets_and_validation() {
     assert_eq!(def.body["accent"], "default");
     assert_eq!(def.body["widgets"][0]["type"], "recent_payments");
     assert_eq!(
-        call(&app, "GET", "/api/v1/admin/storefront", None, &bob.h()).await.status,
+        call(&app, "GET", "/api/v1/admin/storefront", None, &bob.h())
+            .await
+            .status,
         StatusCode::FORBIDDEN
     );
 
@@ -85,8 +94,20 @@ async fn layout_widgets_and_validation() {
         json!({"widgets": [{"type": "recent_payments", "limit": 99}]}),
         json!({"unknown": true}),
     ] {
-        let r = call(&app, "PUT", "/api/v1/admin/storefront", Some(bad.clone()), &admin.h()).await;
-        assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY, "{bad} -> {:?}", r.body);
+        let r = call(
+            &app,
+            "PUT",
+            "/api/v1/admin/storefront",
+            Some(bad.clone()),
+            &admin.h(),
+        )
+        .await;
+        assert_eq!(
+            r.status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "{bad} -> {:?}",
+            r.body
+        );
     }
     let cfg = json!({
         "hero_title": "Play with us", "hero_subtitle": "Ranks and crates", "hero_image": "/uploads/banner.png",
@@ -102,7 +123,14 @@ async fn layout_widgets_and_validation() {
             {"type": "discord", "invite_url": "https://discord.gg/pelty-test", "label": "Join Discord"}
         ]
     });
-    let r = call(&app, "PUT", "/api/v1/admin/storefront", Some(cfg), &admin.h()).await;
+    let r = call(
+        &app,
+        "PUT",
+        "/api/v1/admin/storefront",
+        Some(cfg),
+        &admin.h(),
+    )
+    .await;
     assert_eq!(r.status, StatusCode::OK, "{:?}", r.body);
 
     let pubv = call(&app, "GET", "/api/v1/public/storefront", None, &[]).await;
@@ -116,22 +144,49 @@ async fn layout_widgets_and_validation() {
         .map(|w| w["type"].as_str().unwrap())
         .collect();
     // Unknown product, server status and goal are dropped (community off).
-    assert_eq!(types, ["text", "featured_package", "recent_payments", "top_customer", "discord"]);
+    assert_eq!(
+        types,
+        [
+            "text",
+            "featured_package",
+            "recent_payments",
+            "top_customer",
+            "discord"
+        ]
+    );
     let w = &pubv.body["widgets"];
-    assert_eq!(w[0]["body"], "<b>No refunds</b> on crates.", "stored as text, escaped by the client");
+    assert_eq!(
+        w[0]["body"], "<b>No refunds</b> on crates.",
+        "stored as text, escaped by the client"
+    );
     assert_eq!(w[1]["product"]["name"], name.as_str());
     assert!(
-        w[2]["items"].as_array().unwrap().iter().any(|i| i["products"].as_array().unwrap().iter().any(|n| n == name.as_str())),
+        w[2]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|i| i["products"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|n| n == name.as_str())),
         "{:?}",
         w[2]
     );
     assert!(w[3]["customer"]["name"].is_string() || w[3]["customer"].is_null());
-    assert!(!pubv.body.to_string().contains('@'), "no emails in public widgets");
+    assert!(
+        !pubv.body.to_string().contains('@'),
+        "no emails in public widgets"
+    );
 
     // With the community module on, the status widget appears.
     enable(&app, &admin, &["game_profiles", "server_community"]).await;
     let pubv = call(&app, "GET", "/api/v1/public/storefront", None, &[]).await;
-    assert!(pubv.body["widgets"].as_array().unwrap().iter().any(|w| w["type"] == "server_status"));
+    assert!(pubv.body["widgets"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|w| w["type"] == "server_status"));
 
     // Hidden products are not featured.
     sqlx::query("UPDATE products SET status = 'hidden' WHERE id = $1::uuid")
@@ -140,6 +195,10 @@ async fn layout_widgets_and_validation() {
         .await
         .unwrap();
     let pubv = call(&app, "GET", "/api/v1/public/storefront", None, &[]).await;
-    assert!(!pubv.body["widgets"].as_array().unwrap().iter().any(|w| w["type"] == "featured_package"));
+    assert!(!pubv.body["widgets"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|w| w["type"] == "featured_package"));
     reset_modules(&st).await;
 }

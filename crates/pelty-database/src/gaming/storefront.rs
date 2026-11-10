@@ -254,7 +254,8 @@ pub struct RecentPayment {
     pub paid_at: OffsetDateTime,
 }
 
-/// Latest paid invoices that bought at least one active catalog product.
+/// Latest paid invoices that bought (order) or renewed (service line) at
+/// least one active catalog product.
 pub async fn recent_payments(pool: &PgPool, limit: i64) -> AppResult<Vec<RecentPayment>> {
     sqlx::query_as(concat!(
         "SELECT ",
@@ -264,10 +265,11 @@ pub async fn recent_payments(pool: &PgPool, limit: i64) -> AppResult<Vec<RecentP
            JOIN customers c ON c.id = i.customer_id
            JOIN LATERAL (
                 SELECT array_agg(DISTINCT pr.name ORDER BY pr.name) AS products
-                  FROM invoice_items ii
-                  JOIN services sv ON sv.id = ii.service_id
-                  JOIN products pr ON pr.id = sv.product_id AND pr.status = 'active'
-                 WHERE ii.invoice_id = i.id
+                  FROM products pr
+                 WHERE pr.status = 'active'
+                   AND (pr.id IN (SELECT oi.product_id FROM order_items oi WHERE oi.order_id = i.order_id)
+                        OR pr.id IN (SELECT sv.product_id FROM invoice_items ii JOIN services sv ON sv.id = ii.service_id
+                                      WHERE ii.invoice_id = i.id))
            ) p ON p.products IS NOT NULL
           WHERE i.status = 'paid' AND i.kind = 'invoice' AND i.total > 0 AND i.paid_at IS NOT NULL
           ORDER BY i.paid_at DESC LIMIT $1"
