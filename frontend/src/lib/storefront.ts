@@ -13,10 +13,10 @@ const ACCENT_COLORS: Record<Exclude<Accent, "default">, string> = {
   emerald: "#34d399", violet: "#a78bfa", amber: "#fbbf24", rose: "#fb7185", sky: "#38bdf8",
 };
 
-/** CSS variables that recolor primary buttons and rings inside the store. */
+/** CSS variables that recolor primary buttons, rings and charts (accent tokens only). */
 export function accentStyle(accent: string): CSSProperties | undefined {
   const c = ACCENT_COLORS[accent as keyof typeof ACCENT_COLORS];
-  return c ? ({ "--primary": c, "--ring": c, "--primary-foreground": "#08121c" } as CSSProperties) : undefined;
+  return c ? ({ "--primary": c, "--ring": c, "--primary-foreground": "#08121c", "--chart-1": c } as CSSProperties) : undefined;
 }
 
 export type WidgetConfig =
@@ -30,7 +30,7 @@ export type WidgetConfig =
 
 export interface StorefrontConfig {
   hero_title: string; hero_subtitle: string; hero_image: string; accent: string; layout: "list" | "grid"; sidebar: "left" | "right"; widgets: WidgetConfig[];
-  /** Public-site colour preset in store mode (`default` keeps the site brand). */
+  /** Public-site accent preset in store mode (`panel` = match PeltyCMS; legacy `default` means the same). */
   theme: string; server_id: string | null; discord_url: string; logo_url: string;
 }
 

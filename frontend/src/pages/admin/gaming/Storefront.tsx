@@ -16,7 +16,7 @@ import { api, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import type { TranslationKey } from "@/lib/i18n-core";
 import { useModules } from "@/lib/modules";
-import { THEMES } from "@/lib/publicMode";
+import { normalizeTheme, THEMES } from "@/lib/publicMode";
 import { ACCENTS, PERIODS, WIDGET_TYPES, discordUrlValid, heroImageValid, move, newWidget, widgetValid, type StorefrontConfig, type WidgetConfig, type WidgetType } from "@/lib/storefront";
 import { useCatalog } from "@/pages/store/Store";
 
@@ -37,7 +37,7 @@ function Editor({ initial }: { initial: StorefrontConfig }) {
   const qc = useQueryClient();
   const { enabled } = useModules();
   const catalog = useCatalog();
-  const [f, setF] = useState(initial);
+  const [f, setF] = useState<StorefrontConfig>(() => ({ ...initial, theme: normalizeTheme(initial.theme) }));
   const [adding, setAdding] = useState<WidgetType>("text");
   // Client-only row keys, kept in step with `widgets` (the server rejects
   // unknown fields, so widgets carry no id).
@@ -49,7 +49,7 @@ function Editor({ initial }: { initial: StorefrontConfig }) {
   const valid = heroImageValid(f.hero_image) && heroImageValid(f.logo_url) && discordUrlValid(f.discord_url) && f.widgets.length <= 12 && f.widgets.every(widgetValid);
   const save = useMutation({
     mutationFn: () => api<StorefrontConfig>("/admin/storefront", { method: "PUT", body: f }),
-    onSuccess: (c) => { setF(c); qc.setQueryData(["admin", "storefront"], c); void qc.invalidateQueries({ queryKey: ["public", "storefront"] }); toast.success(t("market.saved")); },
+    onSuccess: (c) => { setF({ ...c, theme: normalizeTheme(c.theme) }); qc.setQueryData(["admin", "storefront"], c); void qc.invalidateQueries({ queryKey: ["public", "storefront"] }); toast.success(t("market.saved")); },
     onError: (e) => toast.error(e instanceof ApiError ? tCode(e.code) : t("error.internal")),
   });
   const needsCommunity = (w: WidgetConfig) => (w.type === "server_status" || w.type === "goal") && !enabled.has("server_community");
@@ -71,8 +71,11 @@ function Editor({ initial }: { initial: StorefrontConfig }) {
               options={[{ value: "right", label: t("storefront.side_right") }, { value: "left", label: t("storefront.side_left") }]} />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <SelectField id="sf-theme" label={t("storefront.theme")} value={f.theme} onChange={(v) => set({ theme: v })}
-              options={THEMES.map((x) => ({ value: x, label: t(`storefront.theme.${x}` as TranslationKey) }))} />
+            <div className="flex flex-col gap-1">
+              <SelectField id="sf-theme" label={t("storefront.theme")} value={f.theme} onChange={(v) => set({ theme: v })}
+                options={THEMES.map((x) => ({ value: x, label: t(`storefront.theme.${x}` as TranslationKey) }))} />
+              <p className="text-xs text-muted-foreground">{t("storefront.theme_hint")}</p>
+            </div>
             <SelectField id="sf-server" label={t("storefront.hero_server")} value={f.server_id ?? "first"} onChange={(v) => set({ server_id: v === "first" ? null : v })}
               options={[{ value: "first", label: t("storefront.hero_server_first") }, ...(servers.data?.items ?? []).map((x) => ({ value: x.id, label: x.name }))]} />
           </div>

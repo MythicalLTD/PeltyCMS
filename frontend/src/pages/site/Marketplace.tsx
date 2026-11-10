@@ -5,6 +5,9 @@ import {
   ArrowSquareOutIcon, CalendarBlankIcon, CaretLeftIcon, CaretRightIcon, DownloadSimpleIcon, FireIcon, MagnifyingGlassIcon, PackageIcon, SealCheckIcon, SparkleIcon, StarIcon, StorefrontIcon, UserCircleIcon,
 } from "@phosphor-icons/react";
 import { EmptyState } from "@/components/EmptyState";
+import { ProductArt } from "@/components/store/ProductArt";
+import { Stars } from "@/components/store/Stars";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { ProductReviews } from "@/components/store/ProductReviews";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +23,7 @@ import { formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import { resourceImages, SORTS, stars, useBrowse, type CreatorPage, type CreatorProfile, type GalleryImage, type MarketListing, type MarketResource } from "@/lib/market";
 import { useModules } from "@/lib/modules";
+import { cn } from "@/lib/utils";
 import { cheapest } from "@/lib/publicMode";
 import { useCatalog, useStoreCurrency } from "@/pages/store/Store";
 
@@ -36,47 +40,46 @@ function usePrice() {
   };
 }
 
-export function Stars({ rating, count, className = "" }: { rating: number | null; count?: number; className?: string }) {
+/** Average rating with the review count, on the shared star component. */
+function Rating({ rating, count }: { rating: number | null; count?: number }) {
   const { t } = useI18n();
   const n = stars(rating);
-  return (
-    <span className={`inline-flex items-center gap-1 text-xs ${className}`} aria-label={rating == null ? t("pub.no_ratings") : t("pub.rating", { n: n.toFixed(1) })}>
-      <span aria-hidden className="flex text-amber-400">
-        {[1, 2, 3, 4, 5].map((i) => <StarIcon key={i} weight={n >= i ? "fill" : n >= i - 0.5 ? "duotone" : "regular"} className="size-3.5" />)}
-      </span>
-      {count != null && <span className="tabular-nums text-muted-foreground">({count})</span>}
-    </span>
-  );
+  return <Stars value={n} count={count} className="text-xs [&_svg]:size-3.5" label={rating == null ? t("pub.no_ratings") : t("pub.rating", { n: n.toFixed(1) })} />;
 }
 
-function Avatar({ src, name, size = "size-6" }: { src: string; name: string; size?: string }) {
-  return src
-    ? <img src={src} alt="" className={`${size} shrink-0 rounded-full object-cover`} />
-    : <span aria-hidden className={`${size} flex shrink-0 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary`}>{name.charAt(0).toUpperCase()}</span>;
+/** Creator avatar on the shared Avatar component (initial on the muted surface as fallback). */
+function CreatorAvatar({ src, name, className }: { src: string; name: string; className?: string }) {
+  return (
+    <Avatar className={cn("size-6", className)}>
+      {src && <AvatarImage src={src} alt="" className="object-cover" />}
+      <AvatarFallback className="bg-muted text-[0.625rem] font-semibold text-muted-foreground">{name.charAt(0).toUpperCase()}</AvatarFallback>
+    </Avatar>
+  );
 }
 
 export function ResourceCard({ l, price, ratings }: { l: MarketListing; price: string | null; ratings: boolean }) {
   const { t } = useI18n();
   return (
     <li data-testid="resource-card">
-      <Link to={`/marketplace/r/${l.product_id}`} className="group flex h-full flex-col overflow-hidden rounded-lg border bg-card transition hover:-translate-y-0.5 hover:border-primary/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
-        <div className="relative aspect-video bg-muted">
-          {l.image_url ? <img src={l.image_url} alt="" loading="lazy" className="size-full object-cover" />
-            : <span aria-hidden className="flex size-full items-center justify-center bg-gradient-to-br from-primary/25 to-muted text-4xl font-bold text-foreground/60">{l.name.charAt(0).toUpperCase()}</span>}
+      <Link to={`/marketplace/r/${l.product_id}`} className="group block h-full rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+        <Card className="h-full gap-0 overflow-hidden py-0 transition-colors group-hover:border-primary/60">
+        <div className="relative aspect-video border-b">
+          <ProductArt src={l.image_url} name={l.name} />
           <Badge className="absolute left-2 top-2" variant="secondary">{l.category}</Badge>
         </div>
-        <div className="flex flex-1 flex-col gap-2 p-3">
+        <div className="flex flex-1 flex-col gap-2 p-4">
           <p className="line-clamp-1 font-semibold group-hover:text-primary">{l.name}</p>
           <p className="line-clamp-2 text-xs text-muted-foreground">{l.description}</p>
           <div className="mt-auto flex items-center justify-between gap-2 pt-1 text-xs">
-            <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground"><Avatar src={l.creator_avatar} name={l.creator} size="size-5" /><span className="truncate">{l.creator}</span></span>
+            <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground"><CreatorAvatar src={l.creator_avatar} name={l.creator} className="size-5" /><span className="truncate">{l.creator}</span></span>
             <span className="font-semibold tabular-nums text-foreground">{price ?? ""}</span>
           </div>
           <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-            {ratings ? <Stars rating={l.rating} count={l.reviews} /> : <span />}
+            {ratings ? <Rating rating={l.rating} count={l.reviews} /> : <span />}
             <span className="flex items-center gap-1 tabular-nums"><DownloadSimpleIcon aria-hidden />{t("pub.sales", { n: l.sales })}</span>
           </div>
         </div>
+        </Card>
       </Link>
     </li>
   );
@@ -116,15 +119,14 @@ export function MarketplaceHomePage() {
   useEffect(() => { document.title = t("pub.marketplace"); }, [t]);
   return (
     <div className="flex flex-col">
-      <section className="relative isolate overflow-hidden border-b bg-card" data-testid="market-hero">
-        <div aria-hidden className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top_right,var(--primary)_0%,transparent_55%)] opacity-25" />
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-12 md:py-16">
-          <h1 className="max-w-3xl text-3xl font-extrabold tracking-tight md:text-5xl">{t("pub.market_title")}</h1>
+      <section className="border-b bg-card" data-testid="market-hero">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-10 md:py-14">
+          <h1 className="max-w-3xl text-3xl font-semibold tracking-tight md:text-4xl">{t("pub.market_title")}</h1>
           <p className="max-w-2xl text-muted-foreground md:text-lg">{t("pub.market_subtitle")}</p>
           <search className="w-full max-w-2xl"><form className="relative flex w-full max-w-2xl gap-2" onSubmit={(e) => { e.preventDefault(); set("q", text.trim() || null); }}>
             <MagnifyingGlassIcon aria-hidden className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input className="h-12 pl-9" maxLength={100} placeholder={t("pub.market_search")} aria-label={t("pub.market_search")} value={text} onChange={(e) => setText(e.target.value)} />
-            <Button type="submit" className="h-12 px-6">{t("pub.search")}</Button>
+            <Input className="h-10 pl-9" maxLength={100} placeholder={t("pub.market_search")} aria-label={t("pub.market_search")} value={text} onChange={(e) => setText(e.target.value)} />
+            <Button type="submit" className="h-10 px-5">{t("pub.search")}</Button>
           </form></search>
           {cats.length > 0 && (
             <nav aria-label={t("pub.categories")} className="flex flex-wrap gap-2">
@@ -170,10 +172,12 @@ function SellBanner() {
   const { t } = useI18n();
   const { data: me } = useMe();
   return (
-    <section className="flex flex-col items-start justify-between gap-4 rounded-lg border bg-gradient-to-r from-primary/20 to-card p-6 md:flex-row md:items-center">
-      <div><h2 className="text-xl font-semibold">{t("pub.sell_title")}</h2><p className="text-sm text-muted-foreground">{t("pub.sell_hint")}</p></div>
-      <Button asChild size="lg"><Link to={me ? "/creator" : "/register"}>{t("pub.start_selling")}</Link></Button>
-    </section>
+    <Card>
+      <CardContent className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
+        <div><h2 className="text-lg font-semibold">{t("pub.sell_title")}</h2><p className="text-sm text-muted-foreground">{t("pub.sell_hint")}</p></div>
+        <Button asChild><Link to={me ? "/creator" : "/register"}>{t("pub.start_selling")}</Link></Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -204,10 +208,10 @@ export function ResourcePage() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="flex min-w-0 flex-col gap-5">
           <header className="flex flex-col gap-2">
-            <h1 className="text-3xl font-bold tracking-tight">{l.name}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{l.name}</h1>
             <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-              <Link to={`/creators/${c.slug}`} className="flex items-center gap-1.5 hover:text-foreground"><Avatar src={c.avatar_url} name={c.display_name} />{c.display_name}</Link>
-              {r.data.ratings && <Stars rating={l.rating} count={l.reviews} />}
+              <Link to={`/creators/${c.slug}`} className="flex items-center gap-1.5 hover:text-foreground"><CreatorAvatar src={c.avatar_url} name={c.display_name} />{c.display_name}</Link>
+              {r.data.ratings && <Rating rating={l.rating} count={l.reviews} />}
               <span className="flex items-center gap-1"><DownloadSimpleIcon aria-hidden />{t("pub.sales", { n: l.sales })}</span>
               <span className="flex items-center gap-1"><CalendarBlankIcon aria-hidden />{formatDate(l.listed_at, lang)}</span>
             </div>
@@ -254,7 +258,7 @@ export function ResourcePage() {
               <CardContent className="flex flex-col gap-2">
                 {more.map((m) => (
                   <Link key={m.product_id} to={`/marketplace/r/${m.product_id}`} className="flex items-center gap-2 rounded-md p-1 text-sm hover:bg-muted">
-                    {m.image_url ? <img src={m.image_url} alt="" className="size-10 rounded object-cover" /> : <span aria-hidden className="flex size-10 items-center justify-center rounded bg-muted font-bold">{m.name.charAt(0)}</span>}
+                    <span className="size-10 shrink-0 overflow-hidden rounded-md border"><ProductArt src={m.image_url} name={m.name} compact /></span>
                     <span className="min-w-0 flex-1 truncate">{m.name}</span>
                   </Link>
                 ))}
@@ -274,23 +278,23 @@ function Gallery({ images, name }: { images: GalleryImage[]; name: string }) {
   const n = images.length;
   const cur = images[Math.min(i, Math.max(0, n - 1))];
   const go = (d: number) => setI((x) => (x + d + n) % n);
-  if (!cur) return <div aria-hidden className="flex aspect-video items-center justify-center rounded-lg border bg-gradient-to-br from-primary/25 to-muted text-6xl font-bold text-foreground/60" data-testid="gallery">{name.charAt(0)}</div>;
+  if (!cur) return <div className="aspect-video overflow-hidden rounded-xl border" data-testid="gallery"><ProductArt name={name} /></div>;
   return (
     <div className="flex flex-col gap-2" data-testid="gallery">
-      <figure className="group relative overflow-hidden rounded-lg border bg-muted">
+      <figure className="group relative overflow-hidden rounded-xl border bg-muted">
         <img src={cur.url} alt={cur.caption || name} className="aspect-video w-full object-cover" />
-        {cur.caption && <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 text-sm text-white">{cur.caption}</figcaption>}
+        {cur.caption && <figcaption className="absolute inset-x-0 bottom-0 border-t bg-background/85 px-3 py-2 text-sm backdrop-blur-sm">{cur.caption}</figcaption>}
         {n > 1 && <>
-          <Button type="button" size="icon" variant="secondary" className="absolute left-2 top-1/2 -translate-y-1/2 opacity-80" aria-label={t("pub.gallery_prev")} onClick={() => go(-1)}><CaretLeftIcon aria-hidden /></Button>
-          <Button type="button" size="icon" variant="secondary" className="absolute right-2 top-1/2 -translate-y-1/2 opacity-80" aria-label={t("pub.gallery_next")} onClick={() => go(1)}><CaretRightIcon aria-hidden /></Button>
-          <span className="absolute right-2 top-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white tabular-nums">{Math.min(i, n - 1) + 1}/{n}</span>
+          <Button type="button" size="icon" variant="secondary" className="absolute left-2 top-1/2 -translate-y-1/2" aria-label={t("pub.gallery_prev")} onClick={() => go(-1)}><CaretLeftIcon aria-hidden /></Button>
+          <Button type="button" size="icon" variant="secondary" className="absolute right-2 top-1/2 -translate-y-1/2" aria-label={t("pub.gallery_next")} onClick={() => go(1)}><CaretRightIcon aria-hidden /></Button>
+          <Badge variant="secondary" className="absolute right-2 top-2 tabular-nums">{Math.min(i, n - 1) + 1}/{n}</Badge>
         </>}
       </figure>
       {n > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-1" data-testid="gallery-thumbs">
           {images.map((g, k) => (
             <button key={g.url} type="button" aria-label={t("pub.gallery_thumb", { n: k + 1 })} aria-current={k === i} onClick={() => setI(k)}
-              className={`shrink-0 overflow-hidden rounded-md border-2 ${k === i ? "border-primary" : "border-transparent opacity-70 hover:opacity-100"}`}>
+              className={cn("shrink-0 overflow-hidden rounded-md border-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring", k === i ? "border-primary" : "border-transparent opacity-70 hover:opacity-100")}>
               <img src={g.url} alt="" loading="lazy" className="h-14 w-24 object-cover" />
             </button>
           ))}
@@ -305,7 +309,7 @@ function CreatorCard({ c }: { c: CreatorProfile }) {
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 pt-6">
-        <div className="flex items-center gap-3"><Avatar src={c.avatar_url} name={c.display_name} size="size-12" /><div className="min-w-0"><p className="truncate font-semibold">{c.display_name}</p><p className="text-xs text-muted-foreground">{t("pub.creator_since", { date: formatDate(c.since, lang) })}</p></div></div>
+        <div className="flex items-center gap-3"><CreatorAvatar src={c.avatar_url} name={c.display_name} className="size-12" /><div className="min-w-0"><p className="truncate font-semibold">{c.display_name}</p><p className="text-xs text-muted-foreground">{t("pub.creator_since", { date: formatDate(c.since, lang) })}</p></div></div>
         {c.bio && <p className="line-clamp-3 text-sm text-muted-foreground">{c.bio}</p>}
         <Button asChild variant="outline"><Link to={`/creators/${c.slug}`}><UserCircleIcon aria-hidden />{t("pub.view_profile")}</Link></Button>
       </CardContent>
@@ -327,12 +331,11 @@ export function CreatorProfilePage() {
   const website = /^https?:\/\//.test(c.website) ? c.website : "";
   return (
     <div className="flex flex-col" data-testid="creator-profile">
-      <section className="relative isolate border-b bg-card">
-        <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-r from-primary/30 via-card to-card" />
+      <section className="border-b bg-card">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10 sm:flex-row sm:items-center">
-          <Avatar src={c.avatar_url} name={c.display_name} size="size-24 text-3xl" />
+          <CreatorAvatar src={c.avatar_url} name={c.display_name} className="size-24 [&_[data-slot=avatar-fallback]]:text-3xl" />
           <div className="flex min-w-0 flex-col gap-2">
-            <h1 className="text-3xl font-bold tracking-tight">{c.display_name}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{c.display_name}</h1>
             {c.bio && <p className="max-w-2xl whitespace-pre-line text-sm text-muted-foreground">{c.bio}</p>}
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
               <span className="flex items-center gap-1"><PackageIcon aria-hidden />{t("pub.resources_n", { n: listings.length })}</span>
@@ -369,10 +372,12 @@ export function CreatorsPage() {
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {q.data.items.map((c) => (
             <li key={c.id}>
-              <Link to={`/creators/${c.slug}`} className="flex items-center gap-3 rounded-lg border bg-card p-4 transition hover:border-primary/60">
-                <Avatar src={c.avatar_url} name={c.display_name} size="size-12" />
-                <span className="min-w-0"><span className="block truncate font-semibold">{c.display_name}</span>
-                  <span className="text-xs text-muted-foreground">{t("pub.resources_n", { n: c.listings ?? 0 })} · {t("pub.sales", { n: c.sales ?? 0 })}</span></span>
+              <Link to={`/creators/${c.slug}`} className="group block rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+                <Card className="transition-colors group-hover:border-primary/60"><CardContent className="flex items-center gap-3">
+                  <CreatorAvatar src={c.avatar_url} name={c.display_name} className="size-12" />
+                  <span className="min-w-0"><span className="block truncate font-semibold">{c.display_name}</span>
+                    <span className="text-xs text-muted-foreground">{t("pub.resources_n", { n: c.listings ?? 0 })} · {t("pub.sales", { n: c.sales ?? 0 })}</span></span>
+                </CardContent></Card>
               </Link>
             </li>
           ))}

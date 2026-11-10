@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Field, FormError } from "@/components/Field";
+import { ProductArt } from "@/components/store/ProductArt";
 import { EmptyState } from "@/components/EmptyState";
 import { api, ApiError } from "@/lib/api";
 import { useAuthActions, useMe } from "@/lib/auth";
@@ -159,6 +160,7 @@ export function StoreProductPage() {
   return (
     <div className="grid gap-4 *:min-w-0 lg:grid-cols-[1fr_20rem]">
       <Card>
+        {product.image_url && <div className="mx-6 aspect-[21/9] overflow-hidden rounded-lg border" data-testid="package-art"><ProductArt src={product.image_url} name={product.name} /></div>}
         <CardHeader>
           <CardTitle className="text-xl">{product.name}</CardTitle>
           <StockBadge p={product} />

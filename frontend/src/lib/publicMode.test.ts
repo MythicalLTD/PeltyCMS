@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyVars, cheapest, connectText, resolveMode, themeVars, THEME_VARS } from "./publicMode";
+import { ACCENT_KEYS, applyVars, cheapest, connectText, normalizeTheme, resolveMode, themeVars, THEME_VARS } from "./publicMode";
 import { browseQuery, stars } from "./market";
 import { modeNav, supportLinks } from "@/layouts/SiteLayout";
 
@@ -28,26 +28,33 @@ describe("helpers", () => {
     expect(connectText("minecraft_java", "play.example.com")).toBe("play.example.com");
     expect(connectText("fivem", "")).toBe("");
   });
-  it("theme vars: preset plus accent; hosting untouched", () => {
+  it("theme vars: accent-only presets; panel, hosting and marketplace untouched", () => {
     expect(themeVars("hosting", { theme: "fivem", accent: "default" }, () => undefined)).toEqual({});
+    expect(themeVars("marketplace", { theme: "fivem", accent: "rose" }, () => ({ "--primary": "#f00" }))).toEqual({});
+    expect(themeVars("store", { theme: "panel", accent: "default" }, () => undefined)).toEqual({});
+    expect(themeVars("store", { theme: "default", accent: "default" }, () => undefined)).toEqual({});
     expect(themeVars("store", { theme: "fivem", accent: "default" }, () => undefined)["--primary"]).toBe(THEME_VARS.fivem["--primary"]);
     expect(themeVars("store", { theme: "minecraft", accent: "rose" }, () => ({ "--primary": "#f00" }))["--primary"]).toBe("#f00");
-    expect(themeVars("marketplace", undefined, () => undefined)).toBe(THEME_VARS.marketplace);
+    for (const preset of ["minecraft", "fivem", "rust", "dark"] as const) {
+      const keys = Object.keys(themeVars("store", { theme: preset, accent: "default" }, () => ({ "--card": "#000", "--radius": "0" })));
+      expect(keys.length).toBeGreaterThan(0);
+      expect(keys.every((k) => (ACCENT_KEYS as readonly string[]).includes(k))).toBe(true);
+    }
   });
-  it("applyVars restores what was there", () => {
+  it("normalizes legacy and unknown presets to panel", () => {
+    expect(normalizeTheme("default")).toBe("panel");
+    expect(normalizeTheme(undefined)).toBe("panel");
+    expect(normalizeTheme("neon")).toBe("panel");
+    expect(normalizeTheme("rust")).toBe("rust");
+  });
+  it("applyVars restores what was there and leaves light/dark alone", () => {
     const props = new Map<string, string>([["--primary", "#123456"]]);
-    const classes = new Set<string>();
-    const root = {
-      style: { getPropertyValue: (k: string) => props.get(k) ?? "", setProperty: (k: string, v: string) => void props.set(k, v), removeProperty: (k: string) => void props.delete(k) },
-      classList: { contains: (c: string) => classes.has(c), toggle: (c: string, v: boolean) => void (v ? classes.add(c) : classes.delete(c)) },
-    };
-    const undo = applyVars(root, { "--primary": "#fff", "--card": "#000" });
-    expect(props.get("--card")).toBe("#000");
-    expect(classes.has("dark")).toBe(true);
+    const root = { style: { getPropertyValue: (k: string) => props.get(k) ?? "", setProperty: (k: string, v: string) => void props.set(k, v), removeProperty: (k: string) => void props.delete(k) } };
+    const undo = applyVars(root, { "--primary": "#fff", "--ring": "#000" });
+    expect(props.get("--ring")).toBe("#000");
     undo();
     expect(props.get("--primary")).toBe("#123456");
-    expect(props.has("--card")).toBe(false);
-    expect(classes.has("dark")).toBe(false);
+    expect(props.has("--ring")).toBe(false);
   });
   it("cheapest price in a currency", () => {
     expect(cheapest([{ currency: "EUR", amount: "9.00" }, { currency: "EUR", amount: "4.50" }, { currency: "USD", amount: "1" }], "EUR")).toBe("4.5");

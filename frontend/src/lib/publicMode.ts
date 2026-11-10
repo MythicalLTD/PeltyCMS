@@ -42,69 +42,59 @@ export function useStorefront(on: boolean) {
   return useQuery({ queryKey: ["public", "storefront"], queryFn: () => api<PublicStorefront>("/public/storefront"), enabled: on, staleTime: 60_000 });
 }
 
-export const THEMES = ["default", "minecraft", "fivem", "rust", "dark"] as const;
+/** Accent presets of the public site. `panel` (default) = match the PeltyCMS panel / site brand; `default` is its old name. */
+export const THEMES = ["panel", "minecraft", "fivem", "rust", "dark"] as const;
 export type StoreTheme = (typeof THEMES)[number];
 
-/** Colour presets: shadcn variables, always dark. Inspired by the games, no official branding. */
-export const THEME_VARS: Record<Exclude<StoreTheme, "default"> | "marketplace", Record<string, string>> = {
-  minecraft: {
-    "--background": "#12160f", "--foreground": "#f1f5ea", "--card": "#1b2216", "--card-foreground": "#f1f5ea", "--popover": "#1b2216",
-    "--popover-foreground": "#f1f5ea", "--primary": "#62c94a", "--primary-foreground": "#0b1407", "--secondary": "#263020",
-    "--secondary-foreground": "#f1f5ea", "--muted": "#232c1d", "--muted-foreground": "#a9b59d", "--accent": "#2b3824",
-    "--accent-foreground": "#f1f5ea", "--border": "#34412b", "--input": "#3f4d34", "--ring": "#62c94a", "--radius": "0.25rem",
-  },
-  fivem: {
-    "--background": "#0d0d12", "--foreground": "#f5f3f0", "--card": "#16161d", "--card-foreground": "#f5f3f0", "--popover": "#16161d",
-    "--popover-foreground": "#f5f3f0", "--primary": "#f59e0b", "--primary-foreground": "#1a1003", "--secondary": "#202029",
-    "--secondary-foreground": "#f5f3f0", "--muted": "#1d1d25", "--muted-foreground": "#a8a6ae", "--accent": "#262630",
-    "--accent-foreground": "#f5f3f0", "--border": "#2c2c37", "--input": "#383845", "--ring": "#f59e0b", "--radius": "0.6rem",
-  },
-  rust: {
-    "--background": "#15110e", "--foreground": "#f3ece6", "--card": "#1f1914", "--card-foreground": "#f3ece6", "--popover": "#1f1914",
-    "--popover-foreground": "#f3ece6", "--primary": "#d9622b", "--primary-foreground": "#1a0b03", "--secondary": "#2a221b",
-    "--secondary-foreground": "#f3ece6", "--muted": "#261f19", "--muted-foreground": "#b2a397", "--accent": "#30271f",
-    "--accent-foreground": "#f3ece6", "--border": "#3a2f26", "--input": "#473a2f", "--ring": "#d9622b", "--radius": "0.2rem",
-  },
-  dark: {
-    "--background": "#0b0b0c", "--foreground": "#ededef", "--card": "#141416", "--card-foreground": "#ededef", "--popover": "#141416",
-    "--popover-foreground": "#ededef", "--primary": "#e4e4e7", "--primary-foreground": "#111113", "--secondary": "#1c1c1f",
-    "--secondary-foreground": "#ededef", "--muted": "#1a1a1d", "--muted-foreground": "#a1a1aa", "--accent": "#222226",
-    "--accent-foreground": "#ededef", "--border": "#27272a", "--input": "#34343a", "--ring": "#a1a1aa", "--radius": "0.5rem",
-  },
-  marketplace: {
-    "--background": "#0b0f1a", "--foreground": "#eef1f8", "--card": "#121829", "--card-foreground": "#eef1f8", "--popover": "#121829",
-    "--popover-foreground": "#eef1f8", "--primary": "#6d7cff", "--primary-foreground": "#070a1c", "--secondary": "#1a2238",
-    "--secondary-foreground": "#eef1f8", "--muted": "#171e32", "--muted-foreground": "#9aa3bd", "--accent": "#1e2740",
-    "--accent-foreground": "#eef1f8", "--border": "#232c46", "--input": "#2e3858", "--ring": "#6d7cff", "--radius": "0.6rem",
-  },
-};
-
-/** Variables of the active look (empty = keep the site brand). The store accent wins over the preset's primary. */
-export function themeVars(mode: PublicMode, sf: Pick<PublicStorefront, "theme" | "accent"> | undefined, accent: (a: string) => Record<string, string> | undefined): Record<string, string> {
-  if (mode === "marketplace") return THEME_VARS.marketplace;
-  if (mode !== "store" || !sf) return {};
-  const base = sf.theme && sf.theme !== "default" ? THEME_VARS[sf.theme as Exclude<StoreTheme, "default">] ?? {} : {};
-  return { ...base, ...accent(sf.accent) };
+/** The preset as stored, with the legacy `default` (and anything unknown) read as `panel`. */
+export function normalizeTheme(t: string | undefined): StoreTheme {
+  return (THEMES as readonly string[]).includes(t ?? "") ? (t as StoreTheme) : "panel";
 }
 
-interface Root { style: { getPropertyValue(k: string): string; setProperty(k: string, v: string): void; removeProperty(k: string): void }; classList: { contains(c: string): boolean; toggle(c: string, on: boolean): void } }
+/** Accent tokens a preset may change. Surfaces, radius, font and components always stay the panel's. */
+export const ACCENT_KEYS = ["--primary", "--primary-foreground", "--ring", "--chart-1", "--sidebar-primary", "--sidebar-primary-foreground", "--sidebar-ring"] as const;
 
-/** Set `vars` (and dark mode) on `root`; returns a function that restores what was there. */
+const accent = (primary: string, fg: string): Record<string, string> => ({
+  "--primary": primary, "--primary-foreground": fg, "--ring": primary, "--chart-1": primary,
+  "--sidebar-primary": primary, "--sidebar-primary-foreground": fg, "--sidebar-ring": primary,
+});
+
+/** Game presets: accent colour only (inspired by the games, no official branding). */
+export const THEME_VARS: Record<Exclude<StoreTheme, "panel">, Record<string, string>> = {
+  minecraft: accent("#62c94a", "#0b1407"),
+  fivem: accent("#f59e0b", "#1a1003"),
+  rust: accent("#d9622b", "#1a0b03"),
+  // Monochrome: follows the current light/dark surfaces.
+  dark: accent("var(--foreground)", "var(--background)"),
+};
+
+/**
+ * Accent variables of the active look (empty = the panel / site brand colours).
+ * Only the store look has presets; the store accent wins over the preset.
+ * Never returns anything outside {@link ACCENT_KEYS}.
+ */
+export function themeVars(mode: PublicMode, sf: Pick<PublicStorefront, "theme" | "accent"> | undefined, accentOf: (a: string) => Record<string, string> | undefined): Record<string, string> {
+  if (mode !== "store" || !sf) return {};
+  const t = normalizeTheme(sf.theme);
+  const vars = { ...(t === "panel" ? {} : THEME_VARS[t]), ...accentOf(sf.accent) };
+  return Object.fromEntries(Object.entries(vars).filter(([k]) => (ACCENT_KEYS as readonly string[]).includes(k)));
+}
+
+interface Root { style: { getPropertyValue(k: string): string; setProperty(k: string, v: string): void; removeProperty(k: string): void } }
+
+/** Set `vars` on `root`; returns a function that restores what was there. Light/dark mode is left alone. */
 export function applyVars(root: Root, vars: Record<string, string>): () => void {
   const keys = Object.keys(vars);
   if (keys.length === 0) return () => {};
   const prev = keys.map((k) => [k, root.style.getPropertyValue(k)] as const);
-  const wasDark = root.classList.contains("dark");
   for (const k of keys) root.style.setProperty(k, vars[k]!);
-  root.classList.toggle("dark", true);
   return () => {
     for (const [k, v] of prev) if (v) root.style.setProperty(k, v); else root.style.removeProperty(k);
-    root.classList.toggle("dark", wasDark);
   };
 }
 
 /**
- * Recolour the public site and client area to the active store/marketplace look. Never used on `/admin`.
+ * Apply the store's accent preset to the public site and client area. Never used on `/admin`.
  * Call it after any effect that sets the brand colours, passing that brand as `brand`.
  */
 export function usePublicTheme(brand?: unknown) {

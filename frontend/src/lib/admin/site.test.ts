@@ -26,6 +26,16 @@ describe("site", () => {
     applyBrand({ primary_color: "bad", font: "manrope" }, root);
     expect(set["--primary"]).toBeUndefined();
   });
+  it("brand colour overrides the theme accent and clearing it restores the theme's", () => {
+    const set: Record<string, string> = { "--primary": "#3366ff", "--ring": "#3366ff" };
+    const style = { setProperty: (k: string, v: string) => { set[k] = v; }, removeProperty: (k: string) => { delete set[k]; }, getPropertyValue: (k: string) => set[k] ?? "" };
+    applyBrand({ primary_color: "", font: "manrope" }, { style });
+    expect(set["--primary"]).toBe("#3366ff");
+    applyBrand({ primary_color: "#ff0000", font: "manrope" }, { style });
+    expect(set["--primary"]).toBe("#ff0000");
+    applyBrand({ primary_color: "", font: "manrope" }, { style });
+    expect([set["--primary"], set["--ring"]]).toEqual(["#3366ff", "#3366ff"]);
+  });
   it("applies the default colour mode", () => {
     const cls: Record<string, boolean> = {};
     const root = { style: { setProperty() {}, removeProperty() {} }, classList: { toggle: (c: string, on: boolean) => { cls[c] = on; } } };

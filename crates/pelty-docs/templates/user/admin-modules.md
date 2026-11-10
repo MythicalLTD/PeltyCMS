@@ -282,7 +282,7 @@ Limits: the status check needs the server's query port to be reachable from the 
 Changes how the game store looks when **Settings → Website → Store mode** is **Game store**. Switch the module on, then open **Store look**:
 
 - **Banner**: a title, subtitle and background image (an `https://` URL or a path on your site such as `/uploads/banner.png`).
-- **Accent color**: recolors buttons and focus rings in the store (theme default, emerald, violet, amber, rose, sky).
+- **Accent color**: recolors buttons, focus rings and charts on the public site (theme default, emerald, violet, amber, rose, sky).
 - **Package layout**: a dense list or cards.
 - **Sidebar** on the left or right, with up to 12 widgets in the order you choose:
   - **Text box**: rules, about, contact. Shown as plain text (no HTML).
@@ -294,7 +294,7 @@ Changes how the game store looks when **Settings → Website → Store mode** is
 
 Store-wide look (used when the public site is in store mode, below):
 
-- **Site theme**: colours for the whole public site and the client area: *Site brand* (your Website colours), *Minecraft* (green), *FiveM* (orange), *Rust* (rust red) or *Dark neutral*. The accent color still recolors buttons on top of the theme. The staff area never changes.
+- **Accent preset**: the public store, marketplace, support pages, basket and client area always use the PeltyCMS panel design (the active theme's colours, cards, buttons, badges, font, radius and light/dark mode). *Match PeltyCMS* (the default; saved as `panel`, the old value `default` means the same) keeps the panel accent, or your Website brand colour when one is set. *Minecraft* (green), *FiveM* (orange), *Rust* (red) and *Monochrome* change only the accent colour. The accent color above wins over the preset. The staff area never changes.
 - **Server in the banner**: which game server the homepage banner shows (default: the first enabled one). Visitors see its address with a copy button (`connect host:port` for FiveM and RedM, the port filled in from the game's default when you left it empty) and, while `server_community` is on, the live player count.
 - **Server logo** (`https://` or `/path`; empty uses the site logo) and a **Discord invite** for the banner button and the store menu.
 

@@ -31,20 +31,20 @@ export function SupportPage() {
   ];
   return (
     <div className="flex flex-col gap-8">
-      <section className="flex flex-col items-center gap-4 rounded-lg border bg-card px-4 py-10 text-center">
+      <Card className="items-center gap-4 px-4 py-10 text-center">
         <LifebuoyIcon aria-hidden className="size-10 text-primary" />
-        <h1 className="text-3xl font-bold tracking-tight">{t("pub.support_title")}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{t("pub.support_title")}</h1>
         <p className="max-w-xl text-muted-foreground">{t("pub.support_subtitle")}</p>
         <search className="w-full max-w-xl"><form className="relative flex w-full gap-2" onSubmit={(e) => { e.preventDefault(); nav(q.trim() ? `/kb?q=${encodeURIComponent(q.trim())}` : "/kb"); }}>
           <MagnifyingGlassIcon aria-hidden className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input className="h-11 pl-9" maxLength={200} placeholder={t("content.kb_search")} aria-label={t("content.kb_search")} value={q} onChange={(e) => setQ(e.target.value)} />
-          <Button type="submit" className="h-11">{t("pub.search")}</Button>
+          <Input className="h-10 pl-9" maxLength={200} placeholder={t("content.kb_search")} aria-label={t("content.kb_search")} value={q} onChange={(e) => setQ(e.target.value)} />
+          <Button type="submit" className="h-10">{t("pub.search")}</Button>
         </form></search>
-      </section>
+      </Card>
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {entries.map((e) => {
           const body = (
-            <Card className="h-full transition hover:border-primary/60">
+            <Card className="h-full transition-colors hover:border-primary/60">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base"><e.icon aria-hidden className="size-5 text-primary" />{t(e.title)}</CardTitle>
                 <CardDescription>{t(e.desc)}</CardDescription>
@@ -54,8 +54,8 @@ export function SupportPage() {
           return (
             <li key={e.testid} data-testid={`support-${e.testid}`}>
               {e.to
-                ? <Link to={e.to} className="block h-full rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{body}</Link>
-                : <button type="button" onClick={e.onClick} className="block h-full w-full rounded-lg text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{body}</button>}
+                ? <Link to={e.to} className="block h-full rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{body}</Link>
+                : <button type="button" onClick={e.onClick} className="block h-full w-full rounded-xl text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{body}</button>}
             </li>
           );
         })}

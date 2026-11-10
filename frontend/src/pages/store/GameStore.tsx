@@ -3,7 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router";
 import { ShoppingCartIcon, StorefrontIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ProductArt } from "@/components/store/ProductArt";
 import { EmptyState } from "@/components/EmptyState";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { api, ApiError } from "@/lib/api";
@@ -20,20 +22,21 @@ import { quickAddCycle } from "@/lib/store/game";
 import { stockState } from "@/pages/client/services/Order";
 import { CurrencySelect, useCatalog, useStoreCurrency } from "@/pages/store/Store";
 
-/** Package art, or the package initial when the owner has not uploaded any. */
+/** Package art (list layout), or the neutral placeholder. */
 function Thumb({ src, name }: { src?: string; name: string }) {
-  const box = "row-span-2 size-14 self-start rounded-md border bg-muted sm:row-span-1 sm:self-center";
-  if (src) return <img src={src} alt="" width={56} height={56} loading="lazy" className={`${box} object-cover`} />;
-  return <span aria-hidden className={`${box} flex items-center justify-center text-lg font-semibold text-muted-foreground`}>{name.trim().charAt(0).toUpperCase()}</span>;
+  return (
+    <span className="row-span-2 size-14 self-start overflow-hidden rounded-md border sm:row-span-1 sm:self-center">
+      <ProductArt src={src} name={name} compact />
+    </span>
+  );
 }
 
-/** Card cover for the grid layout: package art (16:9) with a sale ribbon. */
+/** Card cover for the grid layout: package art (16:9) with a sale badge. */
 function Cover({ src, name, sale }: { src?: string; name: string; sale?: number | string }) {
   return (
-    <div className="relative col-span-2 -mx-3 -mt-3 mb-1 aspect-video overflow-hidden bg-muted">
-      {src ? <img src={src} alt="" loading="lazy" className="size-full object-cover" />
-        : <span aria-hidden className="flex size-full items-center justify-center bg-gradient-to-br from-primary/30 to-muted text-4xl font-bold text-foreground/70">{name.trim().charAt(0).toUpperCase()}</span>}
-      {sale ? <span className="absolute left-2 top-2 rounded bg-primary px-2 py-0.5 text-xs font-bold text-primary-foreground shadow">−{sale}%</span> : null}
+    <div className="relative col-span-2 -mx-4 -mt-4 mb-1 aspect-video overflow-hidden border-b">
+      <ProductArt src={src} name={name} />
+      {sale ? <Badge className="absolute left-2 top-2">−{sale}%</Badge> : null}
     </div>
   );
 }
@@ -94,7 +97,7 @@ export function GameStorePage({ home = false }: { home?: boolean }) {
       )}
 
       {sales.length > 0 && (
-        <section aria-label={t("sales.discount")} className="flex flex-col gap-1 rounded-md border border-primary/40 bg-primary/10 px-4 py-3 text-sm">
+        <section aria-label={t("sales.discount")} className="flex flex-col gap-1 rounded-xl border border-primary/40 bg-primary/10 px-4 py-3 text-sm">
           {sales.map((x) => {
             const left = timeLeft(x.ends_at);
             return left && (
@@ -106,7 +109,7 @@ export function GameStorePage({ home = false }: { home?: boolean }) {
       )}
 
       {count > 0 && view?.preview && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/40 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3 shadow-sm">
           <p className="text-sm">
             {t("game.in_cart", { n: count })}
             <span className="ml-2 font-semibold tabular-nums">{formatMoney(view.preview.total, view.preview.currency, lang)}</span>
@@ -123,14 +126,14 @@ export function GameStorePage({ home = false }: { home?: boolean }) {
       ) : products.length === 0 ? (
         <EmptyState icon={StorefrontIcon} title={t("game.empty", { currency })} description={groups.length > 1 || active ? t("game.empty_hint") : undefined} />
       ) : (
-        <ul className={grid ? "grid gap-3 sm:grid-cols-2 xl:grid-cols-3" : "flex flex-col divide-y rounded-md border"} aria-label={t("game.packages")}>
+        <ul className={grid ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-3" : "flex flex-col divide-y rounded-xl border bg-card text-card-foreground shadow-sm"} aria-label={t("game.packages")}>
           {products.map((p) => {
             const quick = quickAddCycle(p, currency);
             const from = fromPrice(p.prices, currency)!;
             const out = stockState(p) === "out";
             const n = inCart(p.id);
             return (
-              <li key={p.id} data-testid="package" className={grid ? "relative grid grid-cols-[3.5rem_minmax(0,1fr)] content-start gap-x-3 gap-y-2 overflow-hidden rounded-lg border bg-card p-3 transition hover:border-primary/60" : "grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-3 py-3 sm:grid-cols-[3.5rem_minmax(0,1fr)_auto] sm:gap-x-4 sm:px-4"}>
+              <li key={p.id} data-testid="package" className={grid ? "relative grid grid-cols-[3.5rem_minmax(0,1fr)] content-start gap-x-3 gap-y-2 overflow-hidden rounded-xl border bg-card p-4 text-card-foreground shadow-sm transition-colors hover:border-primary/60" : "grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-3 py-3 sm:grid-cols-[3.5rem_minmax(0,1fr)_auto] sm:gap-x-4 sm:px-4"}>
                 {grid ? <Cover src={p.image_url} name={p.name} sale={saleFor(sales, p.id, p.group_id)?.percent} /> : <Thumb src={p.image_url} name={p.name} />}
                 <div className={grid ? "col-span-2 min-w-0" : "min-w-0"}>
                   <h2 className="truncate text-base font-medium"><Link to={`/store/p/${p.id}`} className="rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{p.name}</Link></h2>
@@ -144,7 +147,7 @@ export function GameStorePage({ home = false }: { home?: boolean }) {
                       const price = formatMoney(shown, currency, lang);
                       return (
                         <span className="block font-semibold tabular-nums">
-                          {sale && <><span className="mr-1 rounded bg-primary px-1 text-xs text-primary-foreground">−{sale.percent}%</span><s className="mr-1 font-normal text-muted-foreground">{formatMoney(from.amount, currency, lang)}</s></>}
+                          {sale && <><Badge className="mr-1">−{sale.percent}%</Badge><s className="mr-1 font-normal text-muted-foreground">{formatMoney(from.amount, currency, lang)}</s></>}
                           {quick ? price : t("order.from", { price })}
                         </span>
                       );

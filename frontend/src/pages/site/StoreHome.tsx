@@ -24,7 +24,7 @@ export function StoreHomePage() {
     <div className="flex flex-col">
       <StoreHero sf={sf.data} siteName={name} big />
       <div className="mx-auto -mt-6 w-full max-w-6xl px-4">
-        <nav aria-label={t("pub.quick_links")} className="relative grid grid-cols-2 gap-2 rounded-lg border bg-card p-2 shadow-lg sm:grid-cols-4">
+        <nav aria-label={t("pub.quick_links")} className="relative grid grid-cols-2 gap-2 rounded-xl border bg-card p-2 text-card-foreground shadow-sm sm:grid-cols-4">
           {enabled.has("game_profiles") && (
             <Button asChild variant="ghost" className="justify-start"><Link to={me ? "/game-accounts" : "/login"}><GameControllerIcon aria-hidden />{me ? t("pub.link_game_account") : t("pub.player_login")}</Link></Button>
           )}

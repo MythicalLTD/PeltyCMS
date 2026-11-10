@@ -69,18 +69,28 @@ export function safeHref(h: unknown): string | null {
 export const isInternal = (h: string) => h.startsWith("/") && !h.startsWith("//");
 
 /** Brand settings → theme CSS variables (no custom CSS, only variables). */
+type BrandStyle = { setProperty(k: string, v: string): void; removeProperty(k: string): void; getPropertyValue?(k: string): string };
+/** Theme values that a brand colour replaced, per element, to put back when the brand is cleared. */
+const brandSaved = new WeakMap<object, { primary: string; ring: string }>();
+
 export function applyBrand(
   c: Pick<SiteConfig, "primary_color" | "font"> & { default_mode?: SiteConfig["default_mode"] },
-  root: { style: { setProperty(k: string, v: string): void; removeProperty(k: string): void }; classList?: { toggle(c: string, on: boolean): void } },
+  root: { style: BrandStyle; classList?: { toggle(c: string, on: boolean): void } },
   prefersDark = false,
 ) {
   if (c.default_mode && root.classList) root.classList.toggle("dark", c.default_mode === "dark" || (c.default_mode === "system" && prefersDark));
+  // The brand colour overrides the active PeltyCMS theme's accent; without one
+  // the theme's own values come back (never removed: that would drop the
+  // public site to a different colour than the panel).
+  const st = root.style as BrandStyle;
+  const saved = brandSaved.get(st);
   if (/^#[0-9a-f]{6}$/i.test(c.primary_color)) {
-    root.style.setProperty("--primary", c.primary_color);
-    root.style.setProperty("--ring", c.primary_color);
-  } else {
-    root.style.removeProperty("--primary");
-    root.style.removeProperty("--ring");
+    if (!saved) brandSaved.set(st, { primary: st.getPropertyValue?.("--primary") ?? "", ring: st.getPropertyValue?.("--ring") ?? "" });
+    st.setProperty("--primary", c.primary_color);
+    st.setProperty("--ring", c.primary_color);
+  } else if (saved) {
+    for (const [k, v] of [["--primary", saved.primary], ["--ring", saved.ring]] as const) if (v) st.setProperty(k, v); else st.removeProperty(k);
+    brandSaved.delete(st);
   }
   root.style.setProperty("--font-sans", FONTS[c.font] ?? FONTS.manrope);
 }

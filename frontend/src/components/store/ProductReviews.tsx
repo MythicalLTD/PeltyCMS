@@ -47,8 +47,8 @@ function ReviewsCard({ productId, className }: { productId: string; className?: 
         <div className="grid h-fit gap-1">
           {histogramPercents(s).map((h) => (
             <div key={h.stars} className="flex items-center gap-2 text-xs">
-              <span className="flex w-6 items-center gap-0.5 tabular-nums">{h.stars}<StarIcon weight="fill" aria-hidden className="text-amber-500" /></span>
-              <span className="h-2 flex-1 overflow-hidden rounded bg-muted"><span className="block h-full bg-amber-500" style={{ width: `${h.percent}%` }} /></span>
+              <span className="flex w-6 items-center gap-0.5 tabular-nums">{h.stars}<StarIcon weight="fill" aria-hidden className="text-warning" /></span>
+              <span className="h-2 flex-1 overflow-hidden rounded bg-muted"><span className="block h-full bg-warning" style={{ width: `${h.percent}%` }} /></span>
               <span className="w-8 text-right tabular-nums text-muted-foreground">{h.count}</span>
             </div>
           ))}
@@ -108,7 +108,7 @@ function ReviewForm({ productId, elig }: { productId: string; elig: Eligibility 
         <legend className="text-sm font-medium">{t("reviews.rating")}</legend>
         <div role="radiogroup" className="flex gap-1">
           {[1, 2, 3, 4, 5].map((n) => (
-            <label key={n} className="cursor-pointer p-1 text-xl text-amber-500">
+            <label key={n} className="cursor-pointer p-1 text-xl text-warning">
               <input type="radio" name="review-rating" className="sr-only" checked={rating === n} onChange={() => setRating(n)} aria-label={t("reviews.stars", { n })} />
               <StarIcon weight={n <= rating ? "fill" : "regular"} aria-hidden />
             </label>

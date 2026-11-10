@@ -12,8 +12,10 @@ use uuid::Uuid;
 
 pub const MODULE: &str = "gaming_storefront";
 pub const ACCENTS: &[&str] = &["default", "emerald", "violet", "amber", "rose", "sky"];
-/// Public-site colour presets (store mode); `default` keeps the site brand.
-pub const THEMES: &[&str] = &["default", "minecraft", "fivem", "rust", "dark"];
+/// Public-site accent presets (store mode). `panel` (the default) matches the
+/// PeltyCMS panel and the site brand; the game presets only change the accent
+/// colour. `default` is the old name of `panel` and still accepted.
+pub const THEMES: &[&str] = &["panel", "default", "minecraft", "fivem", "rust", "dark"];
 pub const PERIODS: &[&str] = &["day", "week", "month", "year", "all"];
 const MAX_WIDGETS: usize = 12;
 
@@ -77,8 +79,8 @@ pub struct Config {
     pub sidebar: String,
     #[serde(default)]
     pub widgets: Vec<Widget>,
-    /// One of [`THEMES`]: colours of the whole public site in store mode.
-    #[serde(default = "default_accent")]
+    /// One of [`THEMES`]: accent preset of the public site in store mode.
+    #[serde(default = "default_theme")]
     pub theme: String,
     /// Server shown in the hero (address, players); `None` = the first enabled one.
     #[serde(default)]
@@ -93,6 +95,9 @@ pub struct Config {
 
 fn default_accent() -> String {
     "default".into()
+}
+fn default_theme() -> String {
+    "panel".into()
 }
 fn default_layout() -> String {
     "list".into()
@@ -114,7 +119,7 @@ impl Default for Config {
                 Widget::RecentPayments { limit: 5 },
                 Widget::ServerStatus { server_id: None },
             ],
-            theme: default_accent(),
+            theme: default_theme(),
             server_id: None,
             discord_url: String::new(),
             logo_url: String::new(),
@@ -338,7 +343,7 @@ mod tests {
     #[test]
     fn theme_server_and_links() {
         let mut c = Config::default();
-        assert_eq!(c.theme, "default");
+        assert_eq!(c.theme, "panel");
         c.theme = "fivem".into();
         c.discord_url = "https://discord.gg/rp".into();
         c.logo_url = "/uploads/logo.png".into();
@@ -353,7 +358,7 @@ mod tests {
         assert!(c.validate().is_err());
         // Settings saved before these fields existed still load.
         let old = parse(json!({"accent": "violet"}));
-        assert_eq!((old.theme.as_str(), old.server_id), ("default", None));
+        assert_eq!((old.theme.as_str(), old.server_id), ("panel", None));
     }
 
     #[test]
