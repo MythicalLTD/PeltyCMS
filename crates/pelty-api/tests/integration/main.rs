@@ -137,6 +137,7 @@ mod satisfaction_flow;
 mod security_matrix;
 mod security_questions_flow;
 mod security_suite_flow;
+mod server_community_flow;
 mod server_groups_flow;
 mod service_changes_flow;
 mod setup_wizard_flow;
