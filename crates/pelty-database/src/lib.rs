@@ -95,6 +95,7 @@ pub use registry::registrant_verify;
 pub use registry::DomainService;
 pub mod gaming;
 pub use gaming::delivery as game_delivery;
+pub use gaming::digital;
 pub use gaming::games;
 pub use gaming::modules as feature_modules;
 pub mod helpdesk;

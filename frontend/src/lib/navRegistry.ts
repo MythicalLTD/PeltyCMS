@@ -68,6 +68,7 @@ export const ADMIN_NAV: NavCategory[] = [
     { to: "/admin/module-queue", label: "nav.module_queue", desc: "navdesc.admin_module_queue", icon: QueueIcon },
     { to: "/admin/game-servers", label: "nav.game_servers", desc: "navdesc.admin_game_servers", icon: GameControllerIcon },
     { to: "/admin/game-delivery", label: "nav.game_delivery", desc: "navdesc.admin_game_delivery", icon: TerminalWindowIcon },
+    { to: "/admin/digital-products", label: "nav.digital_products", desc: "navdesc.admin_digital_products", icon: KeyIcon },
     { to: "/admin/module-log", label: "nav.module_log", desc: "navdesc.admin_module_log", icon: ListMagnifyingGlassIcon },
   ] },
   { id: "domains", label: "navcat.domains", icon: GlobeIcon, items: [
@@ -156,6 +157,7 @@ export const CLIENT_NAV_TREE: NavCategory[] = [
     { to: "/announcements", label: "nav.announcements", desc: "navdesc.announcements", icon: MegaphoneIcon, primary: true },
     { to: "/network-status", label: "nav.network_status", desc: "navdesc.network_status", icon: PulseIcon, primary: true },
     { to: "/downloads", label: "nav.downloads", desc: "navdesc.downloads", icon: FolderOpenIcon, primary: true },
+    { to: "/digital", label: "nav.digital", desc: "navdesc.digital", icon: KeyIcon },
   ] },
   { id: "account", label: "navcat.account", icon: UserCircleIcon, items: [
     { to: "/my-details", label: "nav.my_details", desc: "navdesc.my_details", icon: IdentificationCardIcon, primary: true },
