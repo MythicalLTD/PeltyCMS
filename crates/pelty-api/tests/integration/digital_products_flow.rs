@@ -367,6 +367,17 @@ async fn versions_links_and_licenses() {
         json!({"service_id": sid}),
     ));
     assert!(status_of(&app, &alice, "active").await);
+    // A missed termination event is caught at the next check.
+    sqlx::query("UPDATE services SET status = 'cancelled' WHERE id = $1::uuid")
+        .bind(&sid)
+        .execute(&st.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        check(&app, json!({"key": key, "domain": "shop-b.example"})).await["reason"],
+        "revoked"
+    );
+    assert!(status_of(&app, &alice, "revoked").await);
     st.emit(DomainEvent::new(
         "service.terminated",
         json!({"service_id": sid}),
@@ -417,6 +428,16 @@ async fn versions_links_and_licenses() {
     .await;
     assert_eq!(v["valid"], true);
     assert!(v["expires_at"].is_string());
+    // Licensing switched off for the product: existing keys stop validating.
+    let off = call(&app, "PUT", &format!("/api/v1/admin/digital/products/{pid}"), Some(json!({
+        "license_enabled": false, "max_activations": 1, "bind_domain": true, "bind_ip": false, "bind_hwid": false,
+        "link_ttl_secs": 5
+    })), &admin.h()).await;
+    assert_eq!(off.status, StatusCode::OK, "{:?}", off.body);
+    assert_eq!(
+        check(&app, json!({"key": m.body["key"], "domain": "shop-c.example"})).await["reason"],
+        "license_disabled"
+    );
     call(
         &app,
         "PUT",

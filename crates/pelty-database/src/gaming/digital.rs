@@ -120,12 +120,15 @@ impl Settings {
 
 const SETTINGS_COLS: &str = "product_id, license_enabled, max_activations, bind_domain, bind_ip, bind_hwid, license_days, link_ttl_secs, escrow_asset";
 
-pub async fn settings(pool: &PgPool, product: Uuid) -> AppResult<Option<Settings>> {
+pub async fn settings<'e, E: sqlx::PgExecutor<'e>>(
+    ex: E,
+    product: Uuid,
+) -> AppResult<Option<Settings>> {
     sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {SETTINGS_COLS} FROM digital_products WHERE product_id = $1"
     )))
     .bind(product)
-    .fetch_optional(pool)
+    .fetch_optional(ex)
     .await
     .map_err(db_err)
 }
@@ -640,16 +643,35 @@ pub async fn validate(pool: &PgPool, c: &Check, fallback_ip: Option<&str>) -> Ap
         return Ok(Verdict::no("not_found"));
     }
     let mut tx = pool.begin().await.map_err(db_err)?;
-    let row: Option<(Uuid, Uuid, String, i32, Option<OffsetDateTime>)> = sqlx::query_as(
-        "SELECT id, product_id, status, max_activations, expires_at FROM software_licenses WHERE key_hash = $1 FOR UPDATE",
+    // The linked service's state is read too, so a license whose service was
+    // terminated or cancelled is revoked here even if the revocation event
+    // was missed (module off at the time, or a failed hook).
+    let row: Option<(Uuid, Uuid, String, i32, Option<OffsetDateTime>, Option<String>)> = sqlx::query_as(
+        "SELECT l.id, l.product_id, l.status, l.max_activations, l.expires_at, sv.status
+           FROM software_licenses l LEFT JOIN services sv ON sv.id = l.service_id
+          WHERE l.key_hash = $1 FOR UPDATE OF l",
     )
     .bind(key_hash(&c.key))
     .fetch_optional(&mut *tx)
     .await
     .map_err(db_err)?;
-    let Some((id, product, status, max, expires)) = row else {
+    let Some((id, product, mut status, max, expires, service)) = row else {
         return Ok(Verdict::no("not_found"));
     };
+    if status != "revoked"
+        && matches!(service.as_deref(), Some("terminated" | "cancelled" | "fraud"))
+    {
+        sqlx::query("UPDATE software_licenses SET status = 'revoked' WHERE id = $1")
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        tx.commit().await.map_err(db_err)?;
+        tx = pool.begin().await.map_err(db_err)?;
+        status = "revoked".into();
+    } else if status == "active" && service.as_deref() == Some("suspended") {
+        status = "suspended".into();
+    }
     let activations: i64 =
         sqlx::query_scalar("SELECT count(*) FROM license_activations WHERE license_id = $1")
             .bind(id)
@@ -685,7 +707,11 @@ pub async fn validate(pool: &PgPool, c: &Check, fallback_ip: Option<&str>) -> Ap
     if expires.is_some_and(|e| e <= OffsetDateTime::now_utc()) {
         return fail(v, "expired");
     }
-    let s = settings(pool, product).await?.unwrap_or_default();
+    // Read on the transaction's connection: a second pool connection while
+    // the row lock is held could exhaust the pool under concurrent checks.
+    let Some(s) = settings(&mut *tx, product).await?.filter(|s| s.license_enabled) else {
+        return fail(v, "license_disabled");
+    };
     let (fp, domain, ip, hwid) = match fingerprint(&s, c, fallback_ip) {
         Ok(x) => x,
         Err(r) => return fail(v, r),
@@ -737,7 +763,9 @@ pub async fn deactivate(pool: &PgPool, c: &Check, fallback_ip: Option<&str>) -> 
     let Some((id, product)) = row else {
         return Ok(false);
     };
-    let s = settings(pool, product).await?.unwrap_or_default();
+    let Some(s) = settings(pool, product).await?.filter(|s| s.license_enabled) else {
+        return Ok(false);
+    };
     let Ok((fp, ..)) = fingerprint(&s, c, fallback_ip) else {
         return Ok(false);
     };

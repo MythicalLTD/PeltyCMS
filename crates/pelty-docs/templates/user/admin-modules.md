@@ -104,7 +104,7 @@ Call it from the software you sell. Only the fields the product binds are needed
 | `POST /api/v1/public/licenses/validate` | `{"key": "…", "product_id": "…", "domain": "shop.example", "hwid": "…", "activate": true}` | `{"valid": true, "activations": 1, "max_activations": 3, "expires_at": …}` or `{"valid": false, "reason": "…"}` |
 | `POST /api/v1/public/licenses/deactivate` | same identity fields | `{"removed": true}` frees the slot |
 
-Reasons: `not_found`, `wrong_product`, `suspended`, `revoked`, `expired`, `domain_required`, `ip_required`, `hwid_required`, `activation_limit`, `not_activated` (with `"activate": false`). The IP defaults to the caller's address. Repeated unknown keys from one address are rate limited.
+Reasons: `not_found`, `wrong_product`, `suspended`, `revoked`, `expired`, `domain_required`, `ip_required`, `hwid_required`, `activation_limit`, `not_activated` (with `"activate": false`), `license_disabled` (the product's digital settings were removed or licensing is switched off). A license whose service was terminated, cancelled or marked fraud is revoked at the next check, even if the revocation event was missed. The IP defaults to the caller's address. Repeated unknown keys from one address are rate limited.
 
 ## Creator marketplace (`creator_marketplace`)
 
