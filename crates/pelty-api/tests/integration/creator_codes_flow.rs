@@ -73,7 +73,10 @@ async fn creator_code_discounts_and_credits_the_creator() {
         }
     };
     let owned = |s: &Sess| -> Vec<(&'static str, String)> {
-        vec![("cookie", s.cookie.clone()), ("x-csrf-token", s.csrf.clone())]
+        vec![
+            ("cookie", s.cookie.clone()),
+            ("x-csrf-token", s.csrf.clone()),
+        ]
     };
     let code = format!("Cool_{tag}");
     let lower = code.to_ascii_lowercase();
