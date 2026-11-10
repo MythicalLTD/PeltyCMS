@@ -73,9 +73,12 @@ pub async fn public_check(
     State(s): State<AppState>,
     Path(code): Path<String>,
 ) -> ApiResult<Json<Value>> {
-    let c = cc::check(&s.pool, &code, None)
-        .await
-        .map_err(|_| AppError::NotFound)?;
+    // Unknown/disabled codes are 404; a database failure stays a 500.
+    let c = match cc::check(&s.pool, &code, None).await {
+        Ok(c) => c,
+        Err(AppError::Validation(_)) => return Err(AppError::NotFound.into()),
+        Err(e) => return Err(e.into()),
+    };
     Ok(Json(json!({
         "code": c.code,
         "discount_percent": c.discount_percent.normalize().to_string(),

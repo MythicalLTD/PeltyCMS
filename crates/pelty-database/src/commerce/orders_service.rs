@@ -92,6 +92,7 @@ impl OrderService {
         due_days: i64,
         bundle: Option<&BundleDiscount>,
         addon_discounts: &[AddonDiscount],
+        creator_code: Option<Uuid>,
     ) -> AppResult<(Order, Invoice)> {
         orders::place_full(
             &self.pool,
@@ -102,6 +103,7 @@ impl OrderService {
             due_days,
             bundle,
             addon_discounts,
+            creator_code,
         )
         .await
     }
