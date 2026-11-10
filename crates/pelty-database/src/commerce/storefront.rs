@@ -25,13 +25,15 @@ pub struct Cart {
     pub country: String,
     pub items: Value,
     pub coupon: Option<String>,
+    /// Creator code entered on the cart (module `creator_codes`).
+    pub creator_code: Option<String>,
     pub order_id: Option<Uuid>,
     #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
 }
 
 const CART_COLS: &str =
-    "id, customer_id, email, currency::text AS currency, country, items, coupon, order_id, updated_at";
+    "id, customer_id, email, currency::text AS currency, country, items, coupon, creator_code, order_id, updated_at";
 
 #[derive(Debug, Clone)]
 pub struct CartInput {
@@ -39,6 +41,7 @@ pub struct CartInput {
     pub country: String,
     pub items: Vec<CartItem>,
     pub coupon: Option<String>,
+    pub creator_code: Option<String>,
     pub email: Option<String>,
     pub locale: String,
 }
@@ -86,6 +89,12 @@ pub async fn save_cart(
         .map(str::trim)
         .filter(|c| !c.is_empty())
         .map(|c| c.chars().take(64).collect::<String>());
+    let creator_code = i
+        .creator_code
+        .as_deref()
+        .map(str::trim)
+        .filter(|c| !c.is_empty())
+        .map(|c| c.chars().take(24).collect::<String>());
     let items =
         serde_json::to_value(&i.items).map_err(|_| AppError::Validation("error.cart_invalid"))?;
     let enabled: Option<String> =
@@ -96,11 +105,11 @@ pub async fn save_cart(
             .map_err(db_err)?;
     let currency = enabled.ok_or(AppError::Validation("error.invalid_currency"))?;
     sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "INSERT INTO carts (id, customer_id, email, currency, country, items, coupon, locale)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        "INSERT INTO carts (id, customer_id, email, currency, country, items, coupon, locale, creator_code)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
          ON CONFLICT (id) DO UPDATE SET customer_id = COALESCE(EXCLUDED.customer_id, carts.customer_id),
              email = COALESCE(EXCLUDED.email, carts.email), currency = EXCLUDED.currency, country = EXCLUDED.country,
-             items = EXCLUDED.items, coupon = EXCLUDED.coupon, locale = EXCLUDED.locale, updated_at = now(), reminded_at = NULL
+             items = EXCLUDED.items, coupon = EXCLUDED.coupon, creator_code = EXCLUDED.creator_code, locale = EXCLUDED.locale, updated_at = now(), reminded_at = NULL
          WHERE carts.order_id IS NULL
            AND (carts.customer_id IS NULL OR EXCLUDED.customer_id IS NULL OR carts.customer_id = EXCLUDED.customer_id)
          RETURNING {CART_COLS}"
@@ -113,6 +122,7 @@ pub async fn save_cart(
     .bind(items)
     .bind(coupon)
     .bind(i.locale.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').take(16).collect::<String>())
+    .bind(creator_code)
     .fetch_optional(pool)
     .await
     .map_err(db_err)?
@@ -195,6 +205,8 @@ pub struct PreviewLine {
     /// Running timed sale on this line (first invoice only).
     pub sale_discount: Decimal,
     pub sale: Option<String>,
+    /// Creator code discount on this line (first invoice only).
+    pub creator_discount: Decimal,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -205,12 +217,15 @@ pub struct Preview {
     pub discount: Decimal,
     pub group_discount: Decimal,
     pub sale_discount: Decimal,
+    pub creator_discount: Decimal,
     pub tax: Decimal,
     pub taxes: Vec<TaxPart>,
     pub total: Decimal,
     pub inclusive: bool,
     pub coupon: Option<String>,
     pub coupon_error: Option<&'static str>,
+    pub creator_code: Option<String>,
+    pub creator_error: Option<&'static str>,
 }
 
 #[derive(FromRow)]
@@ -223,7 +238,8 @@ struct TaxCust {
 
 /// Price a cart exactly like `orders::place` would, without writing
 /// anything: catalog prices, addons, promo code, client-group discount and
-/// the tax engine. A bad promo code is reported, not fatal.
+/// the tax engine. A bad promo or creator code is reported, not fatal.
+#[allow(clippy::too_many_arguments)]
 pub async fn preview(
     pool: &PgPool,
     customer: Option<Uuid>,
@@ -231,6 +247,7 @@ pub async fn preview(
     currency: &str,
     items: &[CartItem],
     coupon: Option<&str>,
+    creator: Option<&str>,
 ) -> AppResult<Preview> {
     if items.len() > MAX_ITEMS {
         return Err(AppError::Validation("error.cart_invalid"));
@@ -252,6 +269,26 @@ pub async fn preview(
         }
         None => None,
     };
+    let mut creator_error = None;
+    let creator = match creator.map(str::trim).filter(|c| !c.is_empty()) {
+        Some(code)
+            if crate::feature_modules::is_enabled(pool, crate::creator_codes::MODULE).await? =>
+        {
+            match crate::creator_codes::check(pool, code, customer).await {
+                Ok(c) => Some(c),
+                Err(AppError::Validation(k)) => {
+                    creator_error = Some(k);
+                    None
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        _ => None,
+    };
+    let creator_pct = creator
+        .as_ref()
+        .map_or(Decimal::ZERO, |c| c.discount_percent);
+    let mut creator_total = Decimal::ZERO;
     let (cust, group_pct) = match customer {
         Some(cid) => {
             let c: Option<TaxCust> = sqlx::query_as(
@@ -324,6 +361,11 @@ pub async fn preview(
                 .min((q.amount - d - group_line).max(Decimal::ZERO))
         });
         sale_total += sale_discount;
+        // Creator code: after the sale, same clamp as `orders::place_full`.
+        let creator_discount = (q.amount * creator_pct / Decimal::from(100))
+            .round_dp(exp)
+            .min((q.amount - d - group_line - sale_discount).max(Decimal::ZERO));
+        creator_total += creator_discount;
         amounts.push(q.amount);
         if q.setup_fee > Decimal::ZERO {
             amounts.push(q.setup_fee);
@@ -356,6 +398,7 @@ pub async fn preview(
             sale: sale
                 .filter(|_| sale_discount > Decimal::ZERO)
                 .map(|x| x.name.clone()),
+            creator_discount,
         });
     }
     drop(tx); // read-only; rolled back
@@ -371,6 +414,9 @@ pub async fn preview(
     }
     if sale_total > Decimal::ZERO {
         amounts.push(-sale_total);
+    }
+    if creator_total > Decimal::ZERO {
+        amounts.push(-creator_total);
     }
     let cfg = tax::get_settings(pool).await?;
     let reverse = cfg.enabled
@@ -429,12 +475,15 @@ pub async fn preview(
         discount,
         group_discount: group,
         sale_discount: sale_total,
+        creator_discount: creator_total,
         tax: tax_total,
         taxes,
         total: (net + tax_total).max(Decimal::ZERO),
         inclusive,
         coupon: promo_code,
         coupon_error,
+        creator_code: creator.map(|c| c.code),
+        creator_error,
     })
 }
 

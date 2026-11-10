@@ -100,6 +100,7 @@ export const ADMIN_NAV: NavCategory[] = [
     { to: "/admin/sales", label: "nav.sales", desc: "navdesc.admin_sales", icon: PercentIcon },
     { to: "/admin/tracked-links", label: "nav.tracked_links", desc: "navdesc.admin_tracked_links", icon: LinkSimpleIcon },
     { to: "/admin/affiliates", label: "nav.affiliates", desc: "navdesc.admin_affiliates", icon: HandshakeIcon, primary: true },
+    { to: "/admin/creator-codes", label: "nav.creator_codes", desc: "navdesc.admin_creator_codes", icon: MegaphoneIcon },
   ] },
   { id: "website", label: "navcat.website", icon: BrowserIcon, items: [
     { to: "/admin/website", label: "nav.website", desc: "navdesc.admin_website", icon: BrowserIcon, primary: true },

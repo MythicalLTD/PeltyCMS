@@ -66,6 +66,7 @@ mod client_search_flow;
 mod config_options_flow;
 mod content_flow;
 mod coupons_flow;
+mod creator_codes_flow;
 mod credit_auto_apply_flow;
 mod credit_flow;
 mod csv_import_flow;

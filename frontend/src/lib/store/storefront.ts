@@ -3,15 +3,15 @@ import { api, ApiError } from "../api";
 import { newUuid } from "../ids";
 
 export interface StoreLine { product_id: string; cycle: string; config: Record<string, string | number>; addons: string[] }
-export interface StoreCart { id: string; email: string | null; currency: string; country: string; items: StoreLine[]; coupon: string | null; order_id: string | null }
+export interface StoreCart { id: string; email: string | null; currency: string; country: string; items: StoreLine[]; coupon: string | null; creator_code?: string | null; order_id: string | null }
 export interface TaxPart { name: string; rate: string; compound: boolean; amount: string }
 export interface PreviewLine {
-  product_id: string; product_name: string; cycle: string; amount: string; setup_fee: string; labels: string[]; discount: string; sale_discount?: string; sale?: string | null;
+  product_id: string; product_name: string; cycle: string; amount: string; setup_fee: string; labels: string[]; discount: string; sale_discount?: string; sale?: string | null; creator_discount?: string;
   addons: { addon_id: string; name: string; cycle: string; amount: string; setup_fee: string }[];
 }
 export interface CartPreview {
-  currency: string; lines: PreviewLine[]; subtotal: string; discount: string; group_discount: string; sale_discount?: string; tax: string; taxes: TaxPart[];
-  total: string; inclusive: boolean; coupon: string | null; coupon_error: string | null;
+  currency: string; lines: PreviewLine[]; subtotal: string; discount: string; group_discount: string; sale_discount?: string; creator_discount?: string; tax: string; taxes: TaxPart[];
+  total: string; inclusive: boolean; coupon: string | null; coupon_error: string | null; creator_code?: string | null; creator_error?: string | null;
 }
 export interface CartView { cart: StoreCart; preview: CartPreview | null; error: string | null }
 export interface Addon { id: string; name: string; description: string; prices: { currency: string; cycle: string; amount: string; setup_fee: string }[] }
@@ -79,7 +79,7 @@ export type CartSave = Omit<StoreCart, "id" | "order_id"> & { locale: string };
  * cart read back from the API (id, customer_id, updated_at, ...) must be
  * reduced to exactly these keys. */
 export function cartBody(c: CartSave) {
-  return { currency: c.currency, country: c.country ?? "", items: c.items, coupon: c.coupon?.trim() || null, email: c.email || null, locale: c.locale };
+  return { currency: c.currency, country: c.country ?? "", items: c.items, coupon: c.coupon?.trim() || null, creator_code: c.creator_code?.trim() || null, email: c.email || null, locale: c.locale };
 }
 
 /** Ids minted in this tab: a 404 for them just means "not saved yet". */

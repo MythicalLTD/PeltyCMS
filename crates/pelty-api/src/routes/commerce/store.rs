@@ -101,6 +101,7 @@ async fn cart_view_core(s: &AppState, cart: sf::Cart, viewer: Option<Uuid>) -> A
         &cart.currency,
         &items,
         cart.coupon.as_deref(),
+        cart.creator_code.as_deref(),
     )
     .await;
     let (preview, error) = match preview {
@@ -137,6 +138,9 @@ pub struct CartBody {
     pub items: Vec<CartItem>,
     #[serde(default)]
     pub coupon: Option<String>,
+    /// Creator code (module `creator_codes`; ignored while it is off).
+    #[serde(default)]
+    pub creator_code: Option<String>,
     /// Optional email for cart recovery reminders.
     #[serde(default)]
     pub email: Option<String>,
@@ -166,6 +170,7 @@ pub async fn put_cart(
             country: b.country,
             items: b.items,
             coupon: b.coupon,
+            creator_code: b.creator_code,
             email: b.email,
             locale: b.locale,
         },
@@ -244,6 +249,7 @@ pub async fn checkout(
                 &items,
                 cart.coupon.as_deref(),
                 None,
+                cart.creator_code.as_deref(),
             )
             .await
             .map_err(|e| e.0)?;
@@ -764,6 +770,7 @@ pub async fn admin_create_order(
         &currency,
         &b.items,
         b.coupon.as_deref(),
+        None,
         None,
     )
     .await?;
