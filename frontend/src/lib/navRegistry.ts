@@ -6,7 +6,7 @@ import type { Icon } from "@phosphor-icons/react";
 import {
   PushPinIcon,
   LinkSimpleIcon,
-  ArrowsLeftRightIcon, TerminalWindowIcon, BankIcon, BellRingingIcon, BookOpenTextIcon, BrowserIcon, BuildingsIcon, CalendarDotsIcon, ChartBarIcon, ChartLineUpIcon, ChatsCircleIcon, CheckSquareIcon, KanbanIcon, ClockCountdownIcon, CodeIcon, ComputerTowerIcon, CreditCardIcon, CurrencyCircleDollarIcon, DatabaseIcon, EnvelopeIcon, EnvelopeSimpleIcon, FileTextIcon, FolderOpenIcon, GameControllerIcon, GaugeIcon, GearSixIcon, GiftIcon, GlobeIcon, HandshakeIcon, HardDrivesIcon, HeartbeatIcon, IdentificationBadgeIcon, IdentificationCardIcon, KeyIcon, LifebuoyIcon, ListChecksIcon, ListMagnifyingGlassIcon, LockKeyIcon, MegaphoneIcon, NewspaperIcon, NotePencilIcon, NotebookIcon, PackageIcon, PaletteIcon, PaperPlaneTiltIcon, PercentIcon, PlugsConnectedIcon, PulseIcon, PuzzlePieceIcon, QueueIcon, ReceiptIcon, RocketLaunchIcon, ScrollIcon, ShieldCheckIcon, ShieldWarningIcon, ShoppingCartIcon, SignInIcon, SlidersHorizontalIcon, SquaresFourIcon, StackIcon, StorefrontIcon, TextboxIcon, TicketIcon, TranslateIcon, UploadSimpleIcon, UserCircleIcon, UserGearIcon, UsersIcon, UsersThreeIcon, WalletIcon, XCircleIcon,
+  ArrowsLeftRightIcon, TerminalWindowIcon, BankIcon, BellRingingIcon, BookOpenTextIcon, BrowserIcon, BuildingsIcon, CalendarDotsIcon, ChartBarIcon, ChartLineUpIcon, ChatsCircleIcon, CheckSquareIcon, KanbanIcon, ClockCountdownIcon, CodeIcon, ComputerTowerIcon, CreditCardIcon, CurrencyCircleDollarIcon, DatabaseIcon, EnvelopeIcon, EnvelopeSimpleIcon, FileTextIcon, FolderOpenIcon, GameControllerIcon, GaugeIcon, GearSixIcon, GiftIcon, GlobeIcon, HandshakeIcon, HardDrivesIcon, HeartbeatIcon, IdentificationBadgeIcon, IdentificationCardIcon, KeyIcon, LifebuoyIcon, ListChecksIcon, ListMagnifyingGlassIcon, LockKeyIcon, MegaphoneIcon, NewspaperIcon, NotePencilIcon, NotebookIcon, PackageIcon, PaletteIcon, PaperPlaneTiltIcon, PercentIcon, PlugsConnectedIcon, PulseIcon, PuzzlePieceIcon, QueueIcon, ReceiptIcon, RocketLaunchIcon, ScrollIcon, ShieldCheckIcon, ShieldWarningIcon, ShoppingCartIcon, SignInIcon, SlidersHorizontalIcon, SquaresFourIcon, StackIcon, StarIcon, StorefrontIcon, TextboxIcon, TicketIcon, TranslateIcon, UploadSimpleIcon, UserCircleIcon, UserGearIcon, UsersIcon, UsersThreeIcon, WalletIcon, XCircleIcon,
 } from "@phosphor-icons/react";
 import type { TranslationKey } from "@/lib/i18n-core";
 import { routeAllowed } from "@/lib/modules";
@@ -70,6 +70,7 @@ export const ADMIN_NAV: NavCategory[] = [
     { to: "/admin/game-delivery", label: "nav.game_delivery", desc: "navdesc.admin_game_delivery", icon: TerminalWindowIcon },
     { to: "/admin/digital-products", label: "nav.digital_products", desc: "navdesc.admin_digital_products", icon: KeyIcon },
     { to: "/admin/creator-market", label: "nav.creator_market", desc: "navdesc.admin_creator_market", icon: StorefrontIcon },
+    { to: "/admin/product-reviews", label: "nav.product_reviews", desc: "navdesc.admin_product_reviews", icon: StarIcon },
     { to: "/admin/module-log", label: "nav.module_log", desc: "navdesc.admin_module_log", icon: ListMagnifyingGlassIcon },
   ] },
   { id: "domains", label: "navcat.domains", icon: GlobeIcon, items: [
