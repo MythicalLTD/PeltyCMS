@@ -17,6 +17,8 @@ export const MODULE_ROUTES: readonly (readonly [string, ModuleId])[] = [
   ["/admin/game-delivery", "game_delivery"],
   ["/admin/digital-products", "digital_products"],
   ["/digital", "digital_products"],
+  ["/admin/creator-market", "creator_marketplace"],
+  ["/creator", "creator_marketplace"],
 ];
 
 export function moduleForPath(path: string): ModuleId | undefined {

@@ -346,10 +346,10 @@ async fn creators_listings_sales_and_payouts() {
     )
     .await;
     assert_eq!(s2.status, StatusCode::CONFLICT);
-    assert!(s2.body["error"]["code"]
-        .as_str()
-        .unwrap()
-        .starts_with("error.payout_provider_"));
+    assert!(matches!(
+        s2.body["error"]["code"].as_str().unwrap(),
+        "error.payout_provider_unconfigured" | "error.payout_provider_stub"
+    ));
     assert_eq!(
         dec(&balance(&app, &carol).await["available"]),
         Decimal::ZERO
