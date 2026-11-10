@@ -1,4 +1,4 @@
-# Optional modules (gaming, digital products, marketplace, reviews, community)
+# Optional modules (gaming, digital products, marketplace, reviews, community, store look)
 
 PeltyCMS is a hosting and billing panel out of the box. The same install can also run a game server store (Minecraft, FiveM/RedM, Rust and others, like Tebex or CraftingStore), sell digital products with licenses, or host a creator marketplace (like BuiltByBit). Each of these is an **optional module**: nothing changes until you switch it on, and you can combine them freely.
 
@@ -237,3 +237,25 @@ Rewards go through the **in-game delivery** queue (`game_delivery` must be on; t
 Admin routes need the **Manage servers** permission. Settings (`goal_amount`, `goal_currency`, `goal_label`, `leaderboard_size` 1–50, `show_donors`, `show_donor_amounts`) are saved with `PUT /api/v1/admin/modules/server_community`.
 
 Limits: the status check needs the server's query port to be reachable from the panel (it uses the server's **query port** when set, otherwise the game port, otherwise the game's default port). Server lists that only send a signed callback with their own scheme (for example Votifier) are not supported yet; use their HTTP/webhook callback.
+
+## Store look (`gaming_storefront`)
+
+Changes how the game store looks when **Settings → Website → Store mode** is **Game store**. Switch the module on, then open **Store look**:
+
+- **Banner**: a title, subtitle and background image (an `https://` URL or a path on your site such as `/uploads/banner.png`).
+- **Accent color**: recolors buttons and focus rings in the store (theme default, emerald, violet, amber, rose, sky).
+- **Package layout**: a dense list or cards.
+- **Sidebar** on the left or right, with up to 12 widgets in the order you choose:
+  - **Text box**: rules, about, contact. Shown as plain text (no HTML).
+  - **Top customer**: the biggest spender today, this week, month, year or all time. Counts paid invoices in the default currency. Shown by game account name or first name and last initial; the amount only if you switch it on.
+  - **Recent payments** (1–10): who bought which packages, by product name only (no invoice details, no emails).
+  - **Featured package**: one active product with its image and a link. Hidden products are skipped.
+  - **Server status** and **Monthly goal**: from the [community module](#server-status-voting-and-leaderboards-server_community); they only appear while `server_community` is on.
+  - **Discord button**: a `https://discord.gg/…` or `https://discord.com/invite/…` link.
+
+With the module off, the store keeps its plain look and these endpoints return 404.
+
+### API
+
+- `GET /api/v1/public/storefront` (no login): the banner, accent, layout, sidebar side and the widgets with their live data. Widgets with nothing to show (an unknown product, community off) are left out.
+- `GET|PUT /api/v1/admin/storefront` (**Manage settings**): read or replace the settings. Invalid values return `422 error.storefront_invalid`.
