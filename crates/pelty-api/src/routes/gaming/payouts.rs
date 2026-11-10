@@ -115,9 +115,13 @@ pub fn provider(method: &str) -> Option<Box<dyn PayoutProvider>> {
     match method {
         "manual" => Some(Box::new(Manual)),
         "stripe_connect" => Some(Box::new(StripeConnect {
+            // Stripe Connect secret key for creator payouts. The provider is a
+            // stub in this release: with it set, payouts still answer `payout_provider_stub`.
             key_present: env("PELTY_STRIPE_CONNECT_KEY"),
         })),
         "paypal" => Some(Box::new(PayPal {
+            // PayPal Payouts client id for creator payouts. The provider is a
+            // stub in this release: with it set, payouts still answer `payout_provider_stub`.
             key_present: env("PELTY_PAYPAL_PAYOUTS_CLIENT_ID"),
         })),
         _ => None,
