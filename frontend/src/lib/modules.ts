@@ -37,10 +37,15 @@ export function routeAllowed(path: string, enabled: ReadonlySet<string>): boolea
   return !m || enabled.has(m);
 }
 
+/** Never restored from the browser cache: a module toggled in another tab
+ * (or by another admin) would otherwise 404 its pages, or show a disabled
+ * one, until the cached answer goes stale. */
+export const MODULES_QUERY = { queryKey: ["public", "modules"], meta: { persist: false } } as const;
+
 /** `loaded` is true once the list arrived; `failed` when it could not be read. */
 export function useModules(): { enabled: ReadonlySet<string>; loaded: boolean; failed: boolean } {
   const q = useQuery({
-    queryKey: ["public", "modules"],
+    ...MODULES_QUERY,
     queryFn: () => api<{ enabled: string[] }>("/public/modules"),
     staleTime: 60_000,
   });
