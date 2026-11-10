@@ -133,6 +133,9 @@ pub struct PlaceOrder {
     /// Optional promo code.
     #[serde(default)]
     pub coupon: Option<String>,
+    /// Creator code (module `creator_codes`; ignored while it is off).
+    #[serde(default)]
+    pub creator_code: Option<String>,
     /// Bundle the cart fulfils (discount applies when every item is present).
     #[serde(default)]
     pub bundle_id: Option<Uuid>,
@@ -188,6 +191,7 @@ pub async fn client_place_order(
         &b.items,
         b.coupon.as_deref(),
         bundle.as_ref(),
+        b.creator_code.as_deref(),
     )
     .await?;
     let redirect = match &form {
@@ -266,6 +270,7 @@ pub(crate) async fn place_order(
     items: &[CartItem],
     coupon: Option<&str>,
     bundle: Option<&pelty_database::orders::BundleDiscount>,
+    creator: Option<&str>,
 ) -> ApiResult<(orders::Order, invoices::Invoice)> {
     pelty_database::kyc::ensure_can_order(&s.pool, cid).await?;
     // Pre-event: addons may cancel, or set/clear the coupon code.
@@ -284,10 +289,27 @@ pub(crate) async fn place_order(
     let mut discounts = addon_discounts(s, cid, currency, items).await?;
     let sale_discounts = crate::routes::timed_sales::checkout_discounts(s, currency, items).await?;
     discounts.extend(sale_discounts);
+    let creator = crate::routes::creator_codes::resolve(s, cid, creator).await?;
+    if let Some(c) = &creator {
+        discounts
+            .extend(crate::routes::creator_codes::checkout_discounts(s, currency, items, c).await?);
+    }
     let (order, invoice) = s
         .orders()
         .place_full(cid, currency, items, coupon, DUE_DAYS, bundle, &discounts)
         .await?;
+    if let Some(c) = &creator {
+        pelty_database::creator_codes::attach(&s.pool, order.id, c.id).await?;
+        audit::record(
+            &s.pool,
+            Some(u.user_id),
+            "order.creator_code",
+            Some(&order.id.to_string()),
+            u.ip.as_deref(),
+            json!({ "code": c.code, "affiliate_id": c.affiliate_id }),
+        )
+        .await?;
+    }
     if !discounts.is_empty() {
         let applied: Vec<Value> = discounts
             .iter()

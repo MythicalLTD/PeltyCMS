@@ -59,6 +59,9 @@ pub struct HeadlessCart {
     pub items: Vec<CartItem>,
     #[serde(default)]
     pub coupon: Option<String>,
+    /// Creator code (module `creator_codes`; ignored while it is off).
+    #[serde(default)]
+    pub creator_code: Option<String>,
 }
 
 async fn save(s: &AppState, u: &CurrentUser, id: Uuid, b: HeadlessCart) -> ApiResult<Value> {
@@ -90,6 +93,7 @@ async fn save(s: &AppState, u: &CurrentUser, id: Uuid, b: HeadlessCart) -> ApiRe
             country: b.country,
             items: b.items,
             coupon: b.coupon,
+            creator_code: b.creator_code,
             email: None,
             locale: String::new(),
         },
@@ -170,6 +174,7 @@ pub async fn checkout(
         &items,
         cart.coupon.as_deref(),
         None,
+        cart.creator_code.as_deref(),
     )
     .await?;
     sf::mark_converted(&s.pool, cart.id, cid, order.id).await?;
