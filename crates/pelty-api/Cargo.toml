@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+hex = { workspace = true }
 semver = "1"
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 futures-util = { version = "0.3", default-features = false }
@@ -83,7 +84,6 @@ hmac = "0.13"
 time = { workspace = true }
 uuid = { workspace = true }
 sha2 = { workspace = true }
-hex = { workspace = true }
 sqlx = { workspace = true }
 
 # All integration suites share one test binary (tests/integration/main.rs):

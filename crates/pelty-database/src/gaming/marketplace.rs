@@ -15,6 +15,9 @@ use uuid::Uuid;
 
 pub const MODULE: &str = "creator_marketplace";
 pub const PAYOUT_METHODS: &[&str] = &["manual", "stripe_connect", "paypal"];
+/// When automatic payouts are created: never (creators request them), every
+/// week on `payout_weekday` or every month on `payout_monthday`.
+pub const PAYOUT_SCHEDULES: &[&str] = &["manual", "weekly", "monthly"];
 
 /// Marketplace settings (stored in `feature_modules.settings`).
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
@@ -30,6 +33,20 @@ pub struct Config {
     pub min_payout: Decimal,
     pub auto_approve_creators: bool,
     pub auto_approve_listings: bool,
+    /// One of [`PAYOUT_SCHEDULES`].
+    pub payout_schedule: String,
+    /// ISO weekday (1 = Monday … 7 = Sunday) for weekly payouts.
+    pub payout_weekday: u8,
+    /// Day of month (1–28) for monthly payouts.
+    pub payout_monthday: u8,
+    /// Payouts wait in `requested` until staff send them. Off: payouts to
+    /// Stripe Connect / PayPal are sent automatically.
+    pub payout_approval: bool,
+    /// Payout methods creators may pick (staff can still assign any).
+    pub payout_methods: Vec<String>,
+    /// Pull money back from paid Stripe transfers when a refund or
+    /// chargeback leaves the creator's balance negative.
+    pub reverse_transfers_on_refund: bool,
 }
 
 impl Config {
@@ -66,6 +83,38 @@ impl Config {
                 .get("auto_approve_listings")
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
+            payout_schedule: v
+                .get("payout_schedule")
+                .and_then(Value::as_str)
+                .filter(|x| PAYOUT_SCHEDULES.contains(x))
+                .unwrap_or("manual")
+                .into(),
+            payout_weekday: v
+                .get("payout_weekday")
+                .and_then(Value::as_u64)
+                .unwrap_or(1)
+                .clamp(1, 7) as u8,
+            payout_monthday: v
+                .get("payout_monthday")
+                .and_then(Value::as_u64)
+                .unwrap_or(1)
+                .clamp(1, 28) as u8,
+            payout_approval: v
+                .get("payout_approval")
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
+            payout_methods: match v.get("payout_methods").and_then(Value::as_array) {
+                Some(a) => PAYOUT_METHODS
+                    .iter()
+                    .filter(|m| a.iter().any(|x| x.as_str() == Some(m)))
+                    .map(|m| (*m).to_string())
+                    .collect(),
+                None => PAYOUT_METHODS.iter().map(|m| (*m).to_string()).collect(),
+            },
+            reverse_transfers_on_refund: v
+                .get("reverse_transfers_on_refund")
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
         }
     }
     pub fn multi_vendor(&self) -> bool {
@@ -113,9 +162,18 @@ pub struct Creator {
     pub payout_details: Value,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
+    /// Stripe Connect (Express) account, empty until onboarding starts.
+    pub stripe_account_id: String,
+    /// `none`, `onboarding`, `restricted`, `enabled` or `disconnected`.
+    pub stripe_status: String,
+    pub stripe_status_detail: String,
+    pub paypal_email: String,
+    /// Staff fixed the payout method; the creator cannot change it.
+    pub payout_method_locked: bool,
 }
 
-const CCOLS: &str = "id, user_id, customer_id, slug, display_name, bio, website, avatar_url, status, commission_percent, payout_method, payout_details, created_at";
+const CCOLS: &str = "id, user_id, customer_id, slug, display_name, bio, website, avatar_url, status, commission_percent, payout_method, payout_details, created_at,
+    stripe_account_id, stripe_status, stripe_status_detail, paypal_email, payout_method_locked";
 
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[schema(as = CreatorProfile)]
@@ -136,6 +194,16 @@ pub struct Profile {
 }
 
 impl Profile {
+    /// PayPal e-mail given in `payout_details` (older clients send it there).
+    pub fn paypal_email(&self) -> Option<&str> {
+        self.payout_details
+            .as_ref()
+            .and_then(|d| d.get("paypal_email"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|e| !e.is_empty())
+    }
+
     pub fn validate(&self) -> AppResult<()> {
         if !slug_ok(&self.slug)
             || self.display_name.trim().is_empty()
@@ -151,6 +219,9 @@ impl Profile {
                 .payout_details
                 .as_ref()
                 .is_some_and(|d| !d.is_object() || d.to_string().len() > 2000)
+            || self
+                .paypal_email()
+                .is_some_and(|e| !crate::creator_payouts::email_ok(e))
         {
             return Err(AppError::Validation("error.creator_profile_invalid"));
         }
@@ -211,8 +282,8 @@ pub async fn apply(
         return Err(AppError::Conflict("error.creator_exists"));
     }
     sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "INSERT INTO creators (id, user_id, customer_id, slug, display_name, bio, website, avatar_url, status, payout_method, payout_details, approved_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,'manual'),COALESCE($11,'{{}}'::jsonb), CASE WHEN $12 THEN now() END) RETURNING {CCOLS}"
+        "INSERT INTO creators (id, user_id, customer_id, slug, display_name, bio, website, avatar_url, status, payout_method, payout_details, approved_at, paypal_email)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,'manual'),COALESCE($11,'{{}}'::jsonb), CASE WHEN $12 THEN now() END, COALESCE($13, '')) RETURNING {CCOLS}"
     )))
     .bind(Uuid::new_v4())
     .bind(user)
@@ -226,6 +297,7 @@ pub async fn apply(
     .bind(&p.payout_method)
     .bind(&p.payout_details)
     .bind(approve)
+    .bind(p.paypal_email())
     .fetch_one(pool)
     .await
     .map_err(conflict)
@@ -235,7 +307,8 @@ pub async fn update_profile(pool: &PgPool, id: Uuid, p: &Profile) -> AppResult<C
     p.validate()?;
     sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE creators SET slug = $2, display_name = $3, bio = $4, website = $5, avatar_url = $6,
-           payout_method = COALESCE($7, payout_method), payout_details = COALESCE($8, payout_details)
+           payout_method = COALESCE($7, payout_method), payout_details = COALESCE($8, payout_details),
+           paypal_email = COALESCE($9, paypal_email)
          WHERE id = $1 RETURNING {CCOLS}"
     )))
     .bind(id)
@@ -246,6 +319,7 @@ pub async fn update_profile(pool: &PgPool, id: Uuid, p: &Profile) -> AppResult<C
     .bind(&p.avatar_url)
     .bind(&p.payout_method)
     .bind(&p.payout_details)
+    .bind(p.paypal_email())
     .fetch_one(pool)
     .await
     .map_err(conflict)
@@ -613,9 +687,17 @@ pub struct Payout {
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339::option")]
     pub processed_at: Option<OffsetDateTime>,
+    /// PayPal batch (`pending:<sender_batch_id>` until PayPal accepted it).
+    pub batch_id: String,
+    /// Amount pulled back from a Stripe transfer after refunds.
+    #[schema(value_type = String)]
+    pub reversed: Decimal,
+    /// Created by the payout schedule.
+    pub auto: bool,
 }
 
-const PCOLS: &str = "po.id, po.creator_id, c.display_name AS creator, po.currency::text AS currency, po.amount, po.method, po.status, po.provider_ref, po.note, po.created_at, po.processed_at";
+const PCOLS: &str = "po.id, po.creator_id, c.display_name AS creator, po.currency::text AS currency, po.amount, po.method, po.status, po.provider_ref, po.note, po.created_at, po.processed_at,
+    po.batch_id, po.reversed, po.auto";
 
 pub async fn payouts(
     pool: &PgPool,
@@ -652,6 +734,7 @@ pub async fn request_payout(
     currency: &str,
     amount: Decimal,
     cfg: &Config,
+    auto: bool,
 ) -> AppResult<Payout> {
     if amount <= Decimal::ZERO || amount.scale() > 4 {
         return Err(AppError::Validation("error.invalid_amount"));
@@ -678,12 +761,13 @@ pub async fn request_payout(
         return Err(AppError::Conflict("error.payout_insufficient"));
     }
     let id = Uuid::new_v4();
-    sqlx::query("INSERT INTO creator_payouts (id, creator_id, currency, amount, method) VALUES ($1,$2,$3,$4,$5)")
+    sqlx::query("INSERT INTO creator_payouts (id, creator_id, currency, amount, method, auto) VALUES ($1,$2,$3,$4,$5,$6)")
         .bind(id)
         .bind(c.id)
         .bind(&currency)
         .bind(amount)
         .bind(&c.payout_method)
+        .bind(auto)
         .execute(&mut *tx)
         .await
         .map_err(db_err)?;

@@ -154,6 +154,7 @@ pub const REGISTRY: &[EventSpec] = &[
     // ---- creator marketplace ----
     domain("creator.applied", "A customer applied to sell on the marketplace.", &[f("creator_id", "uuid", "Creator"), f("status", "string", "pending or approved")]),
     domain("creator.payout_requested", "A creator requested a payout.", &[f("payout_id", "uuid", "Payout"), f("creator_id", "uuid", "Creator"), f("amount", "decimal", "Amount"), f("currency", "string", "ISO 4217 code")]),
+    domain("creator.payout_failed", "A creator payout failed or was returned; the amount went back to the balance.", &[f("payout_id", "uuid", "Payout"), f("creator_id", "uuid", "Creator"), f("amount", "decimal", "Amount"), f("currency", "string", "ISO 4217 code"), f("reason", "string", "Provider reason")]),
     domain("creator.payout_paid", "A creator payout was marked paid.", &[f("payout_id", "uuid", "Payout"), f("creator_id", "uuid", "Creator"), f("amount", "decimal", "Amount"), f("currency", "string", "ISO 4217 code")]),
     domain("review.submitted", "A customer submitted or edited a product review.", &[f("review_id", "uuid", "Review"), f("product_id", "uuid", "Product"), f("customer_id", "uuid", "Customer"), f("rating", "int", "1 to 5"), f("status", "string", "pending or approved"), f("verified", "bool", "Customer bought the product")]),
     domain("review.approved", "Staff approved a product review.", &[f("review_id", "uuid", "Review"), f("product_id", "uuid", "Product"), f("customer_id", "uuid", "Customer"), f("rating", "int", "1 to 5")]),

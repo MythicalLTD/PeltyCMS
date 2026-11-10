@@ -10,6 +10,10 @@ use serde_json::Value;
 use std::path::PathBuf;
 use tower::ServiceExt;
 
+/// Held by the creator marketplace suites: both change the same module settings,
+/// and the payouts suite sets provider env vars for the whole process.
+pub static CREATOR_PAYOUTS: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 pub fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }

@@ -315,6 +315,7 @@ impl AppState {
             crate::routes::discord_roles::on_event(&state, &event).await;
             crate::routes::digital::on_event(&state, &event).await;
             crate::routes::marketplace::on_event(&state, &event).await;
+            crate::routes::creator_payouts::on_event(&state, &event).await;
             crate::routes::credit::auto_apply_on_event(&state, &event).await;
             plugins.dispatch(&event).await;
             crate::plugin_hooks::on_event(&state, &event).await;

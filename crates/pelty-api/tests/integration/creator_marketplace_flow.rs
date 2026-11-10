@@ -37,6 +37,7 @@ async fn balance(app: &axum::Router, s: &Sess) -> Value {
 
 #[tokio::test]
 async fn creators_listings_sales_and_payouts() {
+    let _serial = CREATOR_PAYOUTS.lock().await;
     let (app, st) = app().await;
     reset_modules(&st).await;
     let admin = sess(&app, &st, "admin").await;

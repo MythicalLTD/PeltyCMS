@@ -2,7 +2,6 @@
 //! and profiles, listings with admin approval, the seller dashboard (balances,
 //! ledger, per-product sales), payouts, and public creator pages. Sales are
 //! accrued on `invoice.paid` and reversed on refunds and chargebacks.
-use super::payouts::{provider, Sent};
 use crate::error::ApiResult;
 use crate::extract::{perms, CurrentUser, RequirePermission};
 use crate::routes::customers::customer_of;
@@ -148,6 +147,7 @@ pub async fn public_resource(
         .map(|l| json!({ "product_id": l.product_id, "name": l.name, "image_url": l.image_url, "sales": l.sales }))
         .collect();
     Ok(Json(json!({
+        "gallery": pelty_database::creator_payouts::gallery(&s.pool, id).await?,
         "listing": l,
         "creator": public_profile(&c),
         "more": more,
@@ -209,6 +209,7 @@ pub async fn dashboard(State(s): State<AppState>, u: CurrentUser) -> ApiResult<J
         "min_payout": cfg.min_payout.to_string(),
         "balances": mk::balances(&s.pool, c.id).await?,
         "products": mk::product_stats(&s.pool, c.id).await?,
+        "payout": super::creator_payouts::dashboard_extra(&s, &c, &cfg).await?,
     })))
 }
 
@@ -222,6 +223,11 @@ pub async fn apply(
     let cfg = mk::config(&s.pool).await?;
     if !cfg.multi_vendor() {
         return Err(AppError::Conflict("error.market_closed").into());
+    }
+    if let Some(m) = b.payout_method.as_deref() {
+        if m != "manual" && !cfg.payout_methods.iter().any(|x| x == m) {
+            return Err(AppError::Validation("error.payout_method_unavailable").into());
+        }
     }
     let cust = customer_of(&s, &u).await?;
     let c = mk::apply(&s.pool, u.user_id, cust, &b, cfg.auto_approve_creators).await?;
@@ -248,6 +254,19 @@ pub async fn update_profile(
     Json(b): Json<Profile>,
 ) -> ApiResult<Json<Creator>> {
     let c = me(&s, &u).await?;
+    if let Some(m) = b.payout_method.as_deref().filter(|m| *m != c.payout_method) {
+        if c.payout_method_locked {
+            return Err(AppError::Conflict("error.payout_method_locked").into());
+        }
+        if !mk::config(&s.pool)
+            .await?
+            .payout_methods
+            .iter()
+            .any(|x| x == m)
+        {
+            return Err(AppError::Validation("error.payout_method_unavailable").into());
+        }
+    }
     Ok(Json(mk::update_profile(&s.pool, c.id, &b).await?))
 }
 
@@ -456,7 +475,12 @@ pub async fn request_payout(
         return Err(AppError::Forbidden.into());
     }
     let cfg = mk::config(&s.pool).await?;
-    let p = mk::request_payout(&s.pool, &c, &b.currency, b.amount, &cfg).await?;
+    let exp = pelty_database::creator_payouts::exponent(&s.pool, &b.currency.to_ascii_uppercase())
+        .await?;
+    if b.amount.normalize().scale() > exp {
+        return Err(AppError::Validation("error.invalid_amount").into());
+    }
+    let p = mk::request_payout(&s.pool, &c, &b.currency, b.amount, &cfg, false).await?;
     audit::record(
         &s.pool,
         Some(u.user_id),
@@ -467,6 +491,7 @@ pub async fn request_payout(
     )
     .await?;
     s.emit(DomainEvent::new("creator.payout_requested", json!({ "payout_id": p.id, "creator_id": c.id, "amount": p.amount.to_string(), "currency": p.currency })));
+    super::creator_payouts::kick_if_auto(&s, &p, &cfg);
     Ok(Json(p))
 }
 
@@ -589,30 +614,7 @@ pub async fn admin_send(
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<mk::Payout>> {
     let p = mk::payout(&s.pool, id).await?;
-    if p.status != "requested" {
-        return Err(AppError::Conflict("error.payout_state").into());
-    }
-    let c = mk::get(&s.pool, p.creator_id).await?;
-    let prov =
-        provider(&p.method).ok_or(AppError::Conflict("error.payout_provider_unconfigured"))?;
-    // Claim first (requested → processing under a row lock) so two sends of
-    // the same payout cannot both reach the provider. Providers get the
-    // payout id as their idempotency key.
-    mk::set_payout(&s.pool, id, "processing", "", "").await?;
-    let out = match prov.send(&c, &p).await {
-        Ok(Sent::Paid(r)) => mk::set_payout(&s.pool, id, "paid", &r, "").await?,
-        Ok(Sent::Processing(r)) => mk::payout_ref(&s.pool, id, &r).await?,
-        Err(code) => {
-            mk::unclaim_payout(&s.pool, id).await?;
-            return Err(AppError::Conflict(code).into());
-        }
-    };
-    if out.status == "paid" {
-        s.emit(DomainEvent::new(
-            "creator.payout_paid",
-            json!({ "payout_id": out.id, "creator_id": out.creator_id, "amount": out.amount.to_string(), "currency": out.currency }),
-        ));
-    }
+    let out = super::creator_payouts::send_one(&s, id).await?;
     audit::record(
         &s.pool,
         Some(u.user_id),
@@ -695,6 +697,8 @@ pub async fn on_event(s: &AppState, e: &DomainEvent) {
                 if let Some(x) = id(key) {
                     let invoices = mk::invoices_for(&s.pool, kind, x).await?;
                     mk::reverse_invoices(&s.pool, &invoices, e.name).await?;
+                    let cfg = mk::config(&s.pool).await?;
+                    super::creator_payouts::clawback(s, &invoices, &cfg).await?;
                 }
             }
         }

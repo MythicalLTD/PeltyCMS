@@ -5,6 +5,7 @@
 
 pub mod community;
 pub mod creator_codes;
+pub mod creator_payouts;
 pub mod delivery;
 pub mod digital;
 pub mod discord_roles;

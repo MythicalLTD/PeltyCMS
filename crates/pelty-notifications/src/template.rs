@@ -161,6 +161,18 @@ pub const TEMPLATES: &[TemplateDef] = &[
         ],
     },
     TemplateDef {
+        name: "creator_payout_paid",
+        vars: &["name", "amount", "method", "link", "company"],
+    },
+    TemplateDef {
+        name: "creator_payout_failed",
+        vars: &["name", "amount", "reason", "link", "company"],
+    },
+    TemplateDef {
+        name: "digital_version_released",
+        vars: &["name", "product", "version", "link", "company"],
+    },
+    TemplateDef {
         name: "affiliate_payout_requested",
         vars: &["affiliate", "amount", "link", "company"],
     },
