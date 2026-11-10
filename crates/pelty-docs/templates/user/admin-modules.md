@@ -146,6 +146,8 @@ Payout administration needs the **Affiliates** permission. Creator and listing r
 |---|---|---|
 | GET | `/api/v1/public/marketplace` | anyone (current mode) |
 | GET | `/api/v1/public/creators`, `/api/v1/public/creators/{slug}` | anyone |
+| GET | `/api/v1/public/marketplace/listings?q=&category=&sort=trending\|new\|top_rated\|popular&limit=` | anyone: approved listings (with creator, category, sales, rating) and the categories |
+| GET | `/api/v1/public/marketplace/listings/{product}` | anyone: one resource page (listing, creator profile, more by the creator) |
 | GET/POST/PUT | `/api/v1/client/creator` | dashboard / apply / update profile |
 | GET/POST | `/api/v1/client/creator/listings` | the creator |
 | POST | `/api/v1/client/creator/listings/{id}/listed` | unlist or relist |
@@ -253,11 +255,34 @@ Changes how the game store looks when **Settings → Website → Store mode** is
   - **Server status** and **Monthly goal**: from the community module (`server_community`, above); they only appear while `server_community` is on.
   - **Discord button**: a `https://discord.gg/…` or `https://discord.com/invite/…` link.
 
+Store-wide look (used when the public site is in store mode, below):
+
+- **Site theme**: colours for the whole public site and the client area: *Site brand* (your Website colours), *Minecraft* (green), *FiveM* (orange), *Rust* (rust red) or *Dark neutral*. The accent color still recolors buttons on top of the theme. The staff area never changes.
+- **Server in the banner**: which game server the homepage banner shows (default: the first enabled one). Visitors see its address with a copy button (`connect host:port` for FiveM and RedM, the port filled in from the game's default when you left it empty) and, while `server_community` is on, the live player count.
+- **Server logo** (`https://` or `/path`; empty uses the site logo) and a **Discord invite** for the banner button and the store menu.
+
 With the module off, the store keeps its plain look and these endpoints return 404.
+
+## Public site look (Settings → Website)
+
+**Public site look** decides what visitors see on `/`, in the header menu and in the footer:
+
+| Setting | Result |
+|---|---|
+| Automatic (default) | Game server store when `gaming_storefront` is on, else the creator marketplace when `creator_marketplace` is on, else the hosting landing. |
+| Hosting landing | Always the hosting homepage (your Website pages) and your own menu. |
+| Game server store | `/` is the store homepage: big server banner (logo, name, copyable address, live players, Discord), quick links (game account, vote, leaderboards, support), category tabs, package cards with images, prices, sale badges and **Add to cart**, and the sidebar widgets (featured package, recent payments, top customer, goal). The menu becomes Store, Vote, Leaderboards (with `server_community`), Marketplace (when that module is on), Discord and Support, plus the cart. `/store` always uses the game store layout. |
+| Creator marketplace | `/` is the marketplace: search, categories (your product groups that hold approved listings), Trending (most sales in the last 30 days), New and Top rated (with `product_reviews`) shelves. Resource pages are at `/marketplace/r/{product}` (image, description, versions and changelog with `digital_products`, reviews and Q&A with `product_reviews`, Buy box, creator card). Creator profiles are at `/creators/{slug}`; `/creators` lists them. The menu becomes Explore, Creators, Store (when the game store is on), Sell (the creator dashboard) and Support. |
+
+When both modules are on, pick which one is the homepage; the other stays in the menu. Choosing a look whose module is off falls back to Automatic.
+
+In every look, signed-in customers land on the store or marketplace homepage (the client area is a click away) and the client area uses the same colours. **Support** (`/support`) gathers the knowledgebase (with search), **Open a ticket**, your tickets, live chat (when it is switched on), network status, announcements and the contact form; it is in the menu and a Support column is added to the footer. Every public page shows *Powered by PeltyCMS* in the footer.
+
+Players sign in with their PeltyCMS account and link their game identity (Minecraft name, FiveM license, Steam ID, Discord ID) under **Game accounts**; there is no username-only login without an account.
 
 ### API
 
-- `GET /api/v1/public/storefront` (no login): the banner, accent, layout, sidebar side and the widgets with their live data. Widgets with nothing to show (an unknown product, community off) are left out.
+- `GET /api/v1/public/storefront` (no login): the banner, accent, theme, logo, Discord link, the banner `server` (`name`, `slug`, `game`, `address`, `status` with `online`/`players`/`max_players` or `null`), layout, sidebar side and the widgets with their live data. Widgets with nothing to show (an unknown product, community off) are left out.
 - `GET|PUT /api/v1/admin/storefront` (**Manage settings**): read or replace the settings. Invalid values return `422 error.storefront_invalid`.
 
 ## Timed sales (`timed_sales`)
