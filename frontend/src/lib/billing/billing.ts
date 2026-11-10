@@ -28,7 +28,7 @@ export interface Service {
 export interface Order { id: string; number: number; customer_id: string; status: string; currency: string; total: string; invoice_id: string | null; invoice_status?: string | null; created_at: string }
 export interface Customer { id: string; owner_user_id?: string | null; owner_avatar_version?: number | null; email: string; organization: string; first_name: string; last_name: string; country: string; currency: string; status: string; notes?: string; created_at: string; vat_number?: string; tax_exempt?: boolean }
 export interface Job { id: number; kind: string; status: string; attempts: number; max_attempts: number; run_at: string; last_error: string | null; created_at: string }
-export interface Product { id: string; name: string; slug: string; status: string; group_id?: string; description?: string; module: string | null; stock_enabled?: boolean; stock_qty?: number; allow_backorder?: boolean; prices: { currency: string; cycle: string; amount: string; setup_fee: string }[]; options?: import("@/pages/client/services/Order").ConfigOption[] }
+export interface Product { id: string; name: string; slug: string; status: string; group_id?: string; description?: string; module: string | null; stock_enabled?: boolean; stock_qty?: number; allow_backorder?: boolean; image_url?: string; prices: { currency: string; cycle: string; amount: string; setup_fee: string }[]; options?: import("@/pages/client/services/Order").ConfigOption[] }
 
 /**
  * Format a decimal string as currency. The string is passed to Intl as-is

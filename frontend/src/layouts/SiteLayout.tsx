@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import {
   DiscordLogoIcon, EnvelopeSimpleIcon, FacebookLogoIcon, GithubLogoIcon, InstagramLogoIcon, LinkedinLogoIcon, ListIcon, MastodonLogoIcon,
-  ShoppingCartIcon, SignInIcon, SquaresFourIcon, XLogoIcon, YoutubeLogoIcon, type Icon,
+  PlugsConnectedIcon, ShoppingCartIcon, SignInIcon, SquaresFourIcon, XLogoIcon, YoutubeLogoIcon, type Icon,
 } from "@phosphor-icons/react";
 import { Logo } from "@/components/Logo";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -17,6 +17,7 @@ import { ChatWidget } from "@/components/support/ChatWidget";
 import { GeneralRuntime } from "@/components/admin/GeneralRuntime";
 import { applyBrand, isInternal, safeHref, usePublicSite, type SiteLink } from "@/lib/admin/site";
 import { lineCount, useStoreCart } from "@/lib/store/storefront";
+import { joinUrl } from "@/lib/store/game";
 
 function NavItem({ l, onClick, block }: { l: SiteLink; onClick?: () => void; block?: boolean }) {
   const h = safeHref(l.href);
@@ -46,6 +47,10 @@ export function SiteLayout() {
   const n = view?.cart.order_id ? 0 : lineCount(view?.cart);
   const c = site?.config;
   useEffect(() => { if (c) applyBrand(c, document.documentElement, window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false); }, [c]);
+  const join = c?.store_mode === "game" ? joinUrl(c.game_join_code) : null;
+  const connect = join ? (
+    <Button asChild variant="outline" size="sm"><a href={join} rel="noopener noreferrer"><PlugsConnectedIcon aria-hidden />{t("game.connect")}</a></Button>
+  ) : null;
   const links: SiteLink[] = [
     ...(c?.nav ?? []),
     ...(site?.nav_pages ?? []).map((p) => ({ label: p.title, href: `/page/${p.slug}` })),
@@ -63,6 +68,7 @@ export function SiteLayout() {
           <Link to="/" aria-label={c?.site_name ?? t("app.name")}><Logo /></Link>
           <nav className="ml-6 hidden items-center gap-1 md:flex">{links.map((l, i) => <NavItem key={i} l={l} />)}</nav>
           <div className="ml-auto flex items-center gap-1">
+            {connect && <span className="hidden sm:inline-flex">{connect}</span>}
             <Button asChild variant="ghost" size="sm">
               <NavLink to="/cart" aria-label={t("store.cart")}><ShoppingCartIcon aria-hidden />{n > 0 && <Badge variant="secondary" className="tabular-nums">{n}</Badge>}</NavLink>
             </Button>
@@ -76,7 +82,7 @@ export function SiteLayout() {
                 <SheetHeader className="p-0"><SheetTitle>{c?.site_name ?? t("app.name")}</SheetTitle></SheetHeader>
                 <nav className="flex flex-col gap-1">{links.map((l, i) => <NavItem key={i} l={l} block onClick={() => setOpen(false)} />)}</nav>
                 <Separator />
-                <div className="flex flex-col gap-2">{account}<LanguageSwitcher /></div>
+                <div className="flex flex-col gap-2">{connect}{account}<LanguageSwitcher /></div>
               </SheetContent>
             </Sheet>
           </div>

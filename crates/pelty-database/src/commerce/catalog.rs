@@ -35,6 +35,8 @@ pub struct Product {
     pub stock_enabled: bool,
     pub stock_qty: i32,
     pub allow_backorder: bool,
+    /// Optional image: a same-site path or an http(s) URL, empty when unset.
+    pub image_url: String,
 }
 
 impl Product {
@@ -163,7 +165,7 @@ pub struct ProductFull {
 }
 
 const PCOLS: &str =
-    "id, group_id, name, slug, description, status, module, module_config, sort_order, created_at, stock_enabled, stock_qty, allow_backorder";
+    "id, group_id, name, slug, description, status, module, module_config, sort_order, created_at, stock_enabled, stock_qty, allow_backorder, image_url";
 
 pub fn valid_slug(s: &str) -> bool {
     let b = s.as_bytes();
@@ -222,6 +224,17 @@ pub struct ProductInput {
     pub module: Option<String>,
     pub module_config: Option<serde_json::Value>,
     pub sort_order: Option<i32>,
+    /// Image path or URL; empty string clears it.
+    pub image_url: Option<String>,
+}
+
+/// Same-site path or http(s) URL, at most 500 bytes, no whitespace or controls.
+pub fn valid_image_url(u: &str) -> bool {
+    u.len() <= 500
+        && ((u.starts_with('/') && !u.starts_with("//"))
+            || u.starts_with("https://")
+            || u.starts_with("http://"))
+        && !u.chars().any(|c| c.is_control() || c.is_whitespace())
 }
 
 impl ProductInput {
@@ -249,6 +262,13 @@ impl ProductInput {
         {
             return Err(AppError::Validation("error.validation"));
         }
+        if self
+            .image_url
+            .as_deref()
+            .is_some_and(|u| !u.is_empty() && !valid_image_url(u))
+        {
+            return Err(AppError::Validation("error.site_link"));
+        }
         Ok(())
     }
 }
@@ -259,8 +279,8 @@ pub async fn create_product(pool: &PgPool, i: &ProductInput) -> AppResult<Produc
         return Err(AppError::Validation("error.validation"));
     };
     sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "INSERT INTO products (id, group_id, name, slug, description, status, module, module_config, sort_order)
-         VALUES ($1,$2,$3,$4,COALESCE($5,''),COALESCE($6,'active'),NULLIF($7,''),COALESCE($8,'{{}}'::jsonb),COALESCE($9,0))
+        "INSERT INTO products (id, group_id, name, slug, description, status, module, module_config, sort_order, image_url)
+         VALUES ($1,$2,$3,$4,COALESCE($5,''),COALESCE($6,'active'),NULLIF($7,''),COALESCE($8,'{{}}'::jsonb),COALESCE($9,0),COALESCE($10,''))
          RETURNING {PCOLS}"
     )))
     .bind(Uuid::new_v4())
@@ -272,6 +292,7 @@ pub async fn create_product(pool: &PgPool, i: &ProductInput) -> AppResult<Produc
     .bind(&i.module)
     .bind(&i.module_config)
     .bind(i.sort_order)
+    .bind(&i.image_url)
     .fetch_one(pool)
     .await
     .map_err(db_err)
@@ -287,7 +308,8 @@ pub async fn update_product(
         "UPDATE products SET group_id = COALESCE($2, group_id), name = COALESCE($3, name), slug = COALESCE($4, slug),
             description = COALESCE($5, description), status = COALESCE($6, status),
             module = CASE WHEN $7::text IS NULL THEN module ELSE NULLIF($7, '') END,
-            module_config = COALESCE($8, module_config), sort_order = COALESCE($9, sort_order)
+            module_config = COALESCE($8, module_config), sort_order = COALESCE($9, sort_order),
+            image_url = COALESCE($10, image_url)
          WHERE id = $1 RETURNING {PCOLS}"
     )))
     .bind(id)
@@ -299,6 +321,7 @@ pub async fn update_product(
     .bind(&i.module)
     .bind(&i.module_config)
     .bind(i.sort_order)
+    .bind(&i.image_url)
     .fetch_optional(pool)
     .await
     .map_err(db_err)

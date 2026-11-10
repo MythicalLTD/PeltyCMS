@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PencilSimpleIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Field, FormError } from "@/components/Field";
+import { ImageUrlField } from "@/components/admin/ImageUrlField";
 import { SelectField } from "@/components/SelectField";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -35,6 +36,7 @@ export function ProductDialog({ product }: { product?: Product }) {
   const [newGroup, setNewGroup] = useState("");
   const [status, setStatus] = useState("active");
   const [desc, setDesc] = useState("");
+  const [image, setImage] = useState("");
   const [prices, setPrices] = useState<PriceRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const groups = useQuery({ queryKey: ["admin", "catalog", "groups"], queryFn: () => api<{ items: Group[] }>("/admin/catalog/groups"), enabled: open });
@@ -45,7 +47,7 @@ export function ProductDialog({ product }: { product?: Product }) {
 
   const reset = () => {
     setName(product?.name ?? ""); setSlug(product?.slug ?? ""); setSlugTouched(!!product);
-    setGroup(product?.group_id ?? ""); setNewGroup(""); setStatus(product?.status ?? "active"); setDesc(product?.description ?? "");
+    setGroup(product?.group_id ?? ""); setNewGroup(""); setStatus(product?.status ?? "active"); setDesc(product?.description ?? ""); setImage(product?.image_url ?? "");
     setPrices(product?.prices.map((p) => ({ currency: p.currency, cycle: p.cycle, amount: p.amount, setup_fee: p.setup_fee })) ?? []);
     setError(null);
   };
@@ -56,7 +58,7 @@ export function ProductDialog({ product }: { product?: Product }) {
         const g = await api<Group>("/admin/catalog/groups", { method: "POST", body: { name: newGroup.trim(), slug: slugify(newGroup) } });
         group_id = g.id;
       }
-      const body = { group_id, name: name.trim(), slug, status, description: desc };
+      const body = { group_id, name: name.trim(), slug, status, description: desc, image_url: image.trim() };
       const p = product
         ? await api<Product>(`/admin/catalog/products/${product.id}`, { method: "PATCH", body })
         : await api<Product>("/admin/catalog/products", { method: "POST", body });
@@ -95,6 +97,7 @@ export function ProductDialog({ product }: { product?: Product }) {
               : <span className="hidden sm:block" />}
             <SelectField id="pd-status" label={t("billing.status")} value={status} onChange={setStatus} options={["active", "hidden", "retired"].map((s) => ({ value: s, label: tCode(`status.${s}`) }))} />
             <div className="grid gap-2 sm:col-span-2"><Label htmlFor="pd-desc">{t("products.description")}</Label><Textarea id="pd-desc" rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} /></div>
+            <ImageUrlField id="pd-image" className="sm:col-span-2" label={t("products.image")} value={image} onChange={setImage} preferPath hint={t("products.image_hint")} />
           </div>
           <div className="grid gap-2">
             <div className="flex items-center justify-between gap-2">

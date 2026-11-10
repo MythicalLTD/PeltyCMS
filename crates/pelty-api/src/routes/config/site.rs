@@ -28,6 +28,9 @@ pub const BLOCK_TYPES: &[&str] = &[
 ];
 pub const FONTS: &[&str] = &["manrope", "inter", "system"];
 pub const MODES: &[&str] = &["dark", "light", "system"];
+/// Storefront layout: `hosting` is the plan store, `game` the compact package
+/// catalog for game servers.
+pub const STORE_MODES: &[&str] = &["hosting", "game"];
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -89,6 +92,9 @@ pub struct SiteConfig {
     pub copyright: String,
     pub show_store_in_nav: bool,
     pub client_dashboard_widgets: Vec<String>,
+    pub store_mode: String,
+    /// cfx.re join code of the FiveM server (the part after `cfx.re/join/`).
+    pub game_join_code: String,
 }
 
 impl Default for SiteConfig {
@@ -153,8 +159,17 @@ impl Default for SiteConfig {
                 "announcements".into(),
                 "kb".into(),
             ],
+            store_mode: "hosting".into(),
+            game_join_code: String::new(),
         }
     }
+}
+
+/// cfx.re join codes are short lowercase base36 ids.
+fn join_code_ok(c: &str) -> bool {
+    (4..=12).contains(&c.len())
+        && c.bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
 }
 
 fn href_ok(h: &str) -> bool {
@@ -191,6 +206,12 @@ pub fn validate_config(c: &SiteConfig) -> AppResult<()> {
     }
     if !FONTS.contains(&c.font.as_str()) || !MODES.contains(&c.default_mode.as_str()) {
         return Err(bad);
+    }
+    if !STORE_MODES.contains(&c.store_mode.as_str()) {
+        return Err(bad);
+    }
+    if !(c.game_join_code.is_empty() || join_code_ok(&c.game_join_code)) {
+        return Err(AppError::Validation("error.game_join_code"));
     }
     if !slug_ok(&c.homepage)
         || c.nav.len() > 20
@@ -504,6 +525,17 @@ mod tests {
         };
         assert!(validate_config(&c).is_err());
         assert!(!href_ok("//evil.example"));
+        let mut c = SiteConfig {
+            store_mode: "game".into(),
+            game_join_code: "abc123".into(),
+            ..Default::default()
+        };
+        assert!(validate_config(&c).is_ok());
+        c.game_join_code = "cfx.re/join/abc123".into();
+        assert!(validate_config(&c).is_err());
+        c.game_join_code.clear();
+        c.store_mode = "casino".into();
+        assert!(validate_config(&c).is_err());
     }
 
     #[test]

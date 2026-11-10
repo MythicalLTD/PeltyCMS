@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ImageUrlField, isImageFieldName } from "@/components/admin/ImageUrlField";
+import { JOIN_CODE, parseJoinCode } from "@/lib/store/game";
 import { api, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -107,6 +108,30 @@ function SettingsTab() {
           </div>
           <div className="flex flex-col gap-2"><Label htmlFor="s-home">{t("site.admin.homepage")}</Label><Input id="s-home" value={c.homepage} onChange={(e) => set("homepage", e.target.value)} /></div>
           <div className="flex items-center gap-3 self-end py-2"><Switch id="s-store" checked={c.show_store_in_nav} onCheckedChange={(v) => set("show_store_in_nav", v)} /><Label htmlFor="s-store">{t("site.admin.show_store")}</Label></div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle>{t("site.admin.store")}</CardTitle><CardDescription>{t("site.admin.store_hint")}</CardDescription></CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="s-store-mode">{t("site.admin.store_mode")}</Label>
+            <Select value={c.store_mode} onValueChange={(v) => set("store_mode", v as SiteConfig["store_mode"])}>
+              <SelectTrigger id="s-store-mode" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="hosting">{t("site.admin.store_mode_hosting")}</SelectItem>
+                <SelectItem value="game">{t("site.admin.store_mode_game")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {c.store_mode === "game" && (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="s-join">{t("site.admin.game_join_code")}</Label>
+              <Input id="s-join" value={c.game_join_code} placeholder="abc123" autoCapitalize="none" spellCheck={false} aria-describedby="s-join-hint"
+                aria-invalid={c.game_join_code !== "" && !JOIN_CODE.test(c.game_join_code)}
+                onChange={(e) => set("game_join_code", parseJoinCode(e.target.value))} />
+              <p id="s-join-hint" className="text-xs text-muted-foreground">{t("site.admin.game_join_code_hint")}</p>
+            </div>
+          )}
         </CardContent>
       </Card>
       <Card>

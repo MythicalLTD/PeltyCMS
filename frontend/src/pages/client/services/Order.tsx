@@ -27,6 +27,7 @@ export interface CatalogProduct {
   prices: { currency: string; cycle: string; amount: string; setup_fee: string }[];
   options: ConfigOption[];
   stock_enabled?: boolean; stock_qty?: number; allow_backorder?: boolean;
+  image_url?: string;
 }
 export type StockState = "out" | "backorder" | "low" | "in" | null;
 /** Storefront stock badge: null when the product doesn't track stock. */

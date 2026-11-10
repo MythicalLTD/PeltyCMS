@@ -11,6 +11,7 @@ import { HomeGate, SitePage } from "@/pages/site/SitePage";
 import { DomainSearchPage } from "@/pages/site/DomainSearch";
 import { ContactPage } from "@/pages/site/Contact";
 import { CartPage, CheckoutPage, StorePage, StoreProductPage } from "@/pages/store/Store";
+import { usePublicSite } from "@/lib/admin/site";
 import { OrderStatusPage } from "@/pages/client/services/OrderStatus";
 import { AccountPage } from "@/pages/client/account/Account";
 import { LoginPage } from "@/pages/auth/Login";
@@ -160,6 +161,15 @@ function OrderGate() {
   return me ? <ClientOrderPage /> : <Navigate to={`/store${loc.search}`} replace />;
 }
 
+const GameStorePage = lazy(() => import("@/pages/store/GameStore").then((m) => ({ default: m.GameStorePage })));
+
+/** `/store` renders the layout the site is configured for; the plan store is the fallback. */
+function StoreGate() {
+  const { data: site, isLoading } = usePublicSite();
+  if (isLoading) return <Loading />;
+  return site?.config.store_mode === "game" ? <Suspense fallback={<Loading />}><GameStorePage /></Suspense> : <StorePage />;
+}
+
 function GuestPad() {
   const { data: me } = useMe();
   return me ? <Outlet /> : <StoreContent />;
@@ -226,8 +236,8 @@ export function App() {
         <Route element={<StoreContent />}>
           <Route path="/domain-search" element={<DomainSearchPage />} />
           <Route path="/contact" element={<ContactPage />} />
-          <Route path="/store" element={<StorePage />} />
-          <Route path="/store/:group" element={<StorePage />} />
+          <Route path="/store" element={<StoreGate />} />
+          <Route path="/store/:group" element={<StoreGate />} />
           <Route path="/store/p/:id" element={<StoreProductPage />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />

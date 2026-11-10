@@ -32,7 +32,7 @@ const gwKey = (g: string) => (g in GW ? GW[g as keyof typeof GW] : null);
 interface Group { id: string; name: string; slug: string }
 interface Catalog { groups: Group[]; products: (CatalogProduct & { slug: string })[] }
 
-function useCatalog() {
+export function useCatalog() {
   return useQuery({ queryKey: ["catalog"], queryFn: () => api<Catalog>("/catalog") });
 }
 function useCurrencies() {
@@ -40,7 +40,7 @@ function useCurrencies() {
 }
 
 /** Active currency: the cart's, else the visitor's last pick, else the first enabled one. */
-function useStoreCurrency() {
+export function useStoreCurrency() {
   const { view, save } = useStoreCart();
   const { data: cur } = useCurrencies();
   const { lang } = useI18n();
@@ -54,7 +54,7 @@ function useStoreCurrency() {
   return { currency, set, options: cur?.items.map((c) => c.code) ?? [] };
 }
 
-function CurrencySelect() {
+export function CurrencySelect() {
   const { t } = useI18n();
   const { currency, set, options } = useStoreCurrency();
   if (options.length < 2) return null;

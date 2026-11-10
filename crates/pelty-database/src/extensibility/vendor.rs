@@ -179,6 +179,7 @@ pub async fn import(
         module: Some(it.module.clone()),
         module_config: Some(config.clone()),
         sort_order: None,
+        image_url: None,
     };
     let p = crate::catalog::create_product(pool, &input).await?;
     crate::provisioning::set_product_module(
