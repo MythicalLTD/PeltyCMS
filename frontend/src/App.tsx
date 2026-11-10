@@ -103,9 +103,11 @@ const AdminLoginHistoryPage = lazy(() => import("@/pages/admin/ops/AdminOps").th
 const AdminBackupsPage = lazy(() => import("@/pages/admin/ops/AdminOps").then((m) => ({ default: m.AdminBackupsPage })));
 const AdminGeneralSettingsPage = lazy(() => import("@/pages/admin/settings/GeneralSettings").then((m) => ({ default: m.AdminGeneralSettingsPage })));
 const AdminDigitalProductsPage = lazy(() => import("@/pages/admin/gaming/DigitalProducts").then((m) => ({ default: m.AdminDigitalProductsPage })));
+const AdminCreatorMarketPage = lazy(() => import("@/pages/admin/gaming/CreatorMarket").then((m) => ({ default: m.AdminCreatorMarketPage })));
 const AdminGameDeliveryPage = lazy(() => import("@/pages/admin/gaming/GameDelivery").then((m) => ({ default: m.AdminGameDeliveryPage })));
 const AdminGameServersPage = lazy(() => import("@/pages/admin/gaming/GameServers").then((m) => ({ default: m.AdminGameServersPage })));
 const DigitalProductsPage = lazy(() => import("@/pages/client/DigitalProducts").then((m) => ({ default: m.DigitalProductsPage })));
+const CreatorPage = lazy(() => import("@/pages/client/Creator").then((m) => ({ default: m.CreatorPage })));
 const GameAccountsPage = lazy(() => import("@/pages/client/GameAccounts").then((m) => ({ default: m.GameAccountsPage })));
 const AdminModulesPage = lazy(() => import("@/pages/admin/gaming/Modules").then((m) => ({ default: m.AdminModulesPage })));
 const AdminNoticeboardPage = lazy(() => import("@/pages/admin/support/Noticeboard").then((m) => ({ default: m.AdminNoticeboardPage })));
@@ -292,6 +294,7 @@ export function App() {
           <Route path="/network-status" element={<Suspense fallback={<Loading />}><NetworkStatusPage /></Suspense>} />
           <Route path="/my-details" element={<Suspense fallback={<Loading />}><MyDetailsPage /></Suspense>} />
           <Route path="/game-accounts" element={<Suspense fallback={<Loading />}><RequireModule id="game_profiles"><GameAccountsPage /></RequireModule></Suspense>} />
+          <Route path="/creator" element={<Suspense fallback={<Loading />}><RequireModule id="creator_marketplace"><CreatorPage /></RequireModule></Suspense>} />
           <Route path="/digital" element={<Suspense fallback={<Loading />}><RequireModule id="digital_products"><DigitalProductsPage /></RequireModule></Suspense>} />
           <Route path="/p/:plugin/:page" element={<ClientPluginPage />} />
         </Route>
@@ -363,6 +366,7 @@ export function App() {
         <Route path="game-servers" element={<RequireModule id="game_profiles"><AdminGameServersPage /></RequireModule>} />
         <Route path="game-delivery" element={<RequireModule id="game_delivery"><AdminGameDeliveryPage /></RequireModule>} />
         <Route path="digital-products" element={<RequireModule id="digital_products"><AdminDigitalProductsPage /></RequireModule>} />
+        <Route path="creator-market" element={<RequireModule id="creator_marketplace"><AdminCreatorMarketPage /></RequireModule>} />
         <Route path="tracked-links" element={<AdminTrackedLinksPage />} />
         <Route path="calendar" element={<AdminCalendarPage />} />
         <Route path="general-settings" element={<AdminGeneralSettingsPage />} />

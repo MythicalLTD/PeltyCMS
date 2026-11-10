@@ -69,6 +69,7 @@ export const ADMIN_NAV: NavCategory[] = [
     { to: "/admin/game-servers", label: "nav.game_servers", desc: "navdesc.admin_game_servers", icon: GameControllerIcon },
     { to: "/admin/game-delivery", label: "nav.game_delivery", desc: "navdesc.admin_game_delivery", icon: TerminalWindowIcon },
     { to: "/admin/digital-products", label: "nav.digital_products", desc: "navdesc.admin_digital_products", icon: KeyIcon },
+    { to: "/admin/creator-market", label: "nav.creator_market", desc: "navdesc.admin_creator_market", icon: StorefrontIcon },
     { to: "/admin/module-log", label: "nav.module_log", desc: "navdesc.admin_module_log", icon: ListMagnifyingGlassIcon },
   ] },
   { id: "domains", label: "navcat.domains", icon: GlobeIcon, items: [
@@ -144,6 +145,7 @@ export const CLIENT_NAV_TREE: NavCategory[] = [
     { to: "/invoices", label: "nav.invoices", desc: "navdesc.invoices", icon: FileTextIcon, primary: true },
     { to: "/quotes", label: "nav.quotes", desc: "navdesc.quotes", icon: NotePencilIcon, primary: true },
     { to: "/billing", label: "nav.credit_methods", desc: "navdesc.billing", icon: WalletIcon, primary: true },
+    { to: "/creator", label: "nav.creator", desc: "navdesc.creator", icon: StorefrontIcon },
   ] },
   { id: "domains", label: "navcat.domains", icon: GlobeIcon, items: [
     { to: "/domains", label: "nav.domains", desc: "navdesc.domains", icon: GlobeIcon, primary: true },

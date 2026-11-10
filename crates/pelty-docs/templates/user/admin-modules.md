@@ -105,3 +105,55 @@ Call it from the software you sell. Only the fields the product binds are needed
 | `POST /api/v1/public/licenses/deactivate` | same identity fields | `{"removed": true}` frees the slot |
 
 Reasons: `not_found`, `wrong_product`, `suspended`, `revoked`, `expired`, `domain_required`, `ip_required`, `hwid_required`, `activation_limit`, `not_activated` (with `"activate": false`). The IP defaults to the caller's address. Repeated unknown keys from one address are rate limited.
+
+## Creator marketplace (`creator_marketplace`)
+
+When this module is on, customers can become **creators** and sell their own products (plugins, FiveM resources, maps, configs) through your store. You take a commission on each sale. Manage it under **Admin → Products → Creator marketplace**. Customers find it under **Billing → Sell as a creator**.
+
+**Modes.** The Settings tab switches between:
+
+- **Multi-vendor.** Customers apply as creators and submit listings.
+- **Admin-only.** Only staff sell. Existing creators keep their dashboard, earnings and payouts, but cannot add new listings, and new applications are refused with `error.market_closed`.
+
+**Settings.** Settings are stored on the module itself:
+
+| Setting | Meaning |
+|---|---|
+| `mode` | `admin_only` or `multi_vendor` |
+| `commission_percent` | Default store commission (a per-creator override is set when you approve a creator) |
+| `hold_days` | Days a sale stays on hold before it can be paid out (refund/chargeback window) |
+| `min_payout` | Smallest payout a creator can request |
+| `auto_approve_creators` / `auto_approve_listings` | Skip manual review |
+
+**Flow.**
+
+1. A customer applies with a display name, URL name and payout details. Staff approve, reject or suspend the creator.
+2. The creator submits a listing (name, category, description, price, billing cycle) and uploads versions. A listing becomes a hidden catalog product until staff approve it. After approval the product goes live and works with digital products (versioned downloads and license keys) if that module is on.
+3. When an invoice is paid, a `sale` ledger entry is written for each line that belongs to a creator. The entry holds the gross amount, the commission and the net amount, and it is available after `hold_days`.
+4. Refunds and disputes (`order.refunded`, `invoice.refunded`, `payment.disputed`) write a matching negative `refund` entry, so the balance can go negative and is recovered from later sales.
+5. A creator requests a payout from the available balance, and the amount is debited right away. Staff then **Send** it through the provider, or mark it paid, rejected or failed. Rejected or failed payouts are credited back.
+
+**Payout providers.**
+
+- **Manual** (bank transfer or anything else). **Send** moves the payout to *processing*; you pay outside PeltyCMS and then mark it *paid*.
+- **Stripe Connect** and **PayPal Payouts** are **stubs** in this release. They return `error.payout_provider_unconfigured` until `PELTY_STRIPE_CONNECT_KEY` / `PELTY_PAYPAL_PAYOUTS_CLIENT_ID` and the creator's account details are set. Even then they return `error.payout_provider_stub`, because no money is moved automatically yet. For now, pay those creators manually and mark the payouts paid.
+
+Payout administration needs the **Affiliates** permission. Creator and listing review need **Catalog**.
+
+### API
+
+| Method | Path | Who |
+|---|---|---|
+| GET | `/api/v1/public/marketplace` | anyone (current mode) |
+| GET | `/api/v1/public/creators`, `/api/v1/public/creators/{slug}` | anyone |
+| GET/POST/PUT | `/api/v1/client/creator` | dashboard / apply / update profile |
+| GET/POST | `/api/v1/client/creator/listings` | the creator |
+| POST | `/api/v1/client/creator/listings/{id}/listed` | unlist or relist |
+| POST | `/api/v1/client/creator/listings/{id}/versions` | the creator |
+| GET | `/api/v1/client/creator/ledger` | the creator |
+| GET/POST | `/api/v1/client/creator/payouts` | the creator |
+| GET | `/api/v1/admin/creators`, POST `/api/v1/admin/creators/{id}/status` | staff (Catalog) |
+| GET | `/api/v1/admin/creator-listings`, POST `/api/v1/admin/creator-listings/{id}/review` | staff (Catalog) |
+| GET | `/api/v1/admin/creator-payouts`, POST `/{id}/send`, POST `/{id}/status` | staff (Affiliates) |
+
+Events: `creator.applied`, `creator.payout_requested`, `creator.payout_paid`.
