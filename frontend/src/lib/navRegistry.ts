@@ -9,6 +9,7 @@ import {
   ArrowsLeftRightIcon, BankIcon, BellRingingIcon, BookOpenTextIcon, BrowserIcon, BuildingsIcon, CalendarDotsIcon, ChartBarIcon, ChartLineUpIcon, ChatsCircleIcon, CheckSquareIcon, KanbanIcon, ClockCountdownIcon, CodeIcon, ComputerTowerIcon, CreditCardIcon, CurrencyCircleDollarIcon, DatabaseIcon, EnvelopeIcon, EnvelopeSimpleIcon, FileTextIcon, FolderOpenIcon, GaugeIcon, GearSixIcon, GiftIcon, GlobeIcon, HandshakeIcon, HardDrivesIcon, HeartbeatIcon, IdentificationBadgeIcon, IdentificationCardIcon, KeyIcon, LifebuoyIcon, ListChecksIcon, ListMagnifyingGlassIcon, LockKeyIcon, MegaphoneIcon, NewspaperIcon, NotePencilIcon, NotebookIcon, PackageIcon, PaletteIcon, PaperPlaneTiltIcon, PercentIcon, PlugsConnectedIcon, PulseIcon, PuzzlePieceIcon, QueueIcon, ReceiptIcon, RocketLaunchIcon, ScrollIcon, ShieldCheckIcon, ShieldWarningIcon, ShoppingCartIcon, SignInIcon, SlidersHorizontalIcon, SquaresFourIcon, StackIcon, StorefrontIcon, TextboxIcon, TicketIcon, TranslateIcon, UploadSimpleIcon, UserCircleIcon, UserGearIcon, UsersIcon, UsersThreeIcon, WalletIcon, XCircleIcon,
 } from "@phosphor-icons/react";
 import type { TranslationKey } from "@/lib/i18n-core";
+import { routeAllowed } from "@/lib/modules";
 
 export interface NavLeaf {
   to: string;
@@ -114,6 +115,7 @@ export const ADMIN_NAV: NavCategory[] = [
   ] },
   { id: "system", label: "navcat.system", icon: GearSixIcon, items: [
     { to: "/admin/general-settings", label: "nav.general_settings", desc: "navdesc.admin_general_settings", icon: SlidersHorizontalIcon, primary: true },
+    { to: "/admin/modules", label: "nav.modules", desc: "navdesc.admin_modules", icon: SquaresFourIcon },
     { to: "/admin/mail-settings", label: "nav.mail_settings", desc: "navdesc.admin_mail_settings", icon: PaperPlaneTiltIcon },
     { to: "/admin/email-templates", label: "nav.email_templates", desc: "navdesc.admin_email_templates", icon: EnvelopeIcon },
     { to: "/admin/translations", label: "nav.translations", desc: "navdesc.admin_translations", icon: TranslateIcon },
@@ -199,8 +201,8 @@ export function categoryForPath(scope: NavScope, pathname: string): { cat: NavCa
 }
 
 /** Hub cards for a category: its own leaves, then related leaves from other categories. */
-export function hubLeaves(scope: NavScope, cat: NavCategory): NavLeaf[] {
+export function hubLeaves(scope: NavScope, cat: NavCategory, enabled?: ReadonlySet<string>): NavLeaf[] {
   const all = flatNav(scope);
   const extra = (cat.related ?? []).map((to) => all.find((l) => l.to === to)).filter((l): l is FlatLeaf => !!l);
-  return [...cat.items, ...extra];
+  return [...cat.items, ...extra].filter((l) => !enabled || routeAllowed(l.to, enabled));
 }

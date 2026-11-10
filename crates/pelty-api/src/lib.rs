@@ -330,10 +330,15 @@ pub fn router(state: AppState) -> Router {
         .merge(routes::health::router())
         .nest(
             "/api/v1",
-            routes::api_router().route_layer(middleware::from_fn_with_state(
-                state.clone(),
-                addon_events::lifecycle,
-            )),
+            routes::api_router()
+                .route_layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    addon_events::lifecycle,
+                ))
+                .route_layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    routes::feature_modules::gate,
+                )),
         )
         .route(
             "/api/openapi.json",

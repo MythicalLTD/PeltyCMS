@@ -93,6 +93,8 @@ pub use registry::domain_pricing;
 pub use registry::domains;
 pub use registry::registrant_verify;
 pub use registry::DomainService;
+pub mod gaming;
+pub use gaming::modules as feature_modules;
 pub mod helpdesk;
 pub use helpdesk::downloads;
 pub use helpdesk::live_chat;

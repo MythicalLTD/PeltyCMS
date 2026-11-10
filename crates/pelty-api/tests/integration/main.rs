@@ -9,6 +9,7 @@
 mod common;
 mod game_store_flow;
 mod live_chat_realtime_flow;
+mod modules_flow;
 mod redis_shared_flow;
 
 mod add_funds_flow;

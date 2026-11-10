@@ -83,7 +83,11 @@ async fn product_image_and_store_mode() {
         &admin.h(),
     )
     .await;
-    assert_eq!(r.body["image_url"], "/api/v1/media/gold.png", "{:?}", r.body);
+    assert_eq!(
+        r.body["image_url"], "/api/v1/media/gold.png",
+        "{:?}",
+        r.body
+    );
     let r = call(
         &app,
         "PATCH",
