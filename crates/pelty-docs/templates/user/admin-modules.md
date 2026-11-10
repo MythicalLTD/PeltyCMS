@@ -67,3 +67,20 @@ Customers link their identities in the client area under Account → **Game acco
 | PUT | `/api/v1/admin/game/servers/{id}/products` | `servers.manage` |
 | POST | `/api/v1/admin/game/servers/{id}/agent-token` | `servers.manage` |
 | GET | `/api/v1/admin/game/customers/{id}/accounts` | `customers.manage` |
+
+## In-game delivery (`game_delivery`)
+
+Requires **Game profiles**. Open **Products → In-game delivery**.
+
+- **Commands** run when a package is bought (`purchase`), renewed (`renewal`), expires or is suspended/cancelled (`expiry`), refunded (`refund`) or charged back (`chargeback`). Set them per package or globally for every package. Each command can target one server or every server whose store sells the package, can wait until the player is online, and can be delayed.
+- **Placeholders**: `{username}`, `{uuid}`, `{uuid_nodash}`, `{xuid}`, `{steamid}`, `{license}`, `{discord_id}`, `{package}`, `{package_id}`, `{service_id}`, `{order_id}`, `{customer_id}`, `{amount}`, `{currency}`, `{server}`. Unknown placeholders are rejected when you save.
+- **Missing game account**: when a command needs an identity the customer has not linked, the delivery waits (`Waiting for game account`) and is sent automatically as soon as they link it on **Game accounts**.
+- **Queue**: every command is a row with status, attempts and the last error. Failures are retried with backoff (2, 4, 8 … up to 60 minutes, 10 attempts). Retry or cancel rows by hand, or resend a service's commands.
+- **Transports**: RCON servers are processed by the worker every minute (or **Run queue now**). Agent servers (FiveM, RedM, any plugin) poll the API with their agent token:
+
+| Call | Body | Result |
+| --- | --- | --- |
+| `POST /api/v1/game-agent/poll` | `{"online": ["<identity>", …], "limit": 50}` | Commands to run now; each is leased for 2 minutes. Online-only commands are returned only for listed players. |
+| `POST /api/v1/game-agent/ack` | `{"delivered": [id…], "failed": [{"id": …, "error": "…"}]}` | Marks results; failures are retried. |
+
+Send the token as `Authorization: Bearer pga_…`. Every poll/ack is scoped to the token's server.

@@ -27,6 +27,9 @@ pub const GATES: &[(&str, &str)] = &[
     ("/public/game", "game_profiles"),
     ("/client/game", "game_profiles"),
     ("/admin/game", "game_profiles"),
+    ("/admin/game/delivery", "game_delivery"),
+    ("/client/game/deliveries", "game_delivery"),
+    ("/game-agent", "game_delivery"),
 ];
 
 /// Module owning `path` (with or without the `/api/v1` prefix), if any.

@@ -311,6 +311,7 @@ impl AppState {
         tokio::spawn(async move {
             crate::provision::on_event(&state, &event).await;
             crate::approval::on_event(&state, &event).await;
+            crate::routes::game_delivery::on_event(&state, &event).await;
             crate::routes::credit::auto_apply_on_event(&state, &event).await;
             plugins.dispatch(&event).await;
             crate::plugin_hooks::on_event(&state, &event).await;

@@ -14,6 +14,7 @@ export type ModuleId = (typeof MODULE_IDS)[number];
 export const MODULE_ROUTES: readonly (readonly [string, ModuleId])[] = [
   ["/admin/game-servers", "game_profiles"],
   ["/game-accounts", "game_profiles"],
+  ["/admin/game-delivery", "game_delivery"],
 ];
 
 export function moduleForPath(path: string): ModuleId | undefined {

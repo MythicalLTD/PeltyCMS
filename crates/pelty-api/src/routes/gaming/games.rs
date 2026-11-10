@@ -82,6 +82,12 @@ pub async fn link(
 ) -> ApiResult<Json<GameAccount>> {
     let c = customer_of(&s, &u).await?;
     let a = games::link_account(&s.pool, c, &b).await?;
+    // Deliveries that waited for this identity can go now.
+    if pelty_database::feature_modules::is_enabled(&s.pool, super::delivery::MODULE).await?
+        && pelty_database::game_delivery::release_waiting(&s.pool, c).await? > 0
+    {
+        super::delivery::kick(&s);
+    }
     audit::record(
         &s.pool,
         Some(u.user_id),

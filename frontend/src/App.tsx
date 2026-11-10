@@ -102,6 +102,7 @@ const AdminCalendarPage = lazy(() => import("@/pages/admin/ops/AdminOps").then((
 const AdminLoginHistoryPage = lazy(() => import("@/pages/admin/ops/AdminOps").then((m) => ({ default: m.AdminLoginHistoryPage })));
 const AdminBackupsPage = lazy(() => import("@/pages/admin/ops/AdminOps").then((m) => ({ default: m.AdminBackupsPage })));
 const AdminGeneralSettingsPage = lazy(() => import("@/pages/admin/settings/GeneralSettings").then((m) => ({ default: m.AdminGeneralSettingsPage })));
+const AdminGameDeliveryPage = lazy(() => import("@/pages/admin/gaming/GameDelivery").then((m) => ({ default: m.AdminGameDeliveryPage })));
 const AdminGameServersPage = lazy(() => import("@/pages/admin/gaming/GameServers").then((m) => ({ default: m.AdminGameServersPage })));
 const GameAccountsPage = lazy(() => import("@/pages/client/GameAccounts").then((m) => ({ default: m.GameAccountsPage })));
 const AdminModulesPage = lazy(() => import("@/pages/admin/gaming/Modules").then((m) => ({ default: m.AdminModulesPage })));
@@ -357,6 +358,7 @@ export function App() {
         <Route path="noticeboard" element={<AdminNoticeboardPage />} />
         <Route path="modules" element={<AdminModulesPage />} />
         <Route path="game-servers" element={<RequireModule id="game_profiles"><AdminGameServersPage /></RequireModule>} />
+        <Route path="game-delivery" element={<RequireModule id="game_delivery"><AdminGameDeliveryPage /></RequireModule>} />
         <Route path="tracked-links" element={<AdminTrackedLinksPage />} />
         <Route path="calendar" element={<AdminCalendarPage />} />
         <Route path="general-settings" element={<AdminGeneralSettingsPage />} />

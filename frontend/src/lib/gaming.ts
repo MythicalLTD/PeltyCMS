@@ -17,3 +17,22 @@ export function address(s: { host: string; port: number | null }): string {
   if (!s.host) return "";
   return s.port ? `${s.host}:${s.port}` : s.host;
 }
+
+export const DELIVERY_TRIGGERS = ["purchase", "renewal", "expiry", "refund", "chargeback"] as const;
+export const DELIVERY_STATUSES = ["pending", "waiting_identity", "delivered", "failed", "cancelled"] as const;
+
+export interface GameCommand { id?: string; server_id: string | null; trigger: string; command: string; require_online: boolean; delay_secs: number }
+export interface GameDelivery {
+  id: string; server_id?: string; server_name: string; package: string | null; trigger: string; command?: string; player: string;
+  require_online?: boolean; status: string; attempts?: number; last_error?: string; response?: string; created_at: string; delivered_at: string | null;
+}
+
+/** Placeholder names in a command template, e.g. `lp user {username}` → ["username"]. */
+export function commandPlaceholders(tpl: string): string[] {
+  return [...tpl.matchAll(/\{([a-z_]+)\}/g)].map((m) => m[1] ?? "");
+}
+
+/** Placeholders a template uses that the server would reject. */
+export function unknownPlaceholders(tpl: string, known: readonly string[]): string[] {
+  return commandPlaceholders(tpl).filter((p) => !known.includes(p));
+}
