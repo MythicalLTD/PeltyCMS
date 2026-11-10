@@ -1,4 +1,4 @@
-# Optional modules (gaming, digital products, marketplace, reviews)
+# Optional modules (gaming, digital products, marketplace, reviews, community)
 
 PeltyCMS is a hosting and billing panel out of the box. The same install can also run a game server store (Minecraft, FiveM/RedM, Rust and others, like Tebex or CraftingStore), sell digital products with licenses, or host a creator marketplace (like BuiltByBit). Each of these is an **optional module**: nothing changes until you switch it on, and you can combine them freely.
 
@@ -203,3 +203,37 @@ Each customer can have at most 5 unanswered questions per product. Public respon
 | POST | `/api/v1/admin/reviews/questions/{id}/status`, `/questions/{id}/answer` | staff (Catalog) |
 
 Events: `review.submitted`, `review.approved`, `question.asked`, `question.answered`.
+
+## Server status, voting and leaderboards (`server_community`)
+
+Needs `game_profiles`. Switch it on and a public **Community** page appears at `/community` with:
+
+- **Live server status** for every game server that has a public address: online/offline, players and slots, version, MOTD and a sample of player names. A background job checks each server once a minute (Minecraft Java ping, Minecraft Bedrock ping, Source A2S for Rust/ARK/CS-style games, and FiveM/RedM `info.json` + `players.json`). Each check times out after a few seconds; the last error is shown to admins under **Community → Servers**, and **Check now** runs a check immediately.
+- **Vote links** to server lists. Put `{username}` in the vote page URL and the page fills in the name the player types.
+- **Top voters** for the current month and, if you switch it on, **top supporters** (paid invoices this month in the goal currency). Supporters are hidden by default; when shown, they appear by their game account **player name** (never an ID such as a UUID or Steam ID), or first name and last initial. Amounts appear only if **Show donation amounts** is on. Emails never appear.
+- An optional **monthly goal** bar ("server costs"), based on paid invoices this month in the goal currency. Set the goal to `0` to hide it.
+
+### Vote rewards
+
+Under **Community → Vote sites**, add each server list with its vote URL, an optional reward command (for example `give {username} diamond 1`), the game server that runs it (or all), whether the player must be online, and a cooldown (0–168 hours, default 24).
+
+Click **Issue token** to get the callback URL to paste into the server list's settings:
+
+```
+https://your-panel/api/v1/public/community/vote/<site id>?username={username}&token=pgv_…
+```
+
+The list calls it when someone votes. The callback accepts `GET` or `POST`, and reads the name from `username`, `user`, `player` or `name` and the token from `token`, `key`, `secret` or the `X-Vote-Token` header. Only a hash of the token is stored; rotating it stops the old one. A wrong token gets `403`, and calls with a wrong token are rate-limited per IP. A repeat vote by the same name inside the cooldown gets `409 error.vote_cooldown` and no reward. If the reward cannot be queued, the vote is undone so the site can retry. Vote names with spaces are only rewarded on Bedrock servers (quoted as one argument); elsewhere the vote counts but no command is queued, so a name can never add command arguments. Caller IPs are cleared after 30 days by housekeeping; votes stay for the leaderboards.
+
+Rewards go through the **in-game delivery** queue (`game_delivery` must be on; trigger `vote`), so they retry, wait for the player when "must be online" is set, and show up under **Game deliveries**. Commands can use `{username}`, `{player}`, `{site}`, `{server}` (unknown placeholders and line breaks are refused) and, when the name matches a customer's game account, that customer's identity variables. Each accepted vote emits the `community.voted` event for extensions and webhooks.
+
+### API
+
+- `GET /api/v1/public/community` (no login): `servers`, `sites`, `top_voters`, `top_donors` (`null` when hidden), `goal` (`null` when unset).
+- `GET|POST /api/v1/public/community/vote/{site}`: the vote callback above.
+- `GET /api/v1/admin/community`: sites, the last 100 votes, statuses and check errors.
+- `POST /api/v1/admin/community/refresh`, `POST /api/v1/admin/community/sites`, `PUT|DELETE /api/v1/admin/community/sites/{id}`, `POST /api/v1/admin/community/sites/{id}/token`.
+
+Admin routes need the **Manage servers** permission. Settings (`goal_amount`, `goal_currency`, `goal_label`, `leaderboard_size` 1–50, `show_donors`, `show_donor_amounts`) are saved with `PUT /api/v1/admin/modules/server_community`.
+
+Limits: the status check needs the server's query port to be reachable from the panel (it uses the server's **query port** when set, otherwise the game port, otherwise the game's default port). Server lists that only send a signed callback with their own scheme (for example Votifier) are not supported yet; use their HTTP/webhook callback.

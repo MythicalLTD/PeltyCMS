@@ -40,6 +40,8 @@ pub const GATES: &[(&str, &str)] = &[
     ("/admin/creators", "creator_marketplace"),
     ("/admin/creator-listings", "creator_marketplace"),
     ("/admin/creator-payouts", "creator_marketplace"),
+    ("/public/community", "server_community"),
+    ("/admin/community", "server_community"),
     ("/public/reviews", "product_reviews"),
     ("/client/reviews", "product_reviews"),
     ("/admin/reviews", "product_reviews"),

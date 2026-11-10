@@ -3,12 +3,14 @@
 //! owning module is off the routes answer 404 as if they did not exist.
 //! Covered by the `modules_flow` integration tests and pelty-docs route inventory tests.
 
+pub mod community;
 pub mod delivery;
 pub mod digital;
 pub mod games;
 pub mod marketplace;
 pub mod modules;
 pub mod payouts;
+pub mod query;
 pub mod rcon;
 pub mod reviews;
 

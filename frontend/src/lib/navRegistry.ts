@@ -67,6 +67,7 @@ export const ADMIN_NAV: NavCategory[] = [
     { to: "/admin/usage-metrics", label: "nav.usage", desc: "navdesc.admin_usage_metrics", icon: ChartBarIcon },
     { to: "/admin/module-queue", label: "nav.module_queue", desc: "navdesc.admin_module_queue", icon: QueueIcon },
     { to: "/admin/game-servers", label: "nav.game_servers", desc: "navdesc.admin_game_servers", icon: GameControllerIcon },
+    { to: "/admin/community", label: "nav.community", desc: "navdesc.admin_community", icon: UsersThreeIcon },
     { to: "/admin/game-delivery", label: "nav.game_delivery", desc: "navdesc.admin_game_delivery", icon: TerminalWindowIcon },
     { to: "/admin/digital-products", label: "nav.digital_products", desc: "navdesc.admin_digital_products", icon: KeyIcon },
     { to: "/admin/creator-market", label: "nav.creator_market", desc: "navdesc.admin_creator_market", icon: StorefrontIcon },
@@ -171,6 +172,7 @@ export const CLIENT_NAV_TREE: NavCategory[] = [
     { to: "/connected-apps", label: "nav.connected_apps", desc: "navdesc.connected_apps", icon: PlugsConnectedIcon, primary: true },
     { to: "/affiliate", label: "nav.affiliates", desc: "navdesc.affiliate", icon: HandshakeIcon, primary: true },
     { to: "/game-accounts", label: "nav.game_accounts", desc: "navdesc.game_accounts", icon: GameControllerIcon },
+    { to: "/community", label: "nav.community", desc: "navdesc.community", icon: UsersThreeIcon },
   ] },
 ];
 
