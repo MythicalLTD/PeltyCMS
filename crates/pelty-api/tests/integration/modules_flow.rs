@@ -12,7 +12,6 @@ pub async fn reset_modules(st: &pelty_api::AppState) {
 }
 
 /// Enable modules in dependency order for a suite.
-#[allow(dead_code)]
 pub async fn enable(app: &axum::Router, admin: &Sess, ids: &[&str]) {
     for id in ids {
         let r = call(

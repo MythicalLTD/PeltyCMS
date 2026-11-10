@@ -10,7 +10,10 @@ export const MODULE_IDS = ["game_profiles", "game_delivery", "server_community",
 export type ModuleId = (typeof MODULE_IDS)[number];
 
 /** SPA route prefixes owned by a module (longest prefix wins). */
-export const MODULE_ROUTES: readonly (readonly [string, ModuleId])[] = [];
+export const MODULE_ROUTES: readonly (readonly [string, ModuleId])[] = [
+  ["/admin/game-servers", "game_profiles"],
+  ["/game-accounts", "game_profiles"],
+];
 
 export function moduleForPath(path: string): ModuleId | undefined {
   return MODULE_ROUTES.filter(([p]) => path === p || path.startsWith(`${p}/`)).toSorted((a, b) => b[0].length - a[0].length)[0]?.[1];
