@@ -113,12 +113,12 @@ export function usePublicTheme(brand?: unknown) {
   const vars = themeVars(mode, sf.data, accentVars);
   const key = JSON.stringify(vars);
   useEffect(() => {
-    if (typeof document === "undefined") return;
+    // Runs again whenever `brand` changes, after applyBrand has reset the colours.
+    if (typeof document === "undefined" || brand === null) return;
     const v = JSON.parse(key) as Record<string, string>;
     const restore = applyVars(document.documentElement, v);
     if (Object.keys(v).length) document.documentElement.dataset.publicMode = mode;
     return () => { restore(); delete document.documentElement.dataset.publicMode; };
-    // `brand`: re-apply after the site brand (applyBrand) runs again.
   }, [key, mode, brand]);
   return { mode, storefront: sf.data };
 }
