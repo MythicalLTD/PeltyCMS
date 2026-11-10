@@ -23,7 +23,11 @@ pub fn router() -> Router<AppState> {
 
 /// API path prefixes (below `/api/v1`) owned by a module. A request whose
 /// path starts with one of these answers 404 while the module is off.
-pub const GATES: &[(&str, &str)] = &[];
+pub const GATES: &[(&str, &str)] = &[
+    ("/public/game", "game_profiles"),
+    ("/client/game", "game_profiles"),
+    ("/admin/game", "game_profiles"),
+];
 
 /// Module owning `path` (with or without the `/api/v1` prefix), if any.
 pub fn module_for(path: &str) -> Option<&'static str> {

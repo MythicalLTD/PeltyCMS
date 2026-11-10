@@ -5,4 +5,5 @@
 //!
 //! Re-exported at the crate root. Covered by the `modules_flow` integration tests.
 
+pub mod games;
 pub mod modules;

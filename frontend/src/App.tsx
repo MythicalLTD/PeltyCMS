@@ -12,6 +12,7 @@ import { DomainSearchPage } from "@/pages/site/DomainSearch";
 import { ContactPage } from "@/pages/site/Contact";
 import { CartPage, CheckoutPage, StorePage, StoreProductPage } from "@/pages/store/Store";
 import { usePublicSite } from "@/lib/admin/site";
+import { RequireModule } from "@/components/RequireModule";
 import { OrderStatusPage } from "@/pages/client/services/OrderStatus";
 import { AccountPage } from "@/pages/client/account/Account";
 import { LoginPage } from "@/pages/auth/Login";
@@ -101,6 +102,8 @@ const AdminCalendarPage = lazy(() => import("@/pages/admin/ops/AdminOps").then((
 const AdminLoginHistoryPage = lazy(() => import("@/pages/admin/ops/AdminOps").then((m) => ({ default: m.AdminLoginHistoryPage })));
 const AdminBackupsPage = lazy(() => import("@/pages/admin/ops/AdminOps").then((m) => ({ default: m.AdminBackupsPage })));
 const AdminGeneralSettingsPage = lazy(() => import("@/pages/admin/settings/GeneralSettings").then((m) => ({ default: m.AdminGeneralSettingsPage })));
+const AdminGameServersPage = lazy(() => import("@/pages/admin/gaming/GameServers").then((m) => ({ default: m.AdminGameServersPage })));
+const GameAccountsPage = lazy(() => import("@/pages/client/GameAccounts").then((m) => ({ default: m.GameAccountsPage })));
 const AdminModulesPage = lazy(() => import("@/pages/admin/gaming/Modules").then((m) => ({ default: m.AdminModulesPage })));
 const AdminNoticeboardPage = lazy(() => import("@/pages/admin/support/Noticeboard").then((m) => ({ default: m.AdminNoticeboardPage })));
 const AdminKycPage = lazy(() => import("@/pages/admin/clients/Kyc").then((m) => ({ default: m.AdminKycPage })));
@@ -285,6 +288,7 @@ export function App() {
           <Route path="/affiliate" element={<ClientAffiliatePage />} />
           <Route path="/network-status" element={<Suspense fallback={<Loading />}><NetworkStatusPage /></Suspense>} />
           <Route path="/my-details" element={<Suspense fallback={<Loading />}><MyDetailsPage /></Suspense>} />
+          <Route path="/game-accounts" element={<Suspense fallback={<Loading />}><RequireModule id="game_profiles"><GameAccountsPage /></RequireModule></Suspense>} />
           <Route path="/p/:plugin/:page" element={<ClientPluginPage />} />
         </Route>
       </Route>
@@ -352,6 +356,7 @@ export function App() {
         <Route path="my-notes" element={<AdminMyNotesPage />} />
         <Route path="noticeboard" element={<AdminNoticeboardPage />} />
         <Route path="modules" element={<AdminModulesPage />} />
+        <Route path="game-servers" element={<RequireModule id="game_profiles"><AdminGameServersPage /></RequireModule>} />
         <Route path="tracked-links" element={<AdminTrackedLinksPage />} />
         <Route path="calendar" element={<AdminCalendarPage />} />
         <Route path="general-settings" element={<AdminGeneralSettingsPage />} />
