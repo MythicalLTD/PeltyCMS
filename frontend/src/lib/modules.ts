@@ -3,6 +3,7 @@
  * The server says which are on (`/public/modules`); routes and navigation of a
  * disabled module are hidden, and its API answers 404.
  */
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
@@ -22,11 +23,13 @@ export function routeAllowed(path: string, enabled: ReadonlySet<string>): boolea
   return !m || enabled.has(m);
 }
 
-export function useModules(): { enabled: ReadonlySet<string>; loaded: boolean } {
+/** `loaded` is true once the list arrived; `failed` when it could not be read. */
+export function useModules(): { enabled: ReadonlySet<string>; loaded: boolean; failed: boolean } {
   const q = useQuery({
     queryKey: ["public", "modules"],
     queryFn: () => api<{ enabled: string[] }>("/public/modules"),
     staleTime: 60_000,
   });
-  return { enabled: new Set(q.data?.enabled ?? []), loaded: q.isSuccess || q.isError };
+  const enabled = useMemo<ReadonlySet<string>>(() => new Set(q.data?.enabled ?? []), [q.data]);
+  return { enabled, loaded: q.isSuccess, failed: q.isError && !q.data };
 }

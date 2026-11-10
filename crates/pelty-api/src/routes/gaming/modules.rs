@@ -67,17 +67,24 @@ pub async fn public_modules(State(s): State<AppState>) -> ApiResult<Json<Value>>
     Ok(Json(json!({ "enabled": fm::enabled(&s.pool).await? })))
 }
 
+#[derive(serde::Serialize, utoipa::ToSchema)]
+pub struct ModuleList {
+    pub items: Vec<ModuleState>,
+}
+
 /// Every optional module with its state, dependencies and settings.
-#[utoipa::path(get, path = "/api/v1/admin/modules", responses((status = 200, body = Vec<ModuleState>), (status = 403)))]
+#[utoipa::path(get, path = "/api/v1/admin/modules", responses((status = 200, body = ModuleList), (status = 403)))]
 pub async fn admin_list(
     State(s): State<AppState>,
     RequirePermission(_u, _): RequirePermission<perms::SettingsManage>,
-) -> ApiResult<Json<Value>> {
-    Ok(Json(json!({ "items": fm::list(&s.pool).await? })))
+) -> ApiResult<Json<ModuleList>> {
+    Ok(Json(ModuleList {
+        items: fm::list(&s.pool).await?,
+    }))
 }
 
 /// Enable or disable a module (and optionally replace its settings).
-#[utoipa::path(put, path = "/api/v1/admin/modules/{id}", request_body = ModuleUpdate, responses((status = 200, body = ModuleState), (status = 404), (status = 409), (status = 422)))]
+#[utoipa::path(put, path = "/api/v1/admin/modules/{id}", request_body = ModuleUpdate, responses((status = 200, body = ModuleState), (status = 403), (status = 404), (status = 409), (status = 422)))]
 pub async fn admin_set(
     State(s): State<AppState>,
     RequirePermission(u, _): RequirePermission<perms::SettingsManage>,

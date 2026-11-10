@@ -165,7 +165,17 @@ pub async fn set(pool: &PgPool, id: &str, u: &ModuleUpdate, by: Uuid) -> AppResu
             return Err(AppError::Validation("error.validation"));
         }
     }
-    check_toggle(id, u.enabled, &enabled(pool).await?)?;
+    // Serialize toggles so two concurrent changes cannot break a dependency.
+    let mut tx = pool.begin().await.map_err(db_err)?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtext('feature_modules'))")
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
+    let on: Vec<String> = sqlx::query_scalar("SELECT id FROM feature_modules WHERE enabled")
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(db_err)?;
+    check_toggle(id, u.enabled, &on)?;
     sqlx::query(
         "INSERT INTO feature_modules (id, enabled, settings, updated_by) VALUES ($1,$2,COALESCE($3,'{}'::jsonb),$4)
          ON CONFLICT (id) DO UPDATE SET enabled=$2, settings=COALESCE($3, feature_modules.settings), updated_by=$4, updated_at=now()",
@@ -174,9 +184,10 @@ pub async fn set(pool: &PgPool, id: &str, u: &ModuleUpdate, by: Uuid) -> AppResu
     .bind(u.enabled)
     .bind(&u.settings)
     .bind(by)
-    .execute(pool)
+    .execute(&mut *tx)
     .await
     .map_err(db_err)?;
+    tx.commit().await.map_err(db_err)?;
     list(pool)
         .await?
         .into_iter()

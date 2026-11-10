@@ -31,7 +31,7 @@ export function AdminModulesPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title={t("modules.title")} description={t("modules.description")} />
-      {!q.data ? <Skeleton className="h-48 w-full" /> : PACKS.map((pack) => (
+      {q.isError && !q.data ? <p role="alert" className="text-sm text-destructive">{t("error.internal")}</p> : !q.data ? <Skeleton className="h-48 w-full" /> : PACKS.map((pack) => (
         <section key={pack} className="flex flex-col gap-3" aria-labelledby={`pack-${pack}`}>
           <h2 id={`pack-${pack}`} className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{t(`modules.pack.${pack}` as TranslationKey)}</h2>
           <div className="grid gap-3 md:grid-cols-2">

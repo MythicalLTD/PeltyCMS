@@ -788,6 +788,7 @@ use utoipa::OpenApi;
     components(schemas(
         pelty_database::feature_modules::ModuleState,
         pelty_database::feature_modules::ModuleUpdate,
+        super::feature_modules::ModuleList,
         super::gateways::UpdateGateway,
         super::gateways::NewCustom,
         super::gateways::TestWebhook,

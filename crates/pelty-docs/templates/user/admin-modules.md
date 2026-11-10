@@ -9,7 +9,7 @@ Go to Admin → System → **Modules** (`settings.manage`). Each card is one mod
 - A fresh install has every module **off**. The client area, store and admin look exactly like a classic hosting panel.
 - Some modules need another one first (shown as **Requires**). For example, in-game delivery needs game profiles, and the creator marketplace needs digital products.
 - You cannot switch off a module that another enabled module needs (shown as **Needed by**). Switch that one off first.
-- A disabled module hides its admin pages, client pages and navigation, and its API answers `404 Not Found` as if it did not exist. Data is kept, so switching it back on restores everything.
+- A disabled module hides its admin pages, client pages and navigation, and its API answers `404 Not Found` as if it did not exist. Each module registers its own pages and API paths for this, so the rule applies to every module listed below as it ships. Data is kept, so switching it back on restores everything.
 
 Every change is written to the audit log as `module.updated`.
 
