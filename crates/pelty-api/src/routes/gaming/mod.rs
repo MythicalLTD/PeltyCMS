@@ -9,6 +9,7 @@ pub mod games;
 pub mod marketplace;
 pub mod modules;
 pub mod payouts;
+pub mod query;
 pub mod rcon;
 pub mod reviews;
 
