@@ -10,6 +10,7 @@ import { api, ApiError } from "@/lib/api";
 import { StoreWidgets } from "@/components/store/StoreWidgets";
 import { useModules } from "@/lib/modules";
 import { accentStyle, type PublicStorefront } from "@/lib/storefront";
+import { salePrice, saleFor, timeLeft, useSales } from "@/lib/sales";
 import { formatMoney } from "@/lib/billing/billing";
 import { useI18n } from "@/lib/i18n";
 import { fromPrice, lineCount, useStoreCart, type StoreLine } from "@/lib/store/storefront";
@@ -38,6 +39,7 @@ export function GameStorePage() {
   const sf = themed ? layout.data : undefined;
   const grid = sf?.layout === "grid";
   const sidebar = sf && sf.widgets.length > 0;
+  const sales = useSales();
 
   const groups = (data?.groups ?? []).filter((g) => data?.products.some((p) => p.group_id === g.id));
   const active = groups.find((g) => g.slug === group) ?? null;
@@ -74,6 +76,18 @@ export function GameStorePage() {
         </nav>
       )}
 
+      {sales.length > 0 && (
+        <section aria-label={t("sales.discount")} className="flex flex-col gap-1 rounded-md border border-primary/40 bg-primary/10 px-4 py-3 text-sm">
+          {sales.map((x) => {
+            const left = timeLeft(x.ends_at);
+            return left && (
+              <p key={x.id}><span className="font-semibold">{t("sales.banner", { name: x.name, percent: x.percent })}</span>{" "}
+                <span className="text-muted-foreground">{left.d > 0 ? t("sales.ends_days", { d: left.d, h: left.h }) : t("sales.ends_hours", { h: left.h, m: left.m })}</span></p>
+            );
+          })}
+        </section>
+      )}
+
       {count > 0 && view?.preview && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/40 px-4 py-3">
           <p className="text-sm">
@@ -107,7 +121,17 @@ export function GameStorePage() {
                 </div>
                 <div className={grid ? "col-span-2 flex flex-wrap items-center justify-between gap-2" : "col-start-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:col-start-auto sm:flex-nowrap"}>
                   <p className="text-sm sm:min-w-28 sm:text-right">
-                    <span className="block font-semibold tabular-nums">{quick ? formatMoney(from.amount, currency, lang) : t("order.from", { price: formatMoney(from.amount, currency, lang) })}</span>
+                    {(() => {
+                      const sale = saleFor(sales, p.id, p.group_id);
+                      const shown = sale ? salePrice(from.amount, sale.percent) : from.amount;
+                      const price = formatMoney(shown, currency, lang);
+                      return (
+                        <span className="block font-semibold tabular-nums">
+                          {sale && <><span className="mr-1 rounded bg-primary px-1 text-xs text-primary-foreground">−{sale.percent}%</span><s className="mr-1 font-normal text-muted-foreground">{formatMoney(from.amount, currency, lang)}</s></>}
+                          {quick ? price : t("order.from", { price })}
+                        </span>
+                      );
+                    })()}
                     <span className="block text-xs text-muted-foreground">{[quick ? tCode(`cycle.${quick}`) : t("game.choose_hint"), n > 0 ? t("game.in_cart", { n }) : ""].filter(Boolean).join(" · ")}</span>
                   </p>
                   {out ? (

@@ -97,6 +97,7 @@ export const ADMIN_NAV: NavCategory[] = [
   { id: "marketing", label: "navcat.marketing", icon: MegaphoneIcon, items: [
     { to: "/admin/campaigns", label: "nav.campaigns", desc: "navdesc.admin_campaigns", icon: EnvelopeSimpleIcon, primary: true },
     { to: "/admin/coupons", label: "nav.coupons", desc: "navdesc.admin_coupons", icon: TicketIcon, primary: true },
+    { to: "/admin/sales", label: "nav.sales", desc: "navdesc.admin_sales", icon: PercentIcon },
     { to: "/admin/tracked-links", label: "nav.tracked_links", desc: "navdesc.admin_tracked_links", icon: LinkSimpleIcon },
     { to: "/admin/affiliates", label: "nav.affiliates", desc: "navdesc.admin_affiliates", icon: HandshakeIcon, primary: true },
   ] },

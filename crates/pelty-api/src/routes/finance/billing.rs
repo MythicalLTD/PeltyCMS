@@ -281,7 +281,9 @@ pub(crate) async fn place_order(
         _ => coupon.map(String::from),
     };
     let coupon = coupon_owned.as_deref();
-    let discounts = addon_discounts(s, cid, currency, items).await?;
+    let mut discounts = addon_discounts(s, cid, currency, items).await?;
+    let sale_discounts = crate::routes::timed_sales::checkout_discounts(s, currency, items).await?;
+    discounts.extend(sale_discounts);
     let (order, invoice) = s
         .orders()
         .place_full(cid, currency, items, coupon, DUE_DAYS, bundle, &discounts)

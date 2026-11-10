@@ -44,6 +44,8 @@ pub const GATES: &[(&str, &str)] = &[
     ("/admin/community", "server_community"),
     ("/public/storefront", "gaming_storefront"),
     ("/admin/storefront", "gaming_storefront"),
+    ("/public/sales", "timed_sales"),
+    ("/admin/sales", "timed_sales"),
     ("/public/reviews", "product_reviews"),
     ("/client/reviews", "product_reviews"),
     ("/admin/reviews", "product_reviews"),

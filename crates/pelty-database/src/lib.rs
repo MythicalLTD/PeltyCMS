@@ -101,6 +101,7 @@ pub use gaming::games;
 pub use gaming::marketplace;
 pub use gaming::modules as feature_modules;
 pub use gaming::reviews;
+pub use gaming::sales as timed_sales;
 pub use gaming::storefront as game_storefront;
 pub mod helpdesk;
 pub use helpdesk::downloads;
