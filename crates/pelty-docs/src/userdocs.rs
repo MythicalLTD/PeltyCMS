@@ -80,6 +80,11 @@ const TEMPLATES: &[(&str, &str, &str)] = &[
         include_str!("../templates/user/admin-api.md"),
     ),
     (
+        "admin-modules",
+        ADMIN,
+        include_str!("../templates/user/admin-modules.md"),
+    ),
+    (
         "admin-map",
         ADMIN,
         include_str!("../templates/user/admin-map.md"),

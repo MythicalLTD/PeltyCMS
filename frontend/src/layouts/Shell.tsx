@@ -29,6 +29,7 @@ import { ICONS } from "@/components/plugin-ui/icons";
 import { AddonDetailPanels, AddonTabs, LayoutSlot, OverridableOutlet, RouteSlot } from "@/components/plugin-ui/AddonSlots";
 import { HostEvents } from "@/components/plugin-ui/HostEvents";
 import { pathAllowed, useClientAccess } from "@/lib/clientAccess";
+import { routeAllowed, useModules } from "@/lib/modules";
 import { useAddonFilter } from "@/lib/addons/use-addon-filter";
 
 export interface NavItem {
@@ -219,7 +220,8 @@ export function Shell({ scope, section, footer, slot }: { scope: NavScope; secti
   const hasHub = !!where && where.cat.items.length > 1;
   const { hide_nav: hidden } = useUiOverrides();
   const access = useClientAccess(scope === "client");
-  const allow = (to: string) => (scope !== "client" || pathAllowed(to, access.data)) && !hidden.some((h) => h.path === to);
+  const { enabled: modules } = useModules();
+  const allow = (to: string) => (scope !== "client" || pathAllowed(to, access.data)) && !hidden.some((h) => h.path === to) && routeAllowed(to, modules);
   const visibleTree = navTree(scope)
     .map((c) => ({ ...c, items: c.items.filter((i) => allow(i.to)) }))
     .filter((c) => c.items.length > 0);

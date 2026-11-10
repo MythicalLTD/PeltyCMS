@@ -8,6 +8,7 @@ import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, C
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { flatNav, type NavScope } from "@/lib/navRegistry";
+import { routeAllowed, useModules } from "@/lib/modules";
 import { pathAllowed, useClientAccess } from "@/lib/clientAccess";
 import { usePluginPages, pluginPagePath } from "@/lib/addons/plugins";
 import { ICONS } from "@/components/plugin-ui/icons";
@@ -40,15 +41,16 @@ export function CommandPalette({ scope }: { scope: NavScope }) {
   }
   const { pages: extPages } = usePluginPages(scope);
   const access = useClientAccess(scope === "client");
+  const { enabled: modules } = useModules();
   const pages = useMemo(
     () => [
       ...flatNav(scope)
-        .filter((p) => scope !== "client" || pathAllowed(p.to, access.data))
+        .filter((p) => (scope !== "client" || pathAllowed(p.to, access.data)) && routeAllowed(p.to, modules))
         .map((p) => ({ ...p, title: t(p.label), group: t(p.category.label), hint: t(p.desc) })),
       // Plugin and WASM addon pages (declarative UI) are searchable too.
       ...extPages.map((p) => ({ to: pluginPagePath(p), primary: false, icon: ICONS[p.icon ?? ""] ?? PuzzlePieceIcon, title: tCode(p.title), group: t("nav.plugins"), hint: p.plugin })),
     ],
-    [scope, t, tCode, extPages, access.data],
+    [scope, t, tCode, extPages, access.data, modules],
   );
   const found = matchPages(pages, q);
   const r = useQuery({

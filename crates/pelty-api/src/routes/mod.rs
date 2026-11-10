@@ -104,6 +104,8 @@ pub use ops::csv_import;
 pub use ops::exports;
 pub use ops::mass;
 pub use ops::reports;
+pub mod gaming;
+pub use gaming::modules as feature_modules;
 pub mod health;
 pub mod openapi;
 
@@ -115,6 +117,7 @@ use uuid::Uuid;
 pub fn api_router() -> Router<AppState> {
     Router::new()
         .merge(auth::router())
+        .merge(feature_modules::router())
         .merge(csv_import::router())
         .merge(live_chat::router())
         .merge(crate::addons::router())

@@ -101,6 +101,7 @@ const AdminCalendarPage = lazy(() => import("@/pages/admin/ops/AdminOps").then((
 const AdminLoginHistoryPage = lazy(() => import("@/pages/admin/ops/AdminOps").then((m) => ({ default: m.AdminLoginHistoryPage })));
 const AdminBackupsPage = lazy(() => import("@/pages/admin/ops/AdminOps").then((m) => ({ default: m.AdminBackupsPage })));
 const AdminGeneralSettingsPage = lazy(() => import("@/pages/admin/settings/GeneralSettings").then((m) => ({ default: m.AdminGeneralSettingsPage })));
+const AdminModulesPage = lazy(() => import("@/pages/admin/gaming/Modules").then((m) => ({ default: m.AdminModulesPage })));
 const AdminNoticeboardPage = lazy(() => import("@/pages/admin/support/Noticeboard").then((m) => ({ default: m.AdminNoticeboardPage })));
 const AdminKycPage = lazy(() => import("@/pages/admin/clients/Kyc").then((m) => ({ default: m.AdminKycPage })));
 const ClientVerificationPage = lazy(() => import("@/pages/client/account/Verification").then((m) => ({ default: m.ClientVerificationPage })));
@@ -350,6 +351,7 @@ export function App() {
         <Route path="customers/:id" element={<AdminClientSummaryPage />} />
         <Route path="my-notes" element={<AdminMyNotesPage />} />
         <Route path="noticeboard" element={<AdminNoticeboardPage />} />
+        <Route path="modules" element={<AdminModulesPage />} />
         <Route path="tracked-links" element={<AdminTrackedLinksPage />} />
         <Route path="calendar" element={<AdminCalendarPage />} />
         <Route path="general-settings" element={<AdminGeneralSettingsPage />} />

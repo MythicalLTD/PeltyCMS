@@ -4,6 +4,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { PageHeader } from "@/components/PageHeader";
 import { useI18n } from "@/lib/i18n";
 import { findCategory, hubLeaves, type NavScope } from "@/lib/navRegistry";
+import { useModules } from "@/lib/modules";
 import { pluginPagePath, usePluginPages } from "@/lib/addons/plugins";
 import { ICONS } from "@/components/plugin-ui/icons";
 
@@ -15,12 +16,13 @@ export function hubPluginPages<T extends { hub?: string | null; area: string }>(
 /** Category hub: every page of a nav category as a link card. */
 export function HubPage({ scope, id: fixed }: { scope: NavScope; id?: string }) {
   const { t, tCode } = useI18n();
+  const { enabled: modules } = useModules();
   const { id } = useParams();
   const cat = findCategory(scope, fixed ?? id);
   const { pages } = usePluginPages(scope);
   if (!cat) return <Navigate to={scope === "admin" ? "/admin" : "/dashboard"} replace />;
   const leaves = [
-    ...hubLeaves(scope, cat).map((i) => ({ to: i.to, icon: i.icon, title: t(i.label), desc: t(i.desc) })),
+    ...hubLeaves(scope, cat, modules).map((i) => ({ to: i.to, icon: i.icon, title: t(i.label), desc: t(i.desc) })),
     ...hubPluginPages(pages, scope, cat.id).map((p) => ({ to: pluginPagePath(p), icon: ICONS[p.icon ?? ""] ?? PuzzlePieceIcon, title: tCode(p.title), desc: p.plugin })),
   ];
   return (

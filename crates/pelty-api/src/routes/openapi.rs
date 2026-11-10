@@ -10,6 +10,9 @@ use utoipa::OpenApi;
     paths(
         super::health::healthz,
         super::health::readyz,
+        super::feature_modules::public_modules,
+        super::feature_modules::admin_list,
+        super::feature_modules::admin_set,
         super::auth::register,
         super::auth::login,
         super::auth::setup_login,
@@ -783,6 +786,9 @@ use utoipa::OpenApi;
         super::plugins::put_settings,
     ),
     components(schemas(
+        pelty_database::feature_modules::ModuleState,
+        pelty_database::feature_modules::ModuleUpdate,
+        super::feature_modules::ModuleList,
         super::gateways::UpdateGateway,
         super::gateways::NewCustom,
         super::gateways::TestWebhook,
