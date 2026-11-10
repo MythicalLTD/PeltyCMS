@@ -32,6 +32,7 @@ pub fn router() -> Router<AppState> {
         .route("/admin/gift-cards", get(gift_list).post(gift_create))
         .route("/admin/gift-cards/{id}/disable", post(gift_disable))
         .route("/client/gift-cards/redeem", post(gift_redeem))
+        .route("/public/gift-cards/balance", post(gift_balance))
         .route("/admin/transactions", get(admin_transactions))
         .route(
             "/admin/transactions/{id}",
@@ -313,6 +314,27 @@ pub async fn gift_redeem(
         json!({ "customer_id": cid, "currency": currency, "amount": amount }),
     ));
     Ok(Json(json!({ "currency": currency, "amount": amount })))
+}
+
+/// Check a gift card's balance without redeeming it (no sign-in needed).
+/// Rate limited per IP; unknown and disabled codes are both 404.
+#[utoipa::path(post, path = "/api/v1/public/gift-cards/balance", request_body = RedeemBody, responses((status = 200), (status = 404), (status = 429)))]
+pub async fn gift_balance(
+    State(s): State<AppState>,
+    ext: axum::http::Extensions,
+    Json(b): Json<RedeemBody>,
+) -> ApiResult<Json<gift_cards::Balance>> {
+    let ip = ext
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .map(|c| c.0.ip().to_string())
+        .unwrap_or_else(|| "unknown".into());
+    if !s.auth_limiter.check(&format!("giftcard:{ip}")) {
+        return Err(AppError::RateLimited.into());
+    }
+    gift_cards::balance(&s.pool, &b.code)
+        .await?
+        .map(Json)
+        .ok_or_else(|| AppError::NotFound.into())
 }
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]

@@ -107,6 +107,7 @@ const AdminCreatorCodesPage = lazy(() => import("@/pages/admin/gaming/CreatorCod
 const AdminSalesPage = lazy(() => import("@/pages/admin/gaming/Sales").then((m) => ({ default: m.AdminSalesPage })));
 const AdminStorefrontPage = lazy(() => import("@/pages/admin/gaming/Storefront").then((m) => ({ default: m.AdminStorefrontPage })));
 const AdminCommunityPage = lazy(() => import("@/pages/admin/gaming/Community").then((m) => ({ default: m.AdminCommunityPage })));
+const GiftCardBalancePage = lazy(() => import("@/pages/site/GiftCardBalance").then((m) => ({ default: m.GiftCardBalancePage })));
 const CommunityPage = lazy(() => import("@/pages/site/Community").then((m) => ({ default: m.CommunityPage })));
 const AdminReviewsPage = lazy(() => import("@/pages/admin/gaming/Reviews").then((m) => ({ default: m.AdminReviewsPage })));
 const AdminCreatorMarketPage = lazy(() => import("@/pages/admin/gaming/CreatorMarket").then((m) => ({ default: m.AdminCreatorMarketPage })));
@@ -251,6 +252,7 @@ export function App() {
         <Route element={<StoreContent />}>
           <Route path="/domain-search" element={<DomainSearchPage />} />
           <Route path="/contact" element={<ContactPage />} />
+          <Route path="/gift-card" element={<Suspense fallback={<Loading />}><GiftCardBalancePage /></Suspense>} />
           <Route path="/community" element={<Suspense fallback={<Loading />}><RequireModule id="server_community"><CommunityPage /></RequireModule></Suspense>} />
           <Route path="/store" element={<StoreGate />} />
           <Route path="/store/:group" element={<StoreGate />} />

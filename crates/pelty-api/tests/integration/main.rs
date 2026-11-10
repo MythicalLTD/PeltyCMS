@@ -97,6 +97,7 @@ mod gateway_rules_flow;
 mod gateways_flow;
 mod gdpr_flow;
 mod general_settings_flow;
+mod giftcard_balance_flow;
 mod housekeeping_flow;
 mod inactive_clients_flow;
 mod inbound_email_flow;

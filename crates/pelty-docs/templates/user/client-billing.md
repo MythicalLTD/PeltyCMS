@@ -16,7 +16,7 @@
 
 - Add funds to your account credit; credit is used to pay invoices.
 - Save a payment method and make one the default. If your provider uses automatic payments, due invoices are charged to the default method; you get an email when a charge fails.
-- Redeem gift cards.
+- Redeem gift cards. To see a card's balance first without using it, open `/gift-card`.
 
 ## If you do not pay
 
