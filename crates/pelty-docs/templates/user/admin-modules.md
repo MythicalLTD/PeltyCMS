@@ -210,7 +210,7 @@ Needs `game_profiles`. Switch it on and a public **Community** page appears at `
 
 - **Live server status** for every game server that has a public address: online/offline, players and slots, version, MOTD and a sample of player names. A background job checks each server once a minute (Minecraft Java ping, Minecraft Bedrock ping, Source A2S for Rust/ARK/CS-style games, and FiveM/RedM `info.json` + `players.json`). Each check times out after a few seconds; the last error is shown to admins under **Community → Servers**, and **Check now** runs a check immediately.
 - **Vote links** to server lists. Put `{username}` in the vote page URL and the page fills in the name the player types.
-- **Top voters** for the current month and, if you switch it on, **top supporters** (paid invoices this month in the goal currency). Supporters are hidden by default; when shown, they appear by their first game account name, or first name and last initial. Amounts appear only if **Show donation amounts** is on. Emails never appear.
+- **Top voters** for the current month and, if you switch it on, **top supporters** (paid invoices this month in the goal currency). Supporters are hidden by default; when shown, they appear by their game account **player name** (never an ID such as a UUID or Steam ID), or first name and last initial. Amounts appear only if **Show donation amounts** is on. Emails never appear.
 - An optional **monthly goal** bar ("server costs"), based on paid invoices this month in the goal currency. Set the goal to `0` to hide it.
 
 ### Vote rewards
@@ -223,9 +223,9 @@ Click **Issue token** to get the callback URL to paste into the server list's se
 https://your-panel/api/v1/public/community/vote/<site id>?username={username}&token=pgv_…
 ```
 
-The list calls it when someone votes. The callback accepts `GET` or `POST`, and reads the name from `username`, `user`, `player` or `name` and the token from `token`, `key`, `secret` or the `X-Vote-Token` header. Only a hash of the token is stored; rotating it stops the old one. A wrong token gets `403`. A repeat vote by the same name inside the cooldown gets `409 error.vote_cooldown` and no reward. Calls are rate-limited per IP.
+The list calls it when someone votes. The callback accepts `GET` or `POST`, and reads the name from `username`, `user`, `player` or `name` and the token from `token`, `key`, `secret` or the `X-Vote-Token` header. Only a hash of the token is stored; rotating it stops the old one. A wrong token gets `403`, and calls with a wrong token are rate-limited per IP. A repeat vote by the same name inside the cooldown gets `409 error.vote_cooldown` and no reward. If the reward cannot be queued, the vote is undone so the site can retry. Vote names with spaces are only rewarded on Bedrock servers (quoted as one argument); elsewhere the vote counts but no command is queued, so a name can never add command arguments. Caller IPs are cleared after 30 days by housekeeping; votes stay for the leaderboards.
 
-Rewards go through the **in-game delivery** queue (`game_delivery` must be on; trigger `vote`), so they retry, wait for the player when "must be online" is set, and show up under **Game deliveries**. Commands can use `{username}`, `{player}`, `{site}`, `{server}` and, when the name matches a customer's game account, that customer's identity variables. Each accepted vote emits the `community.voted` event for extensions and webhooks.
+Rewards go through the **in-game delivery** queue (`game_delivery` must be on; trigger `vote`), so they retry, wait for the player when "must be online" is set, and show up under **Game deliveries**. Commands can use `{username}`, `{player}`, `{site}`, `{server}` (unknown placeholders and line breaks are refused) and, when the name matches a customer's game account, that customer's identity variables. Each accepted vote emits the `community.voted` event for extensions and webhooks.
 
 ### API
 

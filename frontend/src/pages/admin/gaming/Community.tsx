@@ -10,6 +10,7 @@ import { SelectField } from "@/components/SelectField";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -94,6 +95,7 @@ function Sites({ sites }: { sites: VoteSite[] }) {
   const servers = useQuery({ queryKey: ["admin", "game-servers"], queryFn: () => api<{ items: GameServer[] }>("/admin/game/servers") });
   const [edit, setEdit] = useState<{ id: string | null; f: typeof EMPTY } | null>(null);
   const [token, setToken] = useState<{ token: string; callback: string } | null>(null);
+  const [confirm, setConfirm] = useState<{ kind: "rotate" | "delete"; site: VoteSite } | null>(null);
   const refresh = () => void qc.invalidateQueries({ queryKey: ["admin", "community"] });
   const save = useMutation({
     mutationFn: ({ id, f }: { id: string | null; f: typeof EMPTY }) => api(id ? `/admin/community/sites/${id}` : "/admin/community/sites", { method: id ? "PUT" : "POST", body: f }),
@@ -116,9 +118,9 @@ function Sites({ sites }: { sites: VoteSite[] }) {
                 <TableCell className="font-mono text-xs">{v.reward_command || "—"}</TableCell>
                 <TableCell>{t("community.hours", { n: v.cooldown_hours })}</TableCell>
                 <TableCell className="text-right">
-                  <Button size="sm" variant="ghost" onClick={() => issue.mutate(v.id)} disabled={issue.isPending}><KeyIcon aria-hidden />{v.has_token ? t("community.rotate_token") : t("community.issue_token")}</Button>
+                  <Button size="sm" variant="ghost" onClick={() => (v.has_token ? setConfirm({ kind: "rotate", site: v }) : issue.mutate(v.id))} disabled={issue.isPending}><KeyIcon aria-hidden />{v.has_token ? t("community.rotate_token") : t("community.issue_token")}</Button>
                   <Button size="icon" variant="ghost" aria-label={t("common.edit")} onClick={() => setEdit({ id: v.id, f: { name: v.name, url: v.url, server_id: v.server_id, reward_command: v.reward_command, require_online: v.require_online, cooldown_hours: v.cooldown_hours, enabled: v.enabled, sort_order: v.sort_order } })}><PencilSimpleIcon aria-hidden /></Button>
-                  <Button size="icon" variant="ghost" aria-label={t("common.delete")} onClick={() => del.mutate(v.id)} disabled={del.isPending}><TrashIcon aria-hidden /></Button>
+                  <Button size="icon" variant="ghost" aria-label={t("common.delete")} onClick={() => setConfirm({ kind: "delete", site: v })} disabled={del.isPending}><TrashIcon aria-hidden /></Button>
                 </TableCell>
               </TableRow>
             ))}
@@ -144,6 +146,20 @@ function Sites({ sites }: { sites: VoteSite[] }) {
           <DialogFooter><Button type="submit" form="vote-site" disabled={save.isPending}>{t("common.save")}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirm?.kind === "delete" ? t("community.confirm_delete", { name: confirm.site.name }) : t("community.confirm_rotate", { name: confirm?.site.name ?? "" })}</AlertDialogTitle>
+            <AlertDialogDescription>{confirm?.kind === "delete" ? t("community.confirm_delete_hint") : t("community.confirm_rotate_hint")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { if (!confirm) return; if (confirm.kind === "delete") del.mutate(confirm.site.id); else issue.mutate(confirm.site.id); setConfirm(null); }}>
+              {confirm?.kind === "delete" ? t("common.delete") : t("community.rotate_token")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <Dialog open={!!token} onOpenChange={(o) => !o && setToken(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>{t("community.token_title")}</DialogTitle><DialogDescription>{t("community.token_hint")}</DialogDescription></DialogHeader>

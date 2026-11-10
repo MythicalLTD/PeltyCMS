@@ -52,7 +52,7 @@ pub async fn public_overview(State(s): State<AppState>) -> ApiResult<Json<Value>
             list.into_iter()
                 .map(|d| {
                     if cfg.show_donor_amounts {
-                        json!({ "name": d.name, "total": d.total.to_string() })
+                        json!({ "name": d.name, "total": d.total.to_string(), "currency": cfg.goal_currency })
                     } else {
                         json!({ "name": d.name })
                     }
@@ -139,7 +139,14 @@ pub async fn vote_callback(
     let Some((vote, customer)) = cm::record_vote(&s.pool, &site, &username, &ip).await? else {
         return Err(AppError::Conflict("error.vote_cooldown").into());
     };
-    let rewards = reward(&s, &site, vote, username.trim(), customer).await?;
+    let rewards = match reward(&s, &site, vote, username.trim(), customer).await {
+        Ok(n) => n,
+        Err(e) => {
+            // Undo the vote so the site's retry is not refused by the cooldown.
+            cm::delete_vote(&s.pool, vote).await?;
+            return Err(e);
+        }
+    };
     s.emit(DomainEvent::new(
         "community.voted",
         json!({ "vote_id": vote, "site_id": site.id, "username": username.trim(), "customer_id": customer, "rewards": rewards }),

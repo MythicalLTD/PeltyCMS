@@ -59,7 +59,13 @@ pub struct Report {
     pub clients_inactivated: u64,
     pub clients_reactivated: u64,
     pub log_rows_pruned: u64,
+    /// Vote caller IPs cleared after [`VOTE_IP_DAYS`] days.
+    pub vote_ips_cleared: u64,
 }
+
+/// Days a vote keeps its caller IP (abuse checks); the vote itself stays for
+/// the leaderboards.
+pub const VOTE_IP_DAYS: i32 = 30;
 
 /// Log tables pruned by `log_retention_days`.
 const LOG_TABLES: [&str; 5] = [
@@ -110,5 +116,13 @@ pub async fn run(pool: &PgPool) -> AppResult<Report> {
             .rows_affected();
         }
     }
+    r.vote_ips_cleared = sqlx::query(
+        "UPDATE votes SET ip = '' WHERE ip <> '' AND created_at < now() - make_interval(days => $1)",
+    )
+    .bind(VOTE_IP_DAYS)
+    .execute(pool)
+    .await
+    .map_err(db_err)?
+    .rows_affected();
     Ok(r)
 }
