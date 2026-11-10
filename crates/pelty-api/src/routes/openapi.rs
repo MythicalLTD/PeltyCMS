@@ -909,6 +909,8 @@ use utoipa::OpenApi;
         pelty_database::reviews::Question,
         pelty_database::reviews::PublicQuestion,
         pelty_database::reviews::QuestionRow,
+        pelty_database::reviews::CreatorReview,
+        pelty_database::reviews::CreatorQuestion,
         super::reviews::ReviewBody,
         super::reviews::TextBody,
         super::reviews::StatusBody,

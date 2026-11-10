@@ -20,7 +20,7 @@ import { api, ApiError } from "@/lib/api";
 import { creatorNet, creatorSlug, PAYOUT_METHODS, type Creator, type Dashboard, type LedgerEntry, type Listing, type Payout } from "@/lib/marketplace";
 import { useI18n } from "@/lib/i18n";
 import { useModules } from "@/lib/modules";
-import type { QuestionRow, ReviewRow } from "@/lib/reviews";
+import type { CreatorQuestion, CreatorReview } from "@/lib/reviews";
 import { ReplyBox } from "@/components/store/ReplyBox";
 import { Stars } from "@/components/store/Stars";
 import type { TranslationKey } from "@/lib/i18n-core";
@@ -274,7 +274,7 @@ function Payouts({ d }: { d: Dashboard }) {
 function CreatorReviews() {
   const { t, tCode } = useI18n();
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["creator", "reviews"], queryFn: () => api<{ reviews: ReviewRow[]; questions: QuestionRow[] }>("/client/reviews/creator") });
+  const q = useQuery({ queryKey: ["creator", "reviews"], queryFn: () => api<{ creator: boolean; reviews: CreatorReview[]; questions: CreatorQuestion[] }>("/client/reviews/creator") });
   const fail = (e: unknown) => toast.error(e instanceof ApiError ? tCode(e.code) : t("error.internal"));
   const ok = () => { void qc.invalidateQueries({ queryKey: ["creator", "reviews"] }); toast.success(t("reviews.saved")); };
   const reply = useMutation({ mutationFn: ({ id, text }: { id: string; text: string }) => api(`/client/reviews/creator/reviews/${id}/reply`, { method: "POST", body: { text } }), onSuccess: ok, onError: fail });
@@ -285,7 +285,7 @@ function CreatorReviews() {
     <div className="grid gap-3">
       {q.data.questions.map((x) => (
         <Card key={x.id}><CardContent className="grid gap-1 pt-6 text-sm">
-          <p className="text-xs text-muted-foreground">{x.product_name}</p>
+          <p className="text-xs text-muted-foreground">{x.product_name} · {x.author}</p>
           <p><span className="font-medium">{t("reviews.q")}</span> {x.body}</p>
           {x.answer ? <p className="whitespace-pre-line"><span className="font-medium">{t("reviews.a")}</span> {x.answer}</p> : <p className="text-xs text-muted-foreground">{t("reviews.unanswered")}</p>}
           <ReplyBox id={`cq-${x.id}`} initial={x.answer} label={t("reviews.answer")} onSave={(text) => answer.mutate({ id: x.id, text })} />
@@ -293,7 +293,7 @@ function CreatorReviews() {
       ))}
       {q.data.reviews.map((r) => (
         <Card key={r.id}><CardContent className="grid gap-1 pt-6 text-sm">
-          <div className="flex flex-wrap items-center gap-2"><Stars value={r.rating} label={t("reviews.stars", { n: r.rating })} /><span className="text-xs text-muted-foreground">{r.product_name}</span>{r.verified && <Badge variant="secondary">{t("reviews.verified")}</Badge>}</div>
+          <div className="flex flex-wrap items-center gap-2"><Stars value={r.rating} label={t("reviews.stars", { n: r.rating })} /><span className="text-xs text-muted-foreground">{r.product_name} · {r.author}</span>{r.verified && <Badge variant="secondary">{t("reviews.verified")}</Badge>}</div>
           {r.title && <p className="font-semibold">{r.title}</p>}
           {r.body && <p className="whitespace-pre-line">{r.body}</p>}
           {r.reply && <p className="whitespace-pre-line rounded-md bg-muted/50 p-2">{r.reply}</p>}

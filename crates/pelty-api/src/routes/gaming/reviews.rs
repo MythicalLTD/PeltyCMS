@@ -112,10 +112,7 @@ pub async fn eligibility(
     let c = customer_of(&s, &u).await?;
     let cfg = rv::config(&s.pool).await?;
     let purchased = rv::purchased(&s.pool, c, id).await?;
-    let mine = rv::mine(&s.pool, c)
-        .await?
-        .into_iter()
-        .find(|r| r.product_id == id);
+    let mine = rv::for_product(&s.pool, c, id).await?;
     Ok(Json(json!({
         "purchased": purchased,
         "can_review": purchased || !cfg.verified_only,
@@ -223,7 +220,9 @@ async fn owns(s: &AppState, creator: Uuid, product: Uuid) -> ApiResult<()> {
 }
 
 /// Reviews and questions on the current creator's products (empty lists
-/// for customers who are not approved creators).
+/// for customers who are not approved creators). Customer data is reduced
+/// to "First L."; pending questions are listed only when staff approval is
+/// off, since answering publishes them.
 #[utoipa::path(get, path = "/api/v1/client/reviews/creator", responses((status = 200)))]
 pub async fn creator_inbox(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Json<Value>> {
     let Ok(c) = my_creator(&s, &u).await else {
@@ -231,12 +230,11 @@ pub async fn creator_inbox(State(s): State<AppState>, u: CurrentUser) -> ApiResu
             json!({ "creator": false, "reviews": [], "questions": [] }),
         ));
     };
-    let mut questions = rv::questions(&s.pool, Some("approved"), Some(c)).await?;
-    questions.extend(rv::questions(&s.pool, Some("pending"), Some(c)).await?);
+    let cfg = rv::config(&s.pool).await?;
     Ok(Json(json!({
         "creator": true,
-        "reviews": rv::list(&s.pool, Some("approved"), Some(c)).await?,
-        "questions": questions,
+        "reviews": rv::creator_reviews(&s.pool, c).await?,
+        "questions": rv::creator_questions(&s.pool, c, !cfg.require_approval).await?,
     })))
 }
 
@@ -265,10 +263,8 @@ pub async fn creator_answer(
     let c = my_creator(&s, &u).await?;
     let q = rv::question(&s.pool, id).await?;
     owns(&s, c, q.product_id).await?;
-    if q.status == "rejected" {
-        return Err(AppError::NotFound.into());
-    }
-    let q = rv::answer(&s.pool, id, u.user_id, &b.text).await?;
+    let cfg = rv::config(&s.pool).await?;
+    let q = rv::answer(&s.pool, id, u.user_id, &b.text, cfg.require_approval).await?;
     s.emit(DomainEvent::new(
         "question.answered",
         json!({ "question_id": q.id, "product_id": q.product_id, "customer_id": q.customer_id }),
@@ -327,11 +323,21 @@ pub async fn admin_review_status(
 #[utoipa::path(post, path = "/api/v1/admin/reviews/{id}/reply", params(("id" = Uuid, Path)), request_body = TextBody, responses((status = 200, body = rv::Review), (status = 403), (status = 404)))]
 pub async fn admin_reply(
     State(s): State<AppState>,
-    _p: RequirePermission<perms::CatalogManage>,
+    RequirePermission(u, _): RequirePermission<perms::CatalogManage>,
     Path(id): Path<Uuid>,
     Json(b): Json<TextBody>,
 ) -> ApiResult<Json<rv::Review>> {
-    Ok(Json(rv::reply(&s.pool, id, &b.text).await?))
+    let r = rv::reply(&s.pool, id, &b.text).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "review.replied",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "removed": r.reply.is_empty() }),
+    )
+    .await?;
+    Ok(Json(r))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/reviews/questions", params(StatusFilter), responses((status = 200, body = super::Items<rv::QuestionRow>), (status = 403)))]
@@ -348,11 +354,21 @@ pub async fn admin_questions(
 #[utoipa::path(post, path = "/api/v1/admin/reviews/questions/{id}/status", params(("id" = Uuid, Path)), request_body = StatusBody, responses((status = 200, body = rv::Question), (status = 403), (status = 404), (status = 422)))]
 pub async fn admin_question_status(
     State(s): State<AppState>,
-    _p: RequirePermission<perms::CatalogManage>,
+    RequirePermission(u, _): RequirePermission<perms::CatalogManage>,
     Path(id): Path<Uuid>,
     Json(b): Json<StatusBody>,
 ) -> ApiResult<Json<rv::Question>> {
-    Ok(Json(rv::set_question_status(&s.pool, id, &b.status).await?))
+    let q = rv::set_question_status(&s.pool, id, &b.status).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "question.moderated",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "status": q.status }),
+    )
+    .await?;
+    Ok(Json(q))
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/reviews/questions/{id}/answer", params(("id" = Uuid, Path)), request_body = TextBody, responses((status = 200, body = rv::Question), (status = 403), (status = 404), (status = 422)))]
@@ -362,7 +378,16 @@ pub async fn admin_answer(
     Path(id): Path<Uuid>,
     Json(b): Json<TextBody>,
 ) -> ApiResult<Json<rv::Question>> {
-    let q = rv::answer(&s.pool, id, u.user_id, &b.text).await?;
+    let q = rv::answer(&s.pool, id, u.user_id, &b.text, false).await?;
+    audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "question.answered",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "product_id": q.product_id }),
+    )
+    .await?;
     s.emit(DomainEvent::new(
         "question.answered",
         json!({ "question_id": q.id, "product_id": q.product_id, "customer_id": q.customer_id }),

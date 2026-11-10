@@ -153,6 +153,84 @@ pub async fn delete_own(pool: &PgPool, customer: Uuid, id: Uuid) -> AppResult<()
     Ok(())
 }
 
+/// The customer's review of one product, if any.
+pub async fn for_product(
+    pool: &PgPool,
+    customer: Uuid,
+    product: Uuid,
+) -> AppResult<Option<Review>> {
+    sqlx::query_as("SELECT * FROM product_reviews WHERE product_id = $1 AND customer_id = $2")
+        .bind(product)
+        .bind(customer)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
+}
+
+/// Review as a creator sees it: "First L." instead of customer data.
+#[derive(Debug, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+pub struct CreatorReview {
+    pub id: Uuid,
+    pub product_id: Uuid,
+    pub product_name: String,
+    pub author: String,
+    pub rating: i16,
+    pub title: String,
+    pub body: String,
+    pub verified: bool,
+    pub reply: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+pub struct CreatorQuestion {
+    pub id: Uuid,
+    pub product_id: Uuid,
+    pub product_name: String,
+    pub author: String,
+    pub body: String,
+    pub status: String,
+    pub answer: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+/// Approved reviews on a creator's products.
+pub async fn creator_reviews(pool: &PgPool, creator: Uuid) -> AppResult<Vec<CreatorReview>> {
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT r.id, r.product_id, p.name AS product_name, {AUTHOR} AS author, r.rating, r.title, r.body, r.verified, r.reply, r.created_at
+           FROM product_reviews r JOIN products p ON p.id = r.product_id JOIN customers c ON c.id = r.customer_id
+           JOIN creator_products cp ON cp.product_id = r.product_id AND cp.creator_id = $1
+          WHERE r.status = 'approved' ORDER BY (r.reply = '') DESC, r.created_at DESC LIMIT 500"
+    )))
+    .bind(creator)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
+}
+
+/// Questions on a creator's products the creator may answer: approved ones,
+/// plus pending ones when staff approval is not required.
+pub async fn creator_questions(
+    pool: &PgPool,
+    creator: Uuid,
+    include_pending: bool,
+) -> AppResult<Vec<CreatorQuestion>> {
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT q.id, q.product_id, p.name AS product_name, {AUTHOR} AS author, q.body, q.status, q.answer, q.created_at
+           FROM product_questions q JOIN products p ON p.id = q.product_id JOIN customers c ON c.id = q.customer_id
+           JOIN creator_products cp ON cp.product_id = q.product_id AND cp.creator_id = $1
+          WHERE q.status = 'approved' OR ($2 AND q.status = 'pending')
+          ORDER BY (q.answer = '') DESC, q.created_at DESC LIMIT 500"
+    )))
+    .bind(creator)
+    .bind(include_pending)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
+}
+
 pub async fn mine(pool: &PgPool, customer: Uuid) -> AppResult<Vec<Review>> {
     sqlx::query_as("SELECT * FROM product_reviews WHERE customer_id = $1 ORDER BY created_at DESC")
         .bind(customer)
@@ -430,18 +508,29 @@ pub async fn set_question_status(pool: &PgPool, id: Uuid, status: &str) -> AppRe
         .ok_or(AppError::NotFound)
 }
 
-/// Answer a question; answering also publishes it.
-pub async fn answer(pool: &PgPool, id: Uuid, by: Uuid, text: &str) -> AppResult<Question> {
+/// Answer a question; answering also publishes it. `only_approved` (creators
+/// while staff approval is required) answers only already-approved
+/// questions; otherwise any question that is not rejected. The state check
+/// is part of the update, so a concurrent rejection wins.
+pub async fn answer(
+    pool: &PgPool,
+    id: Uuid,
+    by: Uuid,
+    text: &str,
+    only_approved: bool,
+) -> AppResult<Question> {
     let text = text.trim();
     if text.is_empty() || text.chars().count() > 5000 {
         return Err(AppError::Validation("error.question_invalid"));
     }
     sqlx::query_as(
-        "UPDATE product_questions SET answer = $2, answered_by = $3, answered_at = now(), status = 'approved' WHERE id = $1 RETURNING *",
+        "UPDATE product_questions SET answer = $2, answered_by = $3, answered_at = now(), status = 'approved'
+          WHERE id = $1 AND status <> 'rejected' AND (NOT $4 OR status = 'approved') RETURNING *",
     )
     .bind(id)
     .bind(text)
     .bind(by)
+    .bind(only_approved)
     .fetch_optional(pool)
     .await
     .map_err(db_err)?
