@@ -55,3 +55,5 @@ Bundled gateways:
 ## Credit and gift cards
 
 Clients can add funds to their account credit and pay invoices with it; staff manage gift cards in Admin → Billing → **Gift cards**.
+
+Anyone holding a code can check what is left on it at `/gift-card` without signing in or redeeming it. The page shows the balance, the expiry and whether the card is ready to use, already used or expired. Unknown and disabled codes give the same "not valid" answer, and checks are rate limited per IP.

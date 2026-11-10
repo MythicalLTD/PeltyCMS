@@ -85,16 +85,13 @@ async fn gift_card_balance_without_redeeming() {
         .unwrap();
     let (old, _) = make(&app, &admin, Some(past)).await;
     let r = call(&app, "POST", URL, Some(json!({"code": old})), &[]).await;
-    if r.status == StatusCode::UNPROCESSABLE_ENTITY {
-        // Creation may refuse past expiry; then just disable it below.
-    } else {
-        assert_eq!(
-            (r.body["status"].as_str(), dec(&r.body["balance"])),
-            (Some("expired"), "0".into()),
-            "{:?}",
-            r.body
-        );
-    }
+    assert_eq!(r.status, StatusCode::OK, "{:?}", r.body);
+    assert_eq!(
+        (r.body["status"].as_str(), dec(&r.body["balance"])),
+        (Some("expired"), "0".into()),
+        "{:?}",
+        r.body
+    );
 
     // Disabled and unknown codes look the same.
     let (dis, did) = make(&app, &admin, None).await;
