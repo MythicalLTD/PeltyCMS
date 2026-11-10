@@ -1,4 +1,4 @@
-# Optional modules (gaming, digital products, marketplace)
+# Optional modules (gaming, digital products, marketplace, reviews)
 
 PeltyCMS is a hosting and billing panel out of the box. The same install can also run a game server store (Minecraft, FiveM/RedM, Rust and others, like Tebex or CraftingStore), sell digital products with licenses, or host a creator marketplace (like BuiltByBit). Each of these is an **optional module**: nothing changes until you switch it on, and you can combine them freely.
 
@@ -157,3 +157,49 @@ Payout administration needs the **Affiliates** permission. Creator and listing r
 | GET | `/api/v1/admin/creator-payouts`, POST `/{id}/send`, POST `/{id}/status` | staff (Affiliates) |
 
 Events: `creator.applied`, `creator.payout_requested`, `creator.payout_paid`.
+
+## Reviews and Q&A (`product_reviews`)
+
+When this module is on, every active store product page shows:
+
+- the star rating with a 5-to-1 histogram,
+- approved reviews, newest first, with verified buyers listed first,
+- a **Questions & answers** section.
+
+Signed-in customers can write one review per product. Editing a review sends it back to moderation and removes the reply. Customers can also ask questions.
+
+A review carries a **Verified purchase** badge when the customer bought the product, meaning any one of these exists:
+
+- a service for the product that is not pending,
+- a paid order line,
+- a license.
+
+Moderate reviews and questions under **Admin → Products → Reviews & Q&A**. Approve or reject them, reply to reviews publicly, and answer questions. Answering a question also publishes it. When the creator marketplace is on, the creator who owns a product can reply to its reviews and answer its questions from the **Reviews** tab of the creator dashboard. Creators cannot approve or reject anything.
+
+Settings on the module:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `require_approval` | `true` | New reviews and questions wait for staff approval |
+| `verified_only` | `false` | Only buyers may review (others get `error.review_purchase_required`) |
+| `questions` | `true` | Product Q&A is open |
+
+Each customer can have at most 5 unanswered questions per product. Public responses show the author as "First L." and never include customer ids or emails.
+
+### API
+
+| Method | Path | Who |
+|---|---|---|
+| GET | `/api/v1/public/reviews/products/{id}?limit=&offset=` | anyone: summary, approved reviews |
+| GET | `/api/v1/public/reviews/products/{id}/questions` | anyone |
+| GET | `/api/v1/client/reviews` | your reviews |
+| GET/POST | `/api/v1/client/reviews/products/{id}` | eligibility / create or edit your review |
+| DELETE | `/api/v1/client/reviews/{id}` | your review |
+| POST | `/api/v1/client/reviews/products/{id}/questions` | ask |
+| GET | `/api/v1/client/reviews/creator` | approved creators: reviews and questions on their products |
+| POST | `/api/v1/client/reviews/creator/reviews/{id}/reply`, `/creator/questions/{id}/answer` | owning creator |
+| GET | `/api/v1/admin/reviews`, `/api/v1/admin/reviews/questions` (`?status=`) | staff (Catalog) |
+| POST | `/api/v1/admin/reviews/{id}/status`, `/{id}/reply` | staff (Catalog) |
+| POST | `/api/v1/admin/reviews/questions/{id}/status`, `/questions/{id}/answer` | staff (Catalog) |
+
+Events: `review.submitted`, `review.approved`, `question.asked`, `question.answered`.

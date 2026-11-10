@@ -221,16 +221,21 @@ async fn owns(s: &AppState, creator: Uuid, product: Uuid) -> ApiResult<()> {
     Ok(())
 }
 
-/// Reviews and questions on the current creator's products.
-#[utoipa::path(get, path = "/api/v1/client/reviews/creator", responses((status = 200), (status = 403)))]
+/// Reviews and questions on the current creator's products (empty lists
+/// for customers who are not approved creators).
+#[utoipa::path(get, path = "/api/v1/client/reviews/creator", responses((status = 200)))]
 pub async fn creator_inbox(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Json<Value>> {
-    let c = my_creator(&s, &u).await?;
+    let Ok(c) = my_creator(&s, &u).await else {
+        return Ok(Json(
+            json!({ "creator": false, "reviews": [], "questions": [] }),
+        ));
+    };
+    let mut questions = rv::questions(&s.pool, Some("approved"), Some(c)).await?;
+    questions.extend(rv::questions(&s.pool, Some("pending"), Some(c)).await?);
     Ok(Json(json!({
+        "creator": true,
         "reviews": rv::list(&s.pool, Some("approved"), Some(c)).await?,
-        "questions": rv::questions(&s.pool, Some("approved"), Some(c)).await?
-            .into_iter()
-            .chain(rv::questions(&s.pool, Some("pending"), Some(c)).await?)
-            .collect::<Vec<_>>(),
+        "questions": questions,
     })))
 }
 

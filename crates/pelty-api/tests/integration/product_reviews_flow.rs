@@ -287,18 +287,25 @@ async fn reviews_moderation_and_questions() {
     assert_eq!(closed.body["error"]["code"], "error.questions_closed");
 
     // Creators only: Bob is not one.
-    assert_eq!(
-        call(
-            &app,
-            "GET",
-            "/api/v1/client/reviews/creator",
-            None,
-            &bob.h()
-        )
-        .await
-        .status,
-        StatusCode::FORBIDDEN
-    );
+    let inbox = call(
+        &app,
+        "GET",
+        "/api/v1/client/reviews/creator",
+        None,
+        &bob.h(),
+    )
+    .await;
+    assert_eq!(inbox.status, StatusCode::OK);
+    assert_eq!(inbox.body["creator"], false);
+    let not_mine = call(
+        &app,
+        "POST",
+        &format!("/api/v1/client/reviews/creator/reviews/{rid}/reply"),
+        Some(json!({"text": "Not mine"})),
+        &bob.h(),
+    )
+    .await;
+    assert_eq!(not_mine.status, StatusCode::FORBIDDEN);
 
     // Delete: only your own.
     assert_eq!(
