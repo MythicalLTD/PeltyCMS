@@ -1,11 +1,15 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router";
 import { ShoppingCartIcon, StorefrontIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { PageSkeleton } from "@/components/PageSkeleton";
-import { ApiError } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import { StoreWidgets } from "@/components/store/StoreWidgets";
+import { useModules } from "@/lib/modules";
+import { accentStyle, type PublicStorefront } from "@/lib/storefront";
 import { formatMoney } from "@/lib/billing/billing";
 import { useI18n } from "@/lib/i18n";
 import { fromPrice, lineCount, useStoreCart, type StoreLine } from "@/lib/store/storefront";
@@ -28,6 +32,12 @@ export function GameStorePage() {
   const { currency } = useStoreCurrency();
   const { view, save } = useStoreCart();
   const [adding, setAdding] = useState<string | null>(null);
+  const { enabled } = useModules();
+  const themed = enabled.has("gaming_storefront");
+  const layout = useQuery({ queryKey: ["public", "storefront"], queryFn: () => api<PublicStorefront>("/public/storefront"), enabled: themed, staleTime: 60_000 });
+  const sf = themed ? layout.data : undefined;
+  const grid = sf?.layout === "grid";
+  const sidebar = sf && sf.widgets.length > 0;
 
   const groups = (data?.groups ?? []).filter((g) => data?.products.some((p) => p.group_id === g.id));
   const active = groups.find((g) => g.slug === group) ?? null;
@@ -46,8 +56,8 @@ export function GameStorePage() {
     });
   };
 
-  return (
-    <div className="flex flex-col gap-4">
+  const main = (
+    <div className="flex min-w-0 flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">{active?.name ?? t("store.title")}</h1>
         <CurrencySelect />
@@ -82,20 +92,20 @@ export function GameStorePage() {
       ) : products.length === 0 ? (
         <EmptyState icon={StorefrontIcon} title={t("game.empty", { currency })} description={groups.length > 1 || active ? t("game.empty_hint") : undefined} />
       ) : (
-        <ul className="flex flex-col divide-y rounded-md border" aria-label={t("game.packages")}>
+        <ul className={grid ? "grid gap-3 sm:grid-cols-2 xl:grid-cols-3" : "flex flex-col divide-y rounded-md border"} aria-label={t("game.packages")}>
           {products.map((p) => {
             const quick = quickAddCycle(p, currency);
             const from = fromPrice(p.prices, currency)!;
             const out = stockState(p) === "out";
             const n = inCart(p.id);
             return (
-              <li key={p.id} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-3 py-3 sm:grid-cols-[3.5rem_minmax(0,1fr)_auto] sm:gap-x-4 sm:px-4">
+              <li key={p.id} className={grid ? "grid grid-cols-[3.5rem_minmax(0,1fr)] content-start gap-x-3 gap-y-2 rounded-md border p-3" : "grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-3 py-3 sm:grid-cols-[3.5rem_minmax(0,1fr)_auto] sm:gap-x-4 sm:px-4"}>
                 <Thumb src={p.image_url} name={p.name} />
                 <div className="min-w-0">
                   <h2 className="truncate text-base font-medium"><Link to={`/store/p/${p.id}`} className="rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{p.name}</Link></h2>
                   {p.description && <p className="line-clamp-2 text-sm text-muted-foreground sm:line-clamp-1">{p.description}</p>}
                 </div>
-                <div className="col-start-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:col-start-auto sm:flex-nowrap">
+                <div className={grid ? "col-span-2 flex flex-wrap items-center justify-between gap-2" : "col-start-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:col-start-auto sm:flex-nowrap"}>
                   <p className="text-sm sm:min-w-28 sm:text-right">
                     <span className="block font-semibold tabular-nums">{quick ? formatMoney(from.amount, currency, lang) : t("order.from", { price: formatMoney(from.amount, currency, lang) })}</span>
                     <span className="block text-xs text-muted-foreground">{[quick ? tCode(`cycle.${quick}`) : t("game.choose_hint"), n > 0 ? t("game.in_cart", { n }) : ""].filter(Boolean).join(" · ")}</span>
@@ -115,6 +125,27 @@ export function GameStorePage() {
           })}
         </ul>
       )}
+    </div>
+  );
+
+  if (!sf) return main;
+  return (
+    <div className="flex flex-col gap-6" style={accentStyle(sf.accent)} data-accent={sf.accent}>
+      {(sf.hero_title || sf.hero_image) && (
+        <section className="relative overflow-hidden rounded-lg border bg-card">
+          {sf.hero_image && <img src={sf.hero_image} alt="" className="absolute inset-0 size-full object-cover opacity-40" />}
+          <div className="relative flex min-h-36 flex-col justify-end gap-1 p-6">
+            {sf.hero_title && <p className="text-3xl font-bold tracking-tight">{sf.hero_title}</p>}
+            {sf.hero_subtitle && <p className="max-w-2xl text-muted-foreground">{sf.hero_subtitle}</p>}
+          </div>
+        </section>
+      )}
+      {sidebar ? (
+        <div className={sf.sidebar === "left" ? "grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]" : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]"}>
+          {main}
+          <aside aria-label={t("storefront.sidebar")} className={sf.sidebar === "left" ? "lg:order-first" : undefined}><StoreWidgets widgets={sf.widgets} /></aside>
+        </div>
+      ) : main}
     </div>
   );
 }
