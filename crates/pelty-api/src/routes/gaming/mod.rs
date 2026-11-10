@@ -11,3 +11,9 @@ pub mod modules;
 pub mod payouts;
 pub mod rcon;
 pub mod reviews;
+
+/// `{"items": [...]}` list envelope used by the module APIs.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct Items<T> {
+    pub items: Vec<T>,
+}

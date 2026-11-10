@@ -876,6 +876,7 @@ use utoipa::OpenApi;
         super::feature_modules::ModuleList,
         pelty_database::games::GameDef,
         pelty_database::games::ServerInput,
+        super::game_delivery::AgentPoll,
         pelty_database::games::Server,
         pelty_database::games::GameAccount,
         pelty_database::games::AccountInput,

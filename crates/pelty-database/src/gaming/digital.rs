@@ -71,6 +71,7 @@ pub fn version_ok(v: &str) -> bool {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, utoipa::ToSchema)]
+#[schema(as = DigitalSettings)]
 pub struct Settings {
     #[serde(default)]
     pub product_id: Uuid,
@@ -535,6 +536,7 @@ pub async fn activations(pool: &PgPool, license: Uuid) -> AppResult<Vec<Activati
 
 /// What a product's checker sends; only the fields the product binds count.
 #[derive(Debug, Default, Clone, Deserialize, utoipa::ToSchema)]
+#[schema(as = LicenseCheck)]
 pub struct Check {
     pub key: String,
     #[serde(default)]

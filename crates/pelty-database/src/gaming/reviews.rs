@@ -15,6 +15,7 @@ pub const STATUSES: &[&str] = &["pending", "approved", "rejected"];
 
 /// Module settings (stored in `feature_modules.settings`).
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[schema(as = ReviewsConfig)]
 pub struct Config {
     /// New reviews and questions wait for staff approval.
     pub require_approval: bool,
@@ -303,6 +304,7 @@ pub async fn reply(pool: &PgPool, id: Uuid, text: &str) -> AppResult<Review> {
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+#[schema(as = ProductQuestion)]
 pub struct Question {
     pub id: Uuid,
     pub product_id: Uuid,

@@ -182,7 +182,7 @@ pub async fn update_profile(
     Ok(Json(mk::update_profile(&s.pool, c.id, &b).await?))
 }
 
-#[utoipa::path(get, path = "/api/v1/client/creator/listings", responses((status = 200, body = Vec<mk::Listing>)))]
+#[utoipa::path(get, path = "/api/v1/client/creator/listings", responses((status = 200, body = super::Items<mk::Listing>)))]
 pub async fn my_listings(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Json<Value>> {
     let c = me(&s, &u).await?;
     Ok(Json(
@@ -230,7 +230,9 @@ pub async fn create_listing(
             name: Some(b.name.clone()),
             slug: Some(b.slug.clone()),
             description: Some(b.description.clone()),
-            status: Some(if live { "active" } else { "hidden" }.into()),
+            // Always hidden until the listing row exists, so a failure below
+            // never leaves a buyable product without an owner.
+            status: Some("hidden".into()),
             module: None,
             module_config: None,
             sort_order: None,
@@ -245,15 +247,23 @@ pub async fn create_listing(
         amount: b.price,
         setup_fee: Decimal::ZERO,
     };
-    if let Err(e) = catalog::set_prices(&s.pool, p.id, &[price]).await {
+    let setup = async {
+        catalog::set_prices(&s.pool, p.id, &[price]).await?;
+        dg::save_settings(&s.pool, p.id, &dg::Settings::default()).await?;
+        mk::add_listing(&s.pool, p.id, c.id, live).await?;
+        if live {
+            mk::activate_product(&s.pool, p.id).await?;
+        }
+        Ok::<_, AppError>(())
+    }
+    .await;
+    if let Err(e) = setup {
         let _ = sqlx::query("DELETE FROM products WHERE id = $1")
             .bind(p.id)
             .execute(&s.pool)
             .await;
         return Err(e.into());
     }
-    dg::save_settings(&s.pool, p.id, &dg::Settings::default()).await?;
-    mk::add_listing(&s.pool, p.id, c.id, live).await?;
     audit::record(
         &s.pool,
         Some(u.user_id),
@@ -341,7 +351,7 @@ pub async fn upload_version(
     Ok(Json(v))
 }
 
-#[utoipa::path(get, path = "/api/v1/client/creator/ledger", responses((status = 200, body = Vec<mk::Entry>)))]
+#[utoipa::path(get, path = "/api/v1/client/creator/ledger", responses((status = 200, body = super::Items<mk::Entry>)))]
 pub async fn my_ledger(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Json<Value>> {
     let c = me(&s, &u).await?;
     Ok(Json(
@@ -349,7 +359,7 @@ pub async fn my_ledger(State(s): State<AppState>, u: CurrentUser) -> ApiResult<J
     ))
 }
 
-#[utoipa::path(get, path = "/api/v1/client/creator/payouts", responses((status = 200, body = Vec<mk::Payout>)))]
+#[utoipa::path(get, path = "/api/v1/client/creator/payouts", responses((status = 200, body = super::Items<mk::Payout>)))]
 pub async fn my_payouts(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Json<Value>> {
     let c = me(&s, &u).await?;
     Ok(Json(
@@ -358,6 +368,7 @@ pub async fn my_payouts(State(s): State<AppState>, u: CurrentUser) -> ApiResult<
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[schema(as = CreatorPayoutBody)]
 pub struct PayoutBody {
     pub currency: String,
     #[schema(value_type = String)]
@@ -397,7 +408,7 @@ pub struct StatusFilter {
     pub status: Option<String>,
 }
 
-#[utoipa::path(get, path = "/api/v1/admin/creators", params(StatusFilter), responses((status = 200, body = Vec<mk::CreatorRow>)))]
+#[utoipa::path(get, path = "/api/v1/admin/creators", params(StatusFilter), responses((status = 200, body = super::Items<mk::CreatorRow>)))]
 pub async fn admin_creators(
     State(s): State<AppState>,
     _p: RequirePermission<perms::CatalogManage>,
@@ -450,7 +461,7 @@ pub async fn admin_creator_status(
     Ok(Json(c))
 }
 
-#[utoipa::path(get, path = "/api/v1/admin/creator-listings", params(StatusFilter), responses((status = 200, body = Vec<mk::Listing>)))]
+#[utoipa::path(get, path = "/api/v1/admin/creator-listings", params(StatusFilter), responses((status = 200, body = super::Items<mk::Listing>)))]
 pub async fn admin_listings(
     State(s): State<AppState>,
     _p: RequirePermission<perms::CatalogManage>,
@@ -462,6 +473,7 @@ pub async fn admin_listings(
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[schema(as = ListingReviewBody)]
 pub struct ReviewBody {
     pub approve: bool,
     #[serde(default)]
@@ -489,7 +501,7 @@ pub async fn admin_review(
     Ok(Json(json!({ "ok": true })))
 }
 
-#[utoipa::path(get, path = "/api/v1/admin/creator-payouts", params(StatusFilter), responses((status = 200, body = Vec<mk::Payout>)))]
+#[utoipa::path(get, path = "/api/v1/admin/creator-payouts", params(StatusFilter), responses((status = 200, body = super::Items<mk::Payout>)))]
 pub async fn admin_payouts(
     State(s): State<AppState>,
     _p: RequirePermission<perms::AffiliatesManage>,
@@ -514,11 +526,24 @@ pub async fn admin_send(
     let c = mk::get(&s.pool, p.creator_id).await?;
     let prov =
         provider(&p.method).ok_or(AppError::Conflict("error.payout_provider_unconfigured"))?;
+    // Claim first (requested → processing under a row lock) so two sends of
+    // the same payout cannot both reach the provider. Providers get the
+    // payout id as their idempotency key.
+    mk::set_payout(&s.pool, id, "processing", "", "").await?;
     let out = match prov.send(&c, &p).await {
         Ok(Sent::Paid(r)) => mk::set_payout(&s.pool, id, "paid", &r, "").await?,
-        Ok(Sent::Processing(r)) => mk::set_payout(&s.pool, id, "processing", &r, "").await?,
-        Err(code) => return Err(AppError::Conflict(code).into()),
+        Ok(Sent::Processing(r)) => mk::payout_ref(&s.pool, id, &r).await?,
+        Err(code) => {
+            mk::unclaim_payout(&s.pool, id).await?;
+            return Err(AppError::Conflict(code).into());
+        }
     };
+    if out.status == "paid" {
+        s.emit(DomainEvent::new(
+            "creator.payout_paid",
+            json!({ "payout_id": out.id, "creator_id": out.creator_id, "amount": out.amount.to_string(), "currency": out.currency }),
+        ));
+    }
     audit::record(
         &s.pool,
         Some(u.user_id),

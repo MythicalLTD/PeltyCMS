@@ -513,6 +513,7 @@ pub async fn mark_retry(
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+#[schema(as = GameDelivery)]
 pub struct Delivery {
     pub id: Uuid,
     pub server_id: Uuid,

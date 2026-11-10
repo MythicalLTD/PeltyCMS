@@ -49,7 +49,7 @@ pub struct CommandsBody {
     pub commands: Vec<CommandInput>,
 }
 
-#[utoipa::path(get, path = "/api/v1/admin/game/delivery/products/{id}/commands", responses((status = 200, body = Vec<gd::Command>)))]
+#[utoipa::path(get, path = "/api/v1/admin/game/delivery/products/{id}/commands", responses((status = 200, body = super::Items<gd::Command>)))]
 pub async fn product_commands(
     State(s): State<AppState>,
     RequirePermission(_u, _): RequirePermission<perms::ServersManage>,
@@ -81,7 +81,7 @@ pub async fn put_product_commands(
     Ok(Json(json!({ "items": items })))
 }
 
-#[utoipa::path(get, path = "/api/v1/admin/game/delivery/global-commands", responses((status = 200, body = Vec<gd::Command>)))]
+#[utoipa::path(get, path = "/api/v1/admin/game/delivery/global-commands", responses((status = 200, body = super::Items<gd::Command>)))]
 pub async fn global_commands(
     State(s): State<AppState>,
     RequirePermission(_u, _): RequirePermission<perms::ServersManage>,
@@ -112,7 +112,7 @@ pub async fn put_global_commands(
 }
 
 /// Delivery log / queue, newest first (filter by status, server, customer, service).
-#[utoipa::path(get, path = "/api/v1/admin/game/delivery/queue", params(Filter), responses((status = 200, body = Vec<Delivery>)))]
+#[utoipa::path(get, path = "/api/v1/admin/game/delivery/queue", params(Filter), responses((status = 200, body = super::Items<Delivery>)))]
 pub async fn queue(
     State(s): State<AppState>,
     RequirePermission(_u, _): RequirePermission<perms::ServersManage>,
@@ -253,7 +253,7 @@ pub async fn run_now(
 }
 
 /// The client's deliveries (status per server and command).
-#[utoipa::path(get, path = "/api/v1/client/game/deliveries", responses((status = 200, body = Vec<Delivery>)))]
+#[utoipa::path(get, path = "/api/v1/client/game/deliveries", responses((status = 200, body = super::Items<Delivery>)))]
 pub async fn my_deliveries(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Json<Value>> {
     let c = customer_of(&s, &u).await?;
     let f = Filter {
@@ -300,7 +300,14 @@ pub struct PollBody {
 
 /// Agent API: claim due commands for this server (`Authorization: Bearer pga_...`).
 /// Each command is leased for 2 minutes; acknowledge it with `/game-agent/ack`.
-#[utoipa::path(post, path = "/api/v1/game-agent/poll", request_body = PollBody, responses((status = 200, body = Vec<gd::Claimed>), (status = 401)))]
+/// Agent poll answer: the server's slug and the commands to run.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AgentPoll {
+    pub server: String,
+    pub commands: Vec<gd::Claimed>,
+}
+
+#[utoipa::path(post, path = "/api/v1/game-agent/poll", request_body = PollBody, responses((status = 200, body = AgentPoll), (status = 401)))]
 pub async fn agent_poll(
     State(s): State<AppState>,
     h: HeaderMap,

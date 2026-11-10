@@ -81,7 +81,7 @@ pub async fn public_reviews(
 }
 
 /// Approved questions with answers.
-#[utoipa::path(get, path = "/api/v1/public/reviews/products/{id}/questions", params(("id" = Uuid, Path)), responses((status = 200, body = Vec<rv::PublicQuestion>), (status = 404)))]
+#[utoipa::path(get, path = "/api/v1/public/reviews/products/{id}/questions", params(("id" = Uuid, Path)), responses((status = 200, body = super::Items<rv::PublicQuestion>), (status = 404)))]
 pub async fn public_questions(
     State(s): State<AppState>,
     Path(id): Path<Uuid>,
@@ -95,7 +95,7 @@ pub async fn public_questions(
     ))
 }
 
-#[utoipa::path(get, path = "/api/v1/client/reviews", responses((status = 200, body = Vec<rv::Review>)))]
+#[utoipa::path(get, path = "/api/v1/client/reviews", responses((status = 200, body = super::Items<rv::Review>)))]
 pub async fn my_reviews(State(s): State<AppState>, u: CurrentUser) -> ApiResult<Json<Value>> {
     let c = customer_of(&s, &u).await?;
     Ok(Json(json!({ "items": rv::mine(&s.pool, c).await? })))
@@ -125,6 +125,7 @@ pub async fn eligibility(
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[schema(as = ProductReviewBody)]
 pub struct ReviewBody {
     pub rating: i16,
     #[serde(default)]
@@ -280,7 +281,7 @@ pub struct StatusFilter {
     pub status: Option<String>,
 }
 
-#[utoipa::path(get, path = "/api/v1/admin/reviews", params(StatusFilter), responses((status = 200, body = Vec<rv::ReviewRow>), (status = 403)))]
+#[utoipa::path(get, path = "/api/v1/admin/reviews", params(StatusFilter), responses((status = 200, body = super::Items<rv::ReviewRow>), (status = 403)))]
 pub async fn admin_reviews(
     State(s): State<AppState>,
     _p: RequirePermission<perms::CatalogManage>,
@@ -292,6 +293,7 @@ pub async fn admin_reviews(
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[schema(as = ModerationStatusBody)]
 pub struct StatusBody {
     pub status: String,
 }
@@ -332,7 +334,7 @@ pub async fn admin_reply(
     Ok(Json(rv::reply(&s.pool, id, &b.text).await?))
 }
 
-#[utoipa::path(get, path = "/api/v1/admin/reviews/questions", params(StatusFilter), responses((status = 200, body = Vec<rv::QuestionRow>), (status = 403)))]
+#[utoipa::path(get, path = "/api/v1/admin/reviews/questions", params(StatusFilter), responses((status = 200, body = super::Items<rv::QuestionRow>), (status = 403)))]
 pub async fn admin_questions(
     State(s): State<AppState>,
     _p: RequirePermission<perms::CatalogManage>,

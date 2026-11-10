@@ -18,6 +18,7 @@ pub const PAYOUT_METHODS: &[&str] = &["manual", "stripe_connect", "paypal"];
 
 /// Marketplace settings (stored in `feature_modules.settings`).
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[schema(as = MarketplaceConfig)]
 pub struct Config {
     /// `multi_vendor` (creators can sell) or `admin_only` (store only).
     pub mode: String,
@@ -117,6 +118,7 @@ pub struct Creator {
 const CCOLS: &str = "id, user_id, customer_id, slug, display_name, bio, website, avatar_url, status, commission_percent, payout_method, payout_details, created_at";
 
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
+#[schema(as = CreatorProfile)]
 pub struct Profile {
     pub slug: String,
     pub display_name: String,
@@ -512,6 +514,7 @@ pub async fn invoices_for(pool: &PgPool, kind: &str, id: Uuid) -> AppResult<Vec<
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+#[schema(as = CreatorBalance)]
 pub struct Balance {
     pub currency: String,
     /// Can be paid out now.
@@ -543,6 +546,7 @@ pub async fn balances(pool: &PgPool, creator: Uuid) -> AppResult<Vec<Balance>> {
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+#[schema(as = CreatorLedgerEntry)]
 pub struct Entry {
     pub id: Uuid,
     pub kind: String,
@@ -698,6 +702,43 @@ pub async fn request_payout(
 
 /// Moves a payout to `processing`, `paid`, `rejected` or `failed`. Rejected or
 /// failed payouts credit the amount back.
+/// After a provider error on a claimed payout, put it back to `requested`
+/// (only while nothing was recorded from a provider).
+pub async fn unclaim_payout(pool: &PgPool, id: Uuid) -> AppResult<()> {
+    sqlx::query("UPDATE creator_payouts SET status = 'requested' WHERE id = $1 AND status = 'processing' AND provider_ref = ''")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
+    Ok(())
+}
+
+/// Store the provider reference on a payout that is processing.
+pub async fn payout_ref(pool: &PgPool, id: Uuid, provider_ref: &str) -> AppResult<Payout> {
+    if provider_ref.len() > 200 {
+        return Err(AppError::Validation("error.field_too_long"));
+    }
+    sqlx::query(
+        "UPDATE creator_payouts SET provider_ref = $2 WHERE id = $1 AND status = 'processing'",
+    )
+    .bind(id)
+    .bind(provider_ref)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
+    payout(pool, id).await
+}
+
+/// Publish a creator's product (after its listing row exists).
+pub async fn activate_product(pool: &PgPool, product: Uuid) -> AppResult<()> {
+    sqlx::query("UPDATE products SET status = 'active' WHERE id = $1")
+        .bind(product)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
+    Ok(())
+}
+
 pub async fn set_payout(
     pool: &PgPool,
     id: Uuid,
