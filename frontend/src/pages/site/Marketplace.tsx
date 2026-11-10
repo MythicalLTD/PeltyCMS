@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router";
 import {
-  ArrowSquareOutIcon, CalendarBlankIcon, DownloadSimpleIcon, FireIcon, MagnifyingGlassIcon, PackageIcon, SealCheckIcon, SparkleIcon, StarIcon, StorefrontIcon, UserCircleIcon,
+  ArrowSquareOutIcon, CalendarBlankIcon, CaretLeftIcon, CaretRightIcon, DownloadSimpleIcon, FireIcon, MagnifyingGlassIcon, PackageIcon, SealCheckIcon, SparkleIcon, StarIcon, StorefrontIcon, UserCircleIcon,
 } from "@phosphor-icons/react";
 import { EmptyState } from "@/components/EmptyState";
 import { PageSkeleton } from "@/components/PageSkeleton";
@@ -18,7 +18,7 @@ import { useMe } from "@/lib/auth";
 import { formatMoney } from "@/lib/billing/billing";
 import { formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
-import { SORTS, stars, useBrowse, type CreatorPage, type CreatorProfile, type MarketListing, type MarketResource } from "@/lib/market";
+import { resourceImages, SORTS, stars, useBrowse, type CreatorPage, type CreatorProfile, type GalleryImage, type MarketListing, type MarketResource } from "@/lib/market";
 import { useModules } from "@/lib/modules";
 import { cheapest } from "@/lib/publicMode";
 import { useCatalog, useStoreCurrency } from "@/pages/store/Store";
@@ -184,6 +184,7 @@ export function ResourcePage() {
   const { t, lang } = useI18n();
   const { id = "" } = useParams();
   const { enabled } = useModules();
+  const { data: me } = useMe();
   const price = usePrice();
   const r = useQuery({ queryKey: ["public", "marketplace", "r", id], queryFn: () => api<MarketResource>(`/public/marketplace/listings/${id}`) });
   const versions = useQuery({ queryKey: ["public", "changelog", id], queryFn: () => api<{ items: Version[] }>(`/public/digital/products/${id}/changelog`), enabled: !!r.data?.digital, retry: false });
@@ -211,10 +212,7 @@ export function ResourcePage() {
               <span className="flex items-center gap-1"><CalendarBlankIcon aria-hidden />{formatDate(l.listed_at, lang)}</span>
             </div>
           </header>
-          <div className="overflow-hidden rounded-lg border bg-muted" data-testid="gallery">
-            {l.image_url ? <img src={l.image_url} alt="" className="aspect-video w-full object-cover" />
-              : <div aria-hidden className="flex aspect-video items-center justify-center bg-gradient-to-br from-primary/25 to-muted text-6xl font-bold text-foreground/60">{l.name.charAt(0)}</div>}
-          </div>
+          <Gallery images={resourceImages(r.data)} name={l.name} />
           <Tabs defaultValue="overview">
             <TabsList>
               <TabsTrigger value="overview">{t("pub.tab_overview")}</TabsTrigger>
@@ -225,6 +223,7 @@ export function ResourcePage() {
             {r.data.digital && (
               <TabsContent value="versions">
                 <Card><CardContent className="flex flex-col divide-y pt-2">
+                  {me && <p className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm text-muted-foreground">{t("pub.owner_download_hint")}<Button asChild size="sm" variant="outline"><Link to="/digital"><DownloadSimpleIcon aria-hidden />{t("pub.go_downloads")}</Link></Button></p>}
                   {vs.length === 0 ? <p className="py-4 text-sm text-muted-foreground">{t("pub.no_versions")}</p> : vs.map((v) => (
                     <div key={v.version + v.created_at} className="flex flex-col gap-1 py-3">
                       <p className="flex items-center gap-2 font-medium"><Badge variant="secondary">v{v.version}</Badge><span className="text-xs text-muted-foreground">{formatDate(v.created_at, lang)}</span></p>
@@ -264,6 +263,39 @@ export function ResourcePage() {
           )}
         </aside>
       </div>
+    </div>
+  );
+}
+
+/** Resource screenshots: main image with prev/next buttons and thumbnails. */
+function Gallery({ images, name }: { images: GalleryImage[]; name: string }) {
+  const { t } = useI18n();
+  const [i, setI] = useState(0);
+  const n = images.length;
+  const cur = images[Math.min(i, Math.max(0, n - 1))];
+  const go = (d: number) => setI((x) => (x + d + n) % n);
+  if (!cur) return <div aria-hidden className="flex aspect-video items-center justify-center rounded-lg border bg-gradient-to-br from-primary/25 to-muted text-6xl font-bold text-foreground/60" data-testid="gallery">{name.charAt(0)}</div>;
+  return (
+    <div className="flex flex-col gap-2" data-testid="gallery">
+      <figure className="group relative overflow-hidden rounded-lg border bg-muted">
+        <img src={cur.url} alt={cur.caption || name} className="aspect-video w-full object-cover" />
+        {cur.caption && <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 text-sm text-white">{cur.caption}</figcaption>}
+        {n > 1 && <>
+          <Button type="button" size="icon" variant="secondary" className="absolute left-2 top-1/2 -translate-y-1/2 opacity-80" aria-label={t("pub.gallery_prev")} onClick={() => go(-1)}><CaretLeftIcon aria-hidden /></Button>
+          <Button type="button" size="icon" variant="secondary" className="absolute right-2 top-1/2 -translate-y-1/2 opacity-80" aria-label={t("pub.gallery_next")} onClick={() => go(1)}><CaretRightIcon aria-hidden /></Button>
+          <span className="absolute right-2 top-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white tabular-nums">{Math.min(i, n - 1) + 1}/{n}</span>
+        </>}
+      </figure>
+      {n > 1 && (
+        <div className="flex gap-2 overflow-x-auto pb-1" data-testid="gallery-thumbs">
+          {images.map((g, k) => (
+            <button key={g.url} type="button" aria-label={t("pub.gallery_thumb", { n: k + 1 })} aria-current={k === i} onClick={() => setI(k)}
+              className={`shrink-0 overflow-hidden rounded-md border-2 ${k === i ? "border-primary" : "border-transparent opacity-70 hover:opacity-100"}`}>
+              <img src={g.url} alt="" loading="lazy" className="h-14 w-24 object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

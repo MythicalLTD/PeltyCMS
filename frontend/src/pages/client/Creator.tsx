@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { EyeIcon, EyeSlashIcon, PlusIcon, UploadSimpleIcon } from "@phosphor-icons/react";
+import { EyeIcon, EyeSlashIcon, ImagesIcon, PlusIcon, UploadSimpleIcon } from "@phosphor-icons/react";
+import { useSearchParams } from "react-router";
+import { CreatorPayouts } from "@/components/creator/CreatorPayouts";
+import { GalleryEditor } from "@/components/creator/GalleryEditor";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
@@ -17,7 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { api, ApiError } from "@/lib/api";
-import { creatorNet, creatorSlug, PAYOUT_METHODS, type Creator, type Dashboard, type LedgerEntry, type Listing, type Payout } from "@/lib/marketplace";
+import { creatorNet, creatorSlug, type Creator, type Dashboard, type LedgerEntry, type Listing } from "@/lib/marketplace";
 import { useI18n } from "@/lib/i18n";
 import { useModules } from "@/lib/modules";
 import type { CreatorQuestion, CreatorReview } from "@/lib/reviews";
@@ -35,6 +38,9 @@ export function CreatorPage() {
   const { t } = useI18n();
   const q = useQuery({ queryKey: ["client", "creator"], queryFn: () => api<Dashboard>("/client/creator") });
   const reviewsOn = useModules().enabled.has("product_reviews");
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("tab") ?? "overview";
+  const setTab = (v: string) => { const next = new URLSearchParams(params); next.set("tab", v); setParams(next, { replace: true }); };
   if (!q.data) return <Skeleton className="h-48 w-full" />;
   const d = q.data;
   return (
@@ -43,7 +49,7 @@ export function CreatorPage() {
       {!d.creator ? (d.mode === "admin_only" ? <EmptyState title={t("error.market_closed")} /> : <Apply />) : d.creator.status !== "approved" ? (
         <Card><CardContent className="pt-6"><Badge variant="outline">{t(`market.st.${d.creator.status}` as TranslationKey)}</Badge> <span className="text-sm text-muted-foreground">{t(d.creator.status === "pending" ? "creator.waiting" : d.creator.status === "rejected" ? "creator.rejected_note" : "creator.suspended_note")}</span></CardContent></Card>
       ) : (
-        <Tabs defaultValue="overview">
+        <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
             <TabsTrigger value="overview">{t("creator.overview")}</TabsTrigger>
             <TabsTrigger value="listings">{t("market.listings")}</TabsTrigger>
@@ -55,7 +61,7 @@ export function CreatorPage() {
           <TabsContent value="overview"><Overview d={d} /></TabsContent>
           <TabsContent value="listings"><Listings commission={d.commission_percent ?? "0"} closed={d.mode === "admin_only"} /></TabsContent>
           <TabsContent value="ledger"><Ledger /></TabsContent>
-          <TabsContent value="payouts"><Payouts d={d} /></TabsContent>
+          <TabsContent value="payouts"><CreatorPayouts d={d} /></TabsContent>
           {reviewsOn && <TabsContent value="reviews"><CreatorReviews /></TabsContent>}
           <TabsContent value="profile"><ProfileForm creator={d.creator} /></TabsContent>
         </Tabs>
@@ -74,9 +80,6 @@ function ProfileFields({ f, set }: { f: ProfileDraft; set: (p: Partial<ProfileDr
       <Field id="cr-slug" label={t("creator.slug")} required pattern="[a-z0-9][a-z0-9\-]{1,39}" value={f.slug} onChange={(e) => set({ slug: e.target.value })} />
       <div className="grid gap-2"><Label htmlFor="cr-bio">{t("creator.bio")}</Label><Textarea id="cr-bio" maxLength={5000} rows={4} value={f.bio} onChange={(e) => set({ bio: e.target.value })} /></div>
       <Field id="cr-web" label={t("creator.website")} type="url" value={f.website} onChange={(e) => set({ website: e.target.value })} />
-      <SelectField id="cr-method" label={t("market.method")} value={f.payout_method} onChange={(v) => set({ payout_method: v })} options={PAYOUT_METHODS.map((m) => ({ value: m, label: t(`market.method.${m}` as TranslationKey) }))} />
-      {f.payout_method === "paypal" && <Field id="cr-pp" label={t("creator.paypal_email")} type="email" value={f.payout_details.paypal_email ?? ""} onChange={(e) => set({ payout_details: { ...f.payout_details, paypal_email: e.target.value } })} />}
-      {f.payout_method === "stripe_connect" && <Field id="cr-sc" label={t("creator.stripe_account")} value={f.payout_details.stripe_account ?? ""} onChange={(e) => set({ payout_details: { ...f.payout_details, stripe_account: e.target.value } })} />}
       {f.payout_method === "manual" && <Field id="cr-note" label={t("creator.payout_note")} value={f.payout_details.note ?? ""} onChange={(e) => set({ payout_details: { ...f.payout_details, note: e.target.value } })} />}
     </>
   );
@@ -154,6 +157,7 @@ function Listings({ commission, closed }: { commission: string; closed: boolean 
   const create = useMutation({ mutationFn: () => api("/client/creator/listings", { method: "POST", body: draft }), onSuccess: () => { setDraft(null); refresh(); toast.success(t("creator.submitted")); }, onError: fail });
   const listed = useMutation({ mutationFn: ({ id, on }: { id: string; on: boolean }) => api(`/client/creator/listings/${id}/listed`, { method: "POST", body: { listed: on } }), onSuccess: refresh, onError: fail });
   const [up, setUp] = useState<{ id: string; version: string; changelog: string; file: File | null } | null>(null);
+  const [gallery, setGallery] = useState<{ id: string; name: string } | null>(null);
   const upload = useMutation({
     mutationFn: () => {
       if (!up?.file) throw new ApiError(422, "error.validation", "");
@@ -175,6 +179,7 @@ function Listings({ commission, closed }: { commission: string; closed: boolean 
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" onClick={() => setUp({ id: l.product_id, version: "", changelog: "", file: null })}><UploadSimpleIcon aria-hidden />{t("digital.upload")}</Button>
+            <Button size="sm" variant="outline" onClick={() => setGallery({ id: l.product_id, name: l.name })}><ImagesIcon aria-hidden />{t("creator.gallery")}</Button>
             {l.status === "approved" && <Button size="sm" variant="ghost" onClick={() => listed.mutate({ id: l.product_id, on: false })}><EyeSlashIcon aria-hidden />{t("creator.unlist")}</Button>}
             {l.status === "unlisted" && <Button size="sm" variant="ghost" onClick={() => listed.mutate({ id: l.product_id, on: true })}><EyeIcon aria-hidden />{t("creator.relist")}</Button>}
           </CardContent>
@@ -201,6 +206,7 @@ function Listings({ commission, closed }: { commission: string; closed: boolean 
           <DialogFooter><Button type="submit" form="cr-listing" disabled={create.isPending}>{t("creator.submit")}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+      {gallery && <GalleryEditor productId={gallery.id} name={gallery.name} onClose={() => setGallery(null)} />}
       <Dialog open={!!up} onOpenChange={(o) => !o && setUp(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>{t("digital.upload")}</DialogTitle></DialogHeader>
@@ -237,36 +243,6 @@ function Ledger() {
         ))}
       </TableBody>
     </Table>
-  );
-}
-
-function Payouts({ d }: { d: Dashboard }) {
-  const { t } = useI18n();
-  const qc = useQueryClient();
-  const fail = useFail();
-  const q = useQuery({ queryKey: ["client", "creator", "payouts"], queryFn: () => api<{ items: Payout[] }>("/client/creator/payouts") });
-  const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState(d.balances?.[0]?.currency ?? "EUR");
-  const req = useMutation({
-    mutationFn: () => api("/client/creator/payouts", { method: "POST", body: { currency, amount } }),
-    onSuccess: () => { setAmount(""); void qc.invalidateQueries({ queryKey: ["client", "creator"] }); toast.success(t("creator.payout_requested")); },
-    onError: fail,
-  });
-  return (
-    <div className="flex flex-col gap-4">
-      <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); req.mutate(); }}>
-        <div className="w-40"><SelectField id="cr-pcur" label={t("creator.currency")} value={currency} onChange={setCurrency} options={(d.balances ?? [{ currency: "EUR" }]).map((b) => ({ value: b.currency, label: b.currency }))} /></div>
-        <div className="w-40"><Field id="cr-pamt" label={t("market.amount")} inputMode="decimal" required value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
-        <Button type="submit" disabled={req.isPending}>{t("creator.request_payout")}</Button>
-      </form>
-      <p className="text-sm text-muted-foreground">{t("creator.min_payout", { amount: d.min_payout ?? "0" })}</p>
-      {(q.data?.items ?? []).map((p) => (
-        <div key={p.id} className="flex items-center justify-between border-b pb-2 text-sm">
-          <span className="font-mono">{p.amount} {p.currency}</span>
-          <Badge variant={p.status === "paid" ? "secondary" : ["rejected", "failed"].includes(p.status) ? "destructive" : "outline"}>{t(`market.pst.${p.status}` as TranslationKey)}</Badge>
-        </div>
-      ))}
-    </div>
   );
 }
 
