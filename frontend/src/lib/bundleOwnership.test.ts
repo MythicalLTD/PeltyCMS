@@ -10,8 +10,13 @@ describe("ownedBundlePrice", () => {
   it("list mode charges the bundle price minus owned list prices", () => {
     expect(ownedBundlePrice(prices, [true, false, false], 20, { mode: "list", min_percent: "0" }).price).toBe(22);
   });
-  it("floors at the minimum percent", () => {
-    expect(ownedBundlePrice(prices, [true, false, false], 20, { mode: "list", min_percent: "90" }).price).toBe(27);
+  it("floors the extra discount at the minimum percent, keeping the bundle percent", () => {
+    // List mode would charge 22; a 90% floor stops the extra, the bundle's 20% stays (30 * 0.8).
+    expect(ownedBundlePrice(prices, [true, false, false], 20, { mode: "list", min_percent: "90" }).price).toBe(24);
+    // A 30% bundle with a 75% floor: the extra stops at 25%, the bundle percent wins.
+    expect(ownedBundlePrice(prices, [false, false, false], 30, { mode: "list", min_percent: "75" }).price).toBe(28);
+    // Floor above the bundle percent binds: list would give 20% off the rest (20), the 85% floor allows 15%.
+    expect(ownedBundlePrice(prices, [true, true, false], 10, { mode: "list", min_percent: "85" }).price).toBe(17);
   });
   it("matches the plain bundle when nothing is owned", () => {
     expect(ownedBundlePrice(prices, [false, false, false], 20, { mode: "list", min_percent: "0" }).price).toBe(32);

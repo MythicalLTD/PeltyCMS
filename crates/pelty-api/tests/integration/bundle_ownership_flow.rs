@@ -188,10 +188,16 @@ async fn owned_items_discount_the_rest_of_a_bundle() {
     set(json!({"mode": "list", "min_percent": "0"})).await;
     let v = preview(rest()).await;
     assert_eq!(dec(&v["preview"]["total"]), d("22"));
-    // Floor: the rest costs at least 90% of its list price (27).
+    // Floor: the extra discount stops at 75% of the rest's list price
+    // (30 * 0.75 = 22.5)...
+    set(json!({"mode": "list", "min_percent": "75"})).await;
+    let v = preview(rest()).await;
+    assert_eq!(dec(&v["preview"]["total"]), d("22.5"));
+    // ...but never takes away the bundle's own 20% (a 90% floor still
+    // charges 30 * 0.8 = 24, not 27).
     set(json!({"mode": "list", "min_percent": "90"})).await;
     let v = preview(rest()).await;
-    assert_eq!(dec(&v["preview"]["total"]), d("27"));
+    assert_eq!(dec(&v["preview"]["total"]), d("24"));
     set(json!({"mode": "list", "min_percent": "0"})).await;
 
     // Claiming the bundle on a client order works without the owned item,

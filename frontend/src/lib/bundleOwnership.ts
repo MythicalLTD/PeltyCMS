@@ -27,15 +27,16 @@ export interface OwnedBundlePrice { full: number; price: number; saved: number; 
 /**
  * What the rest of a bundle costs when `owned[i]` items are already owned
  * (`prices[i]` list prices). Share: the rest keeps the bundle percent. List:
- * the bundle price minus the owned list prices. Never below `min_percent` of
- * the rest's list price. Same math as the server's `ownership_percent`.
+ * the bundle price minus the owned list prices. The extra discount never takes
+ * the rest below `min_percent` of its list price (the bundle percent stays). Same math as the server's `ownership_percent`.
  */
 export function ownedBundlePrice(prices: number[], owned: boolean[], percent: number, s: OwnershipSettings): OwnedBundlePrice {
   const size = prices.length;
   const have = owned.filter(Boolean).length;
   const rest = prices.reduce((a, p, i) => a + (owned[i] ? 0 : p), 0);
   const had = prices.reduce((a, p, i) => a + (owned[i] ? p : 0), 0);
-  const cap = Math.max(0, 100 - Number(s.min_percent));
+  // The floor limits only the extra ownership discount, never the bundle's own percent.
+  const cap = Math.min(100, Math.max(0, 100 - Number(s.min_percent), percent));
   let pct = s.mode === "list" && had > 0 && rest > 0 ? (percent * (rest + had)) / rest : percent;
   pct = Math.max(0, Math.min(pct, cap));
   const saved = Math.round(rest * pct) / 100;

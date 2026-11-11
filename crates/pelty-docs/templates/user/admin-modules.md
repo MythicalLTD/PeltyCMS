@@ -457,7 +457,7 @@ Limitations: the credit is based on the owned tier's first invoice (renewals are
 Like BuiltByBit: a buyer who already owns some items of a bundle can still buy the bundle and pays only for the rest. Configure it under **Admin → Products → Bundles** once the module is on:
 
 - **Owned items are worth**: *their share of the bundle price* (the rest keeps the bundle percent, e.g. 3 of 5 items at 20% off) or *their full list price* (the rest costs the bundle price minus the list price of what is owned).
-- **Minimum price**: the rest never costs less than this percent of its list price (0 = no floor).
+- **Minimum price**: the extra discount for owned items never takes the rest below this percent of its list price (0 = no floor). The bundle's own percent always applies, even when it is deeper than the floor.
 - **Owned** means an active service of the product or an active, unexpired license, for the signed-in customer. Guests see normal bundle prices.
 - The bundle offer on a resource page shows *You already own 2 of 5*, marks owned items and adds only the rest to the cart; the cart and the invoice line (*Bundle discount: Mega (2 of 5 already owned)*) say the same.
 - A buyer who owns every item cannot buy that bundle again: the offer is disabled and a cart or order with all of it is refused with `error.bundle_all_owned`.

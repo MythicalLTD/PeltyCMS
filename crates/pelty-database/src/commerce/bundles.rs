@@ -432,15 +432,18 @@ pub fn match_owned(
 /// Percent off the bought lines (list total `rest`) when items with list
 /// total `owned` are already owned. Share mode keeps the bundle percent (the
 /// rest costs its share of the bundle price); list mode charges the bundle
-/// price minus the owned items' list prices. Both are capped so the rest
-/// costs at least `min_percent` of its list price.
+/// price minus the owned items' list prices. The extra ownership discount is
+/// capped so the rest costs at least `min_percent` of its list price; the
+/// floor never takes away the bundle's own percent.
 pub fn ownership_percent(
     s: &OwnershipSettings,
     percent: Decimal,
     rest: Decimal,
     owned: Decimal,
 ) -> Decimal {
-    let cap = (Decimal::ONE_HUNDRED - s.min_percent).max(Decimal::ZERO);
+    let cap = (Decimal::ONE_HUNDRED - s.min_percent)
+        .max(percent)
+        .clamp(Decimal::ZERO, Decimal::ONE_HUNDRED);
     let p = if s.mode == "list" && owned > Decimal::ZERO && rest > Decimal::ZERO {
         // pay = (rest + owned)(1 - p) - owned  =>  off = p (rest + owned)
         percent * (rest + owned) / rest
@@ -551,6 +554,28 @@ mod ownership_tests {
         );
         // Nothing owned: the bundle percent.
         assert_eq!(ownership_percent(&list, d("20"), d("50"), d("0")), d("20"));
+        // The floor limits only the extra ownership discount: a 30% bundle
+        // keeps 30% (share mode, or nothing owned) even with an 80% floor.
+        let strict = OwnershipSettings {
+            mode: "share".into(),
+            min_percent: d("80"),
+        };
+        assert_eq!(
+            ownership_percent(&strict, d("30"), d("30"), d("20")),
+            d("30")
+        );
+        let strict_list = OwnershipSettings {
+            mode: "list".into(),
+            min_percent: d("80"),
+        };
+        assert_eq!(
+            ownership_percent(&strict_list, d("30"), d("50"), d("0")),
+            d("30")
+        );
+        assert_eq!(
+            ownership_percent(&strict_list, d("30"), d("30"), d("20")),
+            d("30")
+        );
     }
 
     #[test]
