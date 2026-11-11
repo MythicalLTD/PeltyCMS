@@ -4,7 +4,7 @@ import { ProductReviews } from "@/components/store/ProductReviews";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
-import { ArrowLeftIcon, CreditCardIcon, GiftIcon, PackageIcon, PlusIcon, ShoppingCartIcon, StorefrontIcon, TagIcon, TrashIcon, UserCircleIcon } from "@phosphor-icons/react";
+import { ArrowFatLinesUpIcon, ArrowLeftIcon, CreditCardIcon, GiftIcon, PackageIcon, PlusIcon, ShoppingCartIcon, StorefrontIcon, TagIcon, TrashIcon, UserCircleIcon } from "@phosphor-icons/react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +28,8 @@ import { Captcha } from "@/components/Captcha";
 import { addonPrice, fieldErrors, fromPrice, resetCartId, useStoreCart, type Extras, type StoreLine } from "@/lib/store/storefront";
 import { detectCurrency, giftNameValid, payAmountValid, pricedCurrencies, usePackageRules } from "@/lib/storeRules";
 import { PackageRuleBadges, ruleBlocks } from "@/components/store/PackageRuleBadges";
+import { UpgradeBadge } from "@/components/store/UpgradeBadge";
+import { useTierUpgrades } from "@/lib/tiers";
 import { CountrySelect } from "@/components/geo/CountryRegionFields";
 import { defaultConfig, OptionField, stockState, type CatalogProduct, type ConfigSel } from "@/pages/client/services/Order";
 
@@ -150,6 +152,9 @@ export function StoreProductPage() {
   const [pay, setPay] = useState("");
   const [gift, setGift] = useState(false);
   const [giftTo, setGiftTo] = useState("");
+  // Upgrade credit from the player's own tiers, or the gift recipient's.
+  const { credits } = useTierUpgrades(currency, gift && giftNameValid(giftTo) ? giftTo : undefined);
+  const credit = credits[id];
   const [gate, setGate] = useState({ product, currency });
   if (product !== gate.product || currency !== gate.currency) {
     setGate({ product, currency });
@@ -184,6 +189,7 @@ export function StoreProductPage() {
           <CardTitle className="text-xl">{product.name}</CardTitle>
           <StockBadge p={product} />
           <PackageRuleBadges r={rule} />
+          <UpgradeBadge credit={credit} currency={currency} />
           {product.description && <CardDescription className="whitespace-pre-line">{product.description}</CardDescription>}
           <CardAction><Button asChild variant="ghost" size="sm"><Link to="/store"><ArrowLeftIcon aria-hidden />{t("store.back")}</Link></Button></CardAction>
         </CardHeader>
@@ -240,6 +246,7 @@ export function StoreProductPage() {
         <CardContent className="grid gap-2 text-sm">
           <FormError message={error} />
           {price && <div className="flex justify-between"><span className="text-muted-foreground">{tCode(`cycle.${cycle}`)}</span><span className="tabular-nums">{formatMoney(pwyw && pay.trim() && payOk ? pay.trim() : price.amount, currency, lang)}</span></div>}
+          {credit && price && <div className="flex justify-between" data-testid="summary-upgrade"><span className="text-muted-foreground">{t("tiers.credit_from", { from: credit.from_name })}</span><span className="tabular-nums">−{formatMoney(credit.amount, currency, lang)}</span></div>}
           {gift && giftOk && <p className="flex items-center gap-1.5 text-muted-foreground"><GiftIcon aria-hidden />{t("rules.gift_for", { name: giftTo.trim() })}</p>}
           {price && Number(price.setup_fee) > 0 && <div className="flex justify-between"><span className="text-muted-foreground">{t("order.setup")}</span><span className="tabular-nums">{formatMoney(price.setup_fee, currency, lang)}</span></div>}
           <p className="text-xs text-muted-foreground">{t("store.priced_in_cart")}</p>
@@ -259,6 +266,7 @@ export function Totals({ view }: { view: NonNullable<ReturnType<typeof useStoreC
   return (
     <dl className="grid grid-cols-[1fr_auto] gap-y-1 text-sm">
       <dt className="text-muted-foreground">{t("store.subtotal")}</dt><dd className="tabular-nums">{m(p.subtotal)}</dd>
+      {Number(p.upgrade_credit ?? 0) > 0 && <><dt className="text-muted-foreground" data-testid="cart-upgrade">{t("tiers.credit_total")}</dt><dd className="tabular-nums">−{m(p.upgrade_credit ?? "0")}</dd></>}
       {Number(p.discount) > 0 && <><dt className="text-muted-foreground">{t("order.discount")}</dt><dd className="tabular-nums">−{m(p.discount)}</dd></>}
       {Number(p.bundle_discount ?? 0) > 0 && <><dt className="text-muted-foreground" data-testid="cart-bundle">{t("ctools.bundle_discount", { name: p.bundle ?? "" })}</dt><dd className="tabular-nums">−{m(p.bundle_discount ?? "0")}</dd></>}
       {Number(p.sale_discount ?? 0) > 0 && <><dt className="text-muted-foreground">{t("sales.discount")}</dt><dd className="tabular-nums">−{m(p.sale_discount ?? "0")}</dd></>}
@@ -303,6 +311,7 @@ export function CartPage() {
                   <p className="font-medium">{line?.product_name ?? "-"}</p>
                   <p className="text-xs text-muted-foreground">{tCode(`cycle.${l.cycle}`)}{line && line.labels.length > 0 ? ` · ${line.labels.join(", ")}` : ""}</p>
                   {l.gift_to && <p className="flex items-center gap-1 text-xs text-muted-foreground" data-testid="cart-gift"><GiftIcon aria-hidden />{t("rules.gift_for", { name: l.gift_to })}</p>}
+                  {line && Number(line.upgrade_credit ?? 0) > 0 && <p className="flex items-center gap-1 text-xs text-muted-foreground" data-testid="cart-upgrade-line"><ArrowFatLinesUpIcon aria-hidden />{t("tiers.line", { from: line.upgrade_from ?? "", amount: formatMoney(line.upgrade_credit ?? "0", p!.currency, lang) })}</p>}
                   {line?.addons.map((a) => <p key={a.addon_id} className="text-xs text-muted-foreground">+ {a.name} · {formatMoney(a.amount, p!.currency, lang)}</p>)}
                 </div>
                 {line && <span className="text-sm tabular-nums">{formatMoney((Number(line.amount) + Number(line.setup_fee)).toFixed(2), p!.currency, lang)}</span>}

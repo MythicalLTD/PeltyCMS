@@ -20,6 +20,7 @@ pub mod reviews;
 pub mod sales;
 pub mod store_rules;
 pub mod storefront;
+pub mod tiers;
 
 /// `{"items": [...]}` list envelope used by the module APIs.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]

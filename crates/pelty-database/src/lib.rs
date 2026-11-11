@@ -108,6 +108,7 @@ pub use gaming::reviews;
 pub use gaming::sales as timed_sales;
 pub use gaming::store_rules;
 pub use gaming::storefront as game_storefront;
+pub use gaming::tiers;
 pub mod helpdesk;
 pub use helpdesk::downloads;
 pub use helpdesk::live_chat;

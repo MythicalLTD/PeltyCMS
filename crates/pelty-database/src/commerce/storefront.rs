@@ -209,6 +209,10 @@ pub struct PreviewLine {
     pub creator_discount: Decimal,
     /// Share of the bundle discount on this line.
     pub bundle_discount: Decimal,
+    /// Tier upgrade credit on this line (module `tier_upgrades`).
+    pub upgrade_credit: Decimal,
+    /// Owned lower tier the credit comes from.
+    pub upgrade_from: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -231,6 +235,8 @@ pub struct Preview {
     /// Bundle applied automatically because the cart holds all of it.
     pub bundle: Option<String>,
     pub bundle_discount: Decimal,
+    /// Sum of the lines' tier upgrade credits.
+    pub upgrade_credit: Decimal,
 }
 
 /// The active bundle with the biggest discount that the cart fully holds.
@@ -359,6 +365,8 @@ pub async fn preview(
     crate::store_rules::check_lines(&rules, items, rules_on)?;
     let bundle = best_bundle(pool, items).await?;
     let mut bundle_total = Decimal::ZERO;
+    let mut upgrade_total = Decimal::ZERO;
+    let mut sources = std::collections::HashSet::new();
     // Timed sales, clamped like `orders::place_full` (after promo and group).
     let sales = if crate::feature_modules::is_enabled(pool, crate::timed_sales::MODULE).await? {
         crate::timed_sales::active(pool).await?
@@ -385,9 +393,27 @@ pub async fn preview(
         )?;
         let extras =
             addons::quote(&mut tx, it.product_id, &it.cycle, &currency, &it.addons).await?;
+        // Tier upgrade credit, like `orders::place_full` (discounts apply to
+        // the upgrade price).
+        let credit = crate::tiers::credit_for(
+            &mut tx,
+            customer,
+            it.gift_to.as_deref(),
+            it.product_id,
+            &q.cycle,
+            &currency,
+            q.amount,
+            exp,
+            false,
+        )
+        .await?
+        .filter(|c| sources.insert(c.source));
+        let up = credit.as_ref().map_or(Decimal::ZERO, |c| c.amount);
+        upgrade_total += up;
+        let base = q.amount - up;
         let d = match &promo {
             Some(c) if c.applies_to(q.product_id) => {
-                coupons::line_discount(&c.kind, c.value, q.amount, exp)
+                coupons::line_discount(&c.kind, c.value, base, exp)
             }
             _ => Decimal::ZERO,
         };
@@ -395,14 +421,14 @@ pub async fn preview(
         // Bundle: after the promo code, like `orders::place_full`.
         let bundle_line = match &bundle {
             Some(b) if b.items.contains(&idx) => {
-                coupons::line_discount("percent", b.percent, (q.amount - d).max(Decimal::ZERO), exp)
+                coupons::line_discount("percent", b.percent, (base - d).max(Decimal::ZERO), exp)
             }
             _ => Decimal::ZERO,
         };
         bundle_total += bundle_line;
         let mut group_line = Decimal::ZERO;
         if let Some(pct) = group_pct {
-            let base = q.amount - d + extras.iter().map(|a| a.amount).sum::<Decimal>();
+            let base = base - d + extras.iter().map(|a| a.amount).sum::<Decimal>();
             group_line = coupons::line_discount("percent", pct, base, exp);
             group += group_line;
         }
@@ -410,17 +436,20 @@ pub async fn preview(
             .get(&q.product_id)
             .and_then(|g| crate::timed_sales::best(&sales, q.product_id, *g));
         let sale_discount = sale.map_or(Decimal::ZERO, |x| {
-            (q.amount * x.percent / Decimal::from(100))
+            (base * x.percent / Decimal::from(100))
                 .round_dp(exp)
-                .min((q.amount - d - bundle_line - group_line).max(Decimal::ZERO))
+                .min((base - d - bundle_line - group_line).max(Decimal::ZERO))
         });
         sale_total += sale_discount;
         // Creator code: after the sale, same clamp as `orders::place_full`.
-        let creator_discount = (q.amount * creator_pct / Decimal::from(100))
+        let creator_discount = (base * creator_pct / Decimal::from(100))
             .round_dp(exp)
-            .min((q.amount - d - bundle_line - group_line - sale_discount).max(Decimal::ZERO));
+            .min((base - d - bundle_line - group_line - sale_discount).max(Decimal::ZERO));
         creator_total += creator_discount;
         amounts.push(q.amount);
+        if up > Decimal::ZERO {
+            amounts.push(-up);
+        }
         if q.setup_fee > Decimal::ZERO {
             amounts.push(q.setup_fee);
         }
@@ -454,6 +483,8 @@ pub async fn preview(
                 .map(|x| x.name.clone()),
             creator_discount,
             bundle_discount: bundle_line,
+            upgrade_credit: up,
+            upgrade_from: credit.map(|c| c.from_name),
         });
     }
     drop(tx); // read-only; rolled back
@@ -546,6 +577,7 @@ pub async fn preview(
             .filter(|_| bundle_total > Decimal::ZERO)
             .map(|b| b.name),
         bundle_discount: bundle_total,
+        upgrade_credit: upgrade_total,
     })
 }
 

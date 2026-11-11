@@ -53,6 +53,8 @@ pub const GATES: &[(&str, &str)] = &[
     ("/client/creator-code", "creator_codes"),
     ("/admin/creator-codes", "creator_codes"),
     ("/admin/discord-roles", "discord_roles"),
+    ("/public/tier-upgrades", "tier_upgrades"),
+    ("/admin/tier-groups", "tier_upgrades"),
     ("/public/reviews", "product_reviews"),
     ("/client/reviews", "product_reviews"),
     ("/admin/reviews", "product_reviews"),

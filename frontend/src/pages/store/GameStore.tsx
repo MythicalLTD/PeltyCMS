@@ -16,6 +16,8 @@ import { useModules } from "@/lib/modules";
 import { accentStyle, layoutFor, type PublicStorefront } from "@/lib/storefront";
 import { usePackageRules } from "@/lib/storeRules";
 import { PackageRuleBadges, ruleBlocks } from "@/components/store/PackageRuleBadges";
+import { UpgradeBadge } from "@/components/store/UpgradeBadge";
+import { upgradePrice, useTierUpgrades } from "@/lib/tiers";
 import { StoreAnnouncement } from "@/components/store/StoreAnnouncement";
 import { salePrice, saleFor, timeLeft, useSales } from "@/lib/sales";
 import { formatMoney } from "@/lib/billing/billing";
@@ -59,6 +61,7 @@ export function GameStorePage({ home = false }: { home?: boolean }) {
   const sidebar = sf && sf.widgets.length > 0;
   const sales = useSales();
   const ruleOf = usePackageRules();
+  const { credits } = useTierUpgrades(currency);
   const site = usePublicSite();
 
   // A server store lists the servers' packages only (not e.g. marketplace listings in the same catalog).
@@ -144,16 +147,21 @@ export function GameStorePage({ home = false }: { home?: boolean }) {
                   <h2 className="truncate text-base font-medium"><Link to={`/store/p/${p.id}`} className="rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{p.name}</Link></h2>
                   {p.description && <p className="line-clamp-2 text-sm text-muted-foreground sm:line-clamp-1">{p.description}</p>}
                   <PackageRuleBadges r={rule} />
+                  <UpgradeBadge credit={credits[p.id]} currency={currency} />
                 </div>
                 <div className={grid ? "col-span-2 flex flex-wrap items-center justify-between gap-2" : "col-start-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:col-start-auto sm:flex-nowrap"}>
                   <p className="text-sm sm:min-w-28 sm:text-right">
                     {(() => {
                       const sale = saleFor(sales, p.id, p.group_id);
-                      const shown = sale ? salePrice(from.amount, sale.percent) : from.amount;
+                      // Like the server: the sale applies to the upgrade price.
+                      const credit = credits[p.id];
+                      const base = upgradePrice(from.amount, credit);
+                      const shown = sale ? salePrice(String(base), sale.percent) : String(base);
                       const price = formatMoney(shown, currency, lang);
                       return (
                         <span className="block font-semibold tabular-nums">
-                          {sale && <><Badge className="mr-1">−{sale.percent}%</Badge><s className="mr-1 font-normal text-muted-foreground">{formatMoney(from.amount, currency, lang)}</s></>}
+                          {sale && <Badge className="mr-1">−{sale.percent}%</Badge>}
+                          {(sale || credit) && <s className="mr-1 font-normal text-muted-foreground">{formatMoney(from.amount, currency, lang)}</s>}
                           {quick ? price : t("order.from", { price })}
                         </span>
                       );

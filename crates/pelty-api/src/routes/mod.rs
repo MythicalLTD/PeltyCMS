@@ -119,6 +119,7 @@ pub use gaming::reviews;
 pub use gaming::sales as timed_sales;
 pub use gaming::store_rules;
 pub use gaming::storefront as game_storefront;
+pub use gaming::tiers;
 pub mod health;
 pub mod openapi;
 
@@ -138,6 +139,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(creator_payouts::router())
         .merge(creator_tools::router())
         .merge(store_rules::router())
+        .merge(tiers::router())
         .merge(reviews::router())
         .merge(community::router())
         .merge(game_storefront::router())

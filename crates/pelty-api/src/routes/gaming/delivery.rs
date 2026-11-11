@@ -587,6 +587,15 @@ async fn handle_event(s: &AppState, e: &DomainEvent) -> pelty_core::AppResult<()
         if let Some(ctx) = gd::service_ctx(&s.pool, sid).await? {
             n += gd::enqueue(&s.pool, &ctx, trigger, &occurrence).await?;
         }
+        // Tier upgrade delivered: remove the lower tiers it replaces (their
+        // `expiry` commands), when the tier group asks for it.
+        if trigger == "purchase" {
+            for old in pelty_database::tiers::revocations(&s.pool, sid).await? {
+                if let Some(ctx) = gd::service_ctx(&s.pool, old).await? {
+                    n += gd::enqueue(&s.pool, &ctx, "expiry", &format!("upgrade:{sid}")).await?;
+                }
+            }
+        }
     }
     if n > 0 {
         kick(s);

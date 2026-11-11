@@ -222,7 +222,7 @@ async fn addon_discounts(
     if !crate::addon_filters::has(s, "checkout.discounts") || items.is_empty() {
         return Ok(vec![]);
     }
-    let Ok(quotes) = s.orders().line_amounts(currency, items).await else {
+    let Ok(quotes) = s.orders().line_amounts(Some(cid), currency, items).await else {
         return Ok(vec![]);
     };
     let lines: Vec<Value> = quotes
@@ -288,12 +288,14 @@ pub(crate) async fn place_order(
     };
     let coupon = coupon_owned.as_deref();
     let mut discounts = addon_discounts(s, cid, currency, items).await?;
-    let sale_discounts = crate::routes::timed_sales::checkout_discounts(s, currency, items).await?;
+    let sale_discounts =
+        crate::routes::timed_sales::checkout_discounts(s, cid, currency, items).await?;
     discounts.extend(sale_discounts);
     let creator = crate::routes::creator_codes::resolve(s, cid, creator).await?;
     if let Some(c) = &creator {
-        discounts
-            .extend(crate::routes::creator_codes::checkout_discounts(s, currency, items, c).await?);
+        discounts.extend(
+            crate::routes::creator_codes::checkout_discounts(s, cid, currency, items, c).await?,
+        );
     }
     let (order, invoice) = s
         .orders()

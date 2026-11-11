@@ -44,6 +44,7 @@ pub async fn resolve(
 /// `place_full` re-quotes and clamps them after every earlier discount.
 pub async fn checkout_discounts(
     s: &AppState,
+    customer: Uuid,
     currency: &str,
     items: &[CartItem],
     code: &CreatorCode,
@@ -51,7 +52,11 @@ pub async fn checkout_discounts(
     if code.discount_percent <= Decimal::ZERO || items.is_empty() {
         return Ok(vec![]);
     }
-    let Ok(quotes) = s.orders().line_amounts(currency, items).await else {
+    let Ok(quotes) = s
+        .orders()
+        .line_amounts(Some(customer), currency, items)
+        .await
+    else {
         return Ok(vec![]);
     };
     let pct = code.discount_percent;

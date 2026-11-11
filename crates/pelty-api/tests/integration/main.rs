@@ -174,6 +174,7 @@ mod ticket_notify_flow;
 mod ticket_sla_flow;
 mod ticket_statuses_flow;
 mod tickets_flow;
+mod tier_upgrades_flow;
 mod timed_sales_flow;
 mod tos_consent_flow;
 mod translation_editor_flow;

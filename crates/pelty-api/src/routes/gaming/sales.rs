@@ -26,6 +26,7 @@ pub fn router() -> Router<AppState> {
 /// while the module is off. `place_full` re-quotes and clamps them.
 pub async fn checkout_discounts(
     s: &AppState,
+    customer: Uuid,
     currency: &str,
     items: &[CartItem],
 ) -> ApiResult<Vec<AddonDiscount>> {
@@ -36,7 +37,11 @@ pub async fn checkout_discounts(
     if sales.is_empty() {
         return Ok(vec![]);
     }
-    let Ok(quotes) = s.orders().line_amounts(currency, items).await else {
+    let Ok(quotes) = s
+        .orders()
+        .line_amounts(Some(customer), currency, items)
+        .await
+    else {
         // Invalid carts fail later with the precise error.
         return Ok(vec![]);
     };

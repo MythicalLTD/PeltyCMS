@@ -21,6 +21,7 @@ Every change is written to the audit log as `module.updated`.
 | `gaming_storefront` | Gaming store | |
 | `digital_products` | Digital products | |
 | `creator_marketplace` | Creator marketplace | `digital_products` |
+| `tier_upgrades` | Commerce | |
 
 ## API
 
@@ -427,6 +428,28 @@ support them.
 - Turning the module off hides the field and the pages. Codes entered from then
   on are ignored rather than refused. Orders already placed with a code still
   pay their commission when their invoice is paid.
+
+## Tier upgrades (`tier_upgrades`)
+
+Rank ladders like VIP < VIP+ < MVP. Under **Admin → Marketing → Tier upgrades**, put the packages of one ladder into a **tier group**, lowest first (a package can be in one group only). A player who owns a lower tier then pays less for a higher one:
+
+- **Credit mode**: *What they paid* credits the amount actually paid for the owned tier (after discounts, scaled down by partial refunds) plus any upgrade credit that tier carried, so VIP → VIP+ → MVP is cumulative and never counts VIP twice. *Price difference* credits the owned tier's current list price, so the upgrade costs the difference.
+- **Minimum price**: the upgrade never costs less than this (in the default currency, converted at the currency rate); 0 allows free upgrades.
+- Only the best owned tier counts; one owned tier credits one upgrade at a time (also when two upgrades are in one cart or checked out at once).
+- **Owned** means an active service from a paid, accepted order that is not refunded, cancelled or marked fraud. Expired, terminated or cancelled subscriptions do not count. Refunding or cancelling an upgrade releases its credit back to the lower tier without crediting both.
+- **Gifts** use the recipient's tiers: everything gifted to that player name plus the tiers of customers who linked that name under Game profiles. The buyer's own tiers do not count for a gift.
+- **Pricing order**: the credit is taken off the package price first; coupons, bundles, client-group discounts, timed sales and creator codes then apply to the upgrade price, followed by tax. Gift cards and account credit pay the invoice as usual. The invoice shows an *Upgrade credit: VIP+ (from VIP)* line.
+- **Old tier**: *Cancel the old subscription* (default on) cancels a recurring lower tier when the upgrade order is accepted so it stops billing. *Run removal commands* queues the old tier's in-game expiry commands (Game delivery) when the upgrade is delivered.
+- Store pages show an *Upgrade* badge, the reduced price and the credit in the cart.
+
+Limitations: the credit is based on the owned tier's first invoice (renewals are not added); refunding an upgrade does not reactivate a subscription it cancelled.
+
+### API
+
+| Method | Path | Who |
+| --- | --- | --- |
+| GET | `/api/v1/public/tier-upgrades?currency=EUR&gift_to=Name` | anyone: tier groups; `credits[product_id] = {amount, from_name}` for the signed-in customer (or the gift recipient) |
+| GET/POST | `/api/v1/admin/tier-groups`, GET/PUT/DELETE `/{id}` | staff with catalog access |
 
 ## Discord roles (`discord_roles`)
 

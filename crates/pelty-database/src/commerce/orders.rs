@@ -127,14 +127,36 @@ pub async fn place_with(
 /// transaction).
 pub async fn line_amounts(
     pool: &PgPool,
+    customer: Option<Uuid>,
     currency: &str,
     items: &[CartItem],
 ) -> AppResult<Vec<catalog::Quote>> {
     let currency = currency.to_ascii_uppercase();
     let mut tx = pool.begin().await.map_err(db_err)?;
+    let exp = invoices::exponent(&mut tx, &currency).await?;
     let mut out = Vec::with_capacity(items.len());
+    let mut sources = std::collections::HashSet::new();
     for it in items.iter().take(MAX_ITEMS) {
-        out.push(catalog::quote(&mut tx, it.product_id, &it.cycle, &currency, &it.config).await?);
+        let mut q =
+            catalog::quote(&mut tx, it.product_id, &it.cycle, &currency, &it.config).await?;
+        // Percent discounts (sales, creator codes) apply to the upgrade price.
+        if let Some(c) = crate::tiers::credit_for(
+            &mut tx,
+            customer,
+            it.gift_to.as_deref(),
+            it.product_id,
+            &q.cycle,
+            &currency,
+            q.amount,
+            exp,
+            false,
+        )
+        .await?
+        .filter(|c| sources.insert(c.source))
+        {
+            q.amount -= c.amount;
+        }
+        out.push(q);
     }
     tx.rollback().await.map_err(db_err)?;
     Ok(out)
@@ -190,6 +212,7 @@ pub async fn place_full(
     .map_err(db_err)?;
     let mut group_total = Decimal::ZERO;
     let mut quotes = Vec::with_capacity(items.len());
+    let mut sources = std::collections::HashSet::new();
     for it in items {
         let mut q =
             catalog::quote(&mut tx, it.product_id, &it.cycle, &currency, &it.config).await?;
@@ -204,7 +227,22 @@ pub async fn place_full(
         let fields = addons::check_fields(&mut tx, it.product_id, &it.fields).await?;
         // After validation so bad input stays a 422, not a stock lookup 404.
         catalog::take_stock(&mut tx, it.product_id).await?;
-        quotes.push((q, extras, fields));
+        // Tier upgrade: credit for a lower tier the player owns (one source
+        // per order, so two lines never spend the same credit).
+        let credit = crate::tiers::credit_for(
+            &mut tx,
+            Some(customer_id),
+            it.gift_to.as_deref(),
+            it.product_id,
+            &q.cycle,
+            &currency,
+            q.amount,
+            exp,
+            true,
+        )
+        .await?
+        .filter(|c| sources.insert(c.source));
+        quotes.push((q, extras, fields, credit));
     }
     let order_id = Uuid::new_v4();
     sqlx::query("INSERT INTO orders (id, customer_id, currency, total) VALUES ($1,$2,$3,0)")
@@ -220,11 +258,17 @@ pub async fn place_full(
     let mut bundle_total = Decimal::ZERO;
     // Per line: discounts already granted (coupon, bundle, group share).
     let mut used = vec![Decimal::ZERO; quotes.len()];
-    for (idx, (q, extras, fields)) in quotes.iter().enumerate() {
+    let mut item_ids = Vec::with_capacity(quotes.len());
+    for (idx, (q, extras, fields, credit)) in quotes.iter().enumerate() {
         let item_id = Uuid::new_v4();
+        item_ids.push(item_id);
+        // Discounts apply to the upgrade price (list price minus credit).
+        let up = credit.as_ref().map_or(Decimal::ZERO, |c| c.amount);
+        let base = q.amount - up;
+        used[idx] += up;
         let mut discount = match &coupon {
             Some(c) if c.applies_to(q.product_id) => {
-                coupons::line_discount(&c.kind, c.value, q.amount, exp)
+                coupons::line_discount(&c.kind, c.value, base, exp)
             }
             _ => Decimal::ZERO,
         };
@@ -249,7 +293,7 @@ pub async fn place_full(
             let d = coupons::line_discount(
                 "percent",
                 b.percent,
-                (q.amount - discount).max(Decimal::ZERO),
+                (base - discount).max(Decimal::ZERO),
                 exp,
             );
             bundle_total += d;
@@ -257,12 +301,12 @@ pub async fn place_full(
             line_bundle = d;
         }
         if let Some((_, pct)) = &group {
-            let base = q.amount + extras.iter().map(|a| a.amount).sum::<Decimal>() - discount;
+            let base = base + extras.iter().map(|a| a.amount).sum::<Decimal>() - discount;
             let d = coupons::line_discount("percent", *pct, base, exp);
             group_total += d;
             used[idx] += d;
         }
-        sqlx::query("INSERT INTO order_items (id, order_id, product_id, cycle, amount, setup_fee, config, custom_fields, discount, recurring_discount, promo_cycles, bundle_discount, gift_to) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)")
+        sqlx::query("INSERT INTO order_items (id, order_id, product_id, cycle, amount, setup_fee, config, custom_fields, discount, recurring_discount, promo_cycles, bundle_discount, gift_to, upgrade_credit) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)")
             .bind(item_id)
             .bind(order_id)
             .bind(q.product_id)
@@ -276,9 +320,13 @@ pub async fn place_full(
             .bind(coupon.as_ref().filter(|c| c.recurring).and_then(|c| c.recurring_cycles))
             .bind(line_bundle)
             .bind(items[idx].gift_to.as_deref().map(str::trim))
+            .bind(up)
             .execute(&mut *tx)
             .await
             .map_err(db_err)?;
+        if let Some(c) = credit {
+            crate::tiers::record(&mut tx, item_id, c).await?;
+        }
         let mut desc = format!("{}, {}", q.product_name, q.cycle);
         if !q.labels.is_empty() {
             desc = format!("{desc} ({})", q.labels.join(", "));
@@ -295,6 +343,17 @@ pub async fn place_full(
             period: None,
             auto_tax: true,
         });
+        if let Some(c) = credit {
+            lines.push(NewItem {
+                description: format!("Upgrade credit: {} (from {})", q.product_name, c.from_name),
+                quantity: Decimal::ONE,
+                unit_price: -c.amount,
+                tax_rate: Decimal::ZERO,
+                service_id: None,
+                period: None,
+                auto_tax: true,
+            });
+        }
         if q.setup_fee > Decimal::ZERO {
             lines.push(NewItem {
                 description: format!("{}, setup", q.product_name),
@@ -384,7 +443,7 @@ pub async fn place_full(
         });
     }
     let mut addon_total = Decimal::ZERO;
-    for (idx, (q, _, _)) in quotes.iter().enumerate() {
+    for (idx, (q, _, _, _)) in quotes.iter().enumerate() {
         let mut left = (q.amount - used[idx]).max(Decimal::ZERO);
         for d in addon_discounts.iter().filter(|d| d.item == idx) {
             let amt = d.amount.round_dp(exp).min(left);
@@ -403,6 +462,13 @@ pub async fn place_full(
                 auto_tax: true,
             });
         }
+        // What the line was charged (before tax): an upgrade later credits it.
+        sqlx::query("UPDATE order_items SET net_amount = $2 WHERE id = $1")
+            .bind(item_ids[idx])
+            .bind(left)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
     }
     invoices::add_items(&mut tx, inv, &currency, &lines).await?;
     let invoice = invoices::finalize(&mut tx, inv, due_days).await?;
@@ -576,6 +642,8 @@ pub async fn approve(
         .map_err(db_err)?;
         ids.push(sid);
     }
+    // Tier upgrades: stop billing the recurring lower tiers they replace.
+    crate::tiers::apply(&mut tx, id).await?;
     sqlx::query(
         "UPDATE orders SET status = 'active', approved_at = now(), approved_by = $2 WHERE id = $1",
     )

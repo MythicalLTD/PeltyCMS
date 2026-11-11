@@ -19,3 +19,4 @@ pub mod reviews;
 pub mod sales;
 pub mod store_rules;
 pub mod storefront;
+pub mod tiers;

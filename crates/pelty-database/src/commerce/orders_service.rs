@@ -75,10 +75,11 @@ impl OrderService {
     /// Same as [`orders::line_amounts`].
     pub async fn line_amounts(
         &self,
+        customer: Option<Uuid>,
         currency: &str,
         items: &[CartItem],
     ) -> AppResult<Vec<catalog::Quote>> {
-        orders::line_amounts(&self.pool, currency, items).await
+        orders::line_amounts(&self.pool, customer, currency, items).await
     }
 
     /// Same as [`orders::place_full`].
