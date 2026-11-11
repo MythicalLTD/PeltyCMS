@@ -16,7 +16,14 @@ fn total(inv: &Value) -> String {
     }
 }
 
+/// Both scenarios toggle the same module on a shared database, so they run
+/// one after the other instead of as two parallel tests.
 #[tokio::test]
+async fn store_rules() {
+    limits_requirements_pwyw_gifts_and_bans().await;
+    gift_delivers_to_the_recipient().await;
+}
+
 async fn limits_requirements_pwyw_gifts_and_bans() {
     let (app, st) = app().await;
     reset_modules(&st).await;
@@ -324,6 +331,18 @@ async fn limits_requirements_pwyw_gifts_and_bans() {
     let ban_id = r.body["id"].as_str().unwrap().to_string();
     let r = order(vec![line(&req)]).await;
     assert_eq!(code(&r), "error.store_banned");
+    // Guest checkout checks the same list before an account exists.
+    let banned_guest = |email: String, name: String| {
+        let pool = st.pool.clone();
+        async move {
+            pelty_database::store_rules::banned_guest(&pool, &email, &[name])
+                .await
+                .unwrap()
+        }
+    };
+    assert!(banned_guest(bob.email.clone(), "Someone".into()).await);
+    assert!(banned_guest("fresh@pelty.test".into(), format!(" griefer{tag} ")).await);
+    assert!(!banned_guest("fresh@pelty.test".into(), "Someone".into()).await);
     let list = call(&app, "GET", bans, None, &admin.h()).await;
     assert!(list.body["items"].as_array().unwrap().len() >= 2);
     call(
@@ -393,7 +412,6 @@ async fn limits_requirements_pwyw_gifts_and_bans() {
 /// A gift is delivered to the recipient's name, never the buyer's account;
 /// commands that need more than a name (e.g. a FiveM license) fail instead of
 /// waiting for the buyer to link one.
-#[tokio::test]
 async fn gift_delivers_to_the_recipient() {
     let (app, st) = app().await;
     reset_modules(&st).await;
