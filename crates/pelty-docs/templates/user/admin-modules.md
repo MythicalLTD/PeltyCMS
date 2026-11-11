@@ -363,7 +363,7 @@ When both modules are on, pick which one is the homepage; the other stays in the
 
 In every look, signed-in customers land on the store or marketplace homepage (the client area is a click away) and the client area uses the same colours. **Support** (`/support`) gathers the knowledgebase (with search), **Open a ticket**, your tickets, live chat (when it is switched on), network status, announcements and the contact form; it is in the menu and a Support column is added to the footer. Every public page shows *Powered by PeltyCMS* in the footer.
 
-Players sign in with their PeltyCMS account and link their game identity (Minecraft name, FiveM license, Steam ID, Discord ID) under **Game accounts**; there is no username-only login without an account.
+Players sign in with their PeltyCMS account (or **Login with FiveM** / **Login with Steam** when the `sso-cfx` / `sso-steam` addons are on, see Admin → Security → Single sign-on) and link their game identity (Minecraft name, FiveM license, Steam ID, Discord ID) under **Game accounts**. A Cfx.re sign-in does not provide the FiveM `license:` identifier; delivery still uses the one entered under Game accounts.
 
 ### API
 

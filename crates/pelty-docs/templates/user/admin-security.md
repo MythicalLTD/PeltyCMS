@@ -62,6 +62,31 @@ Click an entry to see its details. **Export CSV** downloads the filtered list, n
 
 Staff and clients can sign in with OAuth/OIDC providers (addons of kind `sso`) and SAML (Admin → Addons & integrations → **SAML**). PeltyCMS can also act as an OAuth provider for other apps (**OAuth clients**).
 
+### Game-store sign-in: FiveM (Cfx.re) and Steam
+
+Two addons give a game store "Login with FiveM" and "Login with Steam" buttons. They show as large accent buttons at the top of the sign-in page and of the store checkout's account step, above the other providers (Discord, Microsoft, ...). Email and password sign-in stays available.
+
+**This is not Rockstar sign-in.** Rockstar's sign-in is first-party only, and the Cfx.re IDMS that Tebex and txAdmin use is private, so PeltyCMS uses neither. "Login with FiveM" signs players in with their **Cfx.re forum account** (forum.cfx.re), which is the path Cfx.re staff point third-party sites to. Steam uses Valve's official **Steam OpenID** sign-in.
+
+Setup (Admin → Addons & integrations):
+
+1. **FiveM (Cfx.re)** (`sso-cfx`): turn on **Show the login button**. You can set an **Application name**, which the forum shows when it asks the player to approve your store (empty uses your site name). No client registration is needed: PeltyCMS creates its forum client id and an RSA key pair on first use and keeps the private key sealed in the addon's storage. The private key never leaves the server.
+2. **Steam** (`sso-steam`): turn on **Show the login button**. You can add a **Steam Web API key** (a secret) to get the player's Steam name through `GetPlayerSummaries`. Without a key the sign-in still works. The return URL and realm come from your public URL (`PELTY_PUBLIC_URL`).
+3. Both have the usual switches: **Button label** (empty shows "Login with FiveM" or "Login with Steam" in the visitor's language), **Allow new sign-ups**, **Link existing accounts by verified email** and **Allow staff sign-in**. Neither provider vouches for an email, so the email linking option never applies to them.
+
+How it works:
+
+- **FiveM:** the player approves your store on forum.cfx.re (scope `session_info`). The forum returns an encrypted key. PeltyCMS decrypts it with its private key, checks the one-time nonce, reads `/session/current.json`, and then revokes the key straight away.
+- **Steam:** Steam sends the player back with a signed assertion. PeltyCMS checks that the assertion comes back to exactly the URL this attempt issued, and Steam itself confirms the signature (`check_authentication`). The account is the SteamID64.
+- Every attempt is one-time, expires after 10 minutes, and is bound to the browser that started it by a short-lived cookie, so a callback link sent to someone else does nothing. Sign-in starts are rate-limited like the password login. A player sent back to the store (`return_to`) only ever lands on a path of your own site.
+- **New players:** neither provider shares an email, so a new player is asked for an email to finish signing up. The email is used for receipts and account recovery, and a verification mail is sent. Banned emails are refused. If the email already belongs to an account, the player signs in with their password and links FiveM or Steam under **Account → Linked accounts**. Staff accounts need **Allow staff sign-in**, and two-factor authentication is never skipped.
+- **What is stored:** the identity keeps the Cfx.re user id or SteamID64 and the forum username or Steam name.
+
+**Limitations:**
+
+- **No Rockstar licence from Cfx.re:** the forum's `session/current.json` returns the forum user (id, username), not a Rockstar/FiveM `license:` identifier, so in-game delivery still uses the FiveM identifier the player enters under **Game accounts** (or at guest checkout). A Steam sign-in does not fill the `steamid` game identity automatically either. The hook for that is `remember_username` in `access/oauth.rs`.
+- **Forum dependencies:** the forum must allow your callback URL (Discourse `allowed_user_api_auth_redirects`) and the player's forum trust level must allow user API keys. Cfx.re controls both, so if the forum refuses, the player sees an error on forum.cfx.re.
+
 ### SAML scope (Service Provider)
 
 PeltyCMS implements a deliberately narrow SAML 2.0 SP: Exclusive C14N 1.0, enveloped XML-DSig with RSA-SHA256 / ECDSA-P256-SHA256 and SHA-256 digests, pinned IdP certificates, HTTP-POST responses and HTTP-Redirect requests. **Not supported:** EncryptedAssertion, SHA-1 signatures, inclusive C14N, XPath transforms, KeyInfo-supplied keys, or artifact binding. Prefer OIDC when the IdP offers it.
