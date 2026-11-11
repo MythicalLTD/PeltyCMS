@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowsLeftRightIcon, PackageIcon, PencilSimpleIcon, PlusIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
+import { toast } from "sonner";
 import { ListPage, ListCard } from "@/components/ListPage";
 import { FormError } from "@/components/Field";
 import { ConfirmAction } from "@/components/ConfirmAction";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +18,8 @@ import { api, ApiError } from "@/lib/api";
 import type { Product } from "@/lib/billing/billing";
 import type { Bundle, Recommendations } from "@/lib/store/cart";
 import { useI18n } from "@/lib/i18n";
+import { useModules } from "@/lib/modules";
+import { OWNERSHIP_MODES, parseOwnership, validMinPercent, type OwnershipSettings } from "@/lib/bundleOwnership";
 
 interface Draft { name: string; description: string; active: boolean; discount_percent: string; items: { product_id: string; cycle: string }[] }
 const EMPTY: Draft = { name: "", description: "", active: true, discount_percent: "10", items: [{ product_id: "", cycle: "" }, { product_id: "", cycle: "" }] };
@@ -124,10 +127,52 @@ function RecsDialog({ product, products }: { product: Product; products: Product
   );
 }
 
+/** Module `bundle_ownership` settings (shown while the module is on). */
+function OwnershipCard() {
+  const { t, tCode } = useI18n();
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ["admin", "modules"], queryFn: () => api<{ items: { id: string; enabled: boolean; settings: Record<string, unknown> }[] }>("/admin/modules") });
+  const m = data?.items.find((x) => x.id === "bundle_ownership");
+  const [f, setF] = useState<OwnershipSettings | null>(null);
+  const cur = f ?? parseOwnership(m?.settings);
+  const save = useMutation({
+    mutationFn: () => api("/admin/modules/bundle_ownership", { method: "PUT", body: { enabled: true, settings: { mode: cur.mode, min_percent: cur.min_percent.trim() } } }),
+    onSuccess: () => { setF(null); qc.invalidateQueries({ queryKey: ["admin", "modules"] }); qc.invalidateQueries({ queryKey: ["public", "bundle-ownership"] }); toast.success(t("common.saved")); },
+    onError: (e) => toast.error(e instanceof ApiError ? tCode(e.code) : t("error.internal")),
+  });
+  if (!m?.enabled) return null;
+  const ok = validMinPercent(cur.min_percent);
+  return (
+    <Card className="min-w-0 shadow-sm" data-testid="bundle-ownership-settings">
+      <CardHeader>
+        <CardTitle>{t("bundle_own.title")}</CardTitle>
+        <CardDescription>{t("bundle_own.desc")}</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="own-mode">{t("bundle_own.mode")}</Label>
+          <Select value={cur.mode} onValueChange={(v) => setF({ ...cur, mode: v as OwnershipSettings["mode"] })}>
+            <SelectTrigger id="own-mode" className="w-full"><SelectValue /></SelectTrigger>
+            <SelectContent>{OWNERSHIP_MODES.map((x) => <SelectItem key={x} value={x}>{t(`bundle_own.mode_${x}`)}</SelectItem>)}</SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">{t(`bundle_own.mode_${cur.mode}_hint`)}</p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="own-min">{t("bundle_own.min_percent")}</Label>
+          <Input id="own-min" inputMode="decimal" value={cur.min_percent} aria-invalid={!ok} onChange={(e) => setF({ ...cur, min_percent: e.target.value })} />
+          <p className="text-xs text-muted-foreground">{t("bundle_own.min_percent_hint")}</p>
+        </div>
+        <div className="sm:col-span-2"><Button disabled={!ok || save.isPending || f === null} onClick={() => save.mutate()}>{t("common.save")}</Button></div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function AdminBundlesPage() {
   const { t } = useI18n();
   const qc = useQueryClient();
   const e = useErr();
+  const modules = useModules();
   const { data, isLoading } = useQuery({ queryKey: ["admin", "bundles"], queryFn: () => api<{ items: Bundle[] }>("/admin/bundles") });
   const { data: prods, isLoading: pl } = useQuery({ queryKey: ["admin", "products", "all"], queryFn: () => api<{ items: Product[] }>("/admin/catalog/products") });
   const products = prods?.items ?? [];
@@ -150,6 +195,7 @@ export function AdminBundlesPage() {
       ]}
     >
       <FormError message={e.error} />
+      {modules.enabled.has("bundle_ownership") && <OwnershipCard />}
       <Card className="min-w-0 gap-0 overflow-hidden py-0 shadow-sm"><CardHeader><CardTitle>{t("recs.section")}</CardTitle></CardHeader></Card>
       <ListCard<Product> rows={prods?.items} loading={pl} rowKey={(p) => p.id} emptyIcon={PackageIcon} emptyTitle={t("bundles.none")}
         columns={[

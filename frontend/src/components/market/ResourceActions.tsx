@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router";
-import { ChatCircleDotsIcon, HeartIcon, PackageIcon, ShoppingCartIcon } from "@phosphor-icons/react";
+import { ChatCircleDotsIcon, CheckCircleIcon, HeartIcon, PackageIcon, ShoppingCartIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Field } from "@/components/Field";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import { api, ApiError } from "@/lib/api";
 import { useMe } from "@/lib/auth";
 import { formatMoney } from "@/lib/billing/billing";
 import { bundlePrice, type CreatorBundle, type WishlistItem } from "@/lib/creatorTools";
+import { ownedBundlePrice, useBundleOwnership } from "@/lib/bundleOwnership";
 import { useI18n } from "@/lib/i18n";
 import { useStoreCart, type StoreLine } from "@/lib/store/storefront";
 import { useCatalog, useStoreCurrency } from "@/pages/store/Store";
@@ -83,12 +84,13 @@ export function BundleOffers({ bundles }: { bundles: CreatorBundle[] }) {
   const { currency } = useStoreCurrency();
   const { view, save } = useStoreCart();
   const nav = useNavigate();
+  const own = useBundleOwnership();
   if (bundles.length === 0) return null;
   const priceOf = (id: string, cycle: string) => Number(data?.products.find((p) => p.id === id)?.prices.find((p) => p.currency === currency && p.cycle === cycle)?.amount ?? NaN);
   const add = (b: CreatorBundle) => {
     const cart = view && !view.cart.order_id ? view.cart : null;
     const base = cart ?? { items: [] as StoreLine[], country: "", coupon: null, email: null };
-    const missing = b.items.filter((i) => !base.items.some((l) => l.product_id === i.product_id)).map((i) => ({ product_id: i.product_id, cycle: i.cycle, config: {}, addons: [] }));
+    const missing = b.items.filter((i) => !base.items.some((l) => l.product_id === i.product_id) && !(own.on && own.owned.has(i.product_id))).map((i) => ({ product_id: i.product_id, cycle: i.cycle, config: {}, addons: [] }));
     save.mutate({ ...base, currency, items: [...base.items, ...missing], locale: lang }, {
       onSuccess: () => nav("/cart"),
       onError: (e) => toast.error(e instanceof ApiError ? tCode(e.code) : t("error.internal")),
@@ -99,7 +101,9 @@ export function BundleOffers({ bundles }: { bundles: CreatorBundle[] }) {
       {bundles.map((b) => {
         const prices = b.items.map((i) => priceOf(i.product_id, i.cycle));
         const known = prices.every((p) => Number.isFinite(p));
-        const pr = bundlePrice(known ? prices : [], Number(b.discount_percent));
+        const mine = b.items.map((i) => own.on && own.owned.has(i.product_id));
+        const op = ownedBundlePrice(known ? prices : b.items.map(() => 0), mine, Number(b.discount_percent), own.settings);
+        const pr = op.owned > 0 ? op : bundlePrice(known ? prices : [], Number(b.discount_percent));
         return (
           <Card key={b.id} data-testid="bundle-offer">
             <CardHeader>
@@ -107,9 +111,18 @@ export function BundleOffers({ bundles }: { bundles: CreatorBundle[] }) {
               {b.description && <CardDescription>{b.description}</CardDescription>}
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              <ul className="flex flex-col gap-1 text-sm">{b.items.map((i) => <li key={i.product_id} className="truncate">{i.product_name}</li>)}</ul>
-              {known && <p className="text-sm"><span className="mr-2 text-muted-foreground line-through tabular-nums">{formatMoney(String(pr.full), currency, lang)}</span><span className="font-semibold tabular-nums">{formatMoney(String(pr.price), currency, lang)}</span></p>}
-              <Button disabled={save.isPending} onClick={() => add(b)}><ShoppingCartIcon aria-hidden />{t("ctools.add_bundle")}</Button>
+              <ul className="flex flex-col gap-1 text-sm">{b.items.map((i, n) => (
+                <li key={i.product_id} className="flex min-w-0 items-center gap-1.5">
+                  {mine[n] && <CheckCircleIcon aria-hidden className="size-4 shrink-0 text-primary" />}
+                  <span className={mine[n] ? "truncate text-muted-foreground" : "truncate"}>{i.product_name}</span>
+                  {mine[n] && <span className="sr-only">{t("bundle_own.owned_item")}</span>}
+                </li>
+              ))}</ul>
+              {op.owned > 0 && <p className="text-sm text-muted-foreground" data-testid="bundle-owned">{t("bundle_own.you_own", { n: op.owned, total: op.size })}</p>}
+              {op.allOwned
+                ? <p className="text-sm font-medium" data-testid="bundle-all-owned">{t("bundle_own.all_owned")}</p>
+                : known && <p className="text-sm"><span className="mr-2 text-muted-foreground line-through tabular-nums">{formatMoney(String(pr.full), currency, lang)}</span><span className="font-semibold tabular-nums">{formatMoney(String(pr.price), currency, lang)}</span></p>}
+              <Button disabled={save.isPending || op.allOwned} onClick={() => add(b)}><ShoppingCartIcon aria-hidden />{op.owned > 0 && !op.allOwned ? t("bundle_own.add_rest") : t("ctools.add_bundle")}</Button>
             </CardContent>
           </Card>
         );

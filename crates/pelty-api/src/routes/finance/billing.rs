@@ -165,7 +165,9 @@ pub async fn client_place_order(
         }
     };
     let bundle = match b.bundle_id {
-        Some(id) => Some(crate::routes::bundles::discount_for(&s, id, &b.items).await?),
+        Some(id) => {
+            Some(crate::routes::bundles::discount_for(&s, id, &b.items, cid, &currency).await?)
+        }
         None => None,
     };
     let form = match b.order_form_id {

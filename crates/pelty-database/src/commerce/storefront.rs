@@ -235,37 +235,116 @@ pub struct Preview {
     /// Bundle applied automatically because the cart holds all of it.
     pub bundle: Option<String>,
     pub bundle_discount: Decimal,
+    /// Bundle items already owned (module `bundle_ownership`) and its size.
+    pub bundle_owned: usize,
+    pub bundle_size: usize,
     /// Sum of the lines' tier upgrade credits.
     pub upgrade_credit: Decimal,
 }
 
 /// The active bundle with the biggest discount that the cart fully holds.
+/// With module `bundle_ownership` on and a known `customer`, items they
+/// already own count as held (at least one item must be bought), and a cart
+/// re-buying a bundle they own completely is refused.
 pub async fn best_bundle(
     pool: &PgPool,
     items: &[CartItem],
+    customer: Option<Uuid>,
+    currency: &str,
 ) -> AppResult<Option<crate::orders::BundleDiscount>> {
-    if items.len() < 2 {
+    let own = match customer {
+        Some(_) => crate::bundles::ownership(pool).await?,
+        None => None,
+    };
+    if items.is_empty() || (own.is_none() && items.len() < 2) {
         return Ok(None);
     }
-    let mut best: Option<crate::orders::BundleDiscount> = None;
-    for b in crate::bundles::list(pool, true).await? {
-        if b.discount_percent <= Decimal::ZERO
-            || best
-                .as_ref()
-                .is_some_and(|x| x.percent >= b.discount_percent)
-        {
+    let bundles = crate::bundles::list(pool, true).await?;
+    let owned = match (&own, customer) {
+        (Some(_), Some(c)) => {
+            let mut ids: Vec<Uuid> = bundles
+                .iter()
+                .flat_map(|b| b.items.iter().map(|i| i.product_id))
+                .collect();
+            ids.sort();
+            ids.dedup();
+            crate::bundles::owned_products(pool, c, &ids).await?
+        }
+        _ => Default::default(),
+    };
+    let mut best: Option<(Decimal, crate::orders::BundleDiscount)> = None;
+    for b in bundles {
+        if b.discount_percent <= Decimal::ZERO || b.items.is_empty() {
             continue;
         }
-        if let Some(idx) = crate::bundles::match_cart(&b, items) {
-            best = Some(crate::orders::BundleDiscount {
+        let Some(s) = &own else {
+            if best.as_ref().is_some_and(|x| x.0 >= b.discount_percent) {
+                continue;
+            }
+            if let Some(idx) = crate::bundles::match_cart(&b, items) {
+                best = Some((
+                    b.discount_percent,
+                    crate::orders::BundleDiscount {
+                        bundle_id: b.id,
+                        name: b.name,
+                        percent: b.discount_percent,
+                        size: b.items.len(),
+                        owned: 0,
+                        items: idx,
+                    },
+                ));
+            }
+            continue;
+        };
+        if b.items.iter().all(|i| owned.contains(&i.product_id))
+            && crate::bundles::match_cart(&b, items).is_some()
+        {
+            return Err(AppError::Validation("error.bundle_all_owned"));
+        }
+        let Some((idx, have)) = crate::bundles::match_owned(&b, items, &owned) else {
+            continue;
+        };
+        let keys: Vec<(Uuid, String)> = idx
+            .iter()
+            .map(|&i| (items[i].product_id, items[i].cycle.clone()))
+            .chain(
+                have.iter()
+                    .map(|&n| (b.items[n].product_id, b.items[n].cycle.clone())),
+            )
+            .collect();
+        let prices = crate::bundles::list_prices(pool, currency, &keys).await?;
+        let (percent, score) = if prices.iter().all(|p| p.is_some()) {
+            let p: Vec<Decimal> = prices.into_iter().flatten().collect();
+            let rest: Decimal = p[..idx.len()].iter().sum();
+            let had: Decimal = p[idx.len()..].iter().sum();
+            let pct = crate::bundles::ownership_percent(s, b.discount_percent, rest, had);
+            (pct, pct * rest)
+        } else {
+            // Unpriced item: plain bundle percent on what is bought.
+            let pct = crate::bundles::ownership_percent(
+                s,
+                b.discount_percent,
+                Decimal::ONE,
+                Decimal::ZERO,
+            );
+            (pct, pct)
+        };
+        if percent <= Decimal::ZERO || best.as_ref().is_some_and(|x| x.0 >= score) {
+            continue;
+        }
+        best = Some((
+            score,
+            crate::orders::BundleDiscount {
                 bundle_id: b.id,
                 name: b.name,
-                percent: b.discount_percent,
+                percent,
+                size: b.items.len(),
+                owned: have.len(),
                 items: idx,
-            });
-        }
+            },
+        ));
     }
-    Ok(best)
+    Ok(best.map(|x| x.1))
 }
 
 #[derive(FromRow)]
@@ -363,7 +442,7 @@ pub async fn preview(
     let rules_on = crate::store_rules::enabled(pool).await?;
     let rules = crate::store_rules::for_cart(pool, items).await?;
     crate::store_rules::check_lines(&rules, items, rules_on)?;
-    let bundle = best_bundle(pool, items).await?;
+    let bundle = best_bundle(pool, items, customer, &currency).await?;
     let mut bundle_total = Decimal::ZERO;
     let mut upgrade_total = Decimal::ZERO;
     let mut sources = std::collections::HashSet::new();
@@ -574,9 +653,12 @@ pub async fn preview(
         creator_code: creator.map(|c| c.code),
         creator_error,
         bundle: bundle
+            .as_ref()
             .filter(|_| bundle_total > Decimal::ZERO)
-            .map(|b| b.name),
+            .map(|b| b.name.clone()),
         bundle_discount: bundle_total,
+        bundle_owned: bundle.as_ref().map_or(0, |b| b.owned),
+        bundle_size: bundle.as_ref().map_or(0, |b| b.size),
         upgrade_credit: upgrade_total,
     })
 }

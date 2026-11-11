@@ -16,6 +16,7 @@ use uuid::Uuid;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/catalog/bundles", get(public_bundles))
+        .route("/public/bundle-ownership", get(public_ownership))
         .route("/catalog/products/{id}/recommendations", get(public_recs))
         .route("/admin/bundles", get(admin_list).post(admin_create))
         .route(
@@ -28,21 +29,36 @@ pub fn router() -> Router<AppState> {
         )
 }
 
-/// Discount for an order claiming `bundle`; 422 unless the cart has it all.
+/// Discount for an order claiming `bundle`; 422 unless the cart has it all
+/// (or, with module `bundle_ownership`, the rest is owned by `customer`).
 pub async fn discount_for(
     s: &AppState,
     bundle: Uuid,
     cart: &[CartItem],
+    customer: Uuid,
+    currency: &str,
 ) -> ApiResult<BundleDiscount> {
     let b = bundles::get(&s.pool, bundle, true)
         .await?
         .ok_or(AppError::Validation("error.bundle_unavailable"))?;
+    if bundles::ownership(&s.pool).await?.is_some() {
+        // Same rules as the store cart, limited to this bundle.
+        let found =
+            pelty_database::storefront::best_bundle(&s.pool, cart, Some(customer), currency)
+                .await?
+                .filter(|d| d.bundle_id == b.id);
+        if let Some(d) = found {
+            return Ok(d);
+        }
+    }
     let items =
         bundles::match_cart(&b, cart).ok_or(AppError::Validation("error.bundle_incomplete"))?;
     Ok(BundleDiscount {
         bundle_id: b.id,
         name: b.name,
         percent: b.discount_percent,
+        size: b.items.len(),
+        owned: 0,
         items,
     })
 }
@@ -51,6 +67,39 @@ pub async fn discount_for(
 pub async fn public_bundles(State(s): State<AppState>) -> ApiResult<Json<Value>> {
     Ok(Json(
         json!({ "items": bundles::list(&s.pool, true).await? }),
+    ))
+}
+
+/// Module `bundle_ownership`: its settings and, for a signed-in customer,
+/// which bundle items they already own (`owned` product ids).
+#[utoipa::path(get, path = "/api/v1/public/bundle-ownership", responses((status = 200), (status = 404)))]
+pub async fn public_ownership(
+    State(s): State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> ApiResult<Json<Value>> {
+    let settings = bundles::ownership(&s.pool)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let owned: Vec<Uuid> = match crate::routes::store::maybe_customer(&s, &headers).await {
+        Some(c) => {
+            let mut ids: Vec<Uuid> = bundles::list(&s.pool, true)
+                .await?
+                .iter()
+                .flat_map(|b| b.items.iter().map(|i| i.product_id))
+                .collect();
+            ids.sort();
+            ids.dedup();
+            let mut v: Vec<Uuid> = bundles::owned_products(&s.pool, c, &ids)
+                .await?
+                .into_iter()
+                .collect();
+            v.sort();
+            v
+        }
+        None => vec![],
+    };
+    Ok(Json(
+        json!({ "mode": settings.mode, "min_percent": settings.min_percent, "owned": owned }),
     ))
 }
 

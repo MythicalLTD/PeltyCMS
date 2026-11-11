@@ -85,6 +85,10 @@ pub struct BundleDiscount {
     pub percent: Decimal,
     /// Cart indices covered by the bundle.
     pub items: Vec<usize>,
+    /// Bundle items the buyer already owns (module `bundle_ownership`), and
+    /// the bundle size.
+    pub owned: usize,
+    pub size: usize,
 }
 
 /// A first-invoice discount on one cart line, computed by an addon (filter
@@ -433,7 +437,14 @@ pub async fn place_full(
     }
     if let Some(b) = bundle.filter(|_| bundle_total > Decimal::ZERO) {
         lines.push(NewItem {
-            description: format!("Bundle discount: {} ({}%)", b.name, b.percent.normalize()),
+            description: if b.owned > 0 {
+                format!(
+                    "Bundle discount: {} ({} of {} already owned)",
+                    b.name, b.owned, b.size
+                )
+            } else {
+                format!("Bundle discount: {} ({}%)", b.name, b.percent.normalize())
+            },
             quantity: Decimal::ONE,
             unit_price: -bundle_total,
             tax_rate: Decimal::ZERO,

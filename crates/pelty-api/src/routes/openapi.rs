@@ -454,6 +454,7 @@ use utoipa::OpenApi;
         super::store_rules::admin_add_ban,
         super::store_rules::admin_remove_ban,
         super::tiers::public_upgrades,
+        super::bundles::public_ownership,
         super::tiers::admin_groups,
         super::tiers::admin_create_group,
         super::tiers::admin_update_group,

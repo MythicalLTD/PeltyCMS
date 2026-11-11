@@ -10,7 +10,7 @@ export interface PreviewLine {
   addons: { addon_id: string; name: string; cycle: string; amount: string; setup_fee: string }[];
 }
 export interface CartPreview {
-  currency: string; lines: PreviewLine[]; subtotal: string; discount: string; group_discount: string; sale_discount?: string; creator_discount?: string; bundle?: string | null; bundle_discount?: string; upgrade_credit?: string; tax: string; taxes: TaxPart[];
+  currency: string; lines: PreviewLine[]; subtotal: string; discount: string; group_discount: string; sale_discount?: string; creator_discount?: string; bundle?: string | null; bundle_discount?: string; bundle_owned?: number; bundle_size?: number; upgrade_credit?: string; tax: string; taxes: TaxPart[];
   total: string; inclusive: boolean; coupon: string | null; coupon_error: string | null; creator_code?: string | null; creator_error?: string | null;
 }
 export interface CartView { cart: StoreCart; preview: CartPreview | null; error: string | null }

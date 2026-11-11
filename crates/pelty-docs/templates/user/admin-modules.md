@@ -22,6 +22,7 @@ Every change is written to the audit log as `module.updated`.
 | `digital_products` | Digital products | |
 | `creator_marketplace` | Creator marketplace | `digital_products` |
 | `tier_upgrades` | Commerce | |
+| `bundle_ownership` | Commerce | |
 
 ## API
 
@@ -450,6 +451,26 @@ Limitations: the credit is based on the owned tier's first invoice (renewals are
 | --- | --- | --- |
 | GET | `/api/v1/public/tier-upgrades?currency=EUR&gift_to=Name` | anyone: tier groups; `credits[product_id] = {amount, from_name}` for the signed-in customer (or the gift recipient) |
 | GET/POST | `/api/v1/admin/tier-groups`, GET/PUT/DELETE `/{id}` | staff with catalog access |
+
+## Bundle ownership discount (`bundle_ownership`)
+
+Like BuiltByBit: a buyer who already owns some items of a bundle can still buy the bundle and pays only for the rest. Configure it under **Admin → Products → Bundles** once the module is on:
+
+- **Owned items are worth**: *their share of the bundle price* (the rest keeps the bundle percent, e.g. 3 of 5 items at 20% off) or *their full list price* (the rest costs the bundle price minus the list price of what is owned).
+- **Minimum price**: the rest never costs less than this percent of its list price (0 = no floor).
+- **Owned** means an active service of the product or an active, unexpired license, for the signed-in customer. Guests see normal bundle prices.
+- The bundle offer on a resource page shows *You already own 2 of 5*, marks owned items and adds only the rest to the cart; the cart and the invoice line (*Bundle discount: Mega (2 of 5 already owned)*) say the same.
+- A buyer who owns every item cannot buy that bundle again: the offer is disabled and a cart or order with all of it is refused with `error.bundle_all_owned`.
+- The discount is applied like a normal bundle discount (after coupons, before group discounts, timed sales and creator codes, then tax).
+
+Limitation: the hosting order form (Billing → Order) still asks for every bundle item before it offers the bundle; a claimed `bundle_id` on `POST /api/v1/client/orders` does accept owned items.
+
+### API
+
+| Method | Path | Who |
+| --- | --- | --- |
+| GET | `/api/v1/public/bundle-ownership` | anyone: `{mode, min_percent, owned}` (`owned` = product ids the signed-in customer owns, else empty) |
+| PUT | `/api/v1/admin/modules/bundle_ownership` | `settings.manage`: `{"enabled": true, "settings": {"mode": "share" or "list", "min_percent": "0"}}` |
 
 ## Discord roles (`discord_roles`)
 
