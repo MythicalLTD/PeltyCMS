@@ -130,6 +130,7 @@ pub use config::content;
 pub use config::general_settings;
 pub use config::languages;
 pub use config::license;
+pub use config::media;
 pub use config::settings;
 pub use config::setup_wizard;
 pub use config::site;

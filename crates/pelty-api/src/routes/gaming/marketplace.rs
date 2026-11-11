@@ -157,7 +157,7 @@ pub async fn public_resource(
 }
 
 fn public_profile(c: &Creator) -> Value {
-    json!({ "id": c.id, "slug": c.slug, "display_name": c.display_name, "bio": c.bio, "website": c.website, "avatar_url": c.avatar_url, "since": c.created_at.date().to_string() })
+    json!({ "id": c.id, "slug": c.slug, "display_name": c.display_name, "bio": c.bio, "website": c.website, "avatar_url": c.avatar_url, "banner_url": c.banner_url, "since": c.created_at.date().to_string() })
 }
 
 #[utoipa::path(get, path = "/api/v1/public/creators", responses((status = 200)))]

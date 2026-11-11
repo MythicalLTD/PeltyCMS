@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { creatorNet, creatorSlug, galleryValid, inTransit, marketConfig, moveItem, paypalEmailValid, stripeReady, validAmount, validPercent } from "./marketplace";
+import { creatorNet, creatorSlug, galleryValid, inTransit, marketConfig, moveItem, moveTo, paypalEmailValid, stripeReady, validAmount, validPercent } from "./marketplace";
 import { resourceImages } from "./market";
 
 describe("marketplace helpers", () => {
@@ -67,6 +67,13 @@ describe("gallery helpers", () => {
     expect(moveItem(["a", "b", "c"], 2, -1)).toEqual(["a", "c", "b"]);
     const xs = ["a"];
     expect(moveItem(xs, 0, -1)).toBe(xs);
+  });
+  it("drag-reorders to an index", () => {
+    expect(moveTo(["a", "b", "c", "d"], 0, 2)).toEqual(["b", "c", "a", "d"]);
+    expect(moveTo(["a", "b", "c", "d"], 3, 0)).toEqual(["d", "a", "b", "c"]);
+    const xs = ["a", "b"];
+    expect(moveTo(xs, 1, 1)).toBe(xs);
+    expect(moveTo(xs, 0, 5)).toBe(xs);
   });
   it("puts the cover first and drops duplicates", () => {
     const listing = { image_url: "/cover.png" } as Parameters<typeof resourceImages>[0]["listing"];

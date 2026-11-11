@@ -9,7 +9,7 @@ import { api, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-export const MEDIA_TYPES = ["image/png", "image/jpeg", "image/webp"];
+export const MEDIA_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 export const MEDIA_MAX = 2 * 1024 * 1024;
 
 /** Field names that should use the smart image upload control. */
@@ -38,7 +38,17 @@ export function checkMediaFile(f: { type: string; size: number }): string | null
   return null;
 }
 
-type UploadResult = { id: string; url: string; path: string };
+export type UploadResult = { id: string; url: string; path: string; thumb?: string };
+
+/** Staff uploads go to `/admin/media`; marketplace creators use `/client/creator/media`. */
+export type MediaEndpoint = "/admin/media" | "/client/creator/media";
+
+/** Validate + upload one image file; rejects with the API error code. */
+export async function uploadMedia(f: File, endpoint: MediaEndpoint = "/admin/media"): Promise<UploadResult> {
+  const err = checkMediaFile(f);
+  if (err) throw new ApiError(422, err, err);
+  return api<UploadResult>(endpoint, { method: "POST", raw: f });
+}
 
 /**
  * Smart logo/image field: drag-drop / pick file uploads to `/admin/media`,
@@ -53,6 +63,7 @@ export function ImageUrlField({
   preferPath = false,
   className,
   hint,
+  endpoint = "/admin/media",
 }: {
   id?: string;
   label?: string;
@@ -63,12 +74,13 @@ export function ImageUrlField({
   preferPath?: boolean;
   className?: string;
   hint?: string;
+  endpoint?: MediaEndpoint;
 }) {
   const { t, tCode } = useI18n();
   const input = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
   const upload = useMutation({
-    mutationFn: (f: File) => api<UploadResult>("/admin/media", { method: "POST", raw: f }),
+    mutationFn: (f: File) => api<UploadResult>(endpoint, { method: "POST", raw: f }),
     onSuccess: (r) => {
       onChange(preferPath ? r.path : r.url);
       toast.success(t("media.uploaded"));

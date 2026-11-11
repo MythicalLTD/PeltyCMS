@@ -14,7 +14,7 @@ sqlparser = { version = "0.63", features = ["visitor"] }
 sqlx = { workspace = true }
 pelty-provisioning = { workspace = true }
 pelty-saml = { workspace = true }
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
 pelty-core = { workspace = true }
 pelty-database = { workspace = true }
 pelty-auth = { workspace = true }

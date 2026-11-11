@@ -332,6 +332,7 @@ export function CreatorProfilePage() {
   return (
     <div className="flex flex-col" data-testid="creator-profile">
       <section className="border-b bg-card">
+        {c.banner_url && <div className="h-36 w-full overflow-hidden bg-muted sm:h-52" data-testid="creator-banner"><img src={c.banner_url} alt="" className="size-full object-cover" /></div>}
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10 sm:flex-row sm:items-center">
           <CreatorAvatar src={c.avatar_url} name={c.display_name} className="size-24 [&_[data-slot=avatar-fallback]]:text-3xl" />
           <div className="flex min-w-0 flex-col gap-2">

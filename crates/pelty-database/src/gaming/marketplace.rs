@@ -155,6 +155,8 @@ pub struct Creator {
     pub bio: String,
     pub website: String,
     pub avatar_url: String,
+    /// Wide header image on the public creator page; empty = none.
+    pub banner_url: String,
     pub status: String,
     #[schema(value_type = Option<String>)]
     pub commission_percent: Option<Decimal>,
@@ -172,7 +174,7 @@ pub struct Creator {
     pub payout_method_locked: bool,
 }
 
-const CCOLS: &str = "id, user_id, customer_id, slug, display_name, bio, website, avatar_url, status, commission_percent, payout_method, payout_details, created_at,
+const CCOLS: &str = "id, user_id, customer_id, slug, display_name, bio, website, avatar_url, banner_url, status, commission_percent, payout_method, payout_details, created_at,
     stripe_account_id, stripe_status, stripe_status_detail, paypal_email, payout_method_locked";
 
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
@@ -186,6 +188,9 @@ pub struct Profile {
     pub website: String,
     #[serde(default)]
     pub avatar_url: String,
+    /// Omitted = keep the current banner.
+    #[serde(default)]
+    pub banner_url: Option<String>,
     #[serde(default)]
     pub payout_method: Option<String>,
     /// e.g. `{"paypal_email": "…"}` or `{"note": "IBAN …"}`; never shown publicly.
@@ -211,6 +216,10 @@ impl Profile {
             || self.bio.len() > 5000
             || !url_ok(&self.website)
             || !(self.avatar_url.is_empty() || crate::catalog::valid_image_url(&self.avatar_url))
+            || self
+                .banner_url
+                .as_deref()
+                .is_some_and(|b| !(b.is_empty() || crate::catalog::valid_image_url(b)))
             || self
                 .payout_method
                 .as_deref()
@@ -282,8 +291,8 @@ pub async fn apply(
         return Err(AppError::Conflict("error.creator_exists"));
     }
     sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "INSERT INTO creators (id, user_id, customer_id, slug, display_name, bio, website, avatar_url, status, payout_method, payout_details, approved_at, paypal_email)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,'manual'),COALESCE($11,'{{}}'::jsonb), CASE WHEN $12 THEN now() END, COALESCE($13, '')) RETURNING {CCOLS}"
+        "INSERT INTO creators (id, user_id, customer_id, slug, display_name, bio, website, avatar_url, status, payout_method, payout_details, approved_at, paypal_email, banner_url)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,'manual'),COALESCE($11,'{{}}'::jsonb), CASE WHEN $12 THEN now() END, COALESCE($13, ''), COALESCE($14, '')) RETURNING {CCOLS}"
     )))
     .bind(Uuid::new_v4())
     .bind(user)
@@ -298,6 +307,7 @@ pub async fn apply(
     .bind(&p.payout_details)
     .bind(approve)
     .bind(p.paypal_email())
+    .bind(&p.banner_url)
     .fetch_one(pool)
     .await
     .map_err(conflict)
@@ -308,7 +318,7 @@ pub async fn update_profile(pool: &PgPool, id: Uuid, p: &Profile) -> AppResult<C
     sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "UPDATE creators SET slug = $2, display_name = $3, bio = $4, website = $5, avatar_url = $6,
            payout_method = COALESCE($7, payout_method), payout_details = COALESCE($8, payout_details),
-           paypal_email = COALESCE($9, paypal_email)
+           paypal_email = COALESCE($9, paypal_email), banner_url = COALESCE($10, banner_url)
          WHERE id = $1 RETURNING {CCOLS}"
     )))
     .bind(id)
@@ -320,6 +330,7 @@ pub async fn update_profile(pool: &PgPool, id: Uuid, p: &Profile) -> AppResult<C
     .bind(&p.payout_method)
     .bind(&p.payout_details)
     .bind(p.paypal_email())
+    .bind(&p.banner_url)
     .fetch_one(pool)
     .await
     .map_err(conflict)
@@ -908,6 +919,7 @@ mod tests {
             bio: String::new(),
             website: "javascript:x".into(),
             avatar_url: String::new(),
+            banner_url: None,
             payout_method: None,
             payout_details: None,
         };

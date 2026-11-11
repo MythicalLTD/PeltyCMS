@@ -166,7 +166,7 @@ Webhooks to create (the exact URLs are shown on **Admin → Creator marketplace 
 
 Webhook events are deduplicated, so Stripe or PayPal retries are safe. Without webhooks Stripe statuses refresh when the creator clicks **Refresh status**, and PayPal relies on the hourly poll.
 
-**Gallery and updates.** Creators add up to 12 screenshots (https URLs with captions) per listing; the resource page shows them as a gallery after the listing image. When a creator uploads a new version, every customer who owns the product (and has not opted out of marketing mail) receives an update email linking to their downloads.
+**Gallery and updates.** Creators add up to 12 screenshots with captions per listing: drag several image files onto the gallery (or pick them), paste an https URL, and drag rows to reorder (the arrow buttons do the same from the keyboard). The resource page shows them as a gallery after the listing image. When a creator uploads a new version, every customer who owns the product (and has not opted out of marketing mail) receives an update email linking to their downloads.
 
 Payout administration needs the **Affiliates** permission. Creator and listing review need **Catalog**.
 
@@ -189,6 +189,7 @@ Payout administration needs the **Affiliates** permission. Creator and listing r
 | PUT | `/api/v1/client/creator/payout-settings` | the creator: method and PayPal email |
 | POST | `/api/v1/client/creator/stripe/onboard`, `/stripe/sync`, `/stripe/dashboard` | the creator: Stripe onboarding link, status refresh, Express dashboard link |
 | GET/PUT | `/api/v1/client/creator/listings/{id}/gallery` | the creator |
+| POST | `/api/v1/client/creator/media` | any signed-in customer (raw image body): avatar, banner, cover and gallery uploads |
 | GET | `/api/v1/admin/creator-payouts`, POST `/{id}/send`, POST `/{id}/status` | staff (Affiliates) |
 | GET | `/api/v1/admin/creator-payouts/overview` | staff (Affiliates): provider configuration, test/live, webhook URLs |
 | POST | `/api/v1/admin/creator-payouts/run`, `/send-batch` | staff (Affiliates): create due payouts, send, sync PayPal |
@@ -281,7 +282,7 @@ Limits: the status check needs the server's query port to be reachable from the 
 
 Changes how the game store looks when **Settings → Website → Store mode** is **Game store**. Switch the module on, then open **Store look**:
 
-- **Banner**: a title, subtitle and background image (an `https://` URL or a path on your site such as `/uploads/banner.png`).
+- **Banner**: a title, subtitle and background image (upload or drop a file, or use an `https://` URL or a path on your site such as `/uploads/banner.png`).
 - **Accent color**: recolors buttons, focus rings and charts on the public site (theme default, emerald, violet, amber, rose, sky).
 - **Package layout**: a dense list or cards.
 - **Sidebar** on the left or right, with up to 12 widgets in the order you choose:
@@ -321,6 +322,15 @@ Players sign in with their PeltyCMS account and link their game identity (Minecr
 
 - `GET /api/v1/public/storefront` (no login): the banner, accent, theme, logo, Discord link, the banner `server` (`name`, `slug`, `game`, `address`, `status` with `online`/`players`/`max_players` or `null`), layout, sidebar side and the widgets with their live data. Widgets with nothing to show (an unknown product, community off) are left out.
 - `GET|PUT /api/v1/admin/storefront` (**Manage settings**): read or replace the settings. Invalid values return `422 error.storefront_invalid`.
+
+## Image uploads
+
+Every image field in the store (store banner and server logo, product and package images, creator avatar, profile banner, listing cover and gallery) accepts a dropped or picked file as well as a URL.
+
+- **Formats**: PNG, JPEG, WebP and GIF, up to 2 MB (`PELTY_UPLOAD_AVATAR_MB`). The file type must match its content; SVG and other formats are refused.
+- **Processing**: every upload is decoded and saved again as PNG, so hidden payloads and metadata are dropped. Images larger than 2048 px on the long edge are scaled down, and a 480 px thumbnail is kept at `/api/v1/media/{id}/thumb`. An animated GIF keeps only its first frame.
+- **Storage**: files are written to the media folder on the server's disk (`PELTY_MEDIA_DIR`, default `data/media`) and served publicly at `/api/v1/media/{id}`. There is no S3 or other object-storage backend; to share files between several app servers, mount the same folder on each.
+- **Creator limits**: customers (creators and applicants) can upload 60 images an hour and keep at most 1,000 images or 500 MB. Staff uploads (`/api/v1/admin/media`, needs the Settings permission) are not limited.
 
 ## Timed sales (`timed_sales`)
 

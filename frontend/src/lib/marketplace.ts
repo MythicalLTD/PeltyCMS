@@ -6,7 +6,7 @@ export interface MarketConfig {
   payout_schedule: PayoutSchedule; payout_weekday: number; payout_monthday: number; payout_approval: boolean; payout_methods: PayoutMethod[]; reverse_transfers_on_refund: boolean;
 }
 export interface Creator {
-  id: string; user_id: string; customer_id: string; slug: string; display_name: string; bio: string; website: string; avatar_url: string;
+  id: string; user_id: string; customer_id: string; slug: string; display_name: string; bio: string; website: string; avatar_url: string; banner_url?: string;
   status: string; commission_percent: string | null; payout_method: string; payout_details: Record<string, string>; created_at: string;
   stripe_account_id: string; stripe_status: StripeStatus; stripe_status_detail: string; paypal_email: string; payout_method_locked: boolean;
 }
@@ -119,6 +119,15 @@ export function galleryValid(items: { url: string; caption: string }[]): boolean
 }
 
 /** Move one item up (-1) or down (+1). */
+/** Move item `from` to index `to` (drag & drop reorder). */
+export function moveTo<T>(xs: T[], from: number, to: number): T[] {
+  if (from === to || from < 0 || to < 0 || from >= xs.length || to >= xs.length) return xs;
+  const out = [...xs];
+  const [moved] = out.splice(from, 1);
+  out.splice(to, 0, moved as T);
+  return out;
+}
+
 export function moveItem<T>(xs: T[], i: number, by: -1 | 1): T[] {
   const j = i + by;
   if (j < 0 || j >= xs.length) return xs;

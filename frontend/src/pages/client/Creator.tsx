@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { Field } from "@/components/Field";
+import { ImageUrlField } from "@/components/admin/ImageUrlField";
 import { SelectField } from "@/components/SelectField";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,7 +71,7 @@ export function CreatorPage() {
   );
 }
 
-interface ProfileDraft { slug: string; display_name: string; bio: string; website: string; avatar_url: string; payout_method: string; payout_details: Record<string, string> }
+interface ProfileDraft { slug: string; display_name: string; bio: string; website: string; avatar_url: string; banner_url: string; payout_method: string; payout_details: Record<string, string> }
 
 function ProfileFields({ f, set }: { f: ProfileDraft; set: (p: Partial<ProfileDraft>) => void }) {
   const { t } = useI18n();
@@ -80,6 +81,8 @@ function ProfileFields({ f, set }: { f: ProfileDraft; set: (p: Partial<ProfileDr
       <Field id="cr-slug" label={t("creator.slug")} required pattern="[a-z0-9][a-z0-9\-]{1,39}" value={f.slug} onChange={(e) => set({ slug: e.target.value })} />
       <div className="grid gap-2"><Label htmlFor="cr-bio">{t("creator.bio")}</Label><Textarea id="cr-bio" maxLength={5000} rows={4} value={f.bio} onChange={(e) => set({ bio: e.target.value })} /></div>
       <Field id="cr-web" label={t("creator.website")} type="url" value={f.website} onChange={(e) => set({ website: e.target.value })} />
+      <ImageUrlField id="cr-avatar" endpoint="/client/creator/media" preferPath label={t("creator.avatar")} value={f.avatar_url} onChange={(url) => set({ avatar_url: url })} hint={t("media.upload_hint")} />
+      <ImageUrlField id="cr-banner" endpoint="/client/creator/media" preferPath label={t("creator.banner")} value={f.banner_url} onChange={(url) => set({ banner_url: url })} hint={t("creator.banner_hint")} />
       {f.payout_method === "manual" && <Field id="cr-note" label={t("creator.payout_note")} value={f.payout_details.note ?? ""} onChange={(e) => set({ payout_details: { ...f.payout_details, note: e.target.value } })} />}
     </>
   );
@@ -89,7 +92,7 @@ function Apply() {
   const { t } = useI18n();
   const qc = useQueryClient();
   const fail = useFail();
-  const [f, setF] = useState<ProfileDraft>({ slug: "", display_name: "", bio: "", website: "", avatar_url: "", payout_method: "manual", payout_details: {} });
+  const [f, setF] = useState<ProfileDraft>({ slug: "", display_name: "", bio: "", website: "", avatar_url: "", banner_url: "", payout_method: "manual", payout_details: {} });
   const set = (p: Partial<ProfileDraft>) => setF((x) => ({ ...x, ...p, slug: p.display_name !== undefined && (!x.slug || x.slug === creatorSlug(x.display_name)) ? creatorSlug(p.display_name) : (p.slug ?? x.slug) }));
   const apply = useMutation({ mutationFn: () => api("/client/creator", { method: "POST", body: f }), onSuccess: () => void qc.invalidateQueries({ queryKey: ["client", "creator"] }), onError: fail });
   return (
@@ -109,7 +112,7 @@ function ProfileForm({ creator }: { creator: Creator }) {
   const { t } = useI18n();
   const qc = useQueryClient();
   const fail = useFail();
-  const [f, setF] = useState<ProfileDraft>({ ...creator, payout_details: creator.payout_details ?? {} });
+  const [f, setF] = useState<ProfileDraft>({ ...creator, banner_url: creator.banner_url ?? "", payout_details: creator.payout_details ?? {} });
   const save = useMutation({ mutationFn: () => api("/client/creator", { method: "PUT", body: f }), onSuccess: () => { void qc.invalidateQueries({ queryKey: ["client", "creator"] }); toast.success(t("market.saved")); }, onError: fail });
   return (
     <form className="grid gap-3 sm:max-w-xl" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
@@ -194,7 +197,7 @@ function Listings({ commission, closed }: { commission: string; closed: boolean 
               <Field id="cr-lname" label={t("game.name")} required maxLength={200} value={d.name} onChange={(e) => setDraft({ ...d, name: e.target.value, slug: creatorSlug(e.target.value) })} />
               <Field id="cr-lslug" label={t("creator.slug")} required value={d.slug} onChange={(e) => setDraft({ ...d, slug: e.target.value })} />
               <div className="grid gap-2"><Label htmlFor="cr-ldesc">{t("creator.listing_description")}</Label><Textarea id="cr-ldesc" maxLength={5000} rows={4} value={d.description} onChange={(e) => setDraft({ ...d, description: e.target.value })} /></div>
-              <Field id="cr-limg" label={t("creator.image_url")} value={d.image_url} onChange={(e) => setDraft({ ...d, image_url: e.target.value })} />
+              <ImageUrlField id="cr-limg" endpoint="/client/creator/media" preferPath label={t("creator.image_url")} value={d.image_url} onChange={(url) => setDraft({ ...d, image_url: url })} />
               <div className="grid grid-cols-3 gap-2">
                 <Field id="cr-lprice" label={t("creator.price")} required inputMode="decimal" value={d.price} onChange={(e) => setDraft({ ...d, price: e.target.value })} />
                 <Field id="cr-lcur" label={t("creator.currency")} required maxLength={3} value={d.currency} onChange={(e) => setDraft({ ...d, currency: e.target.value.toUpperCase() })} />

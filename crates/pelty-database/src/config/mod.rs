@@ -8,6 +8,7 @@ pub mod content;
 pub mod general_settings;
 pub mod languages;
 pub mod license;
+pub mod media;
 pub mod settings;
 pub mod setup_wizard;
 pub mod site;

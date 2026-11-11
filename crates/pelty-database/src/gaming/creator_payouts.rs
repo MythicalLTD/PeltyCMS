@@ -50,7 +50,7 @@ pub fn stripe_account_ok(a: &str) -> bool {
 }
 
 fn ccols() -> &'static str {
-    "id, user_id, customer_id, slug, display_name, bio, website, avatar_url, status, commission_percent, payout_method, payout_details, created_at,
+    "id, user_id, customer_id, slug, display_name, bio, website, avatar_url, banner_url, status, commission_percent, payout_method, payout_details, created_at,
      stripe_account_id, stripe_status, stripe_status_detail, paypal_email, payout_method_locked"
 }
 

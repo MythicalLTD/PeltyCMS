@@ -4,6 +4,7 @@ import { ArrowDownIcon, ArrowUpIcon, PlusIcon, TrashIcon } from "@phosphor-icons
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { Field } from "@/components/Field";
+import { ImageUrlField } from "@/components/admin/ImageUrlField";
 import { LoadError } from "@/components/LoadError";
 import { SelectField } from "@/components/SelectField";
 import { Button } from "@/components/ui/button";
@@ -60,7 +61,7 @@ function Editor({ initial }: { initial: StorefrontConfig }) {
         <CardContent className="grid gap-3">
           <Field id="sf-title" label={t("storefront.hero_title")} maxLength={120} value={f.hero_title} onChange={(e) => set({ hero_title: e.target.value })} />
           <Field id="sf-sub" label={t("storefront.hero_subtitle")} maxLength={300} value={f.hero_subtitle} onChange={(e) => set({ hero_subtitle: e.target.value })} />
-          <Field id="sf-img" label={t("storefront.hero_image")} placeholder="https://… or /uploads/…" value={f.hero_image} onChange={(e) => set({ hero_image: e.target.value.trim() })} />
+          <ImageUrlField id="sf-img" label={t("storefront.hero_image")} preferPath placeholder="https://… or /api/v1/media/…" value={f.hero_image} onChange={(url) => set({ hero_image: url.trim() })} />
           {!heroImageValid(f.hero_image) && <p role="alert" className="text-sm text-destructive">{t("storefront.image_invalid")}</p>}
           <div className="grid gap-3 sm:grid-cols-3">
             <SelectField id="sf-accent" label={t("storefront.accent")} value={f.accent} onChange={(v) => set({ accent: v })}
@@ -79,7 +80,7 @@ function Editor({ initial }: { initial: StorefrontConfig }) {
             <SelectField id="sf-server" label={t("storefront.hero_server")} value={f.server_id ?? "first"} onChange={(v) => set({ server_id: v === "first" ? null : v })}
               options={[{ value: "first", label: t("storefront.hero_server_first") }, ...(servers.data?.items ?? []).map((x) => ({ value: x.id, label: x.name }))]} />
           </div>
-          <Field id="sf-logo" label={t("storefront.logo_url")} placeholder="https://… or /uploads/…" value={f.logo_url} onChange={(e) => set({ logo_url: e.target.value.trim() })} />
+          <ImageUrlField id="sf-logo" label={t("storefront.logo_url")} preferPath placeholder="https://… or /api/v1/media/…" value={f.logo_url} onChange={(url) => set({ logo_url: url.trim() })} />
           {!heroImageValid(f.logo_url) && <p role="alert" className="text-sm text-destructive">{t("storefront.image_invalid")}</p>}
           <Field id="sf-discord" label={t("storefront.discord_url")} placeholder="https://discord.gg/…" value={f.discord_url} onChange={(e) => set({ discord_url: e.target.value.trim() })} />
           {!discordUrlValid(f.discord_url) && <p role="alert" className="text-sm text-destructive">{t("storefront.discord_invalid")}</p>}

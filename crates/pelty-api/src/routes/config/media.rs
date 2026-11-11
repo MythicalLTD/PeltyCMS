@@ -1,8 +1,10 @@
-//! Brand / site media uploads for logos and images used in admin settings.
-//! Staff upload PNG/JPEG/WebP; files are re-encoded and stored under `data/media/`.
-//! Public `GET /api/v1/media/{id}` serves them without auth (needed for site + emails).
+//! Image uploads: staff (logos, product images, store banner) and marketplace
+//! creators (avatars, banners, listing galleries).
+//! PNG/JPEG/WebP/GIF are sniffed, decoded with limits and re-encoded to PNG
+//! (GIFs keep their first frame), with a 480 px thumbnail, under `data/media/`.
+//! Public `GET /api/v1/media/{id}` (and `/thumb`) serves them without auth.
 use crate::error::{ApiError, ApiResult};
-use crate::extract::{perms, RequirePermission};
+use crate::extract::{perms, CurrentUser, RequirePermission};
 use crate::AppState;
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Path, State};
@@ -19,6 +21,7 @@ use uuid::Uuid;
 
 const MAX_DIM: u32 = 4096;
 const MAX_EDGE: u32 = 2048;
+const THUMB_EDGE: u32 = 480;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -28,7 +31,14 @@ pub fn router() -> Router<AppState> {
                 pelty_core::config::upload_limits().avatar + 1024,
             )),
         )
+        .route(
+            "/client/creator/media",
+            post(creator_upload).layer(DefaultBodyLimit::max(
+                pelty_core::config::upload_limits().avatar + 1024,
+            )),
+        )
         .route("/media/{id}", get(serve))
+        .route("/media/{id}/thumb", get(serve_thumb))
 }
 
 pub fn media_dir() -> PathBuf {
@@ -46,13 +56,20 @@ fn bad(code: &'static str) -> ApiError {
     AppError::Validation(code).into()
 }
 
-/// Validate + re-encode (keep aspect ratio, cap longest edge). Returns PNG bytes.
-pub fn process(content_type: Option<&str>, data: &[u8]) -> Result<Vec<u8>, &'static str> {
+/// A processed upload: full image and thumbnail (PNG) and the full size.
+pub struct Processed {
+    pub png: Vec<u8>,
+    pub thumb: Vec<u8>,
+    pub size: (u32, u32),
+}
+
+/// Validate + re-encode (keep aspect ratio, cap longest edge) plus a thumbnail.
+pub fn process(content_type: Option<&str>, data: &[u8]) -> Result<Processed, &'static str> {
     if data.len() > max_bytes() {
         return Err("error.media_too_large");
     }
     let sniffed = match image::guess_format(data) {
-        Ok(f @ (ImageFormat::Png | ImageFormat::Jpeg | ImageFormat::WebP)) => f,
+        Ok(f @ (ImageFormat::Png | ImageFormat::Jpeg | ImageFormat::WebP | ImageFormat::Gif)) => f,
         _ => return Err("error.media_type"),
     };
     let declared = match content_type
@@ -68,6 +85,7 @@ pub fn process(content_type: Option<&str>, data: &[u8]) -> Result<Vec<u8>, &'sta
         Some("image/png") => ImageFormat::Png,
         Some("image/jpeg") | Some("image/jpg") => ImageFormat::Jpeg,
         Some("image/webp") => ImageFormat::WebP,
+        Some("image/gif") => ImageFormat::Gif,
         _ => return Err("error.media_type"),
     };
     if declared != sniffed {
@@ -88,12 +106,23 @@ pub fn process(content_type: Option<&str>, data: &[u8]) -> Result<Vec<u8>, &'sta
     } else {
         img
     };
-    let mut out = Vec::new();
-    scaled
-        .to_rgba8()
-        .write_to(&mut Cursor::new(&mut out), ImageFormat::Png)
-        .map_err(|_| "error.media_invalid")?;
-    Ok(out)
+    let thumb = if scaled.width().max(scaled.height()) > THUMB_EDGE {
+        scaled.resize(THUMB_EDGE, THUMB_EDGE, FilterType::Triangle)
+    } else {
+        scaled.clone()
+    };
+    let png = |img: &image::DynamicImage| -> Result<Vec<u8>, &'static str> {
+        let mut out = Vec::new();
+        img.to_rgba8()
+            .write_to(&mut Cursor::new(&mut out), ImageFormat::Png)
+            .map_err(|_| "error.media_invalid")?;
+        Ok(out)
+    };
+    Ok(Processed {
+        png: png(&scaled)?,
+        thumb: png(&thumb)?,
+        size: (scaled.width(), scaled.height()),
+    })
 }
 
 fn id_ok(id: &str) -> bool {
@@ -108,6 +137,19 @@ pub fn file_for(id: &str) -> Option<PathBuf> {
     p.is_file().then_some(p)
 }
 
+/// The thumbnail, or the full image for uploads made before thumbnails existed.
+pub fn thumb_for(id: &str) -> Option<PathBuf> {
+    if !id_ok(id) {
+        return None;
+    }
+    let p = media_dir().join(format!("{id}_t.png"));
+    if p.is_file() {
+        Some(p)
+    } else {
+        file_for(id)
+    }
+}
+
 /// Absolute or same-origin path for a stored object.
 fn public_url(s: &AppState, id: Uuid) -> String {
     let path = format!("/api/v1/media/{id}");
@@ -119,20 +161,23 @@ fn public_url(s: &AppState, id: Uuid) -> String {
     }
 }
 
-#[utoipa::path(post, path = "/api/v1/admin/media", request_body(content = Vec<u8>, content_type = "image/png"),
-    responses((status = 200), (status = 413), (status = 422)))]
-pub async fn upload(
-    State(s): State<AppState>,
-    RequirePermission(u, _): RequirePermission<perms::SettingsManage>,
-    headers: HeaderMap,
-    body: Bytes,
-) -> ApiResult<Json<Value>> {
-    let ct = headers
+fn content_type(headers: &HeaderMap) -> Option<String> {
+    headers
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
-        .map(str::to_string);
-    let data = body.to_vec();
-    let png = tokio::task::spawn_blocking(move || process(ct.as_deref(), &data))
+        .map(str::to_string)
+}
+
+/// Process and store one upload; answers the JSON every upload endpoint returns.
+async fn store(
+    s: &AppState,
+    ct: Option<String>,
+    data: Bytes,
+    owner: Uuid,
+    scope: &'static str,
+) -> ApiResult<Value> {
+    let data = data.to_vec();
+    let p = tokio::task::spawn_blocking(move || process(ct.as_deref(), &data))
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?
         .map_err(|c| {
@@ -147,32 +192,93 @@ pub async fn upload(
     tokio::fs::create_dir_all(&dir)
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    let path = dir.join(format!("{id}.png"));
-    tokio::fs::write(&path, &png)
+    let io = |e: std::io::Error| AppError::Internal(e.to_string());
+    tokio::fs::write(dir.join(format!("{id}_t.png")), &p.thumb)
         .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    let url = public_url(&s, id);
+        .map_err(io)?;
+    tokio::fs::write(dir.join(format!("{id}.png")), &p.png)
+        .await
+        .map_err(io)?;
+    pelty_database::media::record(
+        &s.pool,
+        id,
+        Some(owner),
+        scope,
+        p.png.len() + p.thumb.len(),
+        p.size,
+    )
+    .await?;
+    let url = public_url(s, id);
+    Ok(json!({
+        "id": id,
+        "url": url,
+        "path": format!("/api/v1/media/{id}"),
+        "thumb": format!("/api/v1/media/{id}/thumb"),
+        "content_type": "image/png",
+        "bytes": p.png.len(),
+        "width": p.size.0,
+        "height": p.size.1,
+    }))
+}
+
+/// Staff upload (logos, product images, store banner).
+#[utoipa::path(post, path = "/api/v1/admin/media", request_body(content = Vec<u8>, content_type = "image/png"),
+    responses((status = 200), (status = 413), (status = 422)))]
+pub async fn upload(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::SettingsManage>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    let v = store(&s, content_type(&headers), body, u.user_id, "staff").await?;
     pelty_database::audit::record(
         &s.pool,
         Some(u.user_id),
         "media.uploaded",
-        Some(&id.to_string()),
+        v["id"].as_str(),
         u.ip.as_deref(),
-        json!({ "bytes": png.len(), "url": url }),
+        json!({ "bytes": v["bytes"], "url": v["url"] }),
     )
     .await?;
-    Ok(Json(json!({
-        "id": id,
-        "url": url,
-        "path": format!("/api/v1/media/{id}"),
-        "content_type": "image/png",
-        "bytes": png.len(),
-    })))
+    Ok(Json(v))
+}
+
+/// Marketplace upload for any signed-in customer (creator avatar, banner and
+/// listing gallery, also while applying). Rate-limited and capped per user.
+#[utoipa::path(post, path = "/api/v1/client/creator/media", request_body(content = Vec<u8>, content_type = "image/png"),
+    responses((status = 200), (status = 413), (status = 422), (status = 429)))]
+pub async fn creator_upload(
+    State(s): State<AppState>,
+    u: CurrentUser,
+    headers: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    let used = pelty_database::media::usage(&s.pool, u.user_id, "creator").await?;
+    if let Some(code) = pelty_database::media::creator_quota_error(used, body.len()) {
+        return Err(if code == "error.media_rate_limited" {
+            AppError::RateLimited.into()
+        } else {
+            bad(code)
+        });
+    }
+    Ok(Json(
+        store(&s, content_type(&headers), body, u.user_id, "creator").await?,
+    ))
 }
 
 #[utoipa::path(get, path = "/api/v1/media/{id}", responses((status = 200, content_type = "image/png"), (status = 404)))]
 pub async fn serve(Path(id): Path<String>) -> ApiResult<Response> {
-    let Some(path) = file_for(&id) else {
+    send(file_for(&id)).await
+}
+
+/// 480 px thumbnail (cards, admin lists).
+#[utoipa::path(get, path = "/api/v1/media/{id}/thumb", responses((status = 200, content_type = "image/png"), (status = 404)))]
+pub async fn serve_thumb(Path(id): Path<String>) -> ApiResult<Response> {
+    send(thumb_for(&id)).await
+}
+
+async fn send(path: Option<PathBuf>) -> ApiResult<Response> {
+    let Some(path) = path else {
         return Err(AppError::NotFound.into());
     };
     let bytes = tokio::fs::read(&path)

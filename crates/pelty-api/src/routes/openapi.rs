@@ -428,6 +428,8 @@ use utoipa::OpenApi;
         crate::addons::registry_oauth2_disconnect,
         super::media::upload,
         super::media::serve,
+        super::media::serve_thumb,
+        super::media::creator_upload,
         super::license::status,
         super::license::accept,
         super::license::overage_notice,
