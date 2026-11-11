@@ -25,6 +25,7 @@ import { formatMoney } from "@/lib/billing/billing";
 import { useI18n } from "@/lib/i18n";
 import { useModules } from "@/lib/modules";
 import { Captcha } from "@/components/Captcha";
+import { GuestCheckoutCard, useGuestCheckout } from "@/components/store/GuestCheckout";
 import { addonPrice, fieldErrors, fromPrice, resetCartId, useStoreCart, type Extras, type StoreLine } from "@/lib/store/storefront";
 import { detectCurrency, giftNameValid, payAmountValid, pricedCurrencies, usePackageRules } from "@/lib/storeRules";
 import { PackageRuleBadges, ruleBlocks } from "@/components/store/PackageRuleBadges";
@@ -413,6 +414,7 @@ export function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
   const { data: gw } = useQuery({ queryKey: ["store", "gateways"], queryFn: () => api<{ items: string[] }>("/store/gateways") });
   const chosen = gateway ?? gw?.items[0] ?? null;
+  const guest = useGuestCheckout(me === null && cart ? id : null);
   // Module-driven checkout form: re-fetch when answers change.
   useEffect(() => {
     if (!cart) return;
@@ -453,7 +455,13 @@ export function CheckoutPage() {
   return (
     <div className="grid gap-4 *:min-w-0 lg:grid-cols-[1fr_22rem]">
       <div className="flex flex-col gap-4">
-        {!me ? <AuthStep /> : (
+        {!me ? (
+          <>
+            {guest && <GuestCheckoutCard cartId={id} avail={guest} fields={values} country={cart.country || null} gateway={chosen}
+              validate={() => { setShown(true); return errs.every((e) => Object.keys(e).length === 0) && !!view?.preview; }} />}
+            <AuthStep />
+          </>
+        ) : (
           <Card><CardHeader><CardTitle>{t("store.account_step")}</CardTitle><CardDescription>{t("store.signed_in_as", { email: me.email })}</CardDescription></CardHeader></Card>
         )}
         {cart.items.map((l, i) => {
@@ -512,7 +520,7 @@ export function CheckoutPage() {
           <FormError message={error ?? (view!.error ? tCode(view!.error) : null)} />
           <Totals view={view!} />
         </CardContent>
-        <div className="px-6"><Captcha form="checkout" signedIn={!!me} /></div>
+        {(me || !guest) && <div className="px-6"><Captcha form="checkout" signedIn={!!me} /></div>}
         <CardFooter><Button className="w-full" disabled={!me || !view!.preview || place.isPending} onClick={submit}><ShoppingCartIcon aria-hidden />{t("store.place_order")}</Button></CardFooter>
       </Card>
     </div>

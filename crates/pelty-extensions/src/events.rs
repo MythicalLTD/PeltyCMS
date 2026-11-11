@@ -179,6 +179,7 @@ pub const REGISTRY: &[EventSpec] = &[
     domain("customer.created", "Staff created a customer account.", &[f("customer_id", "uuid", "Customer"), f("email", "string", "Login email"), f("by", "uuid", "Staff user")]),
     domain("customer.updated", "A customer profile changed (client or staff).", &[f("customer_id", "uuid", "Customer"), f("by_staff", "bool", "Changed by staff"), o("status", "string", "Account status after an admin edit")]),
     domain("customer.contact_added", "A client added a sub-account contact with its own login.", &[f("customer_id", "uuid", "Customer"), f("contact_id", "uuid", "Contact"), o("user_id", "uuid", "Contact's user"), f("permissions", "array", "Granted permissions")]),
+    domain("store.guest_checkout", "A buyer checked out as a guest (module guest_checkout).", &[f("customer_id", "uuid", "Shadow customer"), f("order_id", "uuid", "Order"), f("game", "string", "Game id"), f("new_account", "bool", "A new shadow account was created")]),
     domain("customer.contact_invited", "A client invited a contact by email.", &[f("customer_id", "uuid", "Customer"), f("contact_id", "uuid", "Contact"), f("permissions", "array", "Granted permissions")]),
     domain("customer.contact_updated", "A contact's permissions changed.", &[f("customer_id", "uuid", "Customer"), f("contact_id", "uuid", "Contact"), f("permissions", "array", "Granted permissions")]),
     domain("customer.contact_removed", "A contact was removed.", &[f("customer_id", "uuid", "Customer"), f("contact_id", "uuid", "Contact")]),

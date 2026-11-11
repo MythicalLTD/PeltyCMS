@@ -56,6 +56,7 @@ pub const GATES: &[(&str, &str)] = &[
     ("/public/tier-upgrades", "tier_upgrades"),
     ("/admin/tier-groups", "tier_upgrades"),
     ("/public/bundle-ownership", "bundle_ownership"),
+    ("/store/guest-checkout", "guest_checkout"),
     ("/public/reviews", "product_reviews"),
     ("/client/reviews", "product_reviews"),
     ("/admin/reviews", "product_reviews"),

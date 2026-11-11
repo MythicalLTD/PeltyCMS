@@ -3,7 +3,7 @@ export interface GameDef { id: string; name: string; fields: string[]; query: st
 export interface GameServer {
   id: string; game: string; name: string; slug: string; description: string; host: string; port: number | null; query_port: number | null;
   transport: "none" | "rcon" | "agent"; rcon_host: string; rcon_port: number | null; has_rcon_password: boolean; has_agent_token: boolean;
-  enabled: boolean; sort_order: number; product_ids: string[];
+  enabled: boolean; sort_order: number; guest_checkout?: boolean; product_ids: string[];
 }
 export interface GameAccount { id: string; game: string; field: string; value: string }
 

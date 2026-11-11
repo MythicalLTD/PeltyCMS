@@ -197,6 +197,10 @@ pub struct ServerInput {
     pub enabled: bool,
     #[serde(default)]
     pub sort_order: i32,
+    /// Module `guest_checkout`: buyers may check out on this store with only
+    /// a player name / game identifier and an email.
+    #[serde(default)]
+    pub guest_checkout: bool,
 }
 fn none() -> String {
     "none".into()
@@ -262,10 +266,11 @@ pub struct Server {
     pub has_agent_token: bool,
     pub enabled: bool,
     pub sort_order: i32,
+    pub guest_checkout: bool,
     pub product_ids: Vec<Uuid>,
 }
 
-const SERVER_COLS: &str = "s.id, s.game, s.name, s.slug, s.description, s.host, s.port, s.query_port, s.transport, s.rcon_host, s.rcon_port, s.rcon_password IS NOT NULL AS has_rcon_password, s.agent_token IS NOT NULL AS has_agent_token, s.enabled, s.sort_order, COALESCE((SELECT array_agg(p.product_id ORDER BY p.sort_order, p.product_id) FROM game_server_products p WHERE p.server_id = s.id), '{}') AS product_ids";
+const SERVER_COLS: &str = "s.id, s.game, s.name, s.slug, s.description, s.host, s.port, s.query_port, s.transport, s.rcon_host, s.rcon_port, s.rcon_password IS NOT NULL AS has_rcon_password, s.agent_token IS NOT NULL AS has_agent_token, s.enabled, s.sort_order, s.guest_checkout, COALESCE((SELECT array_agg(p.product_id ORDER BY p.sort_order, p.product_id) FROM game_server_products p WHERE p.server_id = s.id), '{}') AS product_ids";
 
 pub async fn servers(pool: &PgPool, only_enabled: bool) -> AppResult<Vec<Server>> {
     sqlx::query_as(sqlx::AssertSqlSafe(format!(
@@ -304,6 +309,7 @@ pub fn public_view(s: &Server) -> Value {
     json!({
         "id": s.id, "game": s.game, "name": s.name, "slug": s.slug,
         "description": s.description, "host": s.host, "port": s.port,
+        "guest_checkout": s.guest_checkout,
     })
 }
 
@@ -317,10 +323,10 @@ pub async fn save_server(
 ) -> AppResult<Server> {
     b.validate()?;
     let sql = if id.is_none() {
-        "INSERT INTO game_servers (game,name,slug,description,host,port,query_port,transport,rcon_host,rcon_port,enabled,sort_order,rcon_password)
-         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13 WHERE $14 OR NOT $14 OR $15::uuid IS NULL RETURNING id"
+        "INSERT INTO game_servers (game,name,slug,description,host,port,query_port,transport,rcon_host,rcon_port,enabled,sort_order,rcon_password,guest_checkout)
+         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$16 WHERE $14 OR NOT $14 OR $15::uuid IS NULL RETURNING id"
     } else {
-        "UPDATE game_servers SET game=$1,name=$2,slug=$3,description=$4,host=$5,port=$6,query_port=$7,transport=$8,rcon_host=$9,rcon_port=$10,enabled=$11,sort_order=$12,
+        "UPDATE game_servers SET game=$1,name=$2,slug=$3,description=$4,host=$5,port=$6,query_port=$7,transport=$8,rcon_host=$9,rcon_port=$10,enabled=$11,sort_order=$12,guest_checkout=$16,
          rcon_password = CASE WHEN $14 THEN $13 ELSE rcon_password END WHERE id=$15 RETURNING id"
     };
     let id: Uuid = sqlx::query_scalar(sql)
@@ -339,6 +345,7 @@ pub async fn save_server(
         .bind(rcon_password.clone().flatten())
         .bind(rcon_password.is_some())
         .bind(id)
+        .bind(b.guest_checkout)
         .fetch_optional(pool)
         .await
         .map_err(db_err)?

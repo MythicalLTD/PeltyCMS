@@ -18,24 +18,60 @@ import { Switch } from "@/components/ui/switch";
 import { api, ApiError } from "@/lib/api";
 import { address, slugify, type GameDef, type GameServer } from "@/lib/gaming";
 import { useI18n } from "@/lib/i18n";
+import { useModules } from "@/lib/modules";
+import { parseGuest, validLimit } from "@/lib/guestCheckout";
 import type { TranslationKey } from "@/lib/i18n-core";
 
-interface Form { game: string; name: string; slug: string; description: string; host: string; port: string; query_port: string; transport: string; rcon_host: string; rcon_port: string; rcon_password: string; enabled: boolean }
+interface Form { game: string; name: string; slug: string; description: string; host: string; port: string; query_port: string; transport: string; rcon_host: string; rcon_port: string; rcon_password: string; enabled: boolean; guest_checkout: boolean }
 /** Only the editable keys: the PUT body is checked with deny_unknown_fields. */
 function serverForm(s: GameServer): Form {
   return {
     game: s.game, name: s.name, slug: s.slug, description: s.description ?? "", host: s.host ?? "",
     port: s.port?.toString() ?? "", query_port: s.query_port?.toString() ?? "", transport: s.transport,
-    rcon_host: s.rcon_host ?? "", rcon_port: s.rcon_port?.toString() ?? "", rcon_password: "", enabled: s.enabled,
+    rcon_host: s.rcon_host ?? "", rcon_port: s.rcon_port?.toString() ?? "", rcon_password: "", enabled: s.enabled, guest_checkout: s.guest_checkout ?? false,
   };
 }
-const EMPTY: Form = { game: "minecraft_java", name: "", slug: "", description: "", host: "", port: "", query_port: "", transport: "rcon", rcon_host: "", rcon_port: "", rcon_password: "", enabled: true };
+const EMPTY: Form = { game: "minecraft_java", name: "", slug: "", description: "", host: "", port: "", query_port: "", transport: "rcon", rcon_host: "", rcon_port: "", rcon_password: "", enabled: true, guest_checkout: false };
 const num = (s: string) => (s.trim() ? Number(s) : null);
+
+/** Module `guest_checkout` settings (shown while the module is on). */
+function GuestSettingsCard() {
+  const { t, tCode } = useI18n();
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ["admin", "modules"], queryFn: () => api<{ items: { id: string; enabled: boolean; settings: Record<string, unknown> }[] }>("/admin/modules") });
+  const m = data?.items.find((x) => x.id === "guest_checkout");
+  const base = parseGuest(m?.settings);
+  const [f, setF] = useState<{ verify_minecraft: boolean; ip: string; email: string } | null>(null);
+  const cur = f ?? { verify_minecraft: base.verify_minecraft, ip: String(base.ip_per_hour), email: String(base.email_per_hour) };
+  const save = useMutation({
+    mutationFn: () => api("/admin/modules/guest_checkout", { method: "PUT", body: { enabled: true, settings: { verify_minecraft: cur.verify_minecraft, ip_per_hour: Number(cur.ip), email_per_hour: Number(cur.email) } } }),
+    onSuccess: () => { setF(null); void qc.invalidateQueries({ queryKey: ["admin", "modules"] }); toast.success(t("common.saved")); },
+    onError: (e) => toast.error(e instanceof ApiError ? tCode(e.code) : t("error.internal")),
+  });
+  if (!m?.enabled) return null;
+  const ok = validLimit(cur.ip) && validLimit(cur.email);
+  return (
+    <Card className="min-w-0 shadow-sm" data-testid="guest-settings">
+      <CardHeader><CardTitle>{t("guest.settings_title")}</CardTitle><CardDescription>{t("guest.settings_desc")}</CardDescription></CardHeader>
+      <CardContent className="grid gap-4 sm:grid-cols-2">
+        <div className="flex items-start gap-2 sm:col-span-2">
+          <Switch id="guest-mojang" checked={cur.verify_minecraft} onCheckedChange={(v) => setF({ ...cur, verify_minecraft: v })} />
+          <div className="grid gap-1"><Label htmlFor="guest-mojang">{t("guest.verify_minecraft")}</Label><p className="text-xs text-muted-foreground">{t("guest.verify_minecraft_hint")}</p></div>
+        </div>
+        <Field id="guest-ip" inputMode="numeric" label={t("guest.ip_per_hour")} value={cur.ip} onChange={(e) => setF({ ...cur, ip: e.target.value })} error={validLimit(cur.ip) ? undefined : t("guest.limit_invalid")} />
+        <Field id="guest-email-limit" inputMode="numeric" label={t("guest.email_per_hour")} value={cur.email} onChange={(e) => setF({ ...cur, email: e.target.value })} error={validLimit(cur.email) ? undefined : t("guest.limit_invalid")} />
+        <p className="text-xs text-muted-foreground sm:col-span-2">{t("guest.email_required_note")}</p>
+        <div className="sm:col-span-2"><Button disabled={!ok || save.isPending || f === null} onClick={() => save.mutate()}>{t("common.save")}</Button></div>
+      </CardContent>
+    </Card>
+  );
+}
 
 /** Game servers: each has its own store (packages) and a command transport. */
 export function AdminGameServersPage() {
   const { t, tCode } = useI18n();
   const qc = useQueryClient();
+  const { enabled: mods } = useModules();
   const servers = useQuery({ queryKey: ["admin", "game-servers"], queryFn: () => api<{ items: GameServer[] }>("/admin/game/servers") });
   const games = useQuery({ queryKey: ["public", "games"], queryFn: () => api<{ items: GameDef[] }>("/public/game/games") });
   const products = useQuery({ queryKey: ["admin", "catalog", "products"], queryFn: () => api<{ items: { id: string; name: string }[] }>("/admin/catalog/products") });
@@ -65,6 +101,7 @@ export function AdminGameServersPage() {
     <div className="flex flex-col gap-6">
       <PageHeader title={t("game.servers.title")} description={t("game.servers.description")}
         actions={<Button onClick={() => setEdit({ id: null, f: EMPTY })}><PlusIcon aria-hidden />{t("game.servers.add")}</Button>} />
+      <GuestSettingsCard />
       {!servers.data ? <Skeleton className="h-32 w-full" /> : servers.data.items.length === 0 ? <EmptyState title={t("game.servers.empty")} /> : (
         <div className="grid gap-3 md:grid-cols-2">
           {servers.data.items.map((s) => (
@@ -76,6 +113,7 @@ export function AdminGameServersPage() {
                     <Badge variant="secondary">{gameName(s.game)}</Badge>
                     <Badge variant="outline">{t(`game.transport.${s.transport}` as TranslationKey)}</Badge>
                     {!s.enabled && <Badge variant="destructive">{t("game.disabled")}</Badge>}
+                    {mods.has("guest_checkout") && s.guest_checkout && <Badge variant="secondary" data-testid="guest-badge">{t("guest.badge")}</Badge>}
                     <span className="font-mono text-xs">{address(s)}</span>
                   </CardDescription>
                 </div>
@@ -122,6 +160,12 @@ export function AdminGameServersPage() {
               )}
               {edit.f.transport === "agent" && <p className="text-sm text-muted-foreground">{t("game.agent_hint")}</p>}
               <div className="flex items-center gap-2"><Switch id="gs-enabled" checked={edit.f.enabled} onCheckedChange={(v) => set("enabled", v)} /><Label htmlFor="gs-enabled">{t("game.enabled")}</Label></div>
+              {mods.has("guest_checkout") && (
+                <div className="flex items-start gap-2">
+                  <Switch id="gs-guest" checked={edit.f.guest_checkout} onCheckedChange={(v) => set("guest_checkout", v)} />
+                  <div className="grid gap-1"><Label htmlFor="gs-guest">{t("guest.store_toggle")}</Label><p className="text-xs text-muted-foreground">{t("guest.store_toggle_hint")}</p></div>
+                </div>
+              )}
             </form>
           )}
           <DialogFooter><Button type="submit" form="game-server-form" disabled={save.isPending}>{t("common.save")}</Button></DialogFooter>

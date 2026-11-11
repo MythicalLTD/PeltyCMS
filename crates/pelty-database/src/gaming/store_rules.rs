@@ -476,6 +476,25 @@ pub async fn remove_ban(pool: &PgPool, id: Uuid) -> AppResult<()> {
 
 /// The buyer's email, their in-game names and any gift recipient are checked
 /// against the ban list. The error does not say which entry matched.
+/// Ban list check before an account exists (guest checkout): the email or
+/// any of the player names is on the store ban list. `false` while the
+/// store rules module is off.
+pub async fn banned_guest(pool: &PgPool, email: &str, names: &[String]) -> AppResult<bool> {
+    if !crate::feature_modules::is_enabled(pool, MODULE).await? {
+        return Ok(false);
+    }
+    let names: Vec<String> = names.iter().map(|n| n.trim().to_lowercase()).collect();
+    sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM store_bans b WHERE
+            (b.kind = 'email' AND b.value = lower($1)) OR (b.kind = 'username' AND b.value = ANY($2)))",
+    )
+    .bind(email.trim())
+    .bind(&names)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)
+}
+
 async fn banned<'e, E: sqlx::PgExecutor<'e>>(
     ex: E,
     customer: Uuid,

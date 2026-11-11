@@ -161,6 +161,18 @@ pub async fn reset(
     users::set_password(&s.pool, uid, &password::hash(&b.password)?).await?;
     // Possession of the mailbox proves the address too.
     users::mark_verified(&s.pool, uid).await?;
+    // A guest checkout shadow account becomes a normal account.
+    if pelty_database::guest_checkout::mark_claimed(&s.pool, uid).await? {
+        audit::record(
+            &s.pool,
+            Some(uid),
+            "store.guest_claimed",
+            None,
+            g.ip(),
+            json!({}),
+        )
+        .await?;
+    }
     let revoked = sessions::revoke_all(&s.pool, uid).await?;
     pelty_database::api_keys::revoke_all(&s.pool, uid).await?;
     audit::record(

@@ -113,6 +113,7 @@ pub use gaming::delivery as game_delivery;
 pub use gaming::digital;
 pub use gaming::discord_roles;
 pub use gaming::games;
+pub use gaming::guest;
 pub use gaming::marketplace;
 pub use gaming::modules as feature_modules;
 pub use gaming::reviews;
@@ -140,6 +141,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(creator_tools::router())
         .merge(store_rules::router())
         .merge(tiers::router())
+        .merge(guest::router())
         .merge(reviews::router())
         .merge(community::router())
         .merge(game_storefront::router())

@@ -23,6 +23,7 @@ Every change is written to the audit log as `module.updated`.
 | `creator_marketplace` | Creator marketplace | `digital_products` |
 | `tier_upgrades` | Commerce | |
 | `bundle_ownership` | Commerce | |
+| `guest_checkout` | Gaming store | `game_profiles` |
 
 ## API
 
@@ -471,6 +472,30 @@ Limitation: the hosting order form (Billing → Order) still asks for every bund
 | --- | --- | --- |
 | GET | `/api/v1/public/bundle-ownership` | anyone: `{mode, min_percent, owned}` (`owned` = product ids the signed-in customer owns, else empty) |
 | PUT | `/api/v1/admin/modules/bundle_ownership` | `settings.manage`: `{"enabled": true, "settings": {"mode": "share" or "list", "min_percent": "0"}}` |
+
+## Guest checkout (`guest_checkout`)
+
+Like Tebex: on stores that allow it, a buyer checks out with only a player name (or game ID) and an email, without creating an account first.
+
+- **Per store**: turn on *Allow guest checkout* on the store under **Admin → Game servers**. A cart can be bought as a guest when every package in it is sold on an enabled store with guest checkout on, for the same game. Other carts need a normal account.
+- **What the buyer enters**: the game's identity fields (Minecraft Java: the player name; FiveM / RedM: player name, Rockstar/Cfx `license:` or SteamID64; other games: the player name or Steam ID) and an **email**. The email is required: receipts, invoices and the claim link are sent there, and it is the only way back into the order.
+- **Checks**: Minecraft Java names are looked up with the Mojang API (*Check Minecraft names with Mojang*, on by default), so unknown names are refused and the correct spelling and UUID are saved. Other identifiers get a format check (a FiveM license is 40 hex characters, a SteamID64 is 17 digits starting with 7656119). The captcha for *checkout*, banned email domains, the store ban list (email and player name) and fraud screening apply as for signed-in buyers.
+- **Shadow account**: the first guest order for an email creates a customer account keyed by that email with an unusable random password, links the player, opens a session so the buyer can pay right away, and emails a *set your password* link (valid 30 days) that claims the account. The order, invoice, delivery commands (`{username}`, `{uuid}`, ...) and receipts work like any order.
+- **Same email again**: while the account is unclaimed, a new guest order is added to it but no session is opened; the buyer gets the link by email, sets a password and pays from the client area. A different player for that email is refused (`error.guest_identity_mismatch`). Once a password is set (claim link or *Forgot password*), or for any normal account, the buyer must sign in (`error.guest_account_exists`).
+- **Rate limits**: guest checkouts per IP per hour (default 10) and per email per hour (default 5), under **Admin → Game servers → Guest checkout**.
+
+Limitations: guest checkout is for gaming stores (packages on a game server); the reused-account path places the order before the buyer proves the email, so an unpaid order can appear in an unclaimed guest account (rate limited, never delivered until paid).
+
+### API
+
+| Method | Path | Who |
+| --- | --- | --- |
+| GET | `/api/v1/store/guest-checkout/{cart_id}` | anyone: `{available, game, fields, verify_minecraft}` |
+| POST | `/api/v1/store/guest-checkout` | anyone (captcha form `checkout`): `{cart_id, email, identity: {username: "Notch"}, fields?, country?, locale?}` → `{order, invoice, session, csrf_token}`; sets the session cookie only for a new email |
+| PUT | `/api/v1/admin/modules/guest_checkout` | `settings.manage`: `{"enabled": true, "settings": {"verify_minecraft": true, "ip_per_hour": 10, "email_per_hour": 5}}` |
+| PUT | `/api/v1/admin/game/servers/{id}` | `guest_checkout: true` turns it on for that store |
+
+Event: `store.guest_checkout` (`customer_id`, `order_id`, `game`, `new_account`). Mail template: `guest_claim` (`player`, `order`, `link`, `expires_days`).
 
 ## Discord roles (`discord_roles`)
 

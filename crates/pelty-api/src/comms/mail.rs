@@ -315,6 +315,7 @@ pub const SENSITIVE: &[&str] = &[
     "admin_account_locked",
     "admin_password_reset",
     "contact_invite",
+    "guest_claim",
     "new_service_info",
     "client_invite",
     "client_welcome",

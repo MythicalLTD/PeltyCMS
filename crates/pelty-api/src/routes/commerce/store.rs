@@ -212,7 +212,7 @@ pub async fn checkout(
     if cart.customer_id.is_some_and(|c| c != cid) {
         return Err(AppError::NotFound.into());
     }
-    let mut items = sf::parse_items(&cart.items);
+    let items = sf::parse_items(&cart.items);
     if items.is_empty() {
         return Err(AppError::Validation("error.cart_invalid").into());
     }
@@ -220,8 +220,21 @@ pub async fn checkout(
         fields: b.fields,
         country: b.country,
     };
+    Ok(Json(place_cart(&s, &u, cid, &cart, items, input).await?))
+}
+
+/// Place an order + invoice for `cid` from an open cart (signed-in or guest
+/// checkout): order fields, profile country, the bundle the cart holds, and
+/// the addon hook `checkout.place`.
+pub(crate) async fn place_cart(
+    s: &AppState,
+    u: &CurrentUser,
+    cid: Uuid,
+    cart: &sf::Cart,
+    mut items: Vec<CartItem>,
+    input: CheckoutInput,
+) -> ApiResult<Value> {
     let ctx = json!({ "customer_id": cid, "cart_id": cart.id });
-    let (s, u) = (&s, &u);
     let out = crate::addon_functions::run(
         s,
         "checkout.place",
@@ -260,14 +273,14 @@ pub async fn checkout(
         },
     )
     .await?;
-    Ok(Json(out))
+    Ok(out)
 }
 
 /// The rewritable part of a checkout (`fn checkout.place`).
 #[derive(Debug, Serialize, Deserialize)]
-struct CheckoutInput {
-    fields: std::collections::HashMap<usize, std::collections::HashMap<Uuid, String>>,
-    country: Option<String>,
+pub(crate) struct CheckoutInput {
+    pub(crate) fields: std::collections::HashMap<usize, std::collections::HashMap<Uuid, String>>,
+    pub(crate) country: Option<String>,
 }
 
 /// Order status page for the customer.

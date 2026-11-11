@@ -49,6 +49,10 @@ pub const TEMPLATES: &[TemplateDef] = &[
         vars: &["name", "inviter", "link", "expires_days", "company"],
     },
     TemplateDef {
+        name: "guest_claim",
+        vars: &["player", "order", "link", "expires_days", "company"],
+    },
+    TemplateDef {
         name: "email_verify",
         vars: &["name", "link", "company"],
     },

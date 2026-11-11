@@ -11,6 +11,7 @@ pub mod delivery;
 pub mod digital;
 pub mod discord_roles;
 pub mod games;
+pub mod guest;
 pub mod marketplace;
 pub mod modules;
 pub mod payouts;
