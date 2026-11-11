@@ -49,6 +49,7 @@ jobs:
               - '.cargo/**'
               - 'Makefile'
               - 'scripts/test-ci-linker.sh'
+              - 'scripts/ci-apt-install.sh'
               - '.github/workflows/ci.yml'
             workflow_scripts:
               - '.github/workflows/**'
@@ -138,9 +139,7 @@ jobs:
           shared-key: lint
 
       - name: Faster linker
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq clang lld
+        run: bash scripts/ci-apt-install.sh clang lld
 
       - name: rustfmt
         run: cargo fmt --all -- --check
@@ -209,9 +208,7 @@ jobs:
       # Service healthcheck covers Postgres. poppler is for PDF assertions;
       # clang/lld cuts link time on the fat pelty-api test binary.
       - name: Install CI deps
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq poppler-utils clang lld
+        run: bash scripts/ci-apt-install.sh poppler-utils clang lld
 
       - name: Check native/WASM linker isolation
         run: bash scripts/test-ci-linker.sh
