@@ -406,7 +406,8 @@ export function CheckoutPage() {
   const { id, view, loading } = useStoreCart();
   const cart = view && !view.cart.order_id ? view.cart : null;
   const productIds = useMemo(() => [...new Set(cart?.items.map((l) => l.product_id) ?? [])], [cart]);
-  const extras = useQueries({ queries: productIds.map((p) => ({ queryKey: ["catalog", "extras", p], queryFn: () => api<Extras>(`/catalog/products/${p}/extras`) })) });
+  // `combine` keeps the result stable between renders (no effect loop below).
+  const extras = useQueries({ queries: productIds.map((p) => ({ queryKey: ["catalog", "extras", p], queryFn: () => api<Extras>(`/catalog/products/${p}/extras`) })), combine: (rs) => rs.map((r) => r.data) });
   const [gateway, setGateway] = useState<string | null>(null);
   const [values, setValues] = useState<Record<number, Record<string, string>>>({});
   const [dynFields, setDynFields] = useState<Record<string, Extras["fields"]>>({});
@@ -427,7 +428,7 @@ export function CheckoutPage() {
           const r = await api<{ fields: Extras["fields"] }>(`/catalog/products/${l.product_id}/checkout-config`, { method: "POST", body: { selected } });
           next[l.product_id] = r.fields;
         } catch {
-          next[l.product_id] = extras[productIds.indexOf(l.product_id)]?.data?.fields ?? [];
+          next[l.product_id] = extras[productIds.indexOf(l.product_id)]?.fields ?? [];
         }
       }
       if (!cancelled) setDynFields(next);
@@ -435,7 +436,7 @@ export function CheckoutPage() {
     const timer = window.setTimeout(() => { void run(); }, 150);
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [cart, values, extras, productIds]);
-  const fieldsOf = (pid: string) => dynFields[pid] ?? extras[productIds.indexOf(pid)]?.data?.fields ?? [];
+  const fieldsOf = (pid: string) => dynFields[pid] ?? extras[productIds.indexOf(pid)]?.fields ?? [];
   const errs = (cart?.items ?? []).map((l, i) => fieldErrors(fieldsOf(l.product_id), values[i] ?? {}));
   const place = useMutation({
     mutationFn: async () => {
