@@ -16,6 +16,7 @@ pub const ACCENTS: &[&str] = &["default", "emerald", "violet", "amber", "rose", 
 /// PeltyCMS panel and the site brand; the game presets only change the accent
 /// colour. `default` is the old name of `panel` and still accepted.
 pub const THEMES: &[&str] = &["panel", "default", "minecraft", "fivem", "rust", "dark"];
+pub const TONES: &[&str] = &["info", "sale", "warning"];
 pub const PERIODS: &[&str] = &["day", "week", "month", "year", "all"];
 const MAX_WIDGETS: usize = 12;
 
@@ -91,6 +92,19 @@ pub struct Config {
     /// Server logo in the hero (`https://` or `/path`); empty uses the site logo.
     #[serde(default)]
     pub logo_url: String,
+    /// Announcement bar above the store (plain text); empty for none.
+    #[serde(default)]
+    pub announcement: String,
+    /// Optional link of the announcement (`https://` or `/path`).
+    #[serde(default)]
+    pub announcement_link: String,
+    /// One of [`TONES`].
+    #[serde(default = "default_tone")]
+    pub announcement_tone: String,
+    /// Per-category layout (`list` or `grid`) overriding [`Config::layout`].
+    #[serde(default)]
+    #[schema(value_type = Object)]
+    pub group_layouts: std::collections::BTreeMap<Uuid, String>,
 }
 
 fn default_accent() -> String {
@@ -98,6 +112,9 @@ fn default_accent() -> String {
 }
 fn default_theme() -> String {
     "panel".into()
+}
+fn default_tone() -> String {
+    "info".into()
 }
 fn default_layout() -> String {
     "list".into()
@@ -123,6 +140,10 @@ impl Default for Config {
             server_id: None,
             discord_url: String::new(),
             logo_url: String::new(),
+            announcement: String::new(),
+            announcement_link: String::new(),
+            announcement_tone: default_tone(),
+            group_layouts: Default::default(),
         }
     }
 }
@@ -162,6 +183,15 @@ impl Config {
             || !THEMES.contains(&self.theme.as_str())
             || !(self.discord_url.is_empty() || discord_ok(&self.discord_url))
             || !image_ok(&self.logo_url)
+            || !short(&self.announcement, 300)
+            || self.announcement.contains('\n')
+            || !image_ok(&self.announcement_link)
+            || !TONES.contains(&self.announcement_tone.as_str())
+            || self.group_layouts.len() > 200
+            || self
+                .group_layouts
+                .values()
+                .any(|l| !["list", "grid"].contains(&l.as_str()))
         {
             return bad;
         }
@@ -396,5 +426,30 @@ mod tests {
         assert!(
             serde_json::from_value::<Widget>(json!({"type": "html", "body": "<script>"})).is_err()
         );
+    }
+
+    #[test]
+    fn announcement_and_group_layouts() {
+        let mut c = Config {
+            announcement: "Double rank weekend!".into(),
+            announcement_link: "/store/ranks".into(),
+            announcement_tone: "sale".into(),
+            ..Config::default()
+        };
+        c.group_layouts.insert(Uuid::nil(), "grid".into());
+        assert!(c.validate().is_ok());
+        c.announcement_tone = "party".into();
+        assert!(c.validate().is_err());
+        c.announcement_tone = "info".into();
+        c.announcement_link = "javascript:alert(1)".into();
+        assert!(c.validate().is_err());
+        c.announcement_link = String::new();
+        c.group_layouts.insert(Uuid::nil(), "carousel".into());
+        assert!(c.validate().is_err());
+        c.group_layouts.clear();
+        c.announcement = "x".repeat(301);
+        assert!(c.validate().is_err());
+        // Old saved settings without the new fields still parse.
+        assert_eq!(parse(json!({"layout": "grid"})).announcement_tone, "info");
     }
 }

@@ -46,7 +46,7 @@ pub fn router() -> Router<AppState> {
 
 /// Optional session: the storefront works signed out, but a signed-in
 /// customer gets their own tax country and client-group discount.
-async fn maybe_customer(s: &AppState, parts: &axum::http::HeaderMap) -> Option<Uuid> {
+pub(crate) async fn maybe_customer(s: &AppState, parts: &axum::http::HeaderMap) -> Option<Uuid> {
     let tok = crate::extract::cookie(parts, crate::extract::SESSION_COOKIE)?;
     let ctx = pelty_database::sessions::resolve(
         &s.pool,

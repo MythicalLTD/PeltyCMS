@@ -19,11 +19,11 @@ import { useI18n } from "@/lib/i18n";
 import type { Listing } from "@/lib/marketplace";
 
 /** Pick listings with checkboxes (codes and bundles). */
-export function ListingPicker({ id, listings, value, onChange }: { id: string; listings: Listing[]; value: string[]; onChange: (v: string[]) => void }) {
+export function ListingPicker({ id, listings, value, onChange, legend }: { id: string; listings: Pick<Listing, "product_id" | "name">[]; value: string[]; onChange: (v: string[]) => void; legend?: string }) {
   const { t } = useI18n();
   return (
     <fieldset className="grid gap-2">
-      <legend className="mb-1 text-sm font-medium">{t("ctools.listings")}</legend>
+      <legend className="mb-1 text-sm font-medium">{legend ?? t("ctools.listings")}</legend>
       <div className="grid max-h-48 gap-1.5 overflow-y-auto rounded-md border p-2">
         {listings.length === 0 && <p className="text-sm text-muted-foreground">{t("market.no_listings")}</p>}
         {listings.map((l) => (

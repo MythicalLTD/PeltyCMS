@@ -32,6 +32,18 @@ export interface StorefrontConfig {
   hero_title: string; hero_subtitle: string; hero_image: string; accent: string; layout: "list" | "grid"; sidebar: "left" | "right"; widgets: WidgetConfig[];
   /** Public-site accent preset in store mode (`panel` = match PeltyCMS; legacy `default` means the same). */
   theme: string; server_id: string | null; discord_url: string; logo_url: string;
+  /** Announcement bar above the store (plain text, empty = none). */
+  announcement?: string; announcement_link?: string; announcement_tone?: AnnouncementTone;
+  /** Per-category layout overriding `layout` (group id → list | grid). */
+  group_layouts?: Record<string, "list" | "grid">;
+}
+
+export const TONES = ["info", "sale", "warning"] as const;
+export type AnnouncementTone = (typeof TONES)[number];
+
+/** Layout for a category: its override, else the store default. */
+export function layoutFor(sf: Pick<StorefrontConfig, "layout" | "group_layouts"> | undefined, groupId: string | null | undefined): "list" | "grid" {
+  return (groupId && sf?.group_layouts?.[groupId]) || sf?.layout || "list";
 }
 
 /** The hero's server; `status` only while `server_community` checks it. */

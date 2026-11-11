@@ -24,3 +24,13 @@ describe("storefront", () => {
     expect(accentStyle("violet")).toMatchObject({ "--primary": "#a78bfa" });
   });
 });
+
+import { layoutFor } from "./storefront";
+describe("per-category layout", () => {
+  it("falls back to the store layout", () => {
+    expect(layoutFor({ layout: "list", group_layouts: { g1: "grid" } }, "g1")).toBe("grid");
+    expect(layoutFor({ layout: "list", group_layouts: { g1: "grid" } }, "g2")).toBe("list");
+    expect(layoutFor({ layout: "grid" }, null)).toBe("grid");
+    expect(layoutFor(undefined, "g1")).toBe("list");
+  });
+});

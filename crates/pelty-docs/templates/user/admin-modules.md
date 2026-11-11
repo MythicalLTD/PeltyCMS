@@ -317,7 +317,33 @@ Store-wide look (used when the public site is in store mode, below):
 - **Server in the banner**: which game server the homepage banner shows (default: the first enabled one). Visitors see its address with a copy button (`connect host:port` for FiveM and RedM, the port filled in from the game's default when you left it empty) and, while `server_community` is on, the live player count.
 - **Server logo** (`https://` or `/path`; empty uses the site logo) and a **Discord invite** for the banner button and the store menu.
 
-With the module off, the store keeps its plain look and these endpoints return 404.
+**Announcement and categories.** An announcement bar above the store (plain text up to 300 characters, an optional `https://` or `/path` link, and an *info*, *sale* or *warning* style). Each category can override the package layout (list or cards); categories without an override use the store layout.
+
+**Package rules** (Store look → Package rules), per package:
+
+- **Per-player limit**: how many times one customer may buy it, ever or per rolling day / 7 days / 30 days.
+- **Limit for everyone**: how many may be sold in total in the same kinds of period (a limited run, e.g. "100 founder ranks"). Shown on the store as "Only N left" and "Sold out".
+- Pending and paid orders count towards both limits; cancelled and fraud orders do not. The check runs inside the order transaction with the rule locked, so two checkouts cannot both take the last one.
+- **Required packages**: the buyer must already own one of them (an active or suspended service, or a paid order for a one-time package), or have one in the same cart.
+- **Pay what you want**: for one-time prices, the listed price is the minimum and the buyer may enter more (up to 100× the price, at most 100,000, two decimals). Coupons, sales and creator codes apply to the amount they chose.
+- **Can be bought as a gift** (on by default): the buyer ticks *Buy as a gift* on the package page and enters the recipient's in-game name. The buyer pays and gets the invoice; delivery commands use the recipient's name for `{username}` and `{player}`. Commands that need anything else (a UUID, a FiveM license) are marked failed with "gift: missing …" instead of waiting, so they are never sent to the buyer's own account. The per-player limit counts the buyer, not the recipient.
+
+**Store ban list** (Store look → Store ban list): in-game names and emails that cannot buy. Checkout is refused when the buyer's email, any of their linked game names, or a gift recipient is on the list (`error.store_banned`, which does not say which entry matched). Values are stored in lower case.
+
+**Currency.** With the module on, a first-time visitor who has not picked a currency gets the currency of their browser's region (for example `en-US` → USD) when the store sells in it; otherwise the store default.
+
+### API
+
+| Method | Path | Who |
+|---|---|---|
+| GET | `/api/v1/public/storefront/package-rules` | anyone: limits left, requirements, pay what you want, gifting (signed-in customers also get their own remaining limit and whether they meet the requirement) |
+| GET | `/api/v1/admin/storefront/package-rules` | staff (Catalog) |
+| PUT | `/api/v1/admin/storefront/package-rules/{product}` | staff (Catalog): a rule with every default removes it |
+| GET/POST | `/api/v1/admin/storefront/bans`, DELETE `/{id}` | staff (Catalog) |
+
+Order lines (store carts, `/api/v1/client/orders`, headless API) accept `pay_amount` (string) and `gift_to` (in-game name). Both are refused while the module is off.
+
+With the module off, the store keeps its plain look, rules and bans are not applied, and these endpoints return 404.
 
 ## Public site look (Settings → Website)
 

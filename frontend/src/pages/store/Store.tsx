@@ -4,7 +4,7 @@ import { ProductReviews } from "@/components/store/ProductReviews";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
-import { ArrowLeftIcon, CreditCardIcon, PackageIcon, PlusIcon, ShoppingCartIcon, StorefrontIcon, TagIcon, TrashIcon, UserCircleIcon } from "@phosphor-icons/react";
+import { ArrowLeftIcon, CreditCardIcon, GiftIcon, PackageIcon, PlusIcon, ShoppingCartIcon, StorefrontIcon, TagIcon, TrashIcon, UserCircleIcon } from "@phosphor-icons/react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +26,8 @@ import { useI18n } from "@/lib/i18n";
 import { useModules } from "@/lib/modules";
 import { Captcha } from "@/components/Captcha";
 import { addonPrice, fieldErrors, fromPrice, resetCartId, useStoreCart, type Extras, type StoreLine } from "@/lib/store/storefront";
+import { detectCurrency, giftNameValid, payAmountValid, usePackageRules } from "@/lib/storeRules";
+import { PackageRuleBadges, ruleBlocks } from "@/components/store/PackageRuleBadges";
 import { CountrySelect } from "@/components/geo/CountryRegionFields";
 import { defaultConfig, OptionField, stockState, type CatalogProduct, type ConfigSel } from "@/pages/client/services/Order";
 
@@ -48,7 +50,11 @@ export function useStoreCurrency() {
   const { data: cur } = useCurrencies();
   const { lang } = useI18n();
   const [picked, setPicked] = useState<string | null>(() => localStorage.getItem("pelty.currency"));
-  const currency = view?.cart.order_id ? picked ?? cur?.items[0]?.code ?? "EUR" : view?.cart.currency ?? picked ?? cur?.items[0]?.code ?? "EUR";
+  const { enabled } = useModules();
+  // First visit with the game store look on: the browser region's currency, when sold.
+  const auto = enabled.has("gaming_storefront") ? detectCurrency(typeof navigator === "undefined" ? [] : navigator.languages ?? [], cur?.items.map((c) => c.code) ?? []) : null;
+  const fallback = picked ?? auto ?? cur?.items[0]?.code ?? "EUR";
+  const currency = view?.cart.order_id ? fallback : view?.cart.currency ?? fallback;
   const set = (c: string) => {
     localStorage.setItem("pelty.currency", c);
     setPicked(c);
@@ -137,6 +143,11 @@ export function StoreProductPage() {
   const [config, setConfig] = useState<ConfigSel>({});
   const [addons, setAddons] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const rule = usePackageRules()(id);
+  const { enabled: mods } = useModules();
+  const [pay, setPay] = useState("");
+  const [gift, setGift] = useState(false);
+  const [giftTo, setGiftTo] = useState("");
   const [gate, setGate] = useState({ product, currency });
   if (product !== gate.product || currency !== gate.currency) {
     setGate({ product, currency });
@@ -148,10 +159,16 @@ export function StoreProductPage() {
   if (data && !product) return <EmptyState icon={PackageIcon} title={t("store.not_found")} />;
   if (!product) return <PageSkeleton />;
   const price = cycles.find((c) => c.cycle === cycle);
+  const pwyw = !!rule?.pay_what_you_want && cycle === "one_time";
+  const payOk = !pwyw || !pay.trim() || payAmountValid(pay, Number(price?.amount ?? 0));
+  const canGift = mods.has("gaming_storefront") && (rule?.giftable ?? true);
+  const giftOk = !gift || giftNameValid(giftTo);
   const available = (extras.data?.addons ?? []).filter((a) => addonPrice(a, currency, cycle));
   const add = () => {
     const base = view && !view.cart.order_id ? view.cart : { items: [] as StoreLine[], country: "", coupon: null, email: null };
     const line: StoreLine = { product_id: product.id, cycle, config, addons };
+    if (pwyw && pay.trim()) line.pay_amount = pay.trim();
+    if (canGift && gift) line.gift_to = giftTo.trim();
     save.mutate({ ...base, currency, items: [...base.items, line], locale: lang }, {
       onSuccess: () => nav("/cart"),
       onError: (e) => setError(e instanceof ApiError ? tCode(e.code) : t("error.internal")),
@@ -164,6 +181,7 @@ export function StoreProductPage() {
         <CardHeader>
           <CardTitle className="text-xl">{product.name}</CardTitle>
           <StockBadge p={product} />
+          <PackageRuleBadges r={rule} />
           {product.description && <CardDescription className="whitespace-pre-line">{product.description}</CardDescription>}
           <CardAction><Button asChild variant="ghost" size="sm"><Link to="/store"><ArrowLeftIcon aria-hidden />{t("store.back")}</Link></Button></CardAction>
         </CardHeader>
@@ -182,6 +200,22 @@ export function StoreProductPage() {
             <OptionField key={o.id} o={o} value={config[o.id]} currency={currency} cycle={cycle}
               onChange={(v) => setConfig((c) => { const n = { ...c }; if (v === undefined) delete n[o.id]; else n[o.id] = v; return n; })} />
           ))}
+          {pwyw && price && (
+            <div className="grid gap-1 sm:col-span-2" data-testid="pwyw">
+              <Label htmlFor="pwyw-amount">{t("rules.pay_label", { min: formatMoney(price.amount, currency, lang) })}</Label>
+              <Input id="pwyw-amount" inputMode="decimal" className="max-w-48 tabular-nums" placeholder={Number(price.amount).toFixed(2)} value={pay} onChange={(e) => setPay(e.target.value.replace(",", "."))} aria-invalid={!payOk} />
+              <p className={cn("text-xs", payOk ? "text-muted-foreground" : "text-destructive")}>{t("rules.pay_hint")}</p>
+            </div>
+          )}
+          {canGift && (
+            <div className="grid gap-2 sm:col-span-2" data-testid="gift">
+              <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border p-3 text-sm">
+                <Checkbox checked={gift} onCheckedChange={(v) => setGift(!!v)} />
+                <span className="flex items-center gap-1.5 font-medium"><GiftIcon aria-hidden />{t("rules.gift_toggle")}</span>
+              </label>
+              {gift && <div className="grid gap-1"><Label htmlFor="gift-to">{t("rules.gift_to")}</Label><Input id="gift-to" maxLength={64} className="max-w-64" value={giftTo} onChange={(e) => setGiftTo(e.target.value)} aria-invalid={!!giftTo && !giftOk} /><p className="text-xs text-muted-foreground">{t("rules.gift_hint")}</p></div>}
+            </div>
+          )}
           {available.length > 0 && (
             <fieldset className="grid gap-2 sm:col-span-2"><legend className="mb-2 text-sm font-medium">{t("store.addons")}</legend>
               {available.map((a) => {
@@ -203,11 +237,12 @@ export function StoreProductPage() {
         <CardHeader><CardTitle>{t("order.summary")}</CardTitle></CardHeader>
         <CardContent className="grid gap-2 text-sm">
           <FormError message={error} />
-          {price && <div className="flex justify-between"><span className="text-muted-foreground">{tCode(`cycle.${cycle}`)}</span><span className="tabular-nums">{formatMoney(price.amount, currency, lang)}</span></div>}
+          {price && <div className="flex justify-between"><span className="text-muted-foreground">{tCode(`cycle.${cycle}`)}</span><span className="tabular-nums">{formatMoney(pwyw && pay.trim() && payOk ? pay.trim() : price.amount, currency, lang)}</span></div>}
+          {gift && giftOk && <p className="flex items-center gap-1.5 text-muted-foreground"><GiftIcon aria-hidden />{t("rules.gift_for", { name: giftTo.trim() })}</p>}
           {price && Number(price.setup_fee) > 0 && <div className="flex justify-between"><span className="text-muted-foreground">{t("order.setup")}</span><span className="tabular-nums">{formatMoney(price.setup_fee, currency, lang)}</span></div>}
           <p className="text-xs text-muted-foreground">{t("store.priced_in_cart")}</p>
         </CardContent>
-        <CardFooter><Button className="w-full" disabled={!price || save.isPending || stockState(product) === "out"} onClick={add}><PlusIcon aria-hidden />{t("cart.add")}</Button></CardFooter>
+        <CardFooter><Button className="w-full" disabled={!price || save.isPending || stockState(product) === "out" || ruleBlocks(rule) || !payOk || !giftOk} onClick={add}><PlusIcon aria-hidden />{t("cart.add")}</Button></CardFooter>
       </Card>
       <ProductReviews productId={product.id} className="lg:col-span-2" />
     </div>
@@ -265,6 +300,7 @@ export function CartPage() {
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{line?.product_name ?? "-"}</p>
                   <p className="text-xs text-muted-foreground">{tCode(`cycle.${l.cycle}`)}{line && line.labels.length > 0 ? ` · ${line.labels.join(", ")}` : ""}</p>
+                  {l.gift_to && <p className="flex items-center gap-1 text-xs text-muted-foreground" data-testid="cart-gift"><GiftIcon aria-hidden />{t("rules.gift_for", { name: l.gift_to })}</p>}
                   {line?.addons.map((a) => <p key={a.addon_id} className="text-xs text-muted-foreground">+ {a.name} · {formatMoney(a.amount, p!.currency, lang)}</p>)}
                 </div>
                 {line && <span className="text-sm tabular-nums">{formatMoney((Number(line.amount) + Number(line.setup_fee)).toFixed(2), p!.currency, lang)}</span>}

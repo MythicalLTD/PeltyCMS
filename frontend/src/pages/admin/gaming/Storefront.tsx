@@ -18,17 +18,23 @@ import { useI18n } from "@/lib/i18n";
 import type { TranslationKey } from "@/lib/i18n-core";
 import { useModules } from "@/lib/modules";
 import { normalizeTheme, THEMES } from "@/lib/publicMode";
-import { ACCENTS, PERIODS, WIDGET_TYPES, discordUrlValid, heroImageValid, move, newWidget, widgetValid, type StorefrontConfig, type WidgetConfig, type WidgetType } from "@/lib/storefront";
+import { PackageRulesCard, StoreBansCard } from "@/components/admin/StoreRules";
+import { ACCENTS, PERIODS, TONES, type AnnouncementTone, WIDGET_TYPES, discordUrlValid, heroImageValid, move, newWidget, widgetValid, type StorefrontConfig, type WidgetConfig, type WidgetType } from "@/lib/storefront";
 import { useCatalog } from "@/pages/store/Store";
 
 /** Storefront look: hero, accent, layout and the sidebar widget list. */
 export function AdminStorefrontPage() {
   const { t } = useI18n();
+  const products = useCatalog().data?.products ?? [];
   const q = useQuery({ queryKey: ["admin", "storefront"], queryFn: () => api<StorefrontConfig>("/admin/storefront") });
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title={t("storefront.admin_title")} description={t("storefront.admin_desc")} />
       {q.isError && !q.data ? <LoadError retry={() => void q.refetch()} /> : !q.data ? <Skeleton className="h-64 w-full" /> : <Editor initial={q.data} />}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <PackageRulesCard products={products} />
+        <StoreBansCard />
+      </div>
     </div>
   );
 }
@@ -46,8 +52,9 @@ function Editor({ initial }: { initial: StorefrontConfig }) {
   const set = (p: Partial<StorefrontConfig>) => setF((x) => ({ ...x, ...p }));
   const setW = (i: number, w: WidgetConfig) => set({ widgets: f.widgets.map((x, j) => (j === i ? w : x)) });
   const products = catalog.data?.products ?? [];
+  const groups = catalog.data?.groups ?? [];
   const servers = useQuery({ queryKey: ["admin", "game-servers"], queryFn: () => api<{ items: { id: string; name: string }[] }>("/admin/game/servers"), enabled: enabled.has("game_profiles") });
-  const valid = heroImageValid(f.hero_image) && heroImageValid(f.logo_url) && discordUrlValid(f.discord_url) && f.widgets.length <= 12 && f.widgets.every(widgetValid);
+  const valid = heroImageValid(f.hero_image) && heroImageValid(f.announcement_link ?? "") && heroImageValid(f.logo_url) && discordUrlValid(f.discord_url) && f.widgets.length <= 12 && f.widgets.every(widgetValid);
   const save = useMutation({
     mutationFn: () => api<StorefrontConfig>("/admin/storefront", { method: "PUT", body: f }),
     onSuccess: (c) => { setF({ ...c, theme: normalizeTheme(c.theme) }); qc.setQueryData(["admin", "storefront"], c); void qc.invalidateQueries({ queryKey: ["public", "storefront"] }); toast.success(t("market.saved")); },
@@ -86,6 +93,33 @@ function Editor({ initial }: { initial: StorefrontConfig }) {
           {!discordUrlValid(f.discord_url) && <p role="alert" className="text-sm text-destructive">{t("storefront.discord_invalid")}</p>}
           <p className="text-xs text-muted-foreground">{t("storefront.mode_hint")}</p>
           <p className="text-xs text-muted-foreground">{t("storefront.public_mode_hint")}</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle>{t("storefront.announcement_title")}</CardTitle><CardDescription>{t("storefront.announcement_hint")}</CardDescription></CardHeader>
+        <CardContent className="grid gap-3">
+          <Field id="sf-ann" label={t("storefront.announcement")} maxLength={300} value={f.announcement ?? ""} onChange={(e) => set({ announcement: e.target.value.replace(/\n/g, " ") })} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field id="sf-ann-link" label={t("storefront.announcement_link")} placeholder="/store/ranks" value={f.announcement_link ?? ""} onChange={(e) => set({ announcement_link: e.target.value.trim() })} />
+            <SelectField id="sf-ann-tone" label={t("storefront.announcement_tone")} value={f.announcement_tone ?? "info"} onChange={(v) => set({ announcement_tone: v as AnnouncementTone })}
+              options={TONES.map((x) => ({ value: x, label: t(`storefront.tone.${x}` as TranslationKey) }))} />
+          </div>
+          {!heroImageValid(f.announcement_link ?? "") && <p role="alert" className="text-sm text-destructive">{t("storefront.link_invalid")}</p>}
+          {groups.length > 0 && (
+            <fieldset className="grid gap-2">
+              <legend className="mb-1 text-sm font-medium">{t("storefront.group_layouts")}</legend>
+              {groups.map((g) => (
+                <div key={g.id} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="min-w-0 truncate">{g.name}</span>
+                  <div className="w-40">
+                    <SelectField id={`sf-gl-${g.id}`} label={t("storefront.layout")} value={f.group_layouts?.[g.id] ?? "default"}
+                      onChange={(v) => { const n = { ...f.group_layouts }; if (v === "default") delete n[g.id]; else n[g.id] = v as "list" | "grid"; set({ group_layouts: n }); }}
+                      options={[{ value: "default", label: t("storefront.layout_default") }, { value: "list", label: t("storefront.layout_list") }, { value: "grid", label: t("storefront.layout_grid") }]} />
+                  </div>
+                </div>
+              ))}
+            </fieldset>
+          )}
         </CardContent>
       </Card>
       <Card>

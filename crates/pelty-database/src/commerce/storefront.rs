@@ -354,6 +354,9 @@ pub async fn preview(
     let mut discount = Decimal::ZERO;
     let mut group = Decimal::ZERO;
     let mut sale_total = Decimal::ZERO;
+    let rules_on = crate::store_rules::enabled(pool).await?;
+    let rules = crate::store_rules::for_cart(pool, items).await?;
+    crate::store_rules::check_lines(&rules, items, rules_on)?;
     let bundle = best_bundle(pool, items).await?;
     let mut bundle_total = Decimal::ZERO;
     // Timed sales, clamped like `orders::place_full` (after promo and group).
@@ -372,7 +375,14 @@ pub async fn preview(
             .collect()
     };
     for (idx, it) in items.iter().enumerate() {
-        let q = catalog::quote(&mut tx, it.product_id, &it.cycle, &currency, &it.config).await?;
+        let mut q =
+            catalog::quote(&mut tx, it.product_id, &it.cycle, &currency, &it.config).await?;
+        q.amount = crate::store_rules::line_amount(
+            rules.get(&it.product_id),
+            &q.cycle,
+            q.amount,
+            it.pay_amount,
+        )?;
         let extras =
             addons::quote(&mut tx, it.product_id, &it.cycle, &currency, &it.addons).await?;
         let d = match &promo {

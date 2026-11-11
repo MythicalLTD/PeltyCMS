@@ -158,6 +158,7 @@ mod sso_flow;
 mod staff_flow;
 mod static_flow;
 mod stock_flow;
+mod store_rules_flow;
 mod storefront_flow;
 mod subaccount_invite_flow;
 mod support_ext_flow;

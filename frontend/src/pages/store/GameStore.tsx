@@ -13,7 +13,10 @@ import { StoreWidgets } from "@/components/store/StoreWidgets";
 import { StoreHero } from "@/components/store/StoreHero";
 import { usePublicSite } from "@/lib/admin/site";
 import { useModules } from "@/lib/modules";
-import { accentStyle, type PublicStorefront } from "@/lib/storefront";
+import { accentStyle, layoutFor, type PublicStorefront } from "@/lib/storefront";
+import { usePackageRules } from "@/lib/storeRules";
+import { PackageRuleBadges, ruleBlocks } from "@/components/store/PackageRuleBadges";
+import { StoreAnnouncement } from "@/components/store/StoreAnnouncement";
 import { salePrice, saleFor, timeLeft, useSales } from "@/lib/sales";
 import { formatMoney } from "@/lib/billing/billing";
 import { useI18n } from "@/lib/i18n";
@@ -53,9 +56,9 @@ export function GameStorePage({ home = false }: { home?: boolean }) {
   const themed = enabled.has("gaming_storefront");
   const layout = useQuery({ queryKey: ["public", "storefront"], queryFn: () => api<PublicStorefront>("/public/storefront"), enabled: themed, staleTime: 60_000 });
   const sf = themed ? layout.data : undefined;
-  const grid = sf?.layout === "grid";
   const sidebar = sf && sf.widgets.length > 0;
   const sales = useSales();
+  const ruleOf = usePackageRules();
   const site = usePublicSite();
 
   // A server store lists the servers' packages only (not e.g. marketplace listings in the same catalog).
@@ -63,6 +66,7 @@ export function GameStorePage({ home = false }: { home?: boolean }) {
   const catalog = (data?.products ?? []).filter((p) => !only || only.has(p.id));
   const groups = (data?.groups ?? []).filter((g) => catalog.some((p) => p.group_id === g.id));
   const active = groups.find((g) => g.slug === group) ?? null;
+  const grid = layoutFor(sf, active?.id) === "grid";
   const products = catalog.filter((p) => (!active || p.group_id === active.id) && fromPrice(p.prices, currency));
   const cart = view && !view.cart.order_id ? view.cart : null;
   const inCart = (id: string) => cart?.items.filter((l) => l.product_id === id).length ?? 0;
@@ -130,7 +134,8 @@ export function GameStorePage({ home = false }: { home?: boolean }) {
           {products.map((p) => {
             const quick = quickAddCycle(p, currency);
             const from = fromPrice(p.prices, currency)!;
-            const out = stockState(p) === "out";
+            const rule = ruleOf(p.id);
+            const out = stockState(p) === "out" || ruleBlocks(rule);
             const n = inCart(p.id);
             return (
               <li key={p.id} data-testid="package" className={grid ? "relative grid grid-cols-[3.5rem_minmax(0,1fr)] content-start gap-x-3 gap-y-2 overflow-hidden rounded-xl border bg-card p-4 text-card-foreground shadow-sm transition-colors hover:border-primary/60" : "grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-3 py-3 sm:grid-cols-[3.5rem_minmax(0,1fr)_auto] sm:gap-x-4 sm:px-4"}>
@@ -138,6 +143,7 @@ export function GameStorePage({ home = false }: { home?: boolean }) {
                 <div className={grid ? "col-span-2 min-w-0" : "min-w-0"}>
                   <h2 className="truncate text-base font-medium"><Link to={`/store/p/${p.id}`} className="rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{p.name}</Link></h2>
                   {p.description && <p className="line-clamp-2 text-sm text-muted-foreground sm:line-clamp-1">{p.description}</p>}
+                  <PackageRuleBadges r={rule} />
                 </div>
                 <div className={grid ? "col-span-2 flex flex-wrap items-center justify-between gap-2" : "col-start-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:col-start-auto sm:flex-nowrap"}>
                   <p className="text-sm sm:min-w-28 sm:text-right">
@@ -155,8 +161,8 @@ export function GameStorePage({ home = false }: { home?: boolean }) {
                     <span className="block text-xs text-muted-foreground">{[quick ? tCode(`cycle.${quick}`) : t("game.choose_hint"), n > 0 ? t("game.in_cart", { n }) : ""].filter(Boolean).join(" · ")}</span>
                   </p>
                   {out ? (
-                    <Button variant="outline" disabled className="sm:min-w-32">{t("stock.out")}</Button>
-                  ) : quick ? (
+                    <Button variant="outline" disabled className="sm:min-w-32">{ruleBlocks(rule) && rule?.user_left === 0 ? t("rules.limit_reached") : t("stock.out")}</Button>
+                  ) : quick && !rule?.pay_what_you_want && rule?.requirement_met !== false ? (
                     <Button variant="outline" className="sm:min-w-32" disabled={save.isPending} onClick={() => add(p.id, p.name, quick)}>
                       {adding === p.id ? t("game.adding") : t("cart.add")}
                     </Button>
@@ -175,6 +181,7 @@ export function GameStorePage({ home = false }: { home?: boolean }) {
   if (!sf) return main;
   return (
     <div className="flex flex-col gap-6" style={accentStyle(sf.accent)} data-accent={sf.accent}>
+      <StoreAnnouncement sf={sf} />
       {!home && (sf.hero_title || sf.hero_image || sf.server) && <StoreHero sf={sf} siteName={site.data?.config.site_name ?? ""} />}
       {sidebar ? (
         <div className={sf.sidebar === "left" ? "grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]" : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]"}>

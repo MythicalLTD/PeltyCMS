@@ -32,6 +32,14 @@ pub struct CartItem {
     #[serde(default)]
     #[schema(value_type = Object)]
     pub fields: HashMap<Uuid, String>,
+    /// Pay-what-you-want amount (one-time packages with that rule; at least
+    /// the listed price). Ignored for other packages.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>)]
+    pub pay_amount: Option<Decimal>,
+    /// In-game name to deliver this line to (gift purchase).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gift_to: Option<String>,
 }
 
 #[derive(Debug, Clone, FromRow, Serialize)]
@@ -163,6 +171,8 @@ pub async fn place_full(
         return Err(AppError::Forbidden);
     }
     let mut tx = pool.begin().await.map_err(db_err)?;
+    // Game store rules: ban list, purchase limits, required packages, gifts.
+    let rules = crate::store_rules::enforce(&mut tx, customer_id, items).await?;
     let exp = invoices::exponent(&mut tx, &currency).await?;
     let coupon = match coupon.map(str::trim).filter(|c| !c.is_empty()) {
         Some(code) => Some(coupons::lock_for_order(&mut tx, code, customer_id, &currency).await?),
@@ -181,7 +191,14 @@ pub async fn place_full(
     let mut group_total = Decimal::ZERO;
     let mut quotes = Vec::with_capacity(items.len());
     for it in items {
-        let q = catalog::quote(&mut tx, it.product_id, &it.cycle, &currency, &it.config).await?;
+        let mut q =
+            catalog::quote(&mut tx, it.product_id, &it.cycle, &currency, &it.config).await?;
+        q.amount = crate::store_rules::line_amount(
+            rules.get(&it.product_id),
+            &q.cycle,
+            q.amount,
+            it.pay_amount,
+        )?;
         let extras =
             addons::quote(&mut tx, it.product_id, &it.cycle, &currency, &it.addons).await?;
         let fields = addons::check_fields(&mut tx, it.product_id, &it.fields).await?;
@@ -245,7 +262,7 @@ pub async fn place_full(
             group_total += d;
             used[idx] += d;
         }
-        sqlx::query("INSERT INTO order_items (id, order_id, product_id, cycle, amount, setup_fee, config, custom_fields, discount, recurring_discount, promo_cycles, bundle_discount) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)")
+        sqlx::query("INSERT INTO order_items (id, order_id, product_id, cycle, amount, setup_fee, config, custom_fields, discount, recurring_discount, promo_cycles, bundle_discount, gift_to) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)")
             .bind(item_id)
             .bind(order_id)
             .bind(q.product_id)
@@ -258,12 +275,16 @@ pub async fn place_full(
             .bind(recurring_discount)
             .bind(coupon.as_ref().filter(|c| c.recurring).and_then(|c| c.recurring_cycles))
             .bind(line_bundle)
+            .bind(items[idx].gift_to.as_deref().map(str::trim))
             .execute(&mut *tx)
             .await
             .map_err(db_err)?;
         let mut desc = format!("{}, {}", q.product_name, q.cycle);
         if !q.labels.is_empty() {
             desc = format!("{desc} ({})", q.labels.join(", "));
+        }
+        if let Some(g) = items[idx].gift_to.as_deref() {
+            desc = format!("{desc}, gift for {}", g.trim());
         }
         lines.push(NewItem {
             description: desc,

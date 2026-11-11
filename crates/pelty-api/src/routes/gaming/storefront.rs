@@ -100,6 +100,10 @@ pub async fn public_layout(State(s): State<AppState>) -> ApiResult<Json<Value>> 
         "layout": cfg.layout,
         "sidebar": cfg.sidebar,
         "widgets": widgets,
+        "announcement": cfg.announcement,
+        "announcement_link": cfg.announcement_link,
+        "announcement_tone": cfg.announcement_tone,
+        "group_layouts": cfg.group_layouts,
     })))
 }
 

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../api";
 import { newUuid } from "../ids";
 
-export interface StoreLine { product_id: string; cycle: string; config: Record<string, string | number>; addons: string[] }
+export interface StoreLine { product_id: string; cycle: string; config: Record<string, string | number>; addons: string[]; pay_amount?: string; gift_to?: string }
 export interface StoreCart { id: string; email: string | null; currency: string; country: string; items: StoreLine[]; coupon: string | null; creator_code?: string | null; order_id: string | null }
 export interface TaxPart { name: string; rate: string; compound: boolean; amount: string }
 export interface PreviewLine {

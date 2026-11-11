@@ -183,11 +183,23 @@ pub struct ServiceCtx {
     pub amount: String,
     pub currency: String,
     pub order_id: Option<Uuid>,
+    /// In-game name of the gift recipient (gift purchase); commands go to
+    /// that player instead of the buyer's linked game account.
+    pub gift_to: Option<String>,
 }
 
 pub async fn service_ctx(pool: &PgPool, service: Uuid) -> AppResult<Option<ServiceCtx>> {
-    let r: Option<(Uuid, Uuid, String, String, String, Option<Uuid>)> = sqlx::query_as(
-        "SELECT s.customer_id, s.product_id, p.name, s.recurring_amount::text, s.currency::text, oi.order_id
+    type Row = (
+        Uuid,
+        Uuid,
+        String,
+        String,
+        String,
+        Option<Uuid>,
+        Option<String>,
+    );
+    let r: Option<Row> = sqlx::query_as(
+        "SELECT s.customer_id, s.product_id, p.name, s.recurring_amount::text, s.currency::text, oi.order_id, oi.gift_to
          FROM services s JOIN products p ON p.id = s.product_id
          LEFT JOIN order_items oi ON oi.id = s.order_item_id WHERE s.id = $1",
     )
@@ -196,7 +208,7 @@ pub async fn service_ctx(pool: &PgPool, service: Uuid) -> AppResult<Option<Servi
     .await
     .map_err(db_err)?;
     Ok(r.map(
-        |(customer_id, product_id, package, amount, currency, order_id)| ServiceCtx {
+        |(customer_id, product_id, package, amount, currency, order_id, gift_to)| ServiceCtx {
             service_id: service,
             customer_id,
             product_id,
@@ -204,6 +216,7 @@ pub async fn service_ctx(pool: &PgPool, service: Uuid) -> AppResult<Option<Servi
             amount,
             currency,
             order_id,
+            gift_to,
         },
     ))
 }
@@ -275,8 +288,16 @@ pub async fn enqueue(
             })
             .collect();
         for (sid, game, sname) in targets {
-            let ident = crate::games::identity(pool, ctx.customer_id, game).await?;
-            let mut vars = identity_vars(&ident);
+            // Gift: only the recipient's name is known (no linked account),
+            // so `{username}`/`{player}` are filled and nothing else.
+            let gift = ctx.gift_to.as_deref().map(|g| vote_player_arg(game, g));
+            let mut vars = match &gift {
+                Some(Some(name)) => BTreeMap::from([
+                    ("username".to_string(), name.clone()),
+                    ("player".to_string(), name.clone()),
+                ]),
+                _ => identity_vars(&crate::games::identity(pool, ctx.customer_id, game).await?),
+            };
             for (k, v) in [
                 ("package", ctx.package.clone()),
                 ("package_id", ctx.product_id.to_string()),
@@ -292,9 +313,19 @@ pub async fn enqueue(
             ] {
                 vars.insert(k.into(), v);
             }
-            let (status, command, err) = match render(&c.command, &vars) {
-                Ok(cmd) => ("pending", cmd, String::new()),
-                Err(field) => (
+            let (status, command, err) = match (render(&c.command, &vars), &gift) {
+                (_, Some(None)) => (
+                    "failed",
+                    String::new(),
+                    "gift: name not valid for this game".to_string(),
+                ),
+                (Ok(cmd), _) => ("pending", cmd, String::new()),
+                // A gift never waits for the buyer to link an account: the
+                // command would then go to the buyer, not the recipient.
+                (Err(field), Some(Some(_))) => {
+                    ("failed", String::new(), format!("gift: missing {field}"))
+                }
+                (Err(field), None) => (
                     "waiting_identity",
                     String::new(),
                     format!("missing {field}"),
