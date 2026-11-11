@@ -9,6 +9,7 @@
 mod common;
 mod creator_marketplace_flow;
 mod creator_payouts_flow;
+mod creator_tools_flow;
 mod digital_products_flow;
 mod game_delivery_flow;
 mod game_profiles_flow;

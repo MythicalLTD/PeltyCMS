@@ -4,6 +4,7 @@ import { Link, useParams, useSearchParams } from "react-router";
 import {
   ArrowSquareOutIcon, CalendarBlankIcon, CaretLeftIcon, CaretRightIcon, DownloadSimpleIcon, FireIcon, MagnifyingGlassIcon, PackageIcon, SealCheckIcon, SparkleIcon, StarIcon, StorefrontIcon, UserCircleIcon,
 } from "@phosphor-icons/react";
+import { BundleOffers, MessageCreator, WishlistButton } from "@/components/market/ResourceActions";
 import { EmptyState } from "@/components/EmptyState";
 import { ProductArt } from "@/components/store/ProductArt";
 import { Stars } from "@/components/store/Stars";
@@ -245,12 +246,17 @@ export function ResourcePage() {
             <CardHeader><CardTitle className="text-3xl tabular-nums" data-testid="resource-price">{p ?? "—"}</CardTitle></CardHeader>
             <CardContent className="flex flex-col gap-3">
               <Button asChild size="lg"><Link to={`/store/p/${l.product_id}`}>{t("pub.buy_now")}</Link></Button>
+              <div className="grid grid-cols-2 gap-2 [&>button]:min-w-0">
+                <WishlistButton productId={l.product_id} />
+                <MessageCreator productId={l.product_id} product={l.name} creator={c.display_name} />
+              </div>
               <ul className="flex flex-col gap-1 text-xs text-muted-foreground">
                 {r.data.digital && <li className="flex items-center gap-1.5"><DownloadSimpleIcon aria-hidden />{t("pub.instant_download")}</li>}
                 <li className="flex items-center gap-1.5"><SealCheckIcon aria-hidden />{t("pub.reviewed_listing")}</li>
               </ul>
             </CardContent>
           </Card>
+          <BundleOffers bundles={r.data.bundles ?? []} />
           <CreatorCard c={c} />
           {more.length > 0 && (
             <Card>

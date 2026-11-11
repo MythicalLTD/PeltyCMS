@@ -207,6 +207,8 @@ pub struct PreviewLine {
     pub sale: Option<String>,
     /// Creator code discount on this line (first invoice only).
     pub creator_discount: Decimal,
+    /// Share of the bundle discount on this line.
+    pub bundle_discount: Decimal,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -226,6 +228,38 @@ pub struct Preview {
     pub coupon_error: Option<&'static str>,
     pub creator_code: Option<String>,
     pub creator_error: Option<&'static str>,
+    /// Bundle applied automatically because the cart holds all of it.
+    pub bundle: Option<String>,
+    pub bundle_discount: Decimal,
+}
+
+/// The active bundle with the biggest discount that the cart fully holds.
+pub async fn best_bundle(
+    pool: &PgPool,
+    items: &[CartItem],
+) -> AppResult<Option<crate::orders::BundleDiscount>> {
+    if items.len() < 2 {
+        return Ok(None);
+    }
+    let mut best: Option<crate::orders::BundleDiscount> = None;
+    for b in crate::bundles::list(pool, true).await? {
+        if b.discount_percent <= Decimal::ZERO
+            || best
+                .as_ref()
+                .is_some_and(|x| x.percent >= b.discount_percent)
+        {
+            continue;
+        }
+        if let Some(idx) = crate::bundles::match_cart(&b, items) {
+            best = Some(crate::orders::BundleDiscount {
+                bundle_id: b.id,
+                name: b.name,
+                percent: b.discount_percent,
+                items: idx,
+            });
+        }
+    }
+    Ok(best)
 }
 
 #[derive(FromRow)]
@@ -320,6 +354,8 @@ pub async fn preview(
     let mut discount = Decimal::ZERO;
     let mut group = Decimal::ZERO;
     let mut sale_total = Decimal::ZERO;
+    let bundle = best_bundle(pool, items).await?;
+    let mut bundle_total = Decimal::ZERO;
     // Timed sales, clamped like `orders::place_full` (after promo and group).
     let sales = if crate::feature_modules::is_enabled(pool, crate::timed_sales::MODULE).await? {
         crate::timed_sales::active(pool).await?
@@ -335,7 +371,7 @@ pub async fn preview(
             .into_iter()
             .collect()
     };
-    for it in items {
+    for (idx, it) in items.iter().enumerate() {
         let q = catalog::quote(&mut tx, it.product_id, &it.cycle, &currency, &it.config).await?;
         let extras =
             addons::quote(&mut tx, it.product_id, &it.cycle, &currency, &it.addons).await?;
@@ -346,6 +382,14 @@ pub async fn preview(
             _ => Decimal::ZERO,
         };
         discount += d;
+        // Bundle: after the promo code, like `orders::place_full`.
+        let bundle_line = match &bundle {
+            Some(b) if b.items.contains(&idx) => {
+                coupons::line_discount("percent", b.percent, (q.amount - d).max(Decimal::ZERO), exp)
+            }
+            _ => Decimal::ZERO,
+        };
+        bundle_total += bundle_line;
         let mut group_line = Decimal::ZERO;
         if let Some(pct) = group_pct {
             let base = q.amount - d + extras.iter().map(|a| a.amount).sum::<Decimal>();
@@ -358,13 +402,13 @@ pub async fn preview(
         let sale_discount = sale.map_or(Decimal::ZERO, |x| {
             (q.amount * x.percent / Decimal::from(100))
                 .round_dp(exp)
-                .min((q.amount - d - group_line).max(Decimal::ZERO))
+                .min((q.amount - d - bundle_line - group_line).max(Decimal::ZERO))
         });
         sale_total += sale_discount;
         // Creator code: after the sale, same clamp as `orders::place_full`.
         let creator_discount = (q.amount * creator_pct / Decimal::from(100))
             .round_dp(exp)
-            .min((q.amount - d - group_line - sale_discount).max(Decimal::ZERO));
+            .min((q.amount - d - bundle_line - group_line - sale_discount).max(Decimal::ZERO));
         creator_total += creator_discount;
         amounts.push(q.amount);
         if q.setup_fee > Decimal::ZERO {
@@ -399,6 +443,7 @@ pub async fn preview(
                 .filter(|_| sale_discount > Decimal::ZERO)
                 .map(|x| x.name.clone()),
             creator_discount,
+            bundle_discount: bundle_line,
         });
     }
     drop(tx); // read-only; rolled back
@@ -408,6 +453,9 @@ pub async fn preview(
     }
     if discount > Decimal::ZERO {
         amounts.push(-discount);
+    }
+    if bundle_total > Decimal::ZERO {
+        amounts.push(-bundle_total);
     }
     if group > Decimal::ZERO {
         amounts.push(-group);
@@ -484,6 +532,10 @@ pub async fn preview(
         coupon_error,
         creator_code: creator.map(|c| c.code),
         creator_error,
+        bundle: bundle
+            .filter(|_| bundle_total > Decimal::ZERO)
+            .map(|b| b.name),
+        bundle_discount: bundle_total,
     })
 }
 

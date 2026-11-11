@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { EyeIcon, EyeSlashIcon, ImagesIcon, PlusIcon, UploadSimpleIcon } from "@phosphor-icons/react";
+import { ChartLineUpIcon, EyeIcon, EyeSlashIcon, ImagesIcon, PlusIcon, UploadSimpleIcon } from "@phosphor-icons/react";
 import { useSearchParams } from "react-router";
 import { CreatorPayouts } from "@/components/creator/CreatorPayouts";
 import { GalleryEditor } from "@/components/creator/GalleryEditor";
@@ -18,6 +18,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CreatorBundles } from "@/components/creator/CreatorBundles";
+import { CreatorCoupons } from "@/components/creator/CreatorCoupons";
+import { ListingAnalytics } from "@/components/creator/ListingAnalytics";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { api, ApiError } from "@/lib/api";
@@ -51,9 +54,11 @@ export function CreatorPage() {
         <Card><CardContent className="pt-6"><Badge variant="outline">{t(`market.st.${d.creator.status}` as TranslationKey)}</Badge> <span className="text-sm text-muted-foreground">{t(d.creator.status === "pending" ? "creator.waiting" : d.creator.status === "rejected" ? "creator.rejected_note" : "creator.suspended_note")}</span></CardContent></Card>
       ) : (
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
+          <TabsList className="flex h-auto flex-wrap justify-start gap-1">
             <TabsTrigger value="overview">{t("creator.overview")}</TabsTrigger>
             <TabsTrigger value="listings">{t("market.listings")}</TabsTrigger>
+            <TabsTrigger value="codes">{t("ctools.codes")}</TabsTrigger>
+            <TabsTrigger value="bundles">{t("ctools.bundles")}</TabsTrigger>
             <TabsTrigger value="ledger">{t("creator.ledger")}</TabsTrigger>
             <TabsTrigger value="payouts">{t("market.payouts")}</TabsTrigger>
             {reviewsOn && <TabsTrigger value="reviews">{t("reviews.title")}</TabsTrigger>}
@@ -61,6 +66,8 @@ export function CreatorPage() {
           </TabsList>
           <TabsContent value="overview"><Overview d={d} /></TabsContent>
           <TabsContent value="listings"><Listings commission={d.commission_percent ?? "0"} closed={d.mode === "admin_only"} /></TabsContent>
+          <TabsContent value="codes"><CreatorCoupons /></TabsContent>
+          <TabsContent value="bundles"><CreatorBundles /></TabsContent>
           <TabsContent value="ledger"><Ledger /></TabsContent>
           <TabsContent value="payouts"><CreatorPayouts d={d} /></TabsContent>
           {reviewsOn && <TabsContent value="reviews"><CreatorReviews /></TabsContent>}
@@ -161,6 +168,7 @@ function Listings({ commission, closed }: { commission: string; closed: boolean 
   const listed = useMutation({ mutationFn: ({ id, on }: { id: string; on: boolean }) => api(`/client/creator/listings/${id}/listed`, { method: "POST", body: { listed: on } }), onSuccess: refresh, onError: fail });
   const [up, setUp] = useState<{ id: string; version: string; changelog: string; file: File | null } | null>(null);
   const [gallery, setGallery] = useState<{ id: string; name: string } | null>(null);
+  const [stats, setStats] = useState<{ id: string; name: string } | null>(null);
   const upload = useMutation({
     mutationFn: () => {
       if (!up?.file) throw new ApiError(422, "error.validation", "");
@@ -183,6 +191,7 @@ function Listings({ commission, closed }: { commission: string; closed: boolean 
           <CardContent className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" onClick={() => setUp({ id: l.product_id, version: "", changelog: "", file: null })}><UploadSimpleIcon aria-hidden />{t("digital.upload")}</Button>
             <Button size="sm" variant="outline" onClick={() => setGallery({ id: l.product_id, name: l.name })}><ImagesIcon aria-hidden />{t("creator.gallery")}</Button>
+            <Button size="sm" variant="outline" onClick={() => setStats({ id: l.product_id, name: l.name })}><ChartLineUpIcon aria-hidden />{t("ctools.analytics")}</Button>
             {l.status === "approved" && <Button size="sm" variant="ghost" onClick={() => listed.mutate({ id: l.product_id, on: false })}><EyeSlashIcon aria-hidden />{t("creator.unlist")}</Button>}
             {l.status === "unlisted" && <Button size="sm" variant="ghost" onClick={() => listed.mutate({ id: l.product_id, on: true })}><EyeIcon aria-hidden />{t("creator.relist")}</Button>}
           </CardContent>
@@ -209,6 +218,7 @@ function Listings({ commission, closed }: { commission: string; closed: boolean 
           <DialogFooter><Button type="submit" form="cr-listing" disabled={create.isPending}>{t("creator.submit")}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+      <ListingAnalytics productId={stats?.id ?? null} name={stats?.name ?? ""} onClose={() => setStats(null)} />
       {gallery && <GalleryEditor productId={gallery.id} name={gallery.name} onClose={() => setGallery(null)} />}
       <Dialog open={!!up} onOpenChange={(o) => !o && setUp(null)}>
         <DialogContent>

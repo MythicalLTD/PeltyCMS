@@ -6,11 +6,11 @@ export interface StoreLine { product_id: string; cycle: string; config: Record<s
 export interface StoreCart { id: string; email: string | null; currency: string; country: string; items: StoreLine[]; coupon: string | null; creator_code?: string | null; order_id: string | null }
 export interface TaxPart { name: string; rate: string; compound: boolean; amount: string }
 export interface PreviewLine {
-  product_id: string; product_name: string; cycle: string; amount: string; setup_fee: string; labels: string[]; discount: string; sale_discount?: string; sale?: string | null; creator_discount?: string;
+  product_id: string; product_name: string; cycle: string; amount: string; setup_fee: string; labels: string[]; discount: string; sale_discount?: string; sale?: string | null; creator_discount?: string; bundle_discount?: string;
   addons: { addon_id: string; name: string; cycle: string; amount: string; setup_fee: string }[];
 }
 export interface CartPreview {
-  currency: string; lines: PreviewLine[]; subtotal: string; discount: string; group_discount: string; sale_discount?: string; creator_discount?: string; tax: string; taxes: TaxPart[];
+  currency: string; lines: PreviewLine[]; subtotal: string; discount: string; group_discount: string; sale_discount?: string; creator_discount?: string; bundle?: string | null; bundle_discount?: string; tax: string; taxes: TaxPart[];
   total: string; inclusive: boolean; coupon: string | null; coupon_error: string | null; creator_code?: string | null; creator_error?: string | null;
 }
 export interface CartView { cart: StoreCart; preview: CartPreview | null; error: string | null }

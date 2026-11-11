@@ -61,13 +61,13 @@ pub fn router() -> Router<AppState> {
         )
 }
 
-async fn me(s: &AppState, u: &CurrentUser) -> ApiResult<Creator> {
+pub(crate) async fn me(s: &AppState, u: &CurrentUser) -> ApiResult<Creator> {
     Ok(mk::by_user(&s.pool, u.user_id)
         .await?
         .ok_or(AppError::NotFound)?)
 }
 
-async fn approved(s: &AppState, u: &CurrentUser) -> ApiResult<(Creator, mk::Config)> {
+pub(crate) async fn approved(s: &AppState, u: &CurrentUser) -> ApiResult<(Creator, mk::Config)> {
     let cfg = mk::config(&s.pool).await?;
     if !cfg.multi_vendor() {
         return Err(AppError::Conflict("error.market_closed").into());
@@ -139,6 +139,13 @@ pub async fn public_resource(
     let ratings = ratings_on(&s).await?;
     let l = mk::public_listing(&s.pool, ratings, id).await?;
     let c = mk::by_slug(&s.pool, &l.creator_slug).await?;
+    // Count the view for the creator's analytics without slowing the page.
+    let pool = s.pool.clone();
+    tokio::spawn(async move {
+        if let Err(e) = pelty_database::creator_tools::record_view(&pool, id).await {
+            tracing::debug!(error = %e, "listing view not counted");
+        }
+    });
     let more: Vec<Value> = mk::listings(&s.pool, Some(c.id), Some("approved"))
         .await?
         .into_iter()
@@ -151,6 +158,7 @@ pub async fn public_resource(
         "listing": l,
         "creator": public_profile(&c),
         "more": more,
+        "bundles": pelty_database::creator_tools::bundles_with(&s.pool, id).await?,
         "ratings": ratings,
         "digital": pelty_database::feature_modules::is_enabled(&s.pool, "digital_products").await?,
     })))

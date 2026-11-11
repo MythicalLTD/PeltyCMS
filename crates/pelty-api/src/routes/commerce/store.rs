@@ -241,6 +241,8 @@ pub async fn checkout(
             {
                 sf::set_country_if_empty(&s.pool, cid, &c).await?;
             }
+            // A bundle the cart fully holds applies on its own (no code).
+            let bundle = sf::best_bundle(&s.pool, &items).await?;
             let (order, invoice) = crate::routes::billing::place_order(
                 s,
                 u,
@@ -248,7 +250,7 @@ pub async fn checkout(
                 &cart.currency,
                 &items,
                 cart.coupon.as_deref(),
-                None,
+                bundle.as_ref(),
                 cart.creator_code.as_deref(),
             )
             .await

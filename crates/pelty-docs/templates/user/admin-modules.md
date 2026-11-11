@@ -170,6 +170,17 @@ Webhook events are deduplicated, so Stripe or PayPal retries are safe. Without w
 
 Payout administration needs the **Affiliates** permission. Creator and listing review need **Catalog**.
 
+**Discount codes.** On **Creator → Discount codes** a creator makes codes that only work on their own listings (percentage or fixed amount, total uses, uses per customer, expiry). The creator's slug is put in front of every code (`spring` becomes `NOVA-SPRING`), so codes never clash with the store's own coupons or other creators' codes. A code that has already been used is switched off instead of deleted, so old orders keep their history. Customers enter it in the normal coupon box at checkout.
+
+**Bundles.** On **Creator → Bundles** a creator groups 2–10 of their approved listings with a discount (0–100%). Each listing uses its first billing cycle. The bundle is shown on the page of every listing in it ("Add bundle to cart" puts the missing ones in the cart). When a store cart holds every listing of an active bundle, the best such bundle is applied automatically and shown as its own line in the cart summary. The discount is stored per order line, so creator earnings are counted after the bundle (and coupon) discount.
+
+**Wishlists.** Signed-in customers save resources with the heart button on a resource page and see them on **Wishlist** (`/wishlist`, up to 200). Creators see how many wishlists a listing is on in its analytics.
+
+**Messages.** "Message" on a resource page starts a conversation with the creator (up to 20 new conversations per customer per day; not with yourself). Conversations show whether the customer had already paid for the listing (*verified buyer*). Both sides use **Creator messages** (`/messages`); each new message emails the other side (template *Marketplace message*, linking to `/messages?c={id}`) and fires the `market.message_received` event, so you can also route it to Discord or Slack with a notification rule. Either side can close or reopen a conversation.
+
+**Analytics.** **Analytics** on each listing in **Creator → Listings** shows views, paid sales, revenue (after discounts, before tax), the creator's earnings, conversion (sales ÷ views) and wishlist count for the last 7, 30 or 90 days (UTC days) as a chart. A view is counted each time the public resource page is loaded; there is no bot or repeat-visitor filtering.
+
+
 ### API
 
 | Method | Path | Who |
@@ -177,7 +188,7 @@ Payout administration needs the **Affiliates** permission. Creator and listing r
 | GET | `/api/v1/public/marketplace` | anyone (current mode) |
 | GET | `/api/v1/public/creators`, `/api/v1/public/creators/{slug}` | anyone |
 | GET | `/api/v1/public/marketplace/listings?q=&category=&sort=trending\|new\|top_rated\|popular&limit=` | anyone: approved listings (with creator, category, sales, rating) and the categories |
-| GET | `/api/v1/public/marketplace/listings/{product}` | anyone: one resource page (listing, creator profile, more by the creator) |
+| GET | `/api/v1/public/marketplace/listings/{product}` | anyone: one resource page (listing, creator profile, more by the creator, active bundles that include it); counts a view |
 | GET/POST/PUT | `/api/v1/client/creator` | dashboard / apply / update profile |
 | GET/POST | `/api/v1/client/creator/listings` | the creator |
 | POST | `/api/v1/client/creator/listings/{id}/listed` | unlist or relist |
@@ -189,6 +200,13 @@ Payout administration needs the **Affiliates** permission. Creator and listing r
 | PUT | `/api/v1/client/creator/payout-settings` | the creator: method and PayPal email |
 | POST | `/api/v1/client/creator/stripe/onboard`, `/stripe/sync`, `/stripe/dashboard` | the creator: Stripe onboarding link, status refresh, Express dashboard link |
 | GET/PUT | `/api/v1/client/creator/listings/{id}/gallery` | the creator |
+| GET/POST | `/api/v1/client/creator/coupons`, PUT/DELETE `/{id}` | the creator: discount codes |
+| GET/POST | `/api/v1/client/creator/bundles`, PUT/DELETE `/{id}` | the creator: bundles |
+| GET | `/api/v1/client/creator/listings/{id}/analytics?days=7\|30\|90&currency=` | the creator: daily views, sales, revenue, earnings, conversion |
+| GET | `/api/v1/client/wishlist`, PUT/DELETE `/api/v1/client/wishlist/{product}` | signed-in customers |
+| GET/POST | `/api/v1/client/market-messages` | inbox (both sides) / start a conversation (`product_id`, `subject`, `body`) |
+| GET | `/api/v1/client/market-messages/{id}` | either side: thread (marks it read) |
+| POST | `/api/v1/client/market-messages/{id}/reply`, `/{id}/status` | either side: reply, close (`{"open": false}`) or reopen |
 | POST | `/api/v1/client/creator/media` | any signed-in customer (raw image body): avatar, banner, cover and gallery uploads |
 | GET | `/api/v1/admin/creator-payouts`, POST `/{id}/send`, POST `/{id}/status` | staff (Affiliates) |
 | GET | `/api/v1/admin/creator-payouts/overview` | staff (Affiliates): provider configuration, test/live, webhook URLs |
@@ -196,7 +214,7 @@ Payout administration needs the **Affiliates** permission. Creator and listing r
 | PUT | `/api/v1/admin/creators/{id}/payout` | staff (Affiliates): set and lock a creator's method |
 | POST | `/api/v1/webhooks/creator-payouts/stripe`, `/paypal` | Stripe / PayPal (signed) |
 
-Events: `creator.applied`, `creator.payout_requested`, `creator.payout_paid`, `creator.payout_failed`.
+Events: `creator.applied`, `creator.payout_requested`, `creator.payout_paid`, `creator.payout_failed`, `market.message_received`.
 
 ## Reviews and Q&A (`product_reviews`)
 

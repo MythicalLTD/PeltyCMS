@@ -227,6 +227,7 @@ pub async fn place_full(
         };
         discount_total += discount;
         used[idx] += discount;
+        let mut line_bundle = Decimal::ZERO;
         if let Some(b) = bundle.filter(|b| b.items.contains(&idx)) {
             let d = coupons::line_discount(
                 "percent",
@@ -236,6 +237,7 @@ pub async fn place_full(
             );
             bundle_total += d;
             used[idx] += d;
+            line_bundle = d;
         }
         if let Some((_, pct)) = &group {
             let base = q.amount + extras.iter().map(|a| a.amount).sum::<Decimal>() - discount;
@@ -243,7 +245,7 @@ pub async fn place_full(
             group_total += d;
             used[idx] += d;
         }
-        sqlx::query("INSERT INTO order_items (id, order_id, product_id, cycle, amount, setup_fee, config, custom_fields, discount, recurring_discount, promo_cycles) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)")
+        sqlx::query("INSERT INTO order_items (id, order_id, product_id, cycle, amount, setup_fee, config, custom_fields, discount, recurring_discount, promo_cycles, bundle_discount) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)")
             .bind(item_id)
             .bind(order_id)
             .bind(q.product_id)
@@ -255,6 +257,7 @@ pub async fn place_full(
             .bind(discount)
             .bind(recurring_discount)
             .bind(coupon.as_ref().filter(|c| c.recurring).and_then(|c| c.recurring_cycles))
+            .bind(line_bundle)
             .execute(&mut *tx)
             .await
             .map_err(db_err)?;

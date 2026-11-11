@@ -1,3 +1,4 @@
+import type { CreatorBundle } from "@/lib/creatorTools";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
@@ -11,7 +12,7 @@ export interface MarketCategory { name: string; slug: string; listings: number }
 export interface MarketBrowse { items: MarketListing[]; categories: MarketCategory[]; ratings: boolean }
 export interface CreatorProfile { id: string; slug: string; display_name: string; bio: string; website: string; avatar_url: string; banner_url?: string; since: string; listings?: number; sales?: number }
 export interface GalleryImage { url: string; caption: string }
-export interface MarketResource { listing: MarketListing; creator: CreatorProfile; more: { product_id: string; name: string; image_url: string; sales: number }[]; ratings: boolean; digital: boolean; gallery?: GalleryImage[] }
+export interface MarketResource { listing: MarketListing; creator: CreatorProfile; more: { product_id: string; name: string; image_url: string; sales: number }[]; ratings: boolean; digital: boolean; gallery?: GalleryImage[]; bundles?: CreatorBundle[] }
 
 /** Main image first, then the gallery (duplicates dropped). */
 export function resourceImages(r: Pick<MarketResource, "listing" | "gallery">): GalleryImage[] {

@@ -116,6 +116,8 @@ const AdminCreatorMarketPage = lazy(() => import("@/pages/admin/gaming/CreatorMa
 const AdminGameDeliveryPage = lazy(() => import("@/pages/admin/gaming/GameDelivery").then((m) => ({ default: m.AdminGameDeliveryPage })));
 const AdminGameServersPage = lazy(() => import("@/pages/admin/gaming/GameServers").then((m) => ({ default: m.AdminGameServersPage })));
 const DigitalProductsPage = lazy(() => import("@/pages/client/DigitalProducts").then((m) => ({ default: m.DigitalProductsPage })));
+const WishlistPage = lazy(() => import("@/pages/client/Wishlist").then((m) => ({ default: m.WishlistPage })));
+const MarketMessagesPage = lazy(() => import("@/pages/client/MarketMessages").then((m) => ({ default: m.MarketMessagesPage })));
 const CreatorPage = lazy(() => import("@/pages/client/Creator").then((m) => ({ default: m.CreatorPage })));
 const GameAccountsPage = lazy(() => import("@/pages/client/GameAccounts").then((m) => ({ default: m.GameAccountsPage })));
 const AdminModulesPage = lazy(() => import("@/pages/admin/gaming/Modules").then((m) => ({ default: m.AdminModulesPage })));
@@ -319,6 +321,8 @@ export function App() {
           <Route path="/my-details" element={<Suspense fallback={<Loading />}><MyDetailsPage /></Suspense>} />
           <Route path="/game-accounts" element={<Suspense fallback={<Loading />}><RequireModule id="game_profiles"><GameAccountsPage /></RequireModule></Suspense>} />
           <Route path="/creator" element={<Suspense fallback={<Loading />}><RequireModule id="creator_marketplace"><CreatorPage /></RequireModule></Suspense>} />
+          <Route path="/wishlist" element={<Suspense fallback={<Loading />}><RequireModule id="creator_marketplace"><WishlistPage /></RequireModule></Suspense>} />
+          <Route path="/messages" element={<Suspense fallback={<Loading />}><RequireModule id="creator_marketplace"><MarketMessagesPage /></RequireModule></Suspense>} />
           <Route path="/digital" element={<Suspense fallback={<Loading />}><RequireModule id="digital_products"><DigitalProductsPage /></RequireModule></Suspense>} />
           <Route path="/p/:plugin/:page" element={<ClientPluginPage />} />
         </Route>

@@ -37,6 +37,8 @@ pub const GATES: &[(&str, &str)] = &[
     ("/public/creators", "creator_marketplace"),
     ("/public/marketplace", "creator_marketplace"),
     ("/client/creator", "creator_marketplace"),
+    ("/client/wishlist", "creator_marketplace"),
+    ("/client/market-messages", "creator_marketplace"),
     ("/admin/creators", "creator_marketplace"),
     ("/admin/creator-listings", "creator_marketplace"),
     ("/admin/creator-payouts", "creator_marketplace"),

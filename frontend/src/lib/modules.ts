@@ -19,6 +19,8 @@ export const MODULE_ROUTES: readonly (readonly [string, ModuleId])[] = [
   ["/digital", "digital_products"],
   ["/admin/creator-market", "creator_marketplace"],
   ["/creator", "creator_marketplace"],
+  ["/wishlist", "creator_marketplace"],
+  ["/messages", "creator_marketplace"],
   ["/admin/product-reviews", "product_reviews"],
   ["/admin/community", "server_community"],
   ["/admin/storefront", "gaming_storefront"],

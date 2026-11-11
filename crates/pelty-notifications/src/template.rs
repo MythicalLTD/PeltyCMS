@@ -173,6 +173,12 @@ pub const TEMPLATES: &[TemplateDef] = &[
         vars: &["name", "product", "version", "link", "company"],
     },
     TemplateDef {
+        name: "market_message",
+        vars: &[
+            "name", "from", "subject", "product", "message", "link", "company",
+        ],
+    },
+    TemplateDef {
         name: "affiliate_payout_requested",
         vars: &["affiliate", "amount", "link", "company"],
     },

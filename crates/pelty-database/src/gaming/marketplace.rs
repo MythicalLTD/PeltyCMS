@@ -537,10 +537,13 @@ pub async fn owner_of(pool: &PgPool, product: Uuid) -> AppResult<Option<Uuid>> {
 pub async fn accrue_invoice(pool: &PgPool, invoice: Uuid, cfg: &Config) -> AppResult<u64> {
     let r = sqlx::query(
         "WITH lines AS (
-            SELECT ii.id AS line, s.product_id, ii.amount AS gross
+            -- First (order) invoice: minus the line's promo and bundle discount, like below.
+            SELECT ii.id AS line, s.product_id, ii.amount - COALESCE((
+                     SELECT oi.discount + oi.bundle_discount FROM invoices i2 JOIN order_items oi ON oi.order_id = i2.order_id
+                      WHERE i2.id = $1 AND oi.product_id = s.product_id ORDER BY oi.id LIMIT 1), 0) AS gross
               FROM invoice_items ii JOIN services s ON s.id = ii.service_id WHERE ii.invoice_id = $1
             UNION ALL
-            SELECT oi.id, oi.product_id, oi.amount + oi.setup_fee - oi.discount
+            SELECT oi.id, oi.product_id, oi.amount + oi.setup_fee - oi.discount - oi.bundle_discount
               FROM invoices i JOIN order_items oi ON oi.order_id = i.order_id
              WHERE i.id = $1 AND NOT EXISTS (
                SELECT 1 FROM invoice_items ii JOIN services s ON s.id = ii.service_id

@@ -223,6 +223,7 @@ export function Totals({ view }: { view: NonNullable<ReturnType<typeof useStoreC
     <dl className="grid grid-cols-[1fr_auto] gap-y-1 text-sm">
       <dt className="text-muted-foreground">{t("store.subtotal")}</dt><dd className="tabular-nums">{m(p.subtotal)}</dd>
       {Number(p.discount) > 0 && <><dt className="text-muted-foreground">{t("order.discount")}</dt><dd className="tabular-nums">−{m(p.discount)}</dd></>}
+      {Number(p.bundle_discount ?? 0) > 0 && <><dt className="text-muted-foreground" data-testid="cart-bundle">{t("ctools.bundle_discount", { name: p.bundle ?? "" })}</dt><dd className="tabular-nums">−{m(p.bundle_discount ?? "0")}</dd></>}
       {Number(p.sale_discount ?? 0) > 0 && <><dt className="text-muted-foreground">{t("sales.discount")}</dt><dd className="tabular-nums">−{m(p.sale_discount ?? "0")}</dd></>}
       {Number(p.creator_discount ?? 0) > 0 && <><dt className="text-muted-foreground">{t("creator_code.discount", { code: p.creator_code ?? "" })}</dt><dd className="tabular-nums">−{m(p.creator_discount ?? "0")}</dd></>}
       {Number(p.group_discount) > 0 && <><dt className="text-muted-foreground">{t("store.group_discount")}</dt><dd className="tabular-nums">−{m(p.group_discount)}</dd></>}
