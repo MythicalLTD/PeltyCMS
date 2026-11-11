@@ -13,6 +13,7 @@ import { useI18n } from "@/lib/i18n";
 import { ThemeRegion } from "@/components/theme/ThemeSlot";
 import { Captcha } from "@/components/Captcha";
 import { SsoButtons } from "@/components/account/SsoButtons";
+import { SsoSignupCard } from "@/components/account/SsoSignup";
 import { FingerprintIcon } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { setCsrfToken } from "@/lib/api";
@@ -111,6 +112,9 @@ export function LoginPage() {
     }
   };
 
+  const signupToken = params.get("sso_signup");
+  if (signupToken) return <ThemeRegion slot="login"><SsoSignupCard token={signupToken} /></ThemeRegion>;
+
   return (
     <ThemeRegion slot="login"><Card>
       <CardHeader>
@@ -133,7 +137,7 @@ export function LoginPage() {
           <Button type="submit" disabled={formState.isSubmitting}>{t("auth.login.submit")}</Button>
           {pk && <Button type="button" variant="outline" disabled={pkBusy} onClick={() => void withPasskey()}><FingerprintIcon aria-hidden />{t("passkeys.sign_in")}</Button>}
           {pk && <p className="text-muted-foreground text-center text-xs">{t("passkeys.discover_hint")}</p>}
-          <SsoButtons />
+          <SsoButtons returnTo={(loc.state as { from?: string } | null)?.from} />
           <p className="text-center text-sm text-muted-foreground">
             {t("auth.login.no_account")}{" "}
             <Link to="/register" className="text-primary hover:underline">{t("auth.login.register_link")}</Link>

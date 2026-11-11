@@ -24,6 +24,7 @@ import { useAuthActions, useMe } from "@/lib/auth";
 import { formatMoney } from "@/lib/billing/billing";
 import { useI18n } from "@/lib/i18n";
 import { useModules } from "@/lib/modules";
+import { SsoButtons } from "@/components/account/SsoButtons";
 import { Captcha } from "@/components/Captcha";
 import { GuestCheckoutCard, useGuestCheckout } from "@/components/store/GuestCheckout";
 import { addonPrice, fieldErrors, fromPrice, resetCartId, useStoreCart, type Extras, type StoreLine } from "@/lib/store/storefront";
@@ -381,7 +382,8 @@ function AuthStep() {
   return (
     <Card>
       <CardHeader><CardTitle>{t("store.account_step")}</CardTitle><CardDescription>{t("store.account_hint")}</CardDescription></CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-col gap-4">
+        <SsoButtons returnTo="/checkout" divider="after" />
         <Tabs value={mode} onValueChange={setMode}>
           <TabsList className="mb-4 w-full"><TabsTrigger value="register">{t("store.new_customer")}</TabsTrigger><TabsTrigger value="login">{t("store.have_account")}</TabsTrigger></TabsList>
           <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); setError(null); go.mutate(); }}>

@@ -8,7 +8,7 @@ import { api, ApiError } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 
-interface Identity { id: string; provider: string; email: string; created_at: string; last_login_at: string | null }
+interface Identity { id: string; provider: string; email: string; username?: string; created_at: string; last_login_at: string | null }
 
 /** Social / SSO identities linked to the account: link more, unlink. */
 export function LinkedAccountsCard() {
@@ -37,7 +37,7 @@ export function LinkedAccountsCard() {
                   <Icon aria-hidden className="size-5 shrink-0" />
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="font-medium">{p?.label ?? i.provider}</span>
-                    <span className="truncate text-xs text-muted-foreground">{i.email || "-"} · {t("sso.linked_at", { date: formatDateTime(i.created_at, lang) })}</span>
+                    <span className="truncate text-xs text-muted-foreground">{i.username || i.email || "-"} · {t("sso.linked_at", { date: formatDateTime(i.created_at, lang) })}</span>
                   </span>
                   <Button size="sm" variant="outline" disabled={unlink.isPending} onClick={() => unlink.mutate(i.id)}><LinkBreakIcon />{t("sso.unlink")}</Button>
                 </li>
