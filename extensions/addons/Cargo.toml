@@ -27,6 +27,8 @@ members = [
     "sso-discord",
     "sso-microsoft",
     "sso-facebook",
+    "sso-cfx",
+    "sso-steam",
     "fixture-prov",
     "fixture-pay",
     "stripe",

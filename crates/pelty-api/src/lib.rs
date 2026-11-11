@@ -33,6 +33,7 @@ pub mod access;
 pub use access::captcha;
 pub use access::duo;
 pub use access::fraud;
+pub use access::game_sso;
 pub use access::geoip;
 pub use access::oauth;
 pub use access::oidc_provider;

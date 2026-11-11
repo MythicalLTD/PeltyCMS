@@ -6,6 +6,7 @@
 pub mod captcha;
 pub mod duo;
 pub mod fraud;
+pub mod game_sso;
 pub mod geoip;
 pub mod oauth;
 pub mod oidc_provider;

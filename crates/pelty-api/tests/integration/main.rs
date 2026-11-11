@@ -96,6 +96,7 @@ mod extensions_flow;
 mod fixed_term_flow;
 mod form_rate_limit_flow;
 mod fraud_flow;
+mod game_sso_flow;
 mod gaming_reports_flow;
 mod gaming_sales_tax_flow;
 mod gaming_storefront_flow;

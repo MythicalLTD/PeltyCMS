@@ -2169,6 +2169,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pelty-addon-sso-cfx"
+version = "0.1.0"
+dependencies = [
+ "pelty-addon-sdk",
+ "serde_json",
+]
+
+[[package]]
 name = "pelty-addon-sso-common"
 version = "0.1.0"
 dependencies = [
@@ -2221,6 +2229,14 @@ name = "pelty-addon-sso-oidc"
 version = "0.1.0"
 dependencies = [
  "pelty-addon-sso-common",
+ "serde_json",
+]
+
+[[package]]
+name = "pelty-addon-sso-steam"
+version = "0.1.0"
+dependencies = [
+ "pelty-addon-sdk",
  "serde_json",
 ]
 

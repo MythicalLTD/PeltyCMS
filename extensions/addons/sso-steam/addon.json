@@ -1,0 +1,66 @@
+{
+  "id": "sso-steam",
+  "name": "Steam",
+  "version": "0.1.0",
+  "kind": "sso",
+  "engine": "wasm",
+  "provides": "steam",
+  "abi": "0.2.0",
+  "wasm": "addon.wasm",
+  "description": "addons.desc.sso.steam",
+  "author": "MythicalSystems",
+  "permissions": [
+    "network.outbound"
+  ],
+  "capabilities": {
+    "http": [
+      "steamcommunity.com",
+      "api.steampowered.com"
+    ],
+    "secrets": []
+  },
+  "settings": [
+    {
+      "key": "show_button",
+      "label": "addons.sso.setting.show_button",
+      "kind": "bool",
+      "required": false,
+      "default": false
+    },
+    {
+      "key": "api_key",
+      "label": "addons.sso.setting.steam_api_key",
+      "kind": "secret",
+      "required": false,
+      "default": ""
+    },
+    {
+      "key": "button_label",
+      "label": "addons.sso.setting.button_label",
+      "kind": "text",
+      "required": false,
+      "default": ""
+    },
+    {
+      "key": "allow_register",
+      "label": "addons.sso.setting.allow_register",
+      "kind": "bool",
+      "required": false,
+      "default": true
+    },
+    {
+      "key": "link_by_verified_email",
+      "label": "addons.sso.setting.link_by_verified_email",
+      "kind": "bool",
+      "required": false,
+      "default": false
+    },
+    {
+      "key": "allow_staff",
+      "label": "addons.sso.setting.allow_staff",
+      "kind": "bool",
+      "required": false,
+      "default": false
+    }
+  ]
+}

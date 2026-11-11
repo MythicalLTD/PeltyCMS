@@ -46,6 +46,8 @@ hmac = "0.13"
 ring = "0.17"
 ipnet = "2"
 form_urlencoded = "1"
+# RSA for Cfx.re forum keys (already linked through rustls).
+aws-lc-rs = "1"
 pdf-writer = "0.15"
 ttf-parser = "0.25"
 subsetter = "0.2.6"

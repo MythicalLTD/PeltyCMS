@@ -285,6 +285,8 @@ pub struct Resp {
     pub status: StatusCode,
     pub body: Value,
     pub cookies: Vec<String>,
+    /// `Location` header of a redirect.
+    pub location: Option<String>,
 }
 
 pub async fn call(
@@ -313,12 +315,18 @@ pub async fn call(
         .iter()
         .filter_map(|v| v.to_str().ok().map(str::to_string))
         .collect();
+    let location = res
+        .headers()
+        .get("location")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
     let bytes = res.into_body().collect().await.expect("body").to_bytes();
     let body = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
     Resp {
         status,
         body,
         cookies,
+        location,
     }
 }
 
@@ -701,10 +709,16 @@ pub async fn call_from(
         .iter()
         .filter_map(|v| v.to_str().ok().map(str::to_string))
         .collect();
+    let location = res
+        .headers()
+        .get("location")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
     let bytes = res.into_body().collect().await.expect("body").to_bytes();
     Resp {
         status,
         body: serde_json::from_slice(&bytes).unwrap_or(Value::Null),
         cookies,
+        location,
     }
 }

@@ -181,7 +181,7 @@ async fn identity(
     Ok(out)
 }
 
-fn email_ok(e: &str) -> bool {
+pub(crate) fn email_ok(e: &str) -> bool {
     let Some((local, host)) = e.rsplit_once('@') else {
         return false;
     };

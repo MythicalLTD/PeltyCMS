@@ -6,7 +6,9 @@
 //! `link_by_verified_email`, `allow_staff`). Endpoint URLs can be overridden
 //! per addon (required for `oidc`; optional for the others, e.g. a proxy or a
 //! local mock in tests). All provider HTTP goes through the shared transport.
-//! SAML 2.0 is not implemented (see `make docs`).
+//! SAML 2.0 lives in `saml`. Game-store sign-in that is not OAuth (Cfx.re
+//! forum keys for FiveM, Steam OpenID 2.0) shares the account side here and
+//! its protocols in [`crate::game_sso`].
 use crate::addons::Manifest;
 use crate::error::ApiResult;
 use crate::extract::{CurrentUser, SESSION_COOKIE};
@@ -33,6 +35,8 @@ pub const ENGINES: &[&str] = &[
     "discord",
     "microsoft",
     "facebook",
+    "cfx",
+    "steam",
 ];
 
 /// Endpoints and display name from the provider addon's `describe()`.
@@ -42,6 +46,8 @@ struct Endpoints {
     token: String,
     userinfo: String,
     scope: String,
+    /// Empty for OAuth 2.0 / OIDC; see [`crate::game_sso`].
+    protocol: String,
 }
 
 fn endpoints(
@@ -56,6 +62,7 @@ fn endpoints(
         token: g("token_url"),
         userinfo: g("userinfo_url"),
         scope: g("scope"),
+        protocol: g("protocol"),
     };
     Some((ep, a))
 }
@@ -75,6 +82,25 @@ struct Provider {
     token: String,
     userinfo: String,
     scope: String,
+    protocol: String,
+}
+
+impl Provider {
+    fn game(&self) -> bool {
+        crate::game_sso::is_game(&self.protocol)
+    }
+    /// Shown and usable: OAuth needs a client id and endpoints; game
+    /// sign-in has no client registration, so the admin opts in with
+    /// `show_button`.
+    fn configured(&self) -> bool {
+        if self.game() {
+            return flag(&self.cfg, "show_button", false) && !self.authorize.is_empty();
+        }
+        !self.cfg["client_id"].as_str().unwrap_or("").is_empty()
+            && !self.authorize.is_empty()
+            && !self.token.is_empty()
+            && !self.userinfo.is_empty()
+    }
 }
 
 fn pick(cfg: &Value, key: &str, default: &str) -> String {
@@ -103,13 +129,10 @@ async fn provider(s: &AppState, id: &str) -> AppResult<Provider> {
         token: pick(&a.settings, "token_url", &ep.token),
         userinfo: pick(&a.settings, "userinfo_url", &ep.userinfo),
         scope: pick(&a.settings, "scope", &ep.scope),
+        protocol: ep.protocol,
         cfg: a.settings,
     };
-    if p.cfg["client_id"].as_str().unwrap_or("").is_empty()
-        || p.authorize.is_empty()
-        || p.token.is_empty()
-        || p.userinfo.is_empty()
-    {
+    if !p.configured() {
         return Err(AppError::NotFound);
     }
     Ok(p)
@@ -135,6 +158,8 @@ pub fn router() -> Router<AppState> {
         .route("/auth/oauth/providers", get(providers))
         .route("/auth/oauth/{id}/start", get(start))
         .route("/auth/oauth/{id}/callback", get(callback))
+        .route("/auth/oauth/signup/{token}", get(signup_info))
+        .route("/auth/oauth/signup", axum::routing::post(signup))
         .route("/account/identities", get(list_identities))
         .route("/account/identities/{id}", delete(unlink))
 }
@@ -147,14 +172,8 @@ pub async fn providers(State(s): State<AppState>) -> ApiResult<Json<Value>> {
         if a.kind != "sso" || !a.enabled {
             continue;
         }
+        // Unconfigured providers stay hidden (`provider` fails).
         if let Ok(p) = provider(&s, &a.id).await {
-            // Unconfigured providers stay hidden.
-            if p.cfg["client_id"].as_str().unwrap_or("").is_empty()
-                || p.authorize.is_empty()
-                || p.token.is_empty()
-            {
-                continue;
-            }
             let name = if p.name.is_empty() {
                 "SSO"
             } else {
@@ -166,6 +185,9 @@ pub async fn providers(State(s): State<AppState>) -> ApiResult<Json<Value>> {
                 "label": pick(&p.cfg, "button_label", name),
                 "allow_register": flag(&p.cfg, "allow_register", true),
                 "staff": flag(&p.cfg, "allow_staff", false),
+                // Game-store sign-in (FiveM, Steam): shown first and larger.
+                "featured": p.game(),
+                "custom_label": !pick(&p.cfg, "button_label", "").is_empty(),
             }));
         }
     }
@@ -179,11 +201,15 @@ pub struct StartQuery {
     /// `json` returns `{url}` instead of redirecting.
     #[serde(default)]
     pub format: Option<String>,
+    /// Same-site path to land on afterwards (e.g. `/checkout`).
+    #[serde(default)]
+    pub return_to: Option<String>,
 }
 
 #[utoipa::path(get, path = "/api/v1/auth/oauth/{id}/start", params(("id" = String, Path)), responses((status = 303), (status = 404)))]
 pub async fn start(
     State(s): State<AppState>,
+    _g: AuthGuard,
     Path(id): Path<String>,
     headers: HeaderMap,
     Query(q): Query<StartQuery>,
@@ -208,8 +234,12 @@ pub async fn start(
     let state = pelty_auth::token::generate();
     let verifier = pelty_auth::token::generate();
     let nonce = pelty_auth::token::generate();
+    let return_to = crate::game_sso::safe_return_to(q.return_to.as_deref());
+    if p.game() {
+        return start_game(&s, &p, &state, &nonce, mode, user_id, return_to, q.format).await;
+    }
     let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
-    security::put_oauth_state(
+    security::put_oauth_state_ext(
         &s.pool,
         &pelty_auth::token::hash(&state),
         &p.id,
@@ -217,6 +247,10 @@ pub async fn start(
         &nonce,
         mode,
         user_id,
+        security::StateExtra {
+            bind_hash: None,
+            return_to: return_to.as_deref(),
+        },
     )
     .await?;
     let mut url = form_urlencoded::Serializer::new(String::new());
@@ -238,7 +272,66 @@ pub async fn start(
     Ok(see_other(&full))
 }
 
-#[derive(Deserialize)]
+/// Callback URL of a game sign-in attempt; the provider must send the
+/// browser back to exactly this.
+fn game_callback(s: &AppState, id: &str, state: &str) -> String {
+    let mut q = form_urlencoded::Serializer::new(String::new());
+    q.append_pair("state", state);
+    format!("{}?{}", redirect_uri(s, id), q.finish())
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn start_game(
+    s: &AppState,
+    p: &Provider,
+    state: &str,
+    nonce: &str,
+    mode: &str,
+    user_id: Option<Uuid>,
+    return_to: Option<String>,
+    format: Option<String>,
+) -> ApiResult<Response> {
+    let bind = pelty_auth::token::generate();
+    security::put_oauth_state_ext(
+        &s.pool,
+        &pelty_auth::token::hash(state),
+        &p.id,
+        "",
+        nonce,
+        mode,
+        user_id,
+        security::StateExtra {
+            bind_hash: Some(&pelty_auth::token::hash(&bind)),
+            return_to: return_to.as_deref(),
+        },
+    )
+    .await?;
+    let callback = game_callback(s, &p.id, state);
+    let input = crate::game_sso::StartInput {
+        addon_id: &p.id,
+        authorize: &p.authorize,
+        cfg: &p.cfg,
+        callback: &callback,
+        nonce,
+    };
+    let url = if p.protocol == crate::game_sso::DISCOURSE {
+        crate::game_sso::cfx_url(s, &input).await?
+    } else {
+        crate::game_sso::steam_url(s, &input)
+    };
+    let mut r = if format.as_deref() == Some("json") {
+        Json(json!({ "url": url })).into_response()
+    } else {
+        see_other(&url)
+    };
+    r.headers_mut().append(
+        header::SET_COOKIE,
+        crate::routes::auth::cookie_header(s, crate::game_sso::BIND_COOKIE, &bind, 600, true),
+    );
+    Ok(r)
+}
+
+#[derive(Deserialize, Default)]
 pub struct CallbackQuery {
     pub code: Option<String>,
     pub state: Option<String>,
@@ -246,12 +339,14 @@ pub struct CallbackQuery {
 }
 
 /// Normalized provider profile.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Profile {
     pub subject: String,
     pub email: String,
     pub email_verified: bool,
     pub name: String,
+    /// Display handle at the provider (Cfx.re username, Steam persona).
+    pub username: String,
 }
 
 /// Code exchange + userinfo through the provider addon (op `exchange`).
@@ -284,6 +379,7 @@ async fn fetch_profile(
         email: g("email"),
         email_verified: v["email_verified"].as_bool().unwrap_or(false),
         name: g("name"),
+        username: String::new(),
     };
     if prof.subject.is_empty() {
         return Err(AppError::Validation("error.oauth_failed"));
@@ -304,10 +400,11 @@ pub async fn callback(
     g: AuthGuard,
     Path(id): Path<String>,
     headers: HeaderMap,
-    Query(q): Query<CallbackQuery>,
+    Query(raw): Query<Vec<(String, String)>>,
 ) -> ApiResult<Response> {
-    match finish(&s, &g, &id, &headers, q).await {
-        Ok(r) => Ok(r),
+    let res = finish(&s, &g, &id, &headers, &raw).await;
+    let mut out = match res {
+        Ok(r) => r,
         Err(e) => {
             let code = match &e {
                 AppError::Validation(c) | AppError::Conflict(c) | AppError::Denied(c) => {
@@ -315,9 +412,17 @@ pub async fn callback(
                 }
                 _ => "oauth_failed",
             };
-            Ok(see_other(&format!("/login?oauth_error={code}")))
+            see_other(&format!("/login?oauth_error={code}"))
         }
+    };
+    // The browser-binding cookie of a game sign-in is single use.
+    if crate::extract::cookie(&headers, crate::game_sso::BIND_COOKIE).is_some() {
+        out.headers_mut().append(
+            header::SET_COOKIE,
+            crate::routes::auth::cookie_header(&s, crate::game_sso::BIND_COOKIE, "", 0, true),
+        );
     }
+    Ok(out)
 }
 
 async fn finish(
@@ -325,12 +430,18 @@ async fn finish(
     g: &AuthGuard,
     id: &str,
     headers: &HeaderMap,
-    q: CallbackQuery,
+    raw: &[(String, String)],
 ) -> AppResult<Response> {
+    let get = |k: &str| raw.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone());
+    let q = CallbackQuery {
+        code: get("code"),
+        state: get("state"),
+        error: get("error"),
+    };
     if q.error.is_some() {
         return Err(AppError::Validation("error.oauth_cancelled"));
     }
-    let (Some(code), Some(state)) = (q.code, q.state) else {
+    let Some(state) = q.state else {
         return Err(AppError::Validation("error.oauth_failed"));
     };
     let st = security::take_oauth_state(&s.pool, &pelty_auth::token::hash(&state))
@@ -340,17 +451,74 @@ async fn finish(
         return Err(AppError::Validation("error.oauth_state"));
     }
     let p = provider(s, id).await?;
-    let prof = fetch_profile(s, &p, &code, &st.verifier).await?;
+    let prof = if p.game() {
+        // Bound to the browser that started the attempt.
+        let cookie = crate::extract::cookie(headers, crate::game_sso::BIND_COOKIE)
+            .map(|c| pelty_auth::token::hash(&c));
+        match (&st.bind_hash, cookie) {
+            (Some(want), Some(got)) if *want == got => {}
+            _ => return Err(AppError::Validation("error.oauth_state")),
+        }
+        crate::game_sso::profile(
+            s,
+            &p.protocol,
+            &p.id,
+            &p.addon,
+            &p.cfg,
+            raw,
+            &game_callback(s, &p.id, &state),
+            &st.nonce,
+        )
+        .await?
+    } else {
+        let Some(code) = q.code else {
+            return Err(AppError::Validation("error.oauth_failed"));
+        };
+        fetch_profile(s, &p, &code, &st.verifier).await?
+    };
+    complete(
+        s,
+        g,
+        headers,
+        &p.id,
+        &p.cfg,
+        prof,
+        st.mode == "link",
+        st.user_id,
+        st.return_to,
+    )
+    .await
+}
+
+/// Sign in, link or register from a verified provider profile.
+#[allow(clippy::too_many_arguments)]
+async fn complete(
+    s: &AppState,
+    g: &AuthGuard,
+    headers: &HeaderMap,
+    pid: &str,
+    cfg: &Value,
+    prof: Profile,
+    link: bool,
+    link_user: Option<Uuid>,
+    return_to: Option<String>,
+) -> AppResult<Response> {
+    struct P<'a> {
+        id: &'a str,
+        cfg: &'a Value,
+    }
+    let p = P { id: pid, cfg };
     let ip = g.ip();
 
-    if st.mode == "link" {
-        let uid = st.user_id.ok_or(AppError::Unauthenticated)?;
-        security::link_identity(&s.pool, uid, &p.id, &prof.subject, &prof.email).await?;
+    if link {
+        let uid = link_user.ok_or(AppError::Unauthenticated)?;
+        security::link_identity(&s.pool, uid, p.id, &prof.subject, &prof.email).await?;
+        remember_username(s, p.id, &prof).await?;
         audit::record(
             &s.pool,
             Some(uid),
             "auth.identity_linked",
-            Some(&p.id),
+            Some(p.id),
             ip,
             json!({ "provider": p.id }),
         )
@@ -358,9 +526,10 @@ async fn finish(
         return Ok(see_other(&format!("/sessions?linked={}", p.id)));
     }
 
-    let user = match security::find_identity(&s.pool, &p.id, &prof.subject).await? {
+    let user = match security::find_identity(&s.pool, p.id, &prof.subject).await? {
         Some(i) => {
             security::touch_identity(&s.pool, i.id).await?;
+            remember_username(s, p.id, &prof).await?;
             users::find(&s.pool, i.user_id)
                 .await?
                 .ok_or(AppError::Unauthenticated)?
@@ -374,16 +543,17 @@ async fn finish(
             match existing {
                 Some(u)
                     if prof.email_verified
-                        && flag(&p.cfg, "link_by_verified_email", false)
+                        && flag(p.cfg, "link_by_verified_email", false)
                         && !is_staff(s, u.id).await? =>
                 {
-                    security::link_identity(&s.pool, u.id, &p.id, &prof.subject, &prof.email)
+                    security::link_identity(&s.pool, u.id, p.id, &prof.subject, &prof.email)
                         .await?;
+                    remember_username(s, p.id, &prof).await?;
                     audit::record(
                         &s.pool,
                         Some(u.id),
                         "auth.identity_linked",
-                        Some(&p.id),
+                        Some(p.id),
                         ip,
                         json!({ "provider": p.id, "by": "verified_email" }),
                     )
@@ -391,7 +561,31 @@ async fn finish(
                     u
                 }
                 Some(_) => return Err(AppError::Conflict("error.oauth_email_in_use")),
-                None if flag(&p.cfg, "allow_register", true) && !prof.email.is_empty() => {
+                // Steam / Cfx.re never share an e-mail: ask for one first.
+                None if flag(p.cfg, "allow_register", true) && prof.email.is_empty() => {
+                    let token = pelty_auth::token::generate();
+                    security::put_sso_signup(
+                        &s.pool,
+                        &pelty_auth::token::hash(&token),
+                        &security::SsoSignup {
+                            provider: p.id.to_string(),
+                            subject: prof.subject.clone(),
+                            name: if prof.name.is_empty() {
+                                prof.username.clone()
+                            } else {
+                                prof.name.clone()
+                            },
+                            username: prof.username.clone(),
+                            return_to,
+                        },
+                    )
+                    .await?;
+                    return Ok(see_other(&format!("/login?sso_signup={token}")));
+                }
+                None if flag(p.cfg, "allow_register", true) => {
+                    if pelty_database::banned_emails::is_banned(&s.pool, &prof.email).await? {
+                        return Err(AppError::Validation("error.email_banned"));
+                    }
                     let pw = format!("{}Aa1!", pelty_auth::token::generate());
                     let name: String = if prof.name.is_empty() {
                         prof.email.split('@').next().unwrap_or("").to_string()
@@ -414,13 +608,14 @@ async fn finish(
                     if prof.email_verified {
                         users::mark_verified(&s.pool, u.id).await?;
                     }
-                    security::link_identity(&s.pool, u.id, &p.id, &prof.subject, &prof.email)
+                    security::link_identity(&s.pool, u.id, p.id, &prof.subject, &prof.email)
                         .await?;
+                    remember_username(s, p.id, &prof).await?;
                     audit::record(
                         &s.pool,
                         Some(u.id),
                         "auth.registered_via_sso",
-                        Some(&p.id),
+                        Some(p.id),
                         ip,
                         json!({ "provider": p.id }),
                     )
@@ -437,11 +632,37 @@ async fn finish(
             }
         }
     };
+    sign_in(s, g, headers, p.id, p.cfg, user, return_to).await
+}
+
+/// Keep the provider handle on the identity. Hook: if Cfx.re ever exposes
+/// the player's `license:` identifier through a documented API, this is
+/// where it would be written to `customer_game_accounts` (FiveM delivery
+/// uses that). Today `session/current.json` has no licence, so nothing is
+/// invented; players enter it under Game accounts.
+async fn remember_username(s: &AppState, pid: &str, prof: &Profile) -> AppResult<()> {
+    if !prof.username.is_empty() {
+        security::set_identity_username(&s.pool, pid, &prof.subject, &prof.username).await?;
+    }
+    Ok(())
+}
+
+/// Session for `user` signed in through provider `pid` (or the MFA step).
+async fn sign_in(
+    s: &AppState,
+    g: &AuthGuard,
+    headers: &HeaderMap,
+    pid: &str,
+    cfg: &Value,
+    user: users::User,
+    return_to: Option<String>,
+) -> AppResult<Response> {
+    let ip = g.ip();
     if !user.is_active {
         return Err(AppError::Validation("error.oauth_failed"));
     }
     let staff = is_staff(s, user.id).await?;
-    if staff && !flag(&p.cfg, "allow_staff", false) {
+    if staff && !flag(cfg, "allow_staff", false) {
         return Err(AppError::Denied("error.oauth_staff_disabled"));
     }
     if users::is_locked(&s.pool, user.id).await? {
@@ -464,15 +685,165 @@ async fn finish(
         &s.pool,
         Some(user.id),
         "auth.login_sso",
-        Some(&p.id),
+        Some(pid),
         ip,
-        json!({ "provider": p.id }),
+        json!({ "provider": pid }),
     )
     .await?;
     let r = crate::routes::auth::session_response(s, g, headers, user)
         .await
         .map_err(|_| AppError::Validation("error.oauth_failed"))?;
-    let mut out = see_other(if staff { "/admin" } else { "/dashboard" });
+    let to = match return_to {
+        Some(t) if !staff => t,
+        _ if staff => "/admin".to_string(),
+        _ => "/dashboard".to_string(),
+    };
+    let mut out = see_other(&to);
+    for c in r.headers().get_all(header::SET_COOKIE) {
+        out.headers_mut().append(header::SET_COOKIE, c.clone());
+    }
+    Ok(out)
+}
+
+fn signup_hash(token: &str) -> Vec<u8> {
+    pelty_auth::token::hash(token.trim()).to_vec()
+}
+
+/// Public: what the "finish signing up" form shows for a pending sign-up.
+#[utoipa::path(get, path = "/api/v1/auth/oauth/signup/{token}", params(("token" = String, Path)), responses((status = 200), (status = 404)))]
+pub async fn signup_info(
+    State(s): State<AppState>,
+    Path(token): Path<String>,
+) -> ApiResult<Json<Value>> {
+    let su = security::peek_sso_signup(&s.pool, &signup_hash(&token))
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let label = endpoints_name(&s, &su.provider).await;
+    Ok(Json(json!({
+        "provider": su.provider, "provider_name": label, "name": su.name,
+    })))
+}
+
+async fn endpoints_name(s: &AppState, id: &str) -> String {
+    match provider(s, id).await {
+        Ok(p) => pick(&p.cfg, "button_label", &p.name),
+        Err(_) => String::new(),
+    }
+}
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub struct SignupBody {
+    pub token: String,
+    pub email: String,
+}
+
+/// Finish a game sign-in that had no e-mail (Steam, Cfx.re): create the
+/// customer with the entered e-mail (unverified, a verification mail goes
+/// out), link the identity and sign in. An e-mail that already has an
+/// account is refused: sign in there and link from the account page.
+#[utoipa::path(post, path = "/api/v1/auth/oauth/signup", request_body = SignupBody,
+    responses((status = 200, description = "`{redirect}` with the session cookie"), (status = 404), (status = 409), (status = 422), (status = 429)))]
+pub async fn signup(
+    State(s): State<AppState>,
+    g: AuthGuard,
+    headers: HeaderMap,
+    Json(b): Json<SignupBody>,
+) -> ApiResult<Response> {
+    let email = b.email.trim().to_string();
+    if !crate::routes::guest::email_ok(&email) {
+        return Err(AppError::Validation("error.invalid_email").into());
+    }
+    let hash = signup_hash(&b.token);
+    let su = security::peek_sso_signup(&s.pool, &hash)
+        .await?
+        .ok_or(AppError::Validation("error.oauth_state"))?;
+    let p = provider(&s, &su.provider).await?;
+    if !flag(&p.cfg, "allow_register", true) {
+        return Err(AppError::Validation("error.oauth_not_linked").into());
+    }
+    if pelty_database::banned_emails::is_banned(&s.pool, &email).await? {
+        return Err(AppError::Validation("error.email_banned").into());
+    }
+    if users::find_by_email(&s.pool, &email).await?.is_some() {
+        return Err(AppError::Conflict("error.oauth_email_in_use").into());
+    }
+    if security::find_identity(&s.pool, &p.id, &su.subject)
+        .await?
+        .is_some()
+    {
+        return Err(AppError::Conflict("error.identity_linked").into());
+    }
+    // One use from here on.
+    let su = security::take_sso_signup(&s.pool, &hash)
+        .await?
+        .ok_or(AppError::Validation("error.oauth_state"))?;
+    let pre = crate::addon_ext::pre_event(
+        &s,
+        "client.before_register",
+        json!({ "email": email, "display_name": su.name, "ip": g.ip() }),
+    )
+    .await?;
+    let name: String = pre
+        .get("display_name")
+        .and_then(|v| v.as_str())
+        .map(String::from)
+        .filter(|n| !n.trim().is_empty())
+        .unwrap_or_else(|| {
+            if su.name.trim().is_empty() {
+                email.split('@').next().unwrap_or("").to_string()
+            } else {
+                su.name.clone()
+            }
+        })
+        .chars()
+        .take(100)
+        .collect();
+    let pw = format!("{}Aa1!", pelty_auth::token::generate());
+    let u = s
+        .auth
+        .register(
+            pelty_auth::RegisterInput {
+                email: &email,
+                password: &pw,
+                display_name: &name,
+            },
+            "customer",
+            g.ip(),
+        )
+        .await?;
+    security::link_identity(&s.pool, u.id, &p.id, &su.subject, "").await?;
+    if !su.username.is_empty() {
+        security::set_identity_username(&s.pool, &p.id, &su.subject, &su.username).await?;
+    }
+    crate::routes::affiliates::attribute_signup(&s, &headers, u.id).await;
+    if let Err(e) = crate::routes::account::send_verification(&s, &u).await {
+        tracing::error!(error = %e, "could not queue verification email");
+    }
+    audit::record(
+        &s.pool,
+        Some(u.id),
+        "auth.registered_via_sso",
+        Some(&p.id),
+        g.ip(),
+        json!({ "provider": p.id }),
+    )
+    .await?;
+    s.emit(pelty_extensions::events::DomainEvent::new(
+        "user.registered",
+        json!({ "user_id": u.id, "via": p.id }),
+    ));
+    let user = users::find(&s.pool, u.id)
+        .await?
+        .ok_or(AppError::Unauthenticated)?;
+    let r = sign_in(&s, &g, &headers, &p.id, &p.cfg, user, su.return_to).await?;
+    // JSON for the form: where the redirect would have gone, same cookies.
+    let to = r
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("/dashboard")
+        .to_string();
+    let mut out = Json(json!({ "redirect": to })).into_response();
     for c in r.headers().get_all(header::SET_COOKIE) {
         out.headers_mut().append(header::SET_COOKIE, c.clone());
     }

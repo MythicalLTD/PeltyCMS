@@ -40,6 +40,17 @@ pub struct OauthState {
     pub nonce: String,
     pub mode: String,
     pub user_id: Option<Uuid>,
+    /// Hash of the browser-binding cookie set at start (game sign-in).
+    pub bind_hash: Option<Vec<u8>>,
+    /// Same-site path to land on after signing in.
+    pub return_to: Option<String>,
+}
+
+/// Extra state of a sign-in attempt beyond PKCE/nonce.
+#[derive(Debug, Clone, Default)]
+pub struct StateExtra<'a> {
+    pub bind_hash: Option<&'a [u8]>,
+    pub return_to: Option<&'a str>,
 }
 
 pub async fn put_oauth_state(
@@ -51,17 +62,43 @@ pub async fn put_oauth_state(
     mode: &str,
     user_id: Option<Uuid>,
 ) -> AppResult<()> {
+    put_oauth_state_ext(
+        pool,
+        hash,
+        provider,
+        verifier,
+        nonce,
+        mode,
+        user_id,
+        StateExtra::default(),
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn put_oauth_state_ext(
+    pool: &PgPool,
+    hash: &[u8],
+    provider: &str,
+    verifier: &str,
+    nonce: &str,
+    mode: &str,
+    user_id: Option<Uuid>,
+    extra: StateExtra<'_>,
+) -> AppResult<()> {
     sqlx::query("DELETE FROM oauth_states WHERE expires_at < now()")
         .execute(pool)
         .await
         .map_err(db_err)?;
-    sqlx::query("INSERT INTO oauth_states (state_hash, provider, verifier, nonce, mode, user_id, expires_at) VALUES ($1,$2,$3,$4,$5,$6, now() + interval '10 minutes')")
+    sqlx::query("INSERT INTO oauth_states (state_hash, provider, verifier, nonce, mode, user_id, bind_hash, return_to, expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now() + interval '10 minutes')")
         .bind(hash)
         .bind(provider)
         .bind(verifier)
         .bind(nonce)
         .bind(mode)
         .bind(user_id)
+        .bind(extra.bind_hash)
+        .bind(extra.return_to)
         .execute(pool)
         .await
         .map_err(db_err)?;
@@ -70,7 +107,7 @@ pub async fn put_oauth_state(
 
 /// One-time: deletes the state row.
 pub async fn take_oauth_state(pool: &PgPool, hash: &[u8]) -> AppResult<Option<OauthState>> {
-    sqlx::query_as("DELETE FROM oauth_states WHERE state_hash = $1 AND expires_at > now() RETURNING provider, verifier, nonce, mode, user_id")
+    sqlx::query_as("DELETE FROM oauth_states WHERE state_hash = $1 AND expires_at > now() RETURNING provider, verifier, nonce, mode, user_id, bind_hash, return_to")
         .bind(hash)
         .fetch_optional(pool)
         .await
@@ -84,12 +121,14 @@ pub struct Identity {
     pub provider: String,
     pub subject: String,
     pub email: String,
+    /// Display handle at the provider (Cfx.re username, Steam persona).
+    pub username: String,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339::option")]
     pub last_login_at: Option<OffsetDateTime>,
 }
-const ID_COLS: &str = "id, user_id, provider, subject, email, created_at, last_login_at";
+const ID_COLS: &str = "id, user_id, provider, subject, email, username, created_at, last_login_at";
 
 pub async fn find_identity(
     pool: &PgPool,
@@ -104,6 +143,69 @@ pub async fn find_identity(
     .fetch_optional(pool)
     .await
     .map_err(db_err)
+}
+
+/// Remember the provider's display handle of an identity.
+pub async fn set_identity_username(
+    pool: &PgPool,
+    provider: &str,
+    subject: &str,
+    username: &str,
+) -> AppResult<()> {
+    sqlx::query("UPDATE user_identities SET username = $3 WHERE provider = $1 AND subject = $2")
+        .bind(provider)
+        .bind(subject)
+        .bind(username.chars().take(100).collect::<String>())
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
+    Ok(())
+}
+
+/// Verified identity without an e-mail, waiting for the sign-up form.
+#[derive(Debug, Clone, FromRow)]
+pub struct SsoSignup {
+    pub provider: String,
+    pub subject: String,
+    pub name: String,
+    pub username: String,
+    pub return_to: Option<String>,
+}
+
+pub async fn put_sso_signup(pool: &PgPool, hash: &[u8], s: &SsoSignup) -> AppResult<()> {
+    sqlx::query("DELETE FROM sso_signups WHERE expires_at < now()")
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
+    sqlx::query("INSERT INTO sso_signups (token_hash, provider, subject, name, username, return_to, expires_at) VALUES ($1,$2,$3,$4,$5,$6, now() + interval '15 minutes')")
+        .bind(hash)
+        .bind(&s.provider)
+        .bind(&s.subject)
+        .bind(s.name.chars().take(100).collect::<String>())
+        .bind(s.username.chars().take(100).collect::<String>())
+        .bind(&s.return_to)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
+    Ok(())
+}
+
+/// Read a pending sign-up without consuming it (the form shows its name).
+pub async fn peek_sso_signup(pool: &PgPool, hash: &[u8]) -> AppResult<Option<SsoSignup>> {
+    sqlx::query_as("SELECT provider, subject, name, username, return_to FROM sso_signups WHERE token_hash = $1 AND expires_at > now()")
+        .bind(hash)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
+}
+
+/// One-time: deletes the pending sign-up.
+pub async fn take_sso_signup(pool: &PgPool, hash: &[u8]) -> AppResult<Option<SsoSignup>> {
+    sqlx::query_as("DELETE FROM sso_signups WHERE token_hash = $1 AND expires_at > now() RETURNING provider, subject, name, username, return_to")
+        .bind(hash)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn touch_identity(pool: &PgPool, id: Uuid) -> AppResult<()> {
