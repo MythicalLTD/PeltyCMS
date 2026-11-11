@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { banValueValid, detectCurrency, giftNameValid, payAmountValid, ruleBody, ruleDraft, ruleValid } from "./storeRules";
+import { banValueValid, detectCurrency, pricedCurrencies, giftNameValid, payAmountValid, ruleBody, ruleDraft, ruleValid } from "./storeRules";
 
 describe("package rules", () => {
   it("round-trips drafts and validates", () => {
@@ -38,5 +38,9 @@ describe("currency detection", () => {
     expect(detectCurrency(["en-GB", "de-AT"], ["EUR", "USD"])).toBe("EUR");
     expect(detectCurrency(["en"], ["EUR"])).toBeNull();
     expect(detectCurrency(["ro-RO"], ["EUR"])).toBeNull();
+    // USD is enabled but nothing is priced in it, so an en-US visitor stays on EUR.
+    const sold = pricedCurrencies(["EUR", "USD"], [{ prices: [{ currency: "EUR" }] }, { prices: [] }]);
+    expect(sold).toEqual(["EUR"]);
+    expect(detectCurrency(["en-US"], sold)).toBeNull();
   });
 });

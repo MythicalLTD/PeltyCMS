@@ -79,6 +79,12 @@ export function detectCurrency(languages: readonly string[], options: readonly s
   return null;
 }
 
+/** Enabled currencies that at least one catalog product is priced in (auto-detect only picks these). */
+export function pricedCurrencies(enabled: readonly string[], products: readonly { prices: readonly { currency: string }[] }[]): string[] {
+  const sold = new Set(products.flatMap((p) => p.prices.map((x) => x.currency)));
+  return enabled.filter((c) => sold.has(c));
+}
+
 /** Public rules for the store (empty while the module is off). */
 export function usePackageRules() {
   const { enabled } = useModules();

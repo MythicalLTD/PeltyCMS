@@ -26,7 +26,7 @@ import { useI18n } from "@/lib/i18n";
 import { useModules } from "@/lib/modules";
 import { Captcha } from "@/components/Captcha";
 import { addonPrice, fieldErrors, fromPrice, resetCartId, useStoreCart, type Extras, type StoreLine } from "@/lib/store/storefront";
-import { detectCurrency, giftNameValid, payAmountValid, usePackageRules } from "@/lib/storeRules";
+import { detectCurrency, giftNameValid, payAmountValid, pricedCurrencies, usePackageRules } from "@/lib/storeRules";
 import { PackageRuleBadges, ruleBlocks } from "@/components/store/PackageRuleBadges";
 import { CountrySelect } from "@/components/geo/CountryRegionFields";
 import { defaultConfig, OptionField, stockState, type CatalogProduct, type ConfigSel } from "@/pages/client/services/Order";
@@ -48,11 +48,13 @@ function useCurrencies() {
 export function useStoreCurrency() {
   const { view, save } = useStoreCart();
   const { data: cur } = useCurrencies();
+  const { data: catalog } = useCatalog();
   const { lang } = useI18n();
   const [picked, setPicked] = useState<string | null>(() => localStorage.getItem("pelty.currency"));
   const { enabled } = useModules();
-  // First visit with the game store look on: the browser region's currency, when sold.
-  const auto = enabled.has("gaming_storefront") ? detectCurrency(typeof navigator === "undefined" ? [] : navigator.languages ?? [], cur?.items.map((c) => c.code) ?? []) : null;
+  // First visit with the game store look on: the browser region's currency, when packages are priced in it.
+  const sold = catalog ? pricedCurrencies(cur?.items.map((c) => c.code) ?? [], catalog.products) : [];
+  const auto = enabled.has("gaming_storefront") ? detectCurrency(typeof navigator === "undefined" ? [] : navigator.languages ?? [], sold) : null;
   const fallback = picked ?? auto ?? cur?.items[0]?.code ?? "EUR";
   const currency = view?.cart.order_id ? fallback : view?.cart.currency ?? fallback;
   const set = (c: string) => {
