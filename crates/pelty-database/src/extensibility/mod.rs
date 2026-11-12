@@ -6,4 +6,5 @@ pub mod addon_kv;
 pub mod addon_registry;
 pub mod addons;
 pub mod extensions;
+pub mod field_kit;
 pub mod vendor;

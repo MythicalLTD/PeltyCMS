@@ -210,6 +210,9 @@ impl AppState {
             pelty_auth::crypto::SecretBox::from_base64(&k.0)
                 .unwrap_or_else(|e| panic!("invalid PELTY_ENCRYPTION_KEY: {e}"))
         });
+        if let Some(b) = &secret_box {
+            pelty_database::field_kit::install_sealer(Box::new(FieldSealer(b.clone())));
+        }
         let addon_kv: Arc<dyn pelty_wasm::KvStore> = Arc::new(wasm_addons::PgKv {
             pool: pool.clone(),
             secret_box: secret_box.clone(),
@@ -383,4 +386,16 @@ pub fn router(state: AppState) -> Router {
         .layer(TraceLayer::new_for_http())
         .layer(SetRequestIdLayer::new(x_request_id, MakeRequestUuid))
         .with_state(state)
+}
+
+/// Seals password custom fields with the configured encryption key.
+struct FieldSealer(pelty_auth::crypto::SecretBox);
+
+impl pelty_database::field_kit::FieldSealer for FieldSealer {
+    fn seal(&self, plain: &[u8]) -> Vec<u8> {
+        self.0.seal(plain)
+    }
+    fn open(&self, sealed: &[u8]) -> Option<Vec<u8>> {
+        self.0.open(sealed)
+    }
 }

@@ -68,10 +68,26 @@ struct OInfo {
 }
 
 #[derive(Deserialize)]
+struct OKit {
+    key: String,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    kind: String,
+    #[serde(default)]
+    identity_key: Option<String>,
+    #[serde(default)]
+    required: bool,
+}
+
+#[derive(Deserialize)]
 struct ODescribe {
     info: OInfo,
     #[serde(default)]
     checkout_fields: Vec<OCheckout>,
+    /// Custom-field kit keys the module reads (see `KitField`).
+    #[serde(default)]
+    uses_fields: Vec<OKit>,
 }
 
 /// Static view of a provisioning addon's `describe()` (leaked once per load).
@@ -83,6 +99,7 @@ struct ModDesc {
     product_fields: Vec<FieldSpec>,
     actions: &'static [&'static str],
     checkout: Vec<CheckoutField>,
+    uses: Vec<KitField>,
 }
 
 fn mod_desc(addon: &WasmAddon) -> Result<ModDesc, WasmError> {
@@ -114,6 +131,26 @@ fn mod_desc(addon: &WasmAddon) -> Result<ModDesc, WasmError> {
                     pattern: leak(c.pattern),
                     required: c.required,
                 }
+            })
+            .collect(),
+        uses: d
+            .uses_fields
+            .into_iter()
+            .filter(|k| !k.key.is_empty())
+            .map(|k| KitField {
+                name: if k.name.is_empty() {
+                    k.key.clone()
+                } else {
+                    k.name
+                },
+                kind: if k.kind.is_empty() {
+                    "text".into()
+                } else {
+                    k.kind
+                },
+                key: k.key,
+                identity_key: k.identity_key,
+                required: k.required,
             })
             .collect(),
     })
@@ -180,6 +217,9 @@ impl ProvisioningModule for WasmModule {
     }
     fn checkout_fields(&self) -> Vec<CheckoutField> {
         self.desc.checkout.clone()
+    }
+    fn uses_fields(&self) -> Vec<KitField> {
+        self.desc.uses.clone()
     }
     fn custom_actions(&self) -> &'static [&'static str] {
         self.desc.actions

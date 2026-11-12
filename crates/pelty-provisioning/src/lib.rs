@@ -59,7 +59,7 @@ pub struct ServerConn {
 }
 
 /// Everything a module needs to act on one service.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct ServiceCtx {
     pub service_id: String,
     pub customer_email: String,
@@ -67,11 +67,45 @@ pub struct ServiceCtx {
     pub customer_last_name: String,
     /// Product `module_config` (package definition: limits, egg, image…).
     pub product_config: Value,
+    /// Checkout / custom-field kit values. Every field the product has is
+    /// here under its key (module-declared key, the key staff gave it in
+    /// the kit, or the identity field it stands for, e.g. `license`,
+    /// `steamid`), and under its field id. `password` fields arrive
+    /// opened: use them for the remote call only, never log or store them.
     pub custom_fields: Value,
     /// Remote id from a previous `create` (None before creation).
     pub remote_id: Option<String>,
     /// Module-owned state persisted between calls.
     pub module_data: Value,
+}
+
+impl ServiceCtx {
+    /// A custom-field value by key (`None` when empty or missing).
+    pub fn field(&self, key: &str) -> Option<&str> {
+        self.custom_fields
+            .get(key)
+            .and_then(Value::as_str)
+            .filter(|v| !v.is_empty())
+    }
+}
+
+// Custom fields may hold passwords: never print their values.
+impl std::fmt::Debug for ServiceCtx {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let keys: Vec<&String> = self
+            .custom_fields
+            .as_object()
+            .map(|o| o.keys().collect())
+            .unwrap_or_default();
+        f.debug_struct("ServiceCtx")
+            .field("service_id", &self.service_id)
+            .field("customer_email", &self.customer_email)
+            .field("product_config", &self.product_config)
+            .field("custom_fields", &keys)
+            .field("remote_id", &self.remote_id)
+            .field("module_data", &self.module_data)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -113,7 +147,7 @@ pub struct CheckoutField {
     pub key: &'static str,
     pub name: &'static str,
     pub description: &'static str,
-    /// text | textarea | number | select | checkbox
+    /// text | textarea | number | select | checkbox | email | password
     pub kind: &'static str,
     pub choices: &'static [&'static str],
     /// Optional POSIX regex the value must match.
@@ -147,8 +181,30 @@ impl From<&CheckoutField> for DynamicCheckoutField {
     }
 }
 
+/// A custom-field kit key a module reads when staff attached it to the
+/// product (e.g. a FiveM module wanting `license`, or an account module
+/// wanting `account_password`). Unlike [`CheckoutField`] nothing is created
+/// automatically: the admin kit editor lists these and adds the missing ones
+/// in one click.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct KitField {
+    pub key: String,
+    /// Suggested name for the field.
+    pub name: String,
+    /// text | textarea | number | select | checkbox | email | password
+    pub kind: String,
+    /// Player identity field it stands for (`license`, `steamid`, `uuid`...).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity_key: Option<String>,
+    pub required: bool,
+}
+
 pub trait ProvisioningModule: Send + Sync {
     fn info(&self) -> ModuleInfo;
+    /// Custom-field kit keys this module reads from `ServiceCtx::custom_fields`.
+    fn uses_fields(&self) -> Vec<KitField> {
+        Vec::new()
+    }
     /// Fields asked at checkout for this module's products.
     fn checkout_fields(&self) -> Vec<CheckoutField> {
         Vec::new()

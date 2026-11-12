@@ -10,7 +10,9 @@ use time::{Date, OffsetDateTime};
 use uuid::Uuid;
 
 const COLS: &str = "s.id, s.customer_id, s.product_id, p.name AS product_name, s.status, s.cycle, s.currency::text AS currency, \
-    s.recurring_amount, s.next_due_date, s.suspend_reason, s.activated_at, s.terminated_at, s.created_at, s.custom_fields, s.config";
+    s.recurring_amount, s.next_due_date, s.suspend_reason, s.activated_at, s.terminated_at, s.created_at, \
+    COALESCE((SELECT jsonb_object_agg(e.k, CASE WHEN EXISTS (SELECT 1 FROM product_custom_fields pf WHERE pf.product_id = s.product_id AND pf.kind = 'password' AND pf.id::text = e.k) \
+    THEN to_jsonb('********'::text) ELSE e.v END) FROM jsonb_each(s.custom_fields) AS e(k, v)), '{}'::jsonb) AS custom_fields, s.config";
 
 #[derive(Debug, Clone, FromRow, Serialize)]
 pub struct Service {
@@ -30,7 +32,7 @@ pub struct Service {
     pub terminated_at: Option<OffsetDateTime>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
-    /// Custom order field values (field_id → value).
+    /// Custom order field values (field_id → value); passwords read `********`.
     pub custom_fields: serde_json::Value,
     /// Configurable-option selections (option_id → choice id or qty).
     pub config: serde_json::Value,

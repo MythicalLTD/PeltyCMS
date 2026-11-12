@@ -77,7 +77,11 @@ pub fn placeholders(tpl: &str) -> Vec<String> {
         rest = &rest[i + 1..];
         if let Some(j) = rest.find('}') {
             let name = &rest[..j];
-            if !name.is_empty() && name.chars().all(|c| c.is_ascii_lowercase() || c == '_') {
+            if name.starts_with(|c: char| c.is_ascii_lowercase())
+                && name
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+            {
                 out.push(name.to_string());
             }
             rest = &rest[j + 1..];
@@ -88,6 +92,12 @@ pub fn placeholders(tpl: &str) -> Vec<String> {
 
 impl CommandInput {
     pub fn validate(&self) -> AppResult<()> {
+        self.validate_with(&[])
+    }
+
+    /// Like [`validate`](Self::validate), also accepting the package's
+    /// custom-field keys as placeholders.
+    pub fn validate_with(&self, field_keys: &[String]) -> AppResult<()> {
         let c = self.command.trim();
         if c.is_empty()
             || c.len() > 1000
@@ -99,7 +109,7 @@ impl CommandInput {
         }
         if placeholders(c)
             .iter()
-            .any(|p| !PLACEHOLDERS.contains(&p.as_str()))
+            .any(|p| !PLACEHOLDERS.contains(&p.as_str()) && !field_keys.contains(p))
         {
             return Err(AppError::Validation("error.game_placeholder_unknown"));
         }
@@ -121,6 +131,40 @@ pub fn render(tpl: &str, vars: &BTreeMap<String, String>) -> Result<String, Stri
         out = out.replace(&format!("{{{p}}}"), &v);
     }
     Ok(out)
+}
+
+/// Add the service's custom-field values (`{key}`) to `vars` without
+/// replacing identity or built-in values. Password fields stay as their
+/// `{key}` placeholder in the stored command and are filled only when the
+/// command is handed to the server ([`fill_secrets`]).
+pub async fn add_field_vars(
+    pool: &PgPool,
+    service: Uuid,
+    vars: &mut BTreeMap<String, String>,
+) -> AppResult<()> {
+    let (vals, secret) = crate::field_kit::command_values(pool, service).await?;
+    for (k, v) in vals {
+        vars.entry(k).or_insert(v);
+    }
+    for k in secret {
+        vars.insert(k.clone(), format!("{{{k}}}"));
+    }
+    Ok(())
+}
+
+/// Fill password placeholders of claimed commands from the sealed service
+/// fields. The stored command (admin log) keeps `{key}`.
+async fn fill_secrets(pool: &PgPool, mut rows: Vec<Claimed>) -> AppResult<Vec<Claimed>> {
+    for r in rows.iter_mut() {
+        let Some(sid) = r.service_id.filter(|_| r.command.contains('{')) else {
+            continue;
+        };
+        for (k, v) in crate::field_kit::secret_values(pool, sid).await? {
+            let v: String = v.chars().filter(|c| !c.is_control()).collect();
+            r.command = r.command.replace(&format!("{{{k}}}"), &v);
+        }
+    }
+    Ok(rows)
 }
 
 /// Identity variables from linked accounts (`uuid_nodash` derived).
@@ -149,8 +193,18 @@ pub async fn replace_commands(
     if list.len() > 100 {
         return Err(AppError::Validation("error.validation"));
     }
+    let keys: Vec<String> = match product {
+        Some(p) => sqlx::query_scalar(
+            "SELECT COALESCE(module_key, field_key) FROM product_custom_fields WHERE product_id = $1 AND COALESCE(module_key, field_key) IS NOT NULL",
+        )
+        .bind(p)
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?,
+        None => vec![],
+    };
     for c in list {
-        c.validate()?;
+        c.validate_with(&keys)?;
     }
     let mut tx = pool.begin().await.map_err(db_err)?;
     sqlx::query("DELETE FROM game_commands WHERE product_id IS NOT DISTINCT FROM $1")
@@ -300,6 +354,9 @@ pub async fn enqueue(
                 ]),
                 _ => identity_vars(&crate::games::identity(pool, ctx.customer_id, game).await?),
             };
+            if gift.is_none() {
+                add_field_vars(pool, ctx.service_id, &mut vars).await?;
+            }
             for (k, v) in [
                 ("package", ctx.package.clone()),
                 ("package_id", ctx.product_id.to_string()),
@@ -480,6 +537,7 @@ pub async fn release_waiting(pool: &PgPool, customer: Uuid) -> AppResult<usize> 
             );
             vars.insert("amount".into(), ctx.amount);
             vars.insert("currency".into(), ctx.currency);
+            add_field_vars(pool, ctx.service_id, &mut vars).await?;
         }
         vars.insert("customer_id".into(), customer.to_string());
         vars.insert("server".into(), server_name);
@@ -505,23 +563,27 @@ pub struct Claimed {
     pub player: String,
     pub require_online: bool,
     pub attempts: i32,
+    /// Used to fill password placeholders; not sent to the server.
+    #[serde(skip_serializing)]
+    pub service_id: Option<Uuid>,
 }
 
 /// Claim due RCON deliveries (lease: 2 minutes). Safe across instances.
 pub async fn claim_rcon(pool: &PgPool, limit: i64) -> AppResult<Vec<Claimed>> {
-    sqlx::query_as(
+    let rows = sqlx::query_as(
         "UPDATE game_deliveries d SET attempts = attempts + 1, next_attempt_at = now() + interval '2 minutes'
          WHERE d.id IN (SELECT d2.id FROM game_deliveries d2 JOIN game_servers s ON s.id = d2.server_id
                         WHERE d2.status = 'pending' AND d2.next_attempt_at <= now() AND s.transport = 'rcon' AND s.enabled
                           AND d2.attempts < $2
                         ORDER BY d2.next_attempt_at LIMIT $1 FOR UPDATE OF d2 SKIP LOCKED)
-         RETURNING d.id, d.server_id, d.command, d.player, d.require_online, d.attempts",
+         RETURNING d.id, d.server_id, d.command, d.player, d.require_online, d.attempts, d.service_id",
     )
     .bind(limit)
     .bind(MAX_ATTEMPTS)
     .fetch_all(pool)
     .await
-    .map_err(db_err)
+    .map_err(db_err)?;
+    fill_secrets(pool, rows).await
 }
 
 /// Mark leased deliveries that used every attempt without an answer (e.g.
@@ -568,7 +630,7 @@ pub async fn claim_agent(
         .iter()
         .map(|s| s.to_lowercase())
         .collect();
-    sqlx::query_as(
+    let rows = sqlx::query_as(
         "UPDATE game_deliveries d SET attempts = attempts + 1, next_attempt_at = now() + interval '2 minutes'
          WHERE d.id IN (SELECT d2.id FROM game_deliveries d2
                         WHERE d2.server_id = $1 AND d2.status = 'pending' AND d2.next_attempt_at <= now()
@@ -576,7 +638,7 @@ pub async fn claim_agent(
                           AND (NOT d2.require_online OR lower(d2.player) = ANY($2)
                                OR EXISTS (SELECT 1 FROM customer_game_accounts a WHERE a.customer_id = d2.customer_id AND lower(a.value) = ANY($2)))
                         ORDER BY d2.next_attempt_at LIMIT $3 FOR UPDATE SKIP LOCKED)
-         RETURNING d.id, d.server_id, d.command, d.player, d.require_online, d.attempts",
+         RETURNING d.id, d.server_id, d.command, d.player, d.require_online, d.attempts, d.service_id",
     )
     .bind(server)
     .bind(&online)
@@ -584,7 +646,8 @@ pub async fn claim_agent(
     .bind(MAX_ATTEMPTS)
     .fetch_all(pool)
     .await
-    .map_err(db_err)
+    .map_err(db_err)?;
+    fill_secrets(pool, rows).await
 }
 
 pub async fn mark_delivered(
@@ -761,6 +824,22 @@ mod tests {
         assert_eq!(render("give {steamid} 1", &v), Err("steamid".into()));
         assert_eq!(render("say {amount}!", &v).unwrap(), "say !");
         assert_eq!(placeholders("a {x} {y_z} {} {Bad}"), vec!["x", "y_z"]);
+        assert_eq!(placeholders("{rank_2} {2x}"), vec!["rank_2"]);
+        // A password placeholder survives rendering (filled at send time).
+        let v = vars(&[("account_password", "{account_password}"), ("rank", "vip")]);
+        assert_eq!(
+            render("create {rank} {account_password}", &v).unwrap(),
+            "create vip {account_password}"
+        );
+        let c = CommandInput {
+            server_id: None,
+            trigger: "purchase".into(),
+            command: "say {rank}".into(),
+            require_online: false,
+            delay_secs: 0,
+        };
+        assert!(c.validate().is_err());
+        assert!(c.validate_with(&["rank".into()]).is_ok());
     }
 
     #[test]

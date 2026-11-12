@@ -145,6 +145,7 @@ pub use extensibility::addon_kv;
 pub use extensibility::addon_registry;
 pub use extensibility::addons;
 pub use extensibility::extensions;
+pub use extensibility::field_kit;
 pub use extensibility::vendor;
 
 use pelty_core::AppError;

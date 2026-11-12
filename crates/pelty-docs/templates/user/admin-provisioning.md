@@ -22,6 +22,31 @@ Clients can sign in to their panel from the service page with a one-time token (
 - **cPanel / WHM** creates a real session token via the API.
 - **DirectAdmin** and **Plesk** use a configured `sso_url` template that must include `{token}` (and typically `{user}`). Leave it empty to hide SSO for that server.
 
+## Custom-field kit
+
+Every product and game store package has **Checkout fields** (Admin → Products → a product → **Checkout fields**, or Game servers → **Store packages** → **Checkout fields**). The same kit feeds the checkout form, the provisioning module and in-game delivery commands.
+
+- **Field types**: text, long text, number, dropdown, checkbox, e-mail and password. Each field can be required or optional, have a help text and (text, long text, e-mail, password) a format regex. Dropdowns need at least one choice. Admin-only fields are never shown to the buyer.
+- **Presets**: one click adds a ready set of fields; fields the package already has (same key, or the same player ID) are skipped, so applying a preset twice adds nothing. Presets for the games your store sells are listed first as **Suggested**; the others stay available.
+  - **FiveM / RedM player**: Rockstar licence (required), Cfx.re id, SteamID64, Discord id, player name.
+  - **Minecraft: Java player**: username (required), UUID, Discord id.
+  - **Minecraft: Bedrock player**: gamertag (required), XUID, Discord id.
+  - **Steam game player** (Rust, Garry's Mod, ARK, CS2, Unturned): player name, SteamID64 (required), Discord id.
+  - **Account login**: account username, account password, account e-mail, for a package that creates an in-game or panel account. Combine it with a game preset.
+  After applying, rename, reorder (arrows), make fields required or optional, delete or add more.
+- **Keys**: every field has a key (`license`, `account_password`, `rank`...). It is filled from the player ID or the name when left empty, can be changed, must be `a-z`, digits and `_`, and is unique per package. Fields declared by the product's module keep the module's key.
+- **What the module needs**: when the product uses a provisioning module that lists the kit keys it reads, the editor shows them with an **Add missing** button.
+- **Checkout**: the buyer sees the fields with the right input (e-mail keyboard, hidden password), player IDs filled from their game accounts, and the server checks required fields, e-mail format, numbers, dropdown choices and the regex. Signed-in and guest checkouts behave the same.
+
+**Passwords.** A password is collected once at checkout. It is stored encrypted with `PELTY_ENCRYPTION_KEY` (set it; without a key the value is stored as typed but still hidden), never returned by the API (service views show `********`), never sent to the dynamic checkout form logic, and never written to logs or the delivery queue. A password is not a player ID and is never saved on the game account.
+
+**How modules read the kit.** On create, suspend, unsuspend, terminate, change package and custom actions the module gets `ServiceCtx.custom_fields` with every field of the product under its key (and under its field id), passwords decrypted for that call only. In Rust: `svc.field("license")`, `svc.field("account_password")`. Webhook and HTTPS-agent modules can put them in a body template as `{{custom.license}}` or `{{custom.account_password}}`. A module can:
+
+- declare its own fields with `checkout_fields()` (kinds `text`, `textarea`, `number`, `select`, `checkbox`, `email`, `password`); they are created on the product when the module is chosen and keep the module's key; `checkout_config()` can still filter them per selection;
+- list the kit keys it reads with `uses_fields()` (WASM descriptor: `"uses_fields": [{"key": "license", "name": "Rockstar licence", "kind": "text", "identity_key": "license", "required": true}]`); staff then add the missing ones in one click.
+
+Modules must use password values for the remote call only and never log or store them.
+
 ## Shared hosting panels (cPanel, DirectAdmin, Plesk)
 
 These three cover the daily shared-hosting lifecycle: create, suspend, unsuspend, terminate, change package, and change password (custom action).

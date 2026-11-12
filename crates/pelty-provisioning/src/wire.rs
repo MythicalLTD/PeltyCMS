@@ -88,7 +88,8 @@ pub fn svc_from(v: &Value) -> ServiceCtx {
 pub fn describe(m: &dyn ProvisioningModule) -> String {
     let mut info = m.info();
     info.actions = m.custom_actions().to_vec();
-    json!({ "info": info, "checkout_fields": m.checkout_fields() }).to_string()
+    json!({ "info": info, "checkout_fields": m.checkout_fields(), "uses_fields": m.uses_fields() })
+        .to_string()
 }
 
 /// Guest-side dispatcher for provisioning ops. The API key comes from the

@@ -50,6 +50,15 @@ pub fn router() -> Router<AppState> {
             "/admin/catalog/products/{id}/fields/{field}",
             put(update_field).delete(delete_field),
         )
+        .route("/admin/catalog/field-presets", get(field_presets))
+        .route(
+            "/admin/catalog/products/{id}/fields/preset",
+            post(apply_field_preset),
+        )
+        .route(
+            "/admin/catalog/products/{id}/fields/order",
+            put(reorder_fields),
+        )
 }
 
 #[utoipa::path(get, path = "/api/v1/catalog", responses((status = 200)))]
@@ -283,9 +292,19 @@ pub async fn checkout_config(
         .iter()
         .filter_map(|(fid, k)| k.as_ref().map(|k| (*fid, k.clone())))
         .collect();
+    // Passwords are never sent to the module form logic (nor echoed back).
+    let secret: std::collections::HashSet<String> = fields
+        .iter()
+        .filter(|f| f.kind == "password")
+        .flat_map(|f| [Some(f.id.to_string()), f.key().map(str::to_string)])
+        .flatten()
+        .collect();
     let mut selected_by_key = serde_json::Map::new();
     if let Some(obj) = b.selected.as_object() {
         for (k, v) in obj {
+            if secret.contains(k) {
+                continue;
+            }
             if let Ok(uid) = Uuid::parse_str(k) {
                 if let Some(mk) = id_to_key.get(&uid) {
                     selected_by_key.insert(mk.clone(), v.clone());
@@ -376,9 +395,83 @@ pub async fn admin_fields(
     _p: RequirePermission<perms::CatalogManage>,
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<Value>> {
+    let items = addons::fields(&s.pool, id, false).await?;
+    // Context for the kit editor: games of the stores selling the package
+    // (to suggest presets) and what the product's module reads.
+    let mut games: Vec<String> = vec![];
+    for sid in pelty_database::games::servers_for_product(&s.pool, id).await? {
+        let g = pelty_database::games::server(&s.pool, sid).await?.game;
+        if !games.contains(&g) {
+            games.push(g);
+        }
+    }
+    let module: Option<String> = sqlx::query_scalar("SELECT module FROM products WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&s.pool)
+        .await
+        .map_err(pelty_database::db_err)?
+        .flatten();
+    let module_uses = module
+        .as_deref()
+        .and_then(|m| s.provisioning.get(m))
+        .map(|m| m.uses_fields())
+        .unwrap_or_default();
     Ok(Json(
-        json!({ "items": addons::fields(&s.pool, id, false).await? }),
+        json!({ "items": items, "games": games, "module": module, "module_uses": module_uses }),
     ))
+}
+
+#[utoipa::path(get, path = "/api/v1/admin/catalog/field-presets", responses((status = 200), (status = 403)))]
+pub async fn field_presets(_p: RequirePermission<perms::CatalogManage>) -> Json<Value> {
+    Json(json!({ "items": pelty_database::field_kit::PRESETS }))
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ApplyPreset {
+    pub preset: String,
+    /// Field names by key (translated by the admin UI).
+    #[serde(default)]
+    pub names: std::collections::HashMap<String, String>,
+}
+
+/// Add a preset's fields the product does not have yet (by key or by the
+/// identity field they stand for). Fields already there are left as they are.
+#[utoipa::path(post, path = "/api/v1/admin/catalog/products/{id}/fields/preset", request_body = ApplyPreset, responses((status = 200), (status = 404), (status = 422)))]
+pub async fn apply_field_preset(
+    State(s): State<AppState>,
+    RequirePermission(u, _): RequirePermission<perms::CatalogManage>,
+    Path(id): Path<Uuid>,
+    Json(b): Json<ApplyPreset>,
+) -> ApiResult<Json<Value>> {
+    let added = pelty_database::field_kit::apply_preset(&s.pool, id, &b.preset, &b.names).await?;
+    pelty_database::audit::record(
+        &s.pool,
+        Some(u.user_id),
+        "catalog.field_preset_applied",
+        Some(&id.to_string()),
+        u.ip.as_deref(),
+        json!({ "preset": b.preset, "added": added.len() }),
+    )
+    .await?;
+    Ok(Json(json!({ "added": added })))
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FieldOrder {
+    pub ids: Vec<Uuid>,
+}
+
+#[utoipa::path(put, path = "/api/v1/admin/catalog/products/{id}/fields/order", request_body = FieldOrder, responses((status = 200), (status = 422)))]
+pub async fn reorder_fields(
+    State(s): State<AppState>,
+    _p: RequirePermission<perms::CatalogManage>,
+    Path(id): Path<Uuid>,
+    Json(b): Json<FieldOrder>,
+) -> ApiResult<Json<Value>> {
+    pelty_database::field_kit::reorder(&s.pool, id, &b.ids).await?;
+    Ok(Json(json!({ "ok": true })))
 }
 
 #[utoipa::path(post, path = "/api/v1/admin/catalog/products/{id}/fields", request_body = FieldInput, responses((status = 200), (status = 404), (status = 422)))]

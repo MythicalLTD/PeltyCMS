@@ -248,12 +248,15 @@ pub struct ServiceTarget {
     pub last_name: String,
 }
 
+/// Custom fields hold every kit field under its key (module key, staff key,
+/// or identity field) as well as under its field id; passwords are opened
+/// (see [`crate::field_kit::module_view`]).
 pub async fn target(pool: &PgPool, service: Uuid) -> AppResult<Option<ServiceTarget>> {
-    sqlx::query_as(
+    let row: Option<(ServiceTarget, Uuid)> = sqlx::query_as::<_, ServiceTargetRow>(
         "SELECT s.id AS service_id, s.status, p.module, p.module_config AS product_config,
-                COALESCE(s.server_id, p.server_id) AS server_id, p.server_group_id, s.remote_id, s.module_data, COALESCE(oi.custom_fields, '{}'::jsonb) || COALESCE((SELECT jsonb_object_agg(f.module_key, oi.custom_fields->(f.id::text)) FROM product_custom_fields f
-                    WHERE f.product_id = p.id AND f.module_key IS NOT NULL AND oi.custom_fields ? (f.id::text)), '{}'::jsonb) AS custom_fields,
-                c.email::text AS email, c.first_name, c.last_name
+                COALESCE(s.server_id, p.server_id) AS server_id, p.server_group_id, s.remote_id, s.module_data,
+                COALESCE(oi.custom_fields, '{}'::jsonb) || COALESCE(s.custom_fields, '{}'::jsonb) AS custom_fields,
+                c.email::text AS email, c.first_name, c.last_name, p.id AS product_id
          FROM services s JOIN products p ON p.id = s.product_id JOIN customers c ON c.id = s.customer_id
          LEFT JOIN order_items oi ON oi.id = s.order_item_id
          WHERE s.id = $1",
@@ -261,7 +264,20 @@ pub async fn target(pool: &PgPool, service: Uuid) -> AppResult<Option<ServiceTar
     .bind(service)
     .fetch_optional(pool)
     .await
-    .map_err(db_err)
+    .map_err(db_err)?
+    .map(|r| (r.target, r.product_id));
+    let Some((mut t, product)) = row else {
+        return Ok(None);
+    };
+    t.custom_fields = crate::field_kit::module_view(pool, product, &t.custom_fields).await?;
+    Ok(Some(t))
+}
+
+#[derive(FromRow)]
+struct ServiceTargetRow {
+    #[sqlx(flatten)]
+    target: ServiceTarget,
+    product_id: Uuid,
 }
 
 /// Queue a module action for a service if its product uses a module.

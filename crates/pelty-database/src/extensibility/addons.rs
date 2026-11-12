@@ -190,7 +190,11 @@ pub async fn list(pool: &PgPool, product: Option<Uuid>, public: bool) -> AppResu
 
 // custom fields
 
-pub const FIELD_KINDS: &[&str] = &["text", "textarea", "number", "select", "checkbox"];
+/// Field kinds of the custom-field kit. `password` values are sealed at
+/// rest and never returned by the API (see [`crate::field_kit`]).
+pub const FIELD_KINDS: &[&str] = &[
+    "text", "textarea", "number", "select", "checkbox", "email", "password",
+];
 
 #[derive(Debug, Clone, FromRow, Serialize, utoipa::ToSchema)]
 pub struct CustomField {
@@ -208,6 +212,18 @@ pub struct CustomField {
     /// Player identity field this stands for (`license`, `steamid`, ...):
     /// auto-filled from the buyer's game account.
     pub identity_key: Option<String>,
+    /// Key of a field a provisioning module declared (managed by the module).
+    pub module_key: Option<String>,
+    /// Key staff gave the field: provisioning modules read the value as
+    /// `custom_fields[key]`, delivery commands as `{key}`.
+    pub field_key: Option<String>,
+}
+
+impl CustomField {
+    /// The key modules and commands see (module key wins).
+    pub fn key(&self) -> Option<&str> {
+        self.module_key.as_deref().or(self.field_key.as_deref())
+    }
 }
 
 /// Identity fields a checkout field may map to.
@@ -241,9 +257,13 @@ pub struct FieldInput {
     /// Auto-fill from this player identity field (see [`IDENTITY_KEYS`]).
     #[serde(default)]
     pub identity_key: Option<String>,
+    /// Key for modules and delivery commands (`[a-z][a-z0-9_]{0,39}`).
+    /// Derived from the identity field or the name when empty.
+    #[serde(default)]
+    pub key: Option<String>,
 }
 
-const FIELD_COLS: &str = "id, product_id, name, description, kind, choices, pattern, required, admin_only, sort_order, identity_key";
+pub(crate) const FIELD_COLS: &str = "id, product_id, name, description, kind, choices, pattern, required, admin_only, sort_order, identity_key, module_key, field_key";
 
 pub async fn fields(pool: &PgPool, product_id: Uuid, public: bool) -> AppResult<Vec<CustomField>> {
     sqlx::query_as(sqlx::AssertSqlSafe(format!(
@@ -302,20 +322,40 @@ pub async fn upsert_field(
     }) {
         return Err(AppError::Validation("error.invalid_field_identity"));
     }
+    let module_key: Option<String> = match id {
+        Some(fid) => sqlx::query_scalar(
+            "SELECT module_key FROM product_custom_fields WHERE id = $1 AND product_id = $2",
+        )
+        .bind(fid)
+        .bind(product_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?
+        .ok_or(AppError::NotFound)?,
+        None => None,
+    };
+    // A module-declared field keeps the module's key.
+    let field_key = match module_key {
+        Some(_) => None,
+        None => Some(
+            crate::field_kit::resolve_key(pool, product_id, id, f.key.as_deref(), identity_key, n)
+                .await?,
+        ),
+    };
     let choices = serde_json::to_value(&choices).unwrap_or_default();
     let row = match id {
         Some(_) => sqlx::query_as(sqlx::AssertSqlSafe(format!(
-            "UPDATE product_custom_fields SET name=$3, description=$4, kind=$5, choices=$6, pattern=$7, required=$8, admin_only=$9, sort_order=$10, identity_key=$11
+            "UPDATE product_custom_fields SET name=$3, description=$4, kind=$5, choices=$6, pattern=$7, required=$8, admin_only=$9, sort_order=$10, identity_key=$11, field_key=$12
              WHERE id=$1 AND product_id=$2 RETURNING {FIELD_COLS}"
         ))),
         None => sqlx::query_as(sqlx::AssertSqlSafe(format!(
-            "INSERT INTO product_custom_fields (id, product_id, name, description, kind, choices, pattern, required, admin_only, sort_order, identity_key)
-             SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11 WHERE EXISTS (SELECT 1 FROM products WHERE id = $2)
+            "INSERT INTO product_custom_fields (id, product_id, name, description, kind, choices, pattern, required, admin_only, sort_order, identity_key, field_key)
+             SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12 WHERE EXISTS (SELECT 1 FROM products WHERE id = $2)
              RETURNING {FIELD_COLS}"
         ))),
     }
     .bind(id.unwrap_or_else(Uuid::new_v4)).bind(product_id).bind(n).bind(&f.description).bind(&f.kind).bind(choices)
-    .bind(&f.pattern).bind(f.required).bind(f.admin_only).bind(f.sort_order).bind(identity_key)
+    .bind(&f.pattern).bind(f.required).bind(f.admin_only).bind(f.sort_order).bind(identity_key).bind(field_key)
     .fetch_optional(pool).await.map_err(db_err)?;
     row.ok_or(AppError::NotFound)
 }
@@ -407,11 +447,17 @@ pub async fn check_fields(
     }
     let mut out = serde_json::Map::new();
     for d in &defs {
-        let v = values.get(&d.id).map(|s| s.trim()).unwrap_or("");
+        // Passwords keep their spaces (only line breaks are refused).
+        let raw = values.get(&d.id).map(String::as_str).unwrap_or("");
+        let v = if d.kind == "password" {
+            raw
+        } else {
+            raw.trim()
+        };
         if v.chars().count() > MAX_FIELD_LEN || (d.kind != "textarea" && v.contains(['\n', '\r'])) {
             return Err(AppError::Validation("error.invalid_field"));
         }
-        let empty = v.is_empty() || (d.kind == "checkbox" && v == "false");
+        let empty = v.trim().is_empty() || (d.kind == "checkbox" && v == "false");
         if empty {
             if d.required {
                 return Err(AppError::Validation("error.field_required"));
@@ -421,6 +467,7 @@ pub async fn check_fields(
         let ok = match d.kind.as_str() {
             "number" => v.parse::<Decimal>().is_ok(),
             "checkbox" => v == "true",
+            "email" => crate::field_kit::email_ok(v),
             "select" => d
                 .choices
                 .as_array()
@@ -441,7 +488,12 @@ pub async fn check_fields(
                 return Err(AppError::Validation("error.invalid_field"));
             }
         }
-        out.insert(d.id.to_string(), serde_json::Value::String(v.to_string()));
+        let stored = if d.kind == "password" {
+            crate::field_kit::seal(v)
+        } else {
+            v.to_string()
+        };
+        out.insert(d.id.to_string(), serde_json::Value::String(stored));
     }
     Ok(serde_json::Value::Object(out))
 }

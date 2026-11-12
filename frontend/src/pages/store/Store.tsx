@@ -29,7 +29,7 @@ import { Captcha } from "@/components/Captcha";
 import { GuestCheckoutCard, useGuestCheckout } from "@/components/store/GuestCheckout";
 import { badIdentity, PlayerDetailsCard } from "@/components/store/PlayerDetails";
 import { identityBody, identityDisplay, knownIdentity, missingRequired, type IdentityGame } from "@/lib/store/checkoutFields";
-import { addonPrice, fieldErrors, fromPrice, resetCartId, useStoreCart, type Extras, type StoreLine } from "@/lib/store/storefront";
+import { addonPrice, fieldErrors, fromPrice, inputProps, resetCartId, selectedForConfig, useStoreCart, type Extras, type StoreLine } from "@/lib/store/storefront";
 import { detectCurrency, giftNameValid, payAmountValid, pricedCurrencies, usePackageRules } from "@/lib/storeRules";
 import { PackageRuleBadges, ruleBlocks } from "@/components/store/PackageRuleBadges";
 import { UpgradeBadge } from "@/components/store/UpgradeBadge";
@@ -427,7 +427,8 @@ export function CheckoutPage() {
     const run = async () => {
       const next: Record<string, Extras["fields"]> = {};
       for (const [i, l] of cart.items.entries()) {
-        const selected = values[i] ?? {};
+        // Passwords never go to the module form logic.
+        const selected = selectedForConfig(extras[productIds.indexOf(l.product_id)]?.fields ?? [], values[i] ?? {});
         try {
           const r = await api<{ fields: Extras["fields"] }>(`/catalog/products/${l.product_id}/checkout-config`, { method: "POST", body: { selected } });
           next[l.product_id] = r.fields;
@@ -518,7 +519,7 @@ export function CheckoutPage() {
                       ) : f.kind === "checkbox" ? (
                         <Checkbox id={fid} checked={v === "true"} onCheckedChange={(c) => set(c ? "true" : "")} />
                       ) : (
-                        <Input id={fid} value={v} aria-invalid={!!err} onChange={(e) => set(e.target.value)} />
+                        <Input id={fid} value={v} aria-invalid={!!err} onChange={(e) => set(e.target.value)} {...inputProps(f)} />
                       )}
                       {auto && <p className="text-xs text-primary" data-autofilled={f.id}>{t("pid.field_autofilled")}</p>}
                       {f.description && <p className="text-xs text-muted-foreground">{f.description}</p>}

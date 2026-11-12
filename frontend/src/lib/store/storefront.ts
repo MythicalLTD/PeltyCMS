@@ -15,7 +15,7 @@ export interface CartPreview {
 }
 export interface CartView { cart: StoreCart; preview: CartPreview | null; error: string | null }
 export interface Addon { id: string; name: string; description: string; prices: { currency: string; cycle: string; amount: string; setup_fee: string }[] }
-export interface OrderField { id: string; name: string; description: string; kind: string; choices: string[]; pattern: string; required: boolean; identity_key?: string | null }
+export interface OrderField { id: string; name: string; description: string; kind: string; choices: string[]; pattern: string; required: boolean; identity_key?: string | null; module_key?: string | null; field_key?: string | null }
 export interface Extras { addons: Addon[]; fields: OrderField[] }
 export interface Price { currency: string; cycle: string; amount: string; setup_fee: string }
 
@@ -59,16 +59,47 @@ export function addonPrice(a: Addon, currency: string, cycle: string) {
 }
 
 /** Client-side check of custom order fields; the server validates again. */
-export function fieldErrors(fields: OrderField[], values: Record<string, string>): Record<string, "required" | "pattern"> {
-  const out: Record<string, "required" | "pattern"> = {};
+export function fieldErrors(fields: OrderField[], values: Record<string, string>): Record<string, "required" | "pattern" | "email" | "number"> {
+  const out: Record<string, "required" | "pattern" | "email" | "number"> = {};
   for (const f of fields) {
-    const v = (values[f.id] ?? "").trim();
-    if (!v) { if (f.required) out[f.id] = "required"; continue; }
+    const raw = values[f.id] ?? "";
+    const v = f.kind === "password" ? raw : raw.trim();
+    if (!v.trim() || (f.kind === "checkbox" && v === "false")) { if (f.required) out[f.id] = "required"; continue; }
+    if (f.kind === "email" && !emailOk(v)) { out[f.id] = "email"; continue; }
+    if (f.kind === "number" && !/^[-+]?(\d+\.?\d*|\.\d+)$/.test(v)) { out[f.id] = "number"; continue; }
     if (f.pattern) {
       try { if (!new RegExp(`^(?:${f.pattern})$`).test(v)) out[f.id] = "pattern"; } catch { /* server decides */ }
     }
   }
   return out;
+}
+
+/** Same shape check as the server: `local@domain.tld`, no spaces. */
+export function emailOk(v: string): boolean {
+  const at = v.indexOf("@");
+  if (at <= 0 || at !== v.lastIndexOf("@") || at > 64 || v.length > 254 || /\s/.test(v)) return false;
+  const d = v.slice(at + 1);
+  return d.includes(".") && !d.startsWith(".") && !d.endsWith(".") && !d.includes("..");
+}
+
+/** Answers the dynamic checkout form may see: passwords stay on the page until the order is placed. */
+export function selectedForConfig(fields: OrderField[], values: Record<string, string>): Record<string, string> {
+  const secret = new Set(fields.filter((f) => f.kind === "password").map((f) => f.id));
+  return Object.fromEntries(Object.entries(values).filter(([k]) => !secret.has(k)));
+}
+
+/** Input type / autofill hints for a checkout field. */
+export function inputProps(f: OrderField): { type: string; autoComplete?: string; inputMode?: "decimal" | "email" | "numeric" } {
+  const key = f.module_key ?? f.field_key ?? "";
+  switch (f.kind) {
+    case "email": return { type: "email", autoComplete: "email", inputMode: "email" };
+    case "password": return { type: "password", autoComplete: "new-password" };
+    case "number": return { type: "text", inputMode: "decimal" };
+    default:
+      if (f.identity_key === "steamid" || f.identity_key === "discord_id") return { type: "text", inputMode: "numeric", autoComplete: "off" };
+      if (key.includes("username") || f.identity_key === "username") return { type: "text", autoComplete: "username" };
+      return { type: "text" };
+  }
 }
 
 export const lineCount = (c: StoreCart | null | undefined) => c?.items.length ?? 0;
