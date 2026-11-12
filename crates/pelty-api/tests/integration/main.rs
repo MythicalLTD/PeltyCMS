@@ -93,6 +93,7 @@ mod email_log_flow;
 mod event_registry_coverage;
 mod exports_flow;
 mod extensions_flow;
+mod fivem_identity_flow;
 mod fixed_term_flow;
 mod form_rate_limit_flow;
 mod fraud_flow;

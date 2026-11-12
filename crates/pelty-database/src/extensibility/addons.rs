@@ -205,7 +205,21 @@ pub struct CustomField {
     pub required: bool,
     pub admin_only: bool,
     pub sort_order: i32,
+    /// Player identity field this stands for (`license`, `steamid`, ...):
+    /// auto-filled from the buyer's game account.
+    pub identity_key: Option<String>,
 }
+
+/// Identity fields a checkout field may map to.
+pub const IDENTITY_KEYS: &[&str] = &[
+    "username",
+    "uuid",
+    "xuid",
+    "steamid",
+    "license",
+    "discord_id",
+    "fivem",
+];
 
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
@@ -224,13 +238,17 @@ pub struct FieldInput {
     pub admin_only: bool,
     #[serde(default)]
     pub sort_order: i32,
+    /// Auto-fill from this player identity field (see [`IDENTITY_KEYS`]).
+    #[serde(default)]
+    pub identity_key: Option<String>,
 }
 
+const FIELD_COLS: &str = "id, product_id, name, description, kind, choices, pattern, required, admin_only, sort_order, identity_key";
+
 pub async fn fields(pool: &PgPool, product_id: Uuid, public: bool) -> AppResult<Vec<CustomField>> {
-    sqlx::query_as(
-        "SELECT id, product_id, name, description, kind, choices, pattern, required, admin_only, sort_order
-         FROM product_custom_fields WHERE product_id = $1 AND (NOT $2 OR NOT admin_only) ORDER BY sort_order, name, id",
-    )
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {FIELD_COLS} FROM product_custom_fields WHERE product_id = $1 AND (NOT $2 OR NOT admin_only) ORDER BY sort_order, name, id"
+    )))
     .bind(product_id).bind(public)
     .fetch_all(pool).await.map_err(db_err)
 }
@@ -274,20 +292,30 @@ pub async fn upsert_field(
     {
         return Err(AppError::Validation("error.invalid_field_pattern"));
     }
+    let identity_key = f
+        .identity_key
+        .as_deref()
+        .map(str::trim)
+        .filter(|k| !k.is_empty());
+    if identity_key.is_some_and(|k| {
+        !IDENTITY_KEYS.contains(&k) || !matches!(f.kind.as_str(), "text" | "number")
+    }) {
+        return Err(AppError::Validation("error.invalid_field_identity"));
+    }
     let choices = serde_json::to_value(&choices).unwrap_or_default();
     let row = match id {
-        Some(_) => sqlx::query_as(
-            "UPDATE product_custom_fields SET name=$3, description=$4, kind=$5, choices=$6, pattern=$7, required=$8, admin_only=$9, sort_order=$10
-             WHERE id=$1 AND product_id=$2 RETURNING id, product_id, name, description, kind, choices, pattern, required, admin_only, sort_order",
-        ),
-        None => sqlx::query_as(
-            "INSERT INTO product_custom_fields (id, product_id, name, description, kind, choices, pattern, required, admin_only, sort_order)
-             SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10 WHERE EXISTS (SELECT 1 FROM products WHERE id = $2)
-             RETURNING id, product_id, name, description, kind, choices, pattern, required, admin_only, sort_order",
-        ),
+        Some(_) => sqlx::query_as(sqlx::AssertSqlSafe(format!(
+            "UPDATE product_custom_fields SET name=$3, description=$4, kind=$5, choices=$6, pattern=$7, required=$8, admin_only=$9, sort_order=$10, identity_key=$11
+             WHERE id=$1 AND product_id=$2 RETURNING {FIELD_COLS}"
+        ))),
+        None => sqlx::query_as(sqlx::AssertSqlSafe(format!(
+            "INSERT INTO product_custom_fields (id, product_id, name, description, kind, choices, pattern, required, admin_only, sort_order, identity_key)
+             SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11 WHERE EXISTS (SELECT 1 FROM products WHERE id = $2)
+             RETURNING {FIELD_COLS}"
+        ))),
     }
     .bind(id.unwrap_or_else(Uuid::new_v4)).bind(product_id).bind(n).bind(&f.description).bind(&f.kind).bind(choices)
-    .bind(&f.pattern).bind(f.required).bind(f.admin_only).bind(f.sort_order)
+    .bind(&f.pattern).bind(f.required).bind(f.admin_only).bind(f.sort_order).bind(identity_key)
     .fetch_optional(pool).await.map_err(db_err)?;
     row.ok_or(AppError::NotFound)
 }
@@ -367,11 +395,13 @@ pub async fn check_fields(
     product_id: Uuid,
     values: &HashMap<Uuid, String>,
 ) -> AppResult<serde_json::Value> {
-    let defs: Vec<CustomField> = sqlx::query_as(
-        "SELECT id, product_id, name, description, kind, choices, pattern, required, admin_only, sort_order
-         FROM product_custom_fields WHERE product_id = $1 AND NOT admin_only",
-    )
-    .bind(product_id).fetch_all(&mut **tx).await.map_err(db_err)?;
+    let defs: Vec<CustomField> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {FIELD_COLS} FROM product_custom_fields WHERE product_id = $1 AND NOT admin_only"
+    )))
+    .bind(product_id)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(db_err)?;
     if values.keys().any(|k| !defs.iter().any(|d| d.id == *k)) {
         return Err(AppError::Validation("error.invalid_field"));
     }

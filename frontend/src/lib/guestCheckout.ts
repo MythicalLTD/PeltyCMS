@@ -24,7 +24,7 @@ export function validLimit(s: string): boolean {
   return /^\d{1,4}$/.test(s.trim()) && Number(s) >= 1 && Number(s) <= 1000;
 }
 
-export interface GuestAvailability { available: boolean; game: string | null; fields: string[]; verify_minecraft: boolean }
+export interface GuestAvailability { available: boolean; game: string | null; fields: string[]; required?: string[]; verify_minecraft: boolean }
 
 /** Client-side format check (the server re-checks; Minecraft names also go to Mojang). */
 export function identityError(game: string, field: string, value: string): "format" | null {
@@ -36,6 +36,8 @@ export function identityError(game: string, field: string, value: string): "form
     license: /^(license:)?[0-9a-fA-F]{40}$/,
     steamid: /^7656119\d{10}$/,
     xuid: /^\d{15,17}$/,
+    discord_id: /^\d{17,20}$/,
+    fivem: /^(fivem:)?\d{1,12}$/,
   };
   const re = ok[field];
   return re && !re.test(v) ? "format" : null;
@@ -47,7 +49,8 @@ export function shownFields(a: GuestAvailability): string[] {
 }
 
 /** At least one identity value, and Minecraft Java requires the name. */
-export function identityComplete(game: string, values: Record<string, string>): boolean {
+export function identityComplete(game: string, values: Record<string, string>, required: string[] = []): boolean {
+  if (required.some((f) => !values[f]?.trim())) return false;
   if (game === "minecraft_java") return !!values.username?.trim();
   return Object.values(values).some((v) => v.trim() !== "");
 }

@@ -43,6 +43,7 @@ Supported games: Minecraft Java and Bedrock, FiveM and RedM, Rust, Garry's Mod, 
 | `steamid` | Rust, Garry's Mod, ARK, CS2, FiveM | SteamID64 (`7656119...`, 17 digits) |
 | `license` | FiveM / RedM Rockstar license | 40 hex digits, with or without `license:` |
 | `discord_id` | Discord user ID | 17-20 digits |
+| `fivem` | FiveM / RedM Cfx.re account id | digits, with or without `fivem:` (stored without the prefix) |
 
 Values are validated before they are saved, so a linked identity can never inject extra console commands.
 
@@ -55,6 +56,14 @@ Values are validated before they are saved, so a linked identity can never injec
 **Store packages** picks which catalog products the server's store sells, in display order. The public store of a server is `GET /api/v1/public/game/servers/{slug}`.
 
 Customers link their identities in the client area under Account → **Game accounts**. Staff can see them with `GET /api/v1/admin/game/customers/{id}/accounts`.
+
+**Filled for the player, asked when missing.** Players rarely know their in-game IDs, so the store fills what it can:
+
+- **Sign-in fills the IDs it proves.** Login with Steam writes the SteamID64 (`steamid`), Login with Discord the Discord user id (`discord_id`) and Login with FiveM the Cfx.re account id (`fivem`) onto the player's game accounts, for every game with an enabled store that has that field. Only empty fields are filled; an ID the player already saved is never replaced by a sign-in. No sign-in gives the Rockstar `license:`.
+- **Checkout asks for the rest.** On the store checkout a signed-in player sees a **Player details** step: the IDs already on file are shown as filled, and an input appears for each ID the package's delivery commands need (for example `{license}` in `add_principal identifier.license:{license} group.vip`) that is still missing. On FiveM / RedM the Rockstar licence is always asked when missing. The checkout is refused with `error.game_identity_required` until a needed ID is given; what the player types is saved to their game accounts, so the next purchase needs nothing. Guests are asked for the same needed IDs. Gifted lines are skipped (the recipient's name is used).
+- `GET /api/v1/client/game/checkout-identity/{cart_id}` returns, per game of the cart, each field with the known value and whether the delivery needs it. `POST /api/v1/client/checkout` takes the typed IDs as `"identity": {"fivem": {"license": "license:…"}}`.
+
+**Package checkout fields.** Like Tebex custom fields: open **Checkout fields** on a package (Admin → Products, or **Store packages** on a game server) and add text, long text, number, dropdown or checkbox fields, required or optional, with an optional format (regex). A text or number field can be **filled from a player ID** (player name, Rockstar licence, SteamID64, Discord id, Cfx.re id, Minecraft UUID or XUID): it is pre-filled from the buyer's game account, the server fills it too if left empty, and a value the buyer types is saved to the game account when it had none. Answers are stored on the order line and the service like any custom field.
 
 ### API
 
@@ -76,8 +85,8 @@ Customers link their identities in the client area under Account → **Game acco
 Requires **Game profiles**. Open **Products → In-game delivery**.
 
 - **Commands** run when a package is bought (`purchase`), renewed (`renewal`), expires or is suspended/cancelled (`expiry`), refunded (`refund`) or charged back (`chargeback`). Set them per package or globally for every package. Each command can target one server or every server whose store sells the package, can wait until the player is online, and can be delayed. Servers with transport `none` never receive commands. For "wait until online" over RCON, the queue first asks the server for its player list (`list` on Minecraft, `status` elsewhere) and holds the command, without using an attempt, until the player's name appears. A delivery that is claimed but never answered fails after 10 attempts. After an RCON error, the remaining commands for that server are put back in the queue rather than sent on the same connection.
-- **Placeholders**: `{username}`, `{uuid}`, `{uuid_nodash}`, `{xuid}`, `{steamid}`, `{license}`, `{discord_id}`, `{package}`, `{package_id}`, `{service_id}`, `{order_id}`, `{customer_id}`, `{amount}`, `{currency}`, `{server}`. Unknown placeholders are rejected when you save.
-- **Missing game account**: when a command needs an identity the customer has not linked, the delivery waits (`Waiting for game account`) and is sent automatically as soon as they link it on **Game accounts**.
+- **Placeholders**: `{username}`, `{uuid}`, `{uuid_nodash}`, `{xuid}`, `{steamid}`, `{license}`, `{discord_id}`, `{fivem}`, `{package}`, `{package_id}`, `{service_id}`, `{order_id}`, `{customer_id}`, `{amount}`, `{currency}`, `{server}`. Unknown placeholders are rejected when you save.
+- **Missing game account**: the store checkout asks for an identity a command needs (see *Filled for the player, asked when missing* above). For orders placed another way (staff orders, the client order form), when a command needs an identity the customer has not linked, the delivery waits (`Waiting for game account`) and is sent automatically as soon as they link it on **Game accounts**.
 - **Queue**: every command is a row with status, attempts and the last error. Failures are retried with backoff (2, 4, 8 … up to 60 minutes, 10 attempts). Retry or cancel rows by hand, or resend a service's commands.
 - **Transports**: RCON servers are processed by the worker every minute (or **Run queue now**). Agent servers (FiveM, RedM, any plugin) poll the API with their agent token:
 

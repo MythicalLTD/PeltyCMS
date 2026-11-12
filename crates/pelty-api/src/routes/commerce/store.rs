@@ -190,6 +190,13 @@ pub struct CheckoutBody {
     /// Billing country to store on the profile when it is still empty.
     #[serde(default)]
     pub country: Option<String>,
+    /// Player details typed at checkout (game → field → value), e.g.
+    /// `{"fivem": {"license": "license:..."}}`. Saved into empty fields of
+    /// the buyer's game accounts; required when a package's delivery needs
+    /// a field the account does not have yet.
+    #[serde(default)]
+    #[schema(value_type = Object)]
+    pub identity: std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>,
 }
 
 /// Turn a cart into an order + invoice for the signed-in customer. The
@@ -216,6 +223,7 @@ pub async fn checkout(
     if items.is_empty() {
         return Err(AppError::Validation("error.cart_invalid").into());
     }
+    crate::routes::games::apply_checkout_identity(&s, &u, cid, &items, &b.identity).await?;
     let input = CheckoutInput {
         fields: b.fields,
         country: b.country,
@@ -246,6 +254,9 @@ pub(crate) async fn place_cart(
                     it.fields = f.clone();
                 }
             }
+            crate::routes::games::fill_identity_fields(s, cid, &mut items)
+                .await
+                .map_err(|e| e.0)?;
             if let Some(c) = b
                 .country
                 .as_deref()

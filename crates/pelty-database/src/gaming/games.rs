@@ -59,7 +59,7 @@ pub const GAMES: &[GameDef] = &[
     g(
         "fivem",
         "FiveM (GTA V)",
-        &["username", "license", "steamid", "discord_id"],
+        &["username", "license", "steamid", "discord_id", "fivem"],
         "fivem",
         30120,
         "agent",
@@ -67,7 +67,7 @@ pub const GAMES: &[GameDef] = &[
     g(
         "redm",
         "RedM (Red Dead Redemption 2)",
-        &["username", "license", "steamid", "discord_id"],
+        &["username", "license", "steamid", "discord_id", "fivem"],
         "fivem",
         30120,
         "agent",
@@ -163,6 +163,13 @@ pub fn normalize_identity(field: &str, value: &str) -> Option<String> {
             let h = v.strip_prefix("license:").unwrap_or(v);
             return (h.len() == 40 && all(h, |c| c.is_ascii_hexdigit()))
                 .then(|| h.to_ascii_lowercase());
+        }
+        // Cfx.re account id (`fivem:123456` in-game); stored without prefix
+        // like `license`.
+        "fivem" => {
+            let h = v.strip_prefix("fivem:").unwrap_or(v);
+            return ((1..=12).contains(&h.len()) && all(h, |c| c.is_ascii_digit()))
+                .then(|| h.to_string());
         }
         _ => false,
     };
@@ -536,9 +543,144 @@ pub async fn identity(
     Ok(rows.into_iter().collect())
 }
 
+/// Identity field a sign-in engine proves: Steam → SteamID64, Discord →
+/// user id, Cfx.re (Login with FiveM) → `fivem:` account id. The Rockstar
+/// `license:` never comes from a sign-in: it is asked at checkout.
+pub fn sso_field(engine: &str) -> Option<&'static str> {
+    match engine {
+        "steam" => Some("steamid"),
+        "discord" => Some("discord_id"),
+        "cfx" => Some("fivem"),
+        _ => None,
+    }
+}
+
+/// Games with an enabled store whose identity has `field`.
+pub async fn store_games_with(pool: &PgPool, field: &str) -> AppResult<Vec<&'static str>> {
+    let ids: Vec<String> =
+        sqlx::query_scalar("SELECT DISTINCT game FROM game_servers WHERE enabled ORDER BY game")
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?;
+    Ok(ids
+        .iter()
+        .filter_map(|g| game(g))
+        .filter(|g| g.fields.contains(&field))
+        .map(|g| g.id)
+        .collect())
+}
+
+/// Set `field` on each of `games` where the customer has no value yet. An
+/// existing (different) value is never replaced. Returns the games written.
+pub async fn fill_missing(
+    pool: &PgPool,
+    customer: Uuid,
+    games: &[&str],
+    field: &str,
+    value: &str,
+) -> AppResult<Vec<String>> {
+    let Some(v) = normalize_identity(field, value) else {
+        return Ok(vec![]);
+    };
+    let mut out = vec![];
+    for g in games {
+        if !game(g).is_some_and(|d| d.fields.contains(&field)) {
+            continue;
+        }
+        let n = sqlx::query(
+            "INSERT INTO customer_game_accounts (customer_id, game, field, value) VALUES ($1,$2,$3,$4)
+             ON CONFLICT (customer_id, game, field) DO NOTHING",
+        )
+        .bind(customer)
+        .bind(g)
+        .bind(field)
+        .bind(&v)
+        .execute(pool)
+        .await
+        .map_err(db_err)?
+        .rows_affected();
+        if n > 0 {
+            out.push((*g).to_string());
+        }
+    }
+    Ok(out)
+}
+
+/// What a cart needs from the buyer, per game: the identity fields the
+/// delivery commands of its packages use (`{license}`, `{steamid}`, ...).
+/// Gifted lines are skipped (the recipient's name is used). Games come from
+/// the enabled stores selling each package.
+pub async fn cart_needs(
+    pool: &PgPool,
+    lines: &[(Uuid, bool)],
+) -> AppResult<std::collections::BTreeMap<String, std::collections::BTreeSet<String>>> {
+    use std::collections::{BTreeMap, BTreeSet};
+    let ids: Vec<Uuid> = lines.iter().map(|(p, _)| *p).collect();
+    let mut out: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    if ids.is_empty() {
+        return Ok(out);
+    }
+    // (product, server, game)
+    let stores: Vec<(Uuid, Uuid, String)> = sqlx::query_as(
+        "SELECT gp.product_id, s.id, s.game FROM game_server_products gp JOIN game_servers s ON s.id = gp.server_id
+         WHERE gp.product_id = ANY($1) AND s.enabled",
+    )
+    .bind(&ids)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    if stores.is_empty() {
+        return Ok(out);
+    }
+    // (product or global, server or all, template)
+    let cmds: Vec<(Option<Uuid>, Option<Uuid>, String)> = sqlx::query_as(
+        "SELECT product_id, server_id, command FROM game_commands WHERE product_id = ANY($1) OR product_id IS NULL",
+    )
+    .bind(&ids)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    for (pid, gift) in lines {
+        for (_, sid, g) in stores.iter().filter(|(p, _, _)| p == pid) {
+            let Some(def) = game(g) else { continue };
+            let need = out.entry(g.clone()).or_default();
+            if *gift {
+                continue;
+            }
+            for (cp, cs, tpl) in &cmds {
+                if cp.is_some_and(|c| c != *pid) || cs.is_some_and(|c| c != *sid) {
+                    continue;
+                }
+                for ph in crate::game_delivery::placeholders(tpl) {
+                    let f = if ph == "uuid_nodash" {
+                        "uuid".to_string()
+                    } else {
+                        ph
+                    };
+                    if def.fields.contains(&f.as_str()) {
+                        need.insert(f);
+                    }
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sso_engines_map_to_fields() {
+        assert_eq!(sso_field("steam"), Some("steamid"));
+        assert_eq!(sso_field("discord"), Some("discord_id"));
+        assert_eq!(sso_field("cfx"), Some("fivem"));
+        assert_eq!(sso_field("google"), None);
+        assert!(game("fivem").unwrap().fields.contains(&"fivem"));
+        assert!(game("redm").unwrap().fields.contains(&"fivem"));
+        assert!(!game("rust").unwrap().fields.contains(&"fivem"));
+    }
 
     #[test]
     fn games_are_unique_and_named() {
@@ -579,6 +721,14 @@ mod tests {
         assert!(normalize_identity("discord_id", "123456789012345678").is_some());
         assert!(normalize_identity("discord_id", "12").is_none());
         assert!(normalize_identity("unknown", "x").is_none());
+        assert_eq!(
+            normalize_identity("fivem", "fivem:123456").as_deref(),
+            Some("123456")
+        );
+        assert_eq!(normalize_identity("fivem", " 42 ").as_deref(), Some("42"));
+        for bad in ["", "fivem:", "abc", "fivem:12a", "1234567890123"] {
+            assert!(normalize_identity("fivem", bad).is_none(), "{bad:?}");
+        }
     }
 
     #[test]

@@ -27,6 +27,8 @@ import { useModules } from "@/lib/modules";
 import { SsoButtons } from "@/components/account/SsoButtons";
 import { Captcha } from "@/components/Captcha";
 import { GuestCheckoutCard, useGuestCheckout } from "@/components/store/GuestCheckout";
+import { badIdentity, PlayerDetailsCard } from "@/components/store/PlayerDetails";
+import { identityBody, identityDisplay, knownIdentity, missingRequired, type IdentityGame } from "@/lib/store/checkoutFields";
 import { addonPrice, fieldErrors, fromPrice, resetCartId, useStoreCart, type Extras, type StoreLine } from "@/lib/store/storefront";
 import { detectCurrency, giftNameValid, payAmountValid, pricedCurrencies, usePackageRules } from "@/lib/storeRules";
 import { PackageRuleBadges, ruleBlocks } from "@/components/store/PackageRuleBadges";
@@ -439,10 +441,31 @@ export function CheckoutPage() {
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [cart, values, extras, productIds]);
   const fieldsOf = (pid: string) => dynFields[pid] ?? extras[productIds.indexOf(pid)]?.fields ?? [];
-  const errs = (cart?.items ?? []).map((l, i) => fieldErrors(fieldsOf(l.product_id), values[i] ?? {}));
+  // Game store: player IDs we already have, and the ones to ask for.
+  const { enabled: mods } = useModules();
+  const ident = useQuery({
+    queryKey: ["client", "checkout-identity", id, cart?.items.length ?? 0],
+    queryFn: () => api<{ games: IdentityGame[] }>(`/client/game/checkout-identity/${id}`),
+    enabled: !!me && !!cart && mods.has("game_profiles"),
+    retry: false,
+  });
+  const idGames = ident.data?.games ?? [];
+  const [typed, setTyped] = useState<Record<string, Record<string, string>>>({});
+  const known = knownIdentity(idGames, typed);
+  const missingIds = missingRequired(idGames, typed);
+  const badIds = badIdentity(idGames, typed);
+  // Package fields mapped to a player ID are filled from what we know.
+  const merged = (i: number, pid: string): Record<string, string> => {
+    const out = { ...values[i] };
+    for (const f of fieldsOf(pid)) if (f.identity_key && !out[f.id]?.trim() && known[f.identity_key]) out[f.id] = identityDisplay(f.identity_key, known[f.identity_key]!);
+    return out;
+  };
+  const mergedAll = Object.fromEntries((cart?.items ?? []).map((l, i) => [i, merged(i, l.product_id)]));
+  const errs = (cart?.items ?? []).map((l, i) => fieldErrors(fieldsOf(l.product_id), mergedAll[i] ?? {}));
   const place = useMutation({
     mutationFn: async () => {
-      const r = await api<{ order: { id: string }; invoice: { id: string; status: string } }>("/client/checkout", { method: "POST", body: { cart_id: id, fields: values, country: cart?.country || null } });
+      const identity = identityBody(typed);
+      const r = await api<{ order: { id: string }; invoice: { id: string; status: string } }>("/client/checkout", { method: "POST", body: { cart_id: id, fields: mergedAll, country: cart?.country || null, identity } });
       resetCartId(localStorage);
       if (chosen && r.invoice.status === "unpaid") {
         const p = await api<{ init: { type: string; url?: string } }>(`/client/invoices/${r.invoice.id}/pay`, { method: "POST", body: { gateway: chosen } }).catch(() => null);
@@ -454,18 +477,22 @@ export function CheckoutPage() {
   });
   if (loading) return <PageSkeleton />;
   if (!cart || cart.items.length === 0) return <EmptyState icon={ShoppingCartIcon} title={t("store.cart_empty")} action={<Button asChild><Link to="/store">{t("store.browse")}</Link></Button>} />;
-  const submit = () => { setShown(true); if (errs.every((e) => Object.keys(e).length === 0)) place.mutate(); };
+  const submit = () => { setShown(true); if (errs.every((e) => Object.keys(e).length === 0) && missingIds.length === 0 && badIds.length === 0) place.mutate(); };
   return (
     <div className="grid gap-4 *:min-w-0 lg:grid-cols-[1fr_22rem]">
       <div className="flex flex-col gap-4">
         {!me ? (
           <>
-            {guest && <GuestCheckoutCard cartId={id} avail={guest} fields={values} country={cart.country || null} gateway={chosen}
+            {guest && <GuestCheckoutCard cartId={id} avail={guest} fields={mergedAll} country={cart.country || null} gateway={chosen}
               validate={() => { setShown(true); return errs.every((e) => Object.keys(e).length === 0) && !!view?.preview; }} />}
             <AuthStep />
           </>
         ) : (
-          <Card><CardHeader><CardTitle>{t("store.account_step")}</CardTitle><CardDescription>{t("store.signed_in_as", { email: me.email })}</CardDescription></CardHeader></Card>
+          <>
+            <Card><CardHeader><CardTitle>{t("store.account_step")}</CardTitle><CardDescription>{t("store.signed_in_as", { email: me.email })}</CardDescription></CardHeader></Card>
+            <PlayerDetailsCard games={idGames} typed={typed} shown={shown} missing={missingIds}
+              onChange={(g, f, v) => setTyped((x) => ({ ...x, [g]: { ...x[g], [f]: v } }))} />
+          </>
         )}
         {cart.items.map((l, i) => {
           const fields = fieldsOf(l.product_id);
@@ -475,14 +502,16 @@ export function CheckoutPage() {
               <CardHeader><CardTitle>{view!.preview?.lines[i]?.product_name ?? t("store.details")}</CardTitle><CardDescription>{t("store.fields_hint")}</CardDescription></CardHeader>
               <CardContent className="grid gap-4 *:min-w-0 sm:grid-cols-2">
                 {fields.map((f) => {
-                  const v = values[i]?.[f.id] ?? "";
+                  const own = values[i]?.[f.id];
+                  const v = own ?? mergedAll[i]?.[f.id] ?? "";
+                  const auto = own === undefined && !!f.identity_key && !!v;
                   const set = (x: string) => setValues((s) => ({ ...s, [i]: { ...s[i], [f.id]: x } }));
                   const err = shown ? errs[i]?.[f.id] : undefined;
                   const fid = `f-${i}-${f.id}`;
                   return (
                     <div key={f.id} className={f.kind === "textarea" ? "grid gap-2 sm:col-span-2" : "grid gap-2"}>
                       <Label htmlFor={fid}>{f.name}{f.required ? " *" : ""}</Label>
-                      {f.kind === "dropdown" ? (
+                      {f.kind === "dropdown" || f.kind === "select" ? (
                         <Select value={v} onValueChange={set}><SelectTrigger id={fid} className="w-full" aria-invalid={!!err}><SelectValue /></SelectTrigger><SelectContent>{f.choices.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
                       ) : f.kind === "textarea" ? (
                         <Textarea id={fid} value={v} aria-invalid={!!err} onChange={(e) => set(e.target.value)} />
@@ -491,6 +520,7 @@ export function CheckoutPage() {
                       ) : (
                         <Input id={fid} value={v} aria-invalid={!!err} onChange={(e) => set(e.target.value)} />
                       )}
+                      {auto && <p className="text-xs text-primary" data-autofilled={f.id}>{t("pid.field_autofilled")}</p>}
                       {f.description && <p className="text-xs text-muted-foreground">{f.description}</p>}
                       {err && <p className="text-sm text-destructive">{t(`store.field_${err}`)}</p>}
                     </div>

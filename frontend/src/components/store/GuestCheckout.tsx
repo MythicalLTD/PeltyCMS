@@ -52,7 +52,8 @@ export function GuestCheckoutCard({ cartId, avail, fields, country, gateway, val
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const bad = shown.filter((f) => identityError(game, f, ident[f] ?? ""));
-  const ok = emailLooksValid(email) && identityComplete(game, ident) && bad.length === 0;
+  const required = avail.required ?? [];
+  const ok = emailLooksValid(email) && identityComplete(game, ident, required) && bad.length === 0;
   const go = useMutation({
     mutationFn: async () => {
       const r = await api<Placed>("/store/guest-checkout", { method: "POST", body: { cart_id: cartId, email: email.trim(), identity: ident, fields, country, locale: lang } });
@@ -91,13 +92,13 @@ export function GuestCheckoutCard({ cartId, avail, fields, country, gateway, val
           <div className="grid gap-3 *:min-w-0 sm:grid-cols-2">
             {shown.map((f) => (
               <Field key={f} id={`guest-${f}`} label={t(`game.field.${f}` as TranslationKey)} autoComplete="off" spellCheck={false}
-                required={game === "minecraft_java" && f === "username"}
+                required={(game === "minecraft_java" && f === "username") || required.includes(f)}
                 value={ident[f] ?? ""} onChange={(e) => setIdent((s) => ({ ...s, [f]: e.target.value }))}
                 error={touched && bad.includes(f) ? t("error.game_identity_invalid") : undefined}
                 hint={f === "username" && game === "minecraft_java" && avail.verify_minecraft ? t("guest.mojang_hint") : undefined} />
             ))}
           </div>
-          {touched && !identityComplete(game, ident) && <p className="text-sm text-destructive">{t("error.guest_identity_required")}</p>}
+          {touched && !identityComplete(game, ident, required) && <p className="text-sm text-destructive">{t(required.some((f) => !ident[f]?.trim()) ? "error.game_identity_required" : "error.guest_identity_required")}</p>}
           <Field id="guest-email" type="email" required autoComplete="email" label={t("field.email")} value={email} onChange={(e) => setEmail(e.target.value)} error={touched && !emailLooksValid(email) ? t("error.invalid_email") : undefined}
             hint={t("guest.email_hint")} />
           <Captcha form="checkout" />

@@ -14,7 +14,7 @@ pub const TRIGGERS: [&str; 5] = ["purchase", "renewal", "expiry", "refund", "cha
 
 /// Placeholders a command may use. Identity placeholders put the delivery
 /// on hold (`waiting_identity`) until the customer links that field.
-pub const PLACEHOLDERS: [&str; 15] = [
+pub const PLACEHOLDERS: [&str; 16] = [
     "username",
     "uuid",
     "uuid_nodash",
@@ -22,6 +22,7 @@ pub const PLACEHOLDERS: [&str; 15] = [
     "steamid",
     "license",
     "discord_id",
+    "fivem",
     "package",
     "package_id",
     "service_id",
@@ -31,7 +32,7 @@ pub const PLACEHOLDERS: [&str; 15] = [
     "currency",
     "server",
 ];
-const IDENTITY: [&str; 7] = [
+pub const IDENTITY: [&str; 8] = [
     "username",
     "uuid",
     "uuid_nodash",
@@ -39,6 +40,7 @@ const IDENTITY: [&str; 7] = [
     "steamid",
     "license",
     "discord_id",
+    "fivem",
 ];
 /// Attempts before a delivery is marked failed.
 pub const MAX_ATTEMPTS: i32 = 10;

@@ -52,17 +52,34 @@ impl FromRequestParts<AppState> for GuestCtx {
     }
 }
 
-/// Identity fields a guest can enter for `game` (Discord is linked later).
+/// Identity fields a guest can enter for `game` (Discord and the Cfx.re id
+/// come from signing in with them later).
 fn guest_fields(game: &str) -> Vec<&'static str> {
     games::game(game)
         .map(|g| {
             g.fields
                 .iter()
                 .copied()
-                .filter(|f| *f != "discord_id")
+                .filter(|f| !matches!(*f, "discord_id" | "fivem"))
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// Guest-enterable fields the cart's delivery commands need for `game`.
+async fn guest_required(
+    s: &AppState,
+    game: &str,
+    items: &[pelty_database::orders::CartItem],
+) -> ApiResult<Vec<String>> {
+    let allowed = guest_fields(game);
+    Ok(crate::routes::games::cart_needs(s, items)
+        .await?
+        .remove(game)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|f| allowed.contains(&f.as_str()))
+        .collect())
 }
 
 /// Whether this cart can be bought as a guest, for which game and with
@@ -76,19 +93,22 @@ pub async fn availability(
     let cart = sf::get_cart(&s.pool, cart_id)
         .await?
         .ok_or(AppError::NotFound)?;
-    let ids: Vec<Uuid> = sf::parse_items(&cart.items)
-        .iter()
-        .map(|i| i.product_id)
-        .collect();
+    let items = sf::parse_items(&cart.items);
+    let ids: Vec<Uuid> = items.iter().map(|i| i.product_id).collect();
     let game = if cart.order_id.is_none() && cart.customer_id.is_none() {
         gc::cart_game(&s.pool, &ids).await?
     } else {
         None
     };
+    let required = match &game {
+        Some(g) => guest_required(&s, g, &items).await?,
+        None => vec![],
+    };
     Ok(Json(json!({
         "available": game.is_some(),
         "game": game,
         "fields": game.as_deref().map(guest_fields).unwrap_or_default(),
+        "required": required,
         "verify_minecraft": set.verify_minecraft,
     })))
 }
@@ -246,6 +266,13 @@ pub async fn guest_checkout(
         return Err(AppError::Conflict("error.guest_account_exists").into());
     }
     let ident = identity(&s, &set, &game, &b.identity).await?;
+    if guest_required(&s, &game, &items)
+        .await?
+        .iter()
+        .any(|f| !ident.contains_key(f))
+    {
+        return Err(AppError::Validation("error.game_identity_required").into());
+    }
     let names: Vec<String> = ident.get("username").cloned().into_iter().collect();
     if pelty_database::store_rules::banned_guest(&s.pool, &email, &names).await? {
         return Err(AppError::Validation("error.store_banned").into());
@@ -449,6 +476,7 @@ mod tests {
             guest_fields("fivem"),
             vec!["username", "license", "steamid"]
         );
+        assert_eq!(guest_fields("redm"), vec!["username", "license", "steamid"]);
         assert!(guest_fields("nope").is_empty());
     }
 }

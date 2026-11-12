@@ -17,6 +17,7 @@ use utoipa::OpenApi;
         super::games::public_servers,
         super::games::public_server,
         super::games::my_accounts,
+        super::games::checkout_identity,
         super::games::link,
         super::games::unlink,
         super::games::admin_servers,

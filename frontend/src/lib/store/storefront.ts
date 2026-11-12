@@ -15,7 +15,7 @@ export interface CartPreview {
 }
 export interface CartView { cart: StoreCart; preview: CartPreview | null; error: string | null }
 export interface Addon { id: string; name: string; description: string; prices: { currency: string; cycle: string; amount: string; setup_fee: string }[] }
-export interface OrderField { id: string; name: string; description: string; kind: string; choices: string[]; pattern: string; required: boolean }
+export interface OrderField { id: string; name: string; description: string; kind: string; choices: string[]; pattern: string; required: boolean; identity_key?: string | null }
 export interface Extras { addons: Addon[]; fields: OrderField[] }
 export interface Price { currency: string; cycle: string; amount: string; setup_fee: string }
 

@@ -84,7 +84,7 @@ How it works:
 
 **Limitations:**
 
-- **No Rockstar licence from Cfx.re:** the forum's `session/current.json` returns the forum user (id, username), not a Rockstar/FiveM `license:` identifier, so in-game delivery still uses the FiveM identifier the player enters under **Game accounts** (or at guest checkout). A Steam sign-in does not fill the `steamid` game identity automatically either. The hook for that is `remember_username` in `access/oauth.rs`.
+- **No Rockstar licence from Cfx.re:** the forum's `session/current.json` returns the forum user (id, username), not a Rockstar/FiveM `license:` identifier. With **Game profiles** on, Login with FiveM fills the player's Cfx.re id (`fivem`), Login with Steam their SteamID64 (`steamid`) and Login with Discord their Discord id (`discord_id`) on their game accounts (empty fields only). The Rockstar licence is asked once at checkout when a package needs it and then remembered (see Admin → Modules → Game profiles).
 - **Forum dependencies:** the forum must allow your callback URL (Discourse `allowed_user_api_auth_redirects`) and the player's forum trust level must allow user API keys. Cfx.re controls both, so if the forum refuses, the player sees an error on forum.cfx.re.
 
 ### SAML scope (Service Provider)

@@ -12,6 +12,7 @@ import { ServiceUsageDialog } from "@/pages/admin/billing/Usage";
 import { CreateInvoiceDialog, ProductBillingDialog, ProductStockDialog } from "@/pages/admin/billing/BillableItems";
 import { CustomerExtrasDialog } from "@/pages/admin/clients/ClientExtras";
 import { ProductOptionsDialog } from "@/pages/admin/catalog/ConfigOptions";
+import { ProductCheckoutFieldsDialog } from "@/pages/admin/catalog/CheckoutFields";
 import { ProductModuleDialog, ServiceProvisioningDialog } from "@/pages/admin/infra/Servers";
 import { AdminPlanChangeDialog } from "@/pages/admin/catalog/ServicePlan";
 import { Badge } from "@/components/ui/badge";
@@ -138,7 +139,7 @@ export function AdminProductsPage() {
           { header: t("billing.status"), cell: (p) => <StatusBadge status={p.status} /> },
           { header: t("billing.module"), cell: (p) => p.module ? <span className="font-mono text-xs">{p.module}</span> : <span className="text-muted-foreground">{t("billing.module_none")}</span> },
           { header: t("billing.prices"), cell: (p) => <div className="text-xs">{p.prices.map((pr) => <div key={`${pr.currency}-${pr.cycle}`}>{formatMoney(pr.amount, pr.currency, lang)} / {tCode(`cycle.${pr.cycle}`)}</div>)}</div> },
-          { header: "", cell: (p) => <div className="flex flex-wrap justify-end gap-2"><ProductDialog product={p} /><ProductOptionsDialog productId={p.id} productName={p.name} options={p.options ?? []} prices={p.prices} /><ProductBillingDialog productId={p.id} productName={p.name} /><ProductStockDialog productId={p.id} productName={p.name} value={p} onDone={() => void qc.invalidateQueries({ queryKey: ["admin", "products"] })} /><ProductModuleDialog productId={p.id} productName={p.name} onDone={() => void qc.invalidateQueries({ queryKey: ["admin", "products"] })} /></div> },
+          { header: "", cell: (p) => <div className="flex flex-wrap justify-end gap-2"><ProductDialog product={p} /><ProductOptionsDialog productId={p.id} productName={p.name} options={p.options ?? []} prices={p.prices} /><ProductCheckoutFieldsDialog productId={p.id} productName={p.name} /><ProductBillingDialog productId={p.id} productName={p.name} /><ProductStockDialog productId={p.id} productName={p.name} value={p} onDone={() => void qc.invalidateQueries({ queryKey: ["admin", "products"] })} /><ProductModuleDialog productId={p.id} productName={p.name} onDone={() => void qc.invalidateQueries({ queryKey: ["admin", "products"] })} /></div> },
         ]}
       />
   );

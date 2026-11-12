@@ -155,6 +155,42 @@ async fn game_sso() {
         assert_eq!(r.status, StatusCode::NOT_FOUND, "{id} hidden");
     }
 
+    // Game stores (FiveM, RedM): sign-ins fill the IDs they prove.
+    crate::modules_flow::enable(&app, &admin, &["game_profiles"]).await;
+    let tag = &uuid::Uuid::new_v4().simple().to_string()[..8];
+    for game in ["fivem", "redm"] {
+        let r = call(&app, "POST", "/api/v1/admin/game/servers", Some(json!({"game": game, "name": format!("{game} {tag}"), "slug": format!("{game}-sso-{tag}"), "transport": "agent"})), &admin.h()).await;
+        assert_eq!(r.status, StatusCode::OK, "{:?}", r.body);
+    }
+    let accounts = |h: Vec<(String, String)>| {
+        let app = app.clone();
+        async move {
+            let h: Vec<(&str, &str)> = h.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+            let r = call(&app, "GET", "/api/v1/client/game/accounts", None, &h).await;
+            assert_eq!(r.status, StatusCode::OK, "{:?}", r.body);
+            r.body["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|a| {
+                    (
+                        format!(
+                            "{}.{}",
+                            a["game"].as_str().unwrap(),
+                            a["field"].as_str().unwrap()
+                        ),
+                        a["value"].as_str().unwrap().to_string(),
+                    )
+                })
+                .collect::<std::collections::BTreeMap<String, String>>()
+        }
+    };
+    let own = |h: &[(&str, &str)]| -> Vec<(String, String)> {
+        h.iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    };
+
     // ----- Cfx.re (FiveM) -----
     settings(
         &app,
@@ -369,6 +405,12 @@ async fn game_sso() {
         .expect("cfx identity");
     assert_eq!(idn["subject"], cfx_id.to_string());
     assert_eq!(idn["username"], "fivem_rp");
+    // Login with FiveM wrote the Cfx.re id (`fivem:`) on both stores' game
+    // accounts; no Rockstar licence is invented (checkout asks for it).
+    let acc = accounts(own(&[("cookie", ck.as_str())])).await;
+    assert_eq!(acc.get("fivem.fivem"), Some(&cfx_id.to_string()), "{acc:?}");
+    assert_eq!(acc.get("redm.fivem"), Some(&cfx_id.to_string()), "{acc:?}");
+    assert!(!acc.contains_key("fivem.license"), "{acc:?}");
     // Sign-up token is single use.
     let r = call(
         &app,
@@ -463,6 +505,18 @@ async fn game_sso() {
         format!("{}/", state.cfg.public_url.trim_end_matches('/'))
     );
     let sid = steam_id();
+    // A SteamID the player already typed for FiveM is kept (never replaced
+    // by a sign-in); RedM had none and gets the signed-in one.
+    let typed = steam_id();
+    let r = call(
+        &app,
+        "POST",
+        "/api/v1/client/game/accounts",
+        Some(json!({"game": "fivem", "field": "steamid", "value": typed})),
+        &cust.h(),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK, "{:?}", r.body);
     let before = mock.requests().len();
     mock.push(200, "ns:http://specs.openid.net/auth/2.0\nis_valid:true\n");
     mock.push(
@@ -499,6 +553,9 @@ async fn game_sso() {
         (idn["subject"].as_str(), idn["username"].as_str()),
         (Some(sid.as_str()), Some("Gordon"))
     );
+    let acc = accounts(own(&cust.h())).await;
+    assert_eq!(acc.get("fivem.steamid"), Some(&typed), "{acc:?}");
+    assert_eq!(acc.get("redm.steamid"), Some(&sid), "{acc:?}");
 
     // Steam login of that account.
     let steam_start = |extra: &'static str| {

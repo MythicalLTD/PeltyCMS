@@ -20,6 +20,7 @@ import { address, slugify, type GameDef, type GameServer } from "@/lib/gaming";
 import { useI18n } from "@/lib/i18n";
 import { useModules } from "@/lib/modules";
 import { parseGuest, validLimit } from "@/lib/guestCheckout";
+import { ProductCheckoutFieldsDialog } from "@/pages/admin/catalog/CheckoutFields";
 import type { TranslationKey } from "@/lib/i18n-core";
 
 interface Form { game: string; name: string; slug: string; description: string; host: string; port: string; query_port: string; transport: string; rcon_host: string; rcon_port: string; rcon_password: string; enabled: boolean; guest_checkout: boolean }
@@ -178,7 +179,8 @@ export function AdminGameServersPage() {
             {(products.data?.items ?? []).map((p) => (
               <div key={p.id} className="flex items-center gap-2">
                 <Checkbox id={`pk-${p.id}`} checked={pkgs?.ids.includes(p.id) ?? false} onCheckedChange={(c) => setPkgs((x) => x && { ...x, ids: c === true ? [...x.ids, p.id] : x.ids.filter((i) => i !== p.id) })} />
-                <Label htmlFor={`pk-${p.id}`}>{p.name}</Label>
+                <Label htmlFor={`pk-${p.id}`} className="flex-1">{p.name}</Label>
+                {pkgs?.ids.includes(p.id) && <ProductCheckoutFieldsDialog productId={p.id} productName={p.name} />}
               </div>
             ))}
           </div>

@@ -481,6 +481,7 @@ async fn finish(
         g,
         headers,
         &p.id,
+        &p.engine,
         &p.cfg,
         prof,
         st.mode == "link",
@@ -497,6 +498,7 @@ async fn complete(
     g: &AuthGuard,
     headers: &HeaderMap,
     pid: &str,
+    engine: &str,
     cfg: &Value,
     prof: Profile,
     link: bool,
@@ -514,6 +516,7 @@ async fn complete(
         let uid = link_user.ok_or(AppError::Unauthenticated)?;
         security::link_identity(&s.pool, uid, p.id, &prof.subject, &prof.email).await?;
         remember_username(s, p.id, &prof).await?;
+        link_game_ids(s, engine, uid, &prof.subject).await;
         audit::record(
             &s.pool,
             Some(uid),
@@ -530,6 +533,7 @@ async fn complete(
         Some(i) => {
             security::touch_identity(&s.pool, i.id).await?;
             remember_username(s, p.id, &prof).await?;
+            link_game_ids(s, engine, i.user_id, &prof.subject).await;
             users::find(&s.pool, i.user_id)
                 .await?
                 .ok_or(AppError::Unauthenticated)?
@@ -549,6 +553,7 @@ async fn complete(
                     security::link_identity(&s.pool, u.id, p.id, &prof.subject, &prof.email)
                         .await?;
                     remember_username(s, p.id, &prof).await?;
+                    link_game_ids(s, engine, u.id, &prof.subject).await;
                     audit::record(
                         &s.pool,
                         Some(u.id),
@@ -611,6 +616,7 @@ async fn complete(
                     security::link_identity(&s.pool, u.id, p.id, &prof.subject, &prof.email)
                         .await?;
                     remember_username(s, p.id, &prof).await?;
+                    link_game_ids(s, engine, u.id, &prof.subject).await;
                     audit::record(
                         &s.pool,
                         Some(u.id),
@@ -635,11 +641,60 @@ async fn complete(
     sign_in(s, g, headers, p.id, p.cfg, user, return_to).await
 }
 
-/// Keep the provider handle on the identity. Hook: if Cfx.re ever exposes
-/// the player's `license:` identifier through a documented API, this is
-/// where it would be written to `customer_game_accounts` (FiveM delivery
-/// uses that). Today `session/current.json` has no licence, so nothing is
-/// invented; players enter it under Game accounts.
+/// Write the id a game-store sign-in proves onto the customer's game
+/// accounts (module `game_profiles`): Steam → `steamid`, Discord →
+/// `discord_id`, Cfx.re → `fivem`, on every game with an enabled store that
+/// has the field. Only empty fields are filled; a different value already
+/// there is left alone. Never fails the sign-in. Cfx.re's
+/// `session/current.json` has no Rockstar `license:`, so none is invented:
+/// checkout asks for it.
+pub(crate) async fn link_game_ids(s: &AppState, engine: &str, user: Uuid, subject: &str) {
+    if let Err(e) = try_link_game_ids(s, engine, user, subject).await {
+        tracing::warn!(error = %e, engine, "could not link game ids from sign-in");
+    }
+}
+
+async fn try_link_game_ids(s: &AppState, engine: &str, user: Uuid, subject: &str) -> AppResult<()> {
+    use pelty_database::{feature_modules, games};
+    let Some(field) = games::sso_field(engine) else {
+        return Ok(());
+    };
+    if !feature_modules::is_enabled(&s.pool, "game_profiles").await?
+        || games::normalize_identity(field, subject).is_none()
+        || is_staff(s, user).await?
+        || pelty_database::storefront::contact_for_user(&s.pool, user)
+            .await?
+            .is_some()
+    {
+        return Ok(());
+    }
+    let list = games::store_games_with(&s.pool, field).await?;
+    if list.is_empty() {
+        return Ok(());
+    }
+    let cid = s.clients().id_for_user(user).await?;
+    let wrote = games::fill_missing(&s.pool, cid, &list, field, subject).await?;
+    if wrote.is_empty() {
+        return Ok(());
+    }
+    audit::record(
+        &s.pool,
+        Some(user),
+        "game_account.linked",
+        Some(&cid.to_string()),
+        None,
+        json!({ "games": wrote, "field": field, "via": engine }),
+    )
+    .await?;
+    if feature_modules::is_enabled(&s.pool, crate::routes::gaming::delivery::MODULE).await?
+        && pelty_database::game_delivery::release_waiting(&s.pool, cid).await? > 0
+    {
+        crate::routes::gaming::delivery::kick(s);
+    }
+    Ok(())
+}
+
+/// Keep the provider handle on the identity.
 async fn remember_username(s: &AppState, pid: &str, prof: &Profile) -> AppResult<()> {
     if !prof.username.is_empty() {
         security::set_identity_username(&s.pool, pid, &prof.subject, &prof.username).await?;
@@ -815,6 +870,7 @@ pub async fn signup(
     if !su.username.is_empty() {
         security::set_identity_username(&s.pool, &p.id, &su.subject, &su.username).await?;
     }
+    link_game_ids(&s, &p.engine, u.id, &su.subject).await;
     crate::routes::affiliates::attribute_signup(&s, &headers, u.id).await;
     if let Err(e) = crate::routes::account::send_verification(&s, &u).await {
         tracing::error!(error = %e, "could not queue verification email");
