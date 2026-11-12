@@ -136,6 +136,11 @@ async fn field_kit_presets_provisioning_passwords_and_delivery() {
     assert_eq!(r.body["games"], json!(["fivem"]));
     let items = r.body["items"].as_array().unwrap().clone();
     assert_eq!(items.len(), 9, "{items:?}");
+    assert_eq!(
+        items.last().unwrap()["field_key"],
+        "rank",
+        "a new field goes after the existing ones"
+    );
     assert_eq!(by_key(&items, "username")["name"], "Nume jucător");
     assert_eq!(by_key(&items, "account_password")["kind"], "password");
     assert_eq!(by_key(&items, "account_email")["kind"], "email");

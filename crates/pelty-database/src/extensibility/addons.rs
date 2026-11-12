@@ -343,6 +343,7 @@ pub async fn upsert_field(
         ),
     };
     let choices = serde_json::to_value(&choices).unwrap_or_default();
+    // A new field with no explicit position goes after the existing ones.
     let row = match id {
         Some(_) => sqlx::query_as(sqlx::AssertSqlSafe(format!(
             "UPDATE product_custom_fields SET name=$3, description=$4, kind=$5, choices=$6, pattern=$7, required=$8, admin_only=$9, sort_order=$10, identity_key=$11, field_key=$12
@@ -350,7 +351,9 @@ pub async fn upsert_field(
         ))),
         None => sqlx::query_as(sqlx::AssertSqlSafe(format!(
             "INSERT INTO product_custom_fields (id, product_id, name, description, kind, choices, pattern, required, admin_only, sort_order, identity_key, field_key)
-             SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12 WHERE EXISTS (SELECT 1 FROM products WHERE id = $2)
+             SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,
+                    CASE WHEN $10 = 0 THEN COALESCE((SELECT MAX(sort_order) + 1 FROM product_custom_fields WHERE product_id = $2), 0) ELSE $10 END,
+                    $11,$12 WHERE EXISTS (SELECT 1 FROM products WHERE id = $2)
              RETURNING {FIELD_COLS}"
         ))),
     }
