@@ -256,6 +256,11 @@ pub async fn load_enabled(s: &AppState) -> AppResult<()> {
             continue;
         }
         if row.source == "builtin" {
+            // A disabled placeholder waits for an explicit install (#418):
+            // adopting it here would skip the capability approval.
+            if !row.enabled && addons::is_placeholder(s, &row) {
+                continue;
+            }
             reg::adopt_package(
                 &s.pool,
                 &row.id,

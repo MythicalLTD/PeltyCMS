@@ -28,6 +28,7 @@ mod addon_guide;
 mod addon_hooks_flow;
 mod addon_host_flow;
 mod addon_lifecycle_flow;
+mod addon_placeholder_flow;
 mod addon_power_flow;
 mod addon_registry_flow;
 mod addon_trust_flow;

@@ -323,7 +323,9 @@ pub async fn check(s: &AppState, incoming: &Manifest, restore: bool) -> AppResul
     let Some(row) = reg::get(&s.pool, &incoming.id).await? else {
         return Ok(());
     };
-    if row.enabled && !restore {
+    // A built-in placeholder (#418) has nothing running to disable.
+    let placeholder = addons::is_placeholder(s, &row);
+    if row.enabled && !restore && !placeholder {
         return Err(AppError::Conflict("error.addon_disable_first"));
     }
     let identity = || AppError::Conflict("error.addon_upgrade_identity");
@@ -346,10 +348,14 @@ pub async fn check(s: &AppState, incoming: &Manifest, restore: bool) -> AppResul
     {
         return Err(migrations());
     }
-    // Older host-native rows have no package manifest. Only trusted startup
-    // restoration may adopt them; never let an upload claim this exception.
+    // Older host-native rows have no package manifest. Trusted startup
+    // restoration may adopt them in place. An upload may only replace a
+    // placeholder whose addon the host no longer implements, with the
+    // package of that exact id and engine and no schema of its own; it is
+    // then adopted by an explicit install (capability approval), never
+    // here (see `addons::accept_package_with`).
     if row.source == "builtin" {
-        if restore
+        if (restore || placeholder)
             && row.manifest_hash == "builtin"
             && incoming.id == addons::builtin_id(&row.kind, &row.engine)
             && incoming.is_wasm()

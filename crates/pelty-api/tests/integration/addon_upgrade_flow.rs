@@ -386,7 +386,7 @@ async fn installed_upgrade_policy_is_atomic() {
 }
 
 #[tokio::test]
-async fn legacy_adoption_is_restore_only() {
+async fn legacy_adoption_rules() {
     let (_, s) = app().await;
     let id = "provisioning-upgrade-legacy";
     reg::remove(&s.pool, id).await.unwrap();
@@ -412,13 +412,28 @@ async fn legacy_adoption_is_restore_only() {
         "wasm": "addon.wasm", "files": {"addon.wasm": "0".repeat(64)}
     }))
     .unwrap();
+    // A built-in row with a recorded package hash is not a placeholder:
+    // only trusted restoration may replace it.
+    reg::set_package(&s.pool, id, "legacy", &"f".repeat(64))
+        .await
+        .unwrap();
     assert!(matches!(
         pelty_api::addon_upgrade::check(&s, &m, false).await,
         Err(pelty_core::AppError::Conflict(
             "error.addon_upgrade_manifest"
         ))
     ));
+    reg::set_package(&s.pool, id, "legacy", "builtin")
+        .await
+        .unwrap();
+    // A placeholder (#418) may be replaced by an upload, enabled or not.
+    pelty_api::addon_upgrade::check(&s, &m, false)
+        .await
+        .unwrap();
     reg::set_enabled(&s.pool, id, true).await.unwrap();
+    pelty_api::addon_upgrade::check(&s, &m, false)
+        .await
+        .unwrap();
     pelty_api::addon_upgrade::check(&s, &m, true).await.unwrap();
     m.provides = Some("other-engine".into());
     assert!(matches!(

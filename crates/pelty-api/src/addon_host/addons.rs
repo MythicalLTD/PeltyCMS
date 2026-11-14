@@ -156,6 +156,17 @@ fn hex_lower(b: &[u8]) -> String {
 }
 
 /// Host-implemented addons that are not WASM (yet): see `make docs`.
+/// A row registered by migration 0220/0265 for an addon that used to be
+/// host-native: `source = 'builtin'`, `manifest_hash = 'builtin'`, no
+/// package recorded. Once the addon ships as a package (and the host no
+/// longer implements it) the row is only a placeholder: nothing can run
+/// from it, and installing the package adopts it (see [`install_addon`]).
+pub fn is_placeholder(s: &AppState, row: &reg::InstalledAddon) -> bool {
+    row.source == "builtin"
+        && row.manifest_hash == "builtin"
+        && !builtins(s).iter().any(|b| b.manifest.id == row.id)
+}
+
 fn builtins(_s: &AppState) -> Vec<CatalogEntry> {
     let mut out = vec![];
     for m in crate::captcha::builtin_manifests()
@@ -649,8 +660,20 @@ pub(crate) async fn accept_package_with(
         dir: Some(dir),
     };
     verify(&e)?;
-    if reg::get(&s.pool, &e.manifest.id).await?.is_some() {
-        reg::set_package(&s.pool, &e.manifest.id, &e.manifest.version, &e.hash).await?;
+    match reg::get(&s.pool, &e.manifest.id).await? {
+        // An upload over a built-in placeholder only makes the package
+        // available: the admin installs it (approving its capabilities),
+        // which adopts the row. A placeholder never runs, so park it
+        // disabled; startup does not adopt disabled placeholders.
+        Some(row) if !restore && is_placeholder(s, &row) => {
+            if row.enabled {
+                reg::set_enabled(&s.pool, &row.id, false).await?;
+            }
+        }
+        Some(_) => {
+            reg::set_package(&s.pool, &e.manifest.id, &e.manifest.version, &e.hash).await?;
+        }
+        None => {}
     }
     Ok(e)
 }
@@ -715,7 +738,7 @@ async fn upload(
 ) -> ApiResult<Json<Value>> {
     let e = upload_package(&s, &body, q.replace, Actor::from(&u)).await?;
     let row = reg::get(&s.pool, &e.manifest.id).await?;
-    Ok(Json(entry_json(&e, row.as_ref())))
+    Ok(Json(entry_json(&e, installed_row(&s, &e, row.as_ref()))))
 }
 
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -1327,7 +1350,16 @@ async fn registry_install(
     )
     .await?;
     let row = reg::get(&s.pool, &id).await?;
-    Ok(Json(entry_json(&e, row.as_ref())))
+    Ok(Json(entry_json(&e, installed_row(&s, &e, row.as_ref()))))
+}
+
+/// A built-in placeholder row for a packaged addon reads as "not installed".
+fn installed_row<'a>(
+    s: &AppState,
+    e: &CatalogEntry,
+    row: Option<&'a reg::InstalledAddon>,
+) -> Option<&'a reg::InstalledAddon> {
+    row.filter(|r| e.dir.is_none() || !is_placeholder(s, r))
 }
 
 fn entry_json(e: &CatalogEntry, row: Option<&reg::InstalledAddon>) -> Value {
@@ -1371,7 +1403,12 @@ pub async fn list_entries(s: &AppState) -> AppResult<Vec<Value>> {
     let rows = reg::list(&s.pool).await?;
     Ok(catalog(s)
         .iter()
-        .map(|e| entry_json(e, rows.iter().find(|r| r.id == e.manifest.id)))
+        .map(|e| {
+            entry_json(
+                e,
+                installed_row(s, e, rows.iter().find(|r| r.id == e.manifest.id)),
+            )
+        })
         .collect())
 }
 
@@ -1389,7 +1426,7 @@ async fn detail(
 ) -> ApiResult<Json<Value>> {
     let e = find(&s, &id)?;
     let row = reg::get(&s.pool, &id).await?;
-    Ok(Json(entry_json(&e, row.as_ref())))
+    Ok(Json(entry_json(&e, installed_row(&s, &e, row.as_ref()))))
 }
 
 /// Does the manifest ask for sandboxed iframes (`capabilities.ui: ["iframe"]`)?
@@ -1437,7 +1474,7 @@ async fn install(
     };
     let e = install_addon(&s, &id, &opts, Actor::from(&u)).await?;
     let row = reg::get(&s.pool, &id).await?;
-    Ok(Json(entry_json(&e, row.as_ref())))
+    Ok(Json(entry_json(&e, installed_row(&s, &e, row.as_ref()))))
 }
 
 /// Dangerous capabilities of a manifest (each must be approved at install).
@@ -1458,9 +1495,11 @@ pub async fn install_addon(
 ) -> AppResult<CatalogEntry> {
     let _lock = crate::addon_upgrade::lock(&s.pool, id).await?;
     let e = find(s, id)?;
-    if reg::get(&s.pool, id).await?.is_some() {
-        return Err(AppError::Conflict("error.addon_installed"));
-    }
+    let placeholder = match reg::get(&s.pool, id).await? {
+        None => None,
+        Some(row) if e.dir.is_some() && is_placeholder(s, &row) => Some(row),
+        Some(_) => return Err(AppError::Conflict("error.addon_installed")),
+    };
     let missing = unapproved(&e.manifest, opts);
     if missing == ["ui.iframe"] {
         return Err(AppError::Validation("error.addon_iframe_approval"));
@@ -1468,7 +1507,29 @@ pub async fn install_addon(
     if !missing.is_empty() {
         return Err(AppError::Validation("error.addon_capability_approval"));
     }
-    install_entry(s, &e).await?;
+    match placeholder {
+        // Same checks as a replacement (identity, no schema of its own),
+        // then the row is mapped to the package; settings are kept and it
+        // stays disabled until enabled explicitly.
+        Some(row) => {
+            crate::addon_upgrade::check(s, &e.manifest, false).await?;
+            crate::addon_trust::verify_entry(s, &e)?;
+            verify(&e)?;
+            if row.enabled {
+                reg::set_enabled(&s.pool, id, false).await?;
+            }
+            reg::adopt_package(
+                &s.pool,
+                id,
+                &e.manifest.version,
+                &e.hash,
+                e.source,
+                &e.manifest.permissions,
+            )
+            .await?;
+        }
+        None => install_entry(s, &e).await?,
+    }
     actor.record(s, "addon.installed", id, json!({})).await?;
     s.emit(pelty_extensions::events::DomainEvent::new(
         "addon.installed",
