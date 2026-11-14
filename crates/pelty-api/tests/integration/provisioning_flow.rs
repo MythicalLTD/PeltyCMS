@@ -266,6 +266,12 @@ async fn provisioning_servers_jobs_and_failures() {
     )
     .await;
     assert_eq!(s.status, StatusCode::OK, "{:?}", s.body);
+    // The action reason reaches the module (ServiceCtx.suspend_reason, #419).
+    let t = pelty_database::provisioning::target(&st.pool, sid.parse().unwrap())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(t.suspend_reason, "test");
     assert_eq!(drain(&st, &sid).await, "ok");
     assert!(m
         .log

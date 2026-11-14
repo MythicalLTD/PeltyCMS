@@ -67,6 +67,7 @@ pub fn svc_to(s: &ServiceCtx) -> Value {
         "customer_first_name": s.customer_first_name, "customer_last_name": s.customer_last_name,
         "product_config": s.product_config, "custom_fields": s.custom_fields,
         "remote_id": s.remote_id, "module_data": s.module_data,
+        "suspend_reason": s.suspend_reason,
     })
 }
 
@@ -81,6 +82,7 @@ pub fn svc_from(v: &Value) -> ServiceCtx {
         custom_fields: v["custom_fields"].clone(),
         remote_id: v["remote_id"].as_str().map(str::to_string),
         module_data: v["module_data"].clone(),
+        suspend_reason: s("suspend_reason"),
     }
 }
 

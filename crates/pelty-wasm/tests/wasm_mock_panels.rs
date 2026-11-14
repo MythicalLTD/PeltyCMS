@@ -78,6 +78,7 @@ fn svc(config: Value, remote: Option<&str>) -> ServiceCtx {
         custom_fields: json!({}),
         remote_id: remote.map(str::to_string),
         module_data: json!({}),
+        suspend_reason: String::new(),
     }
 }
 
@@ -333,9 +334,27 @@ async fn featherpanel_full_lifecycle() {
             .await
             .unwrap_or_else(|e| panic!("{a}: {e}"));
     }
+    let mut with_reason = s.clone();
+    with_reason.suspend_reason = "Overdue invoice INV-12".into();
+    run(p.as_ref(), "suspend", &conn, &with_reason)
+        .await
+        .unwrap();
     let log = m.log.lock().unwrap();
     let (_, _, patch, _) = log.iter().find(|(me, _, _, _)| me == "PATCH").unwrap();
     assert_eq!(patch["memory"], 2048);
+    // FeatherPanel rejects a suspend without a 3..=2000 char reason (#419).
+    let suspends: Vec<&Value> = log
+        .iter()
+        .filter(|(me, p, _, _)| me == "POST" && p == "/api/admin/servers/31/suspend")
+        .map(|(_, _, b, _)| b)
+        .collect();
+    assert_eq!(
+        suspends,
+        [
+            &json!({"reason": "Suspended by billing"}),
+            &json!({"reason": "Overdue invoice INV-12"})
+        ]
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -110,6 +110,7 @@ mod tests {
             custom_fields: json!({}),
             remote_id: Some("42".into()),
             module_data: json!({}),
+            suspend_reason: String::new(),
         };
         let mut srv = ServerConn {
             base_url: "https://panel.test/".into(),

@@ -87,6 +87,7 @@ fn svc(config: Value, remote: Option<&str>, data: Value) -> ServiceCtx {
         custom_fields: json!({ "domain": "alice.example" }),
         remote_id: remote.map(str::to_string),
         module_data: data,
+        suspend_reason: String::new(),
     }
 }
 

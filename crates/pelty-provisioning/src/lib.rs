@@ -77,6 +77,9 @@ pub struct ServiceCtx {
     pub remote_id: Option<String>,
     /// Module-owned state persisted between calls.
     pub module_data: Value,
+    /// Why the service is being suspended (the staff action or automation
+    /// reason; empty when none was given). Only meaningful for `suspend`.
+    pub suspend_reason: String,
 }
 
 impl ServiceCtx {
@@ -104,6 +107,7 @@ impl std::fmt::Debug for ServiceCtx {
             .field("custom_fields", &keys)
             .field("remote_id", &self.remote_id)
             .field("module_data", &self.module_data)
+            .field("suspend_reason", &self.suspend_reason)
             .finish_non_exhaustive()
     }
 }

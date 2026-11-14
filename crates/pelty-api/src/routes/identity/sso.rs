@@ -53,6 +53,7 @@ async fn load(s: &AppState, sid: Uuid) -> ApiResult<(ServerConn, ServiceCtx, Str
         custom_fields: t.custom_fields,
         remote_id: t.remote_id,
         module_data: t.module_data,
+        suspend_reason: String::new(),
     };
     Ok((
         ServerConn {

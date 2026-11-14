@@ -99,6 +99,7 @@ pub async fn load(s: &AppState, sid: Uuid) -> Result<Loaded, JobError> {
         custom_fields: t.custom_fields,
         remote_id: t.remote_id,
         module_data: t.module_data,
+        suspend_reason: t.suspend_reason,
     };
     Ok(Loaded {
         module,

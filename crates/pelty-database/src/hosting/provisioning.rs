@@ -246,6 +246,7 @@ pub struct ServiceTarget {
     pub email: String,
     pub first_name: String,
     pub last_name: String,
+    pub suspend_reason: String,
 }
 
 /// Custom fields hold every kit field under its key (module key, staff key,
@@ -256,7 +257,7 @@ pub async fn target(pool: &PgPool, service: Uuid) -> AppResult<Option<ServiceTar
         "SELECT s.id AS service_id, s.status, p.module, p.module_config AS product_config,
                 COALESCE(s.server_id, p.server_id) AS server_id, p.server_group_id, s.remote_id, s.module_data,
                 COALESCE(oi.custom_fields, '{}'::jsonb) || COALESCE(s.custom_fields, '{}'::jsonb) AS custom_fields,
-                c.email::text AS email, c.first_name, c.last_name, p.id AS product_id
+                c.email::text AS email, c.first_name, c.last_name, s.suspend_reason, p.id AS product_id
          FROM services s JOIN products p ON p.id = s.product_id JOIN customers c ON c.id = s.customer_id
          LEFT JOIN order_items oi ON oi.id = s.order_item_id
          WHERE s.id = $1",
