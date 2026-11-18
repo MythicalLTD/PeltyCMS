@@ -139,7 +139,7 @@ jobs:
           fi
 
       - name: Checkout monorepo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: MythicalLTD/PeltyCMS
           ref: ${{ steps.args.outputs.monorepo_ref }}
@@ -147,7 +147,7 @@ jobs:
 
       - name: Checkout addon overlay
         if: steps.args.outputs.overlay_caller == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: addon-src
 

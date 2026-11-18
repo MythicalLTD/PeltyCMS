@@ -1,7 +1,7 @@
 # Multi-stage: web build -> rust build (incl. pelty-docs, needs frontend/src) ->
 # slim runtime as non-root uid 10001. Smoke: `docker build -t peltycms:latest .`
 # then `docker compose up` with a local .env (see docker-compose.yml).
-FROM node:22-bookworm-slim AS web
+FROM node:24-bookworm-slim AS web
 WORKDIR /src/frontend
 RUN corepack enable pnpm
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
