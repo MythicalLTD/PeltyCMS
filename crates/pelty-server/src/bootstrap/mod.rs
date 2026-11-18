@@ -30,10 +30,10 @@ pub struct Report {
 impl Report {
     pub fn print(&self) {
         for c in &self.created {
-            println!("[PeltyCMS] created {c}");
+            say!("[PeltyCMS] created {c}");
         }
         for w in &self.warnings {
-            println!("[PeltyCMS] warning: {w}");
+            say!("[PeltyCMS] warning: {w}");
         }
     }
 }

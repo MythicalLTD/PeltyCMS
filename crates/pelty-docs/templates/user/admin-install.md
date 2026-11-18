@@ -46,6 +46,18 @@ pelty-server setup --yes --accept-eula --local-pg \
 
 Manage it with `pelty-server pg start|stop|status|download`. The sidecar is left running when `serve` exits (restart-friendly); stop it explicitly with `pg stop`. Prefer a managed Postgres for multi-instance or production HA.
 
+The managed cluster is only ever the one in `data/pg/data`. If another program already listens on the chosen port (a system PostgreSQL, a sidecar started from another install folder, an editor or SSH port forward), setup and `serve` do not try to log in to it: the managed cluster starts on the next free port and `DATABASE_URL` in `.env` is updated. When setup runs again over an existing `data/pg/data` (for example after a failed first attempt), the `pelty` role gets the new password through PostgreSQL single-user mode; data is never deleted. Only a cluster that holds no databases yet is re-created when that reset fails.
+
+#### Troubleshooting: `password authentication failed for user "pelty"`
+
+Builds before 2026-11-19 connected to whatever already listened on 127.0.0.1:5432 and saved a new random password for it, so a fresh install failed on every start when port 5432 was taken (often by another PostgreSQL or an editor port forward). Current builds fix this by themselves on the next start. To recover a folder from an older build by hand:
+
+1. Stop the server. If `data/pg/data` exists and holds nothing you need (a fresh install), delete the `data/pg/data` folder (keep `data/pg/dist`, the downloaded binaries).
+2. Run `pelty-server setup` again and pick **Local PostgreSQL**; it chooses a free port if 5432 is busy.
+3. To see what holds the port: `netstat -ano | findstr :5432` (Windows) or `ss -ltnp 'sport = :5432'` (Linux).
+
+The error text ends with `at line N`: that is a line number in the PostgreSQL server source, not in `.env`.
+
 ## From source
 
 ```bash
@@ -96,6 +108,12 @@ This uses defaults for everything not given (`--bind`, `--admin-password`, `--ad
 ```
 
 Under systemd or Docker there is no terminal, so the wizard never runs there. In a container the server prints a hint instead; run the wizard once with a terminal attached: `docker run -it --rm -v pelty:/data <image> pelty-server setup` or `docker compose run --rm app pelty-server setup`.
+
+### Logs
+
+Like a Minecraft server, `pelty-server` (serve and setup) writes everything it prints, including startup and fatal errors, to `logs/latest.log` in the server folder, as plain text without colours. On the next start the previous file is compressed to `logs/YYYY-MM-DD-N.log.gz` (UTC date of its last line, `N` counts up per day). Archives older than `PELTY_LOG_RETENTION_DAYS` (default 30, `0` keeps all) are deleted. `PELTY_LOG_DIR` moves the folder, `PELTY_LOG_FILE=false` turns the file off; the level follows `RUST_LOG` and the console's `log level`. Standard output is unchanged, so Docker and systemd logs keep working (in Docker the folder is `/data/logs`). One-shot commands such as `cron run`, `pg ...` or `admin create` do not touch the folder.
+
+Game store deliveries have their own log: **Admin > Game delivery** lists every command sent to a game server with its time, status, attempts and the server's response; the **Logs** button on a server in **Admin > Game servers** opens it filtered to that server. Password placeholders stay as `{key}` in the log.
 
 Like a Minecraft server, `pelty-server` sets up the folder it starts in. The bootstrap never overwrites a file (only the wizard edits `.env`, after you confirm), and every created file or folder is printed. `serve` exits until `eula.txt` says `eula=true` or `PELTY_EULA=true` is set. Started in a terminal it opens a console (`help`, `status`, `addons install <zip>`, `admin reset-password <email>`, `log level debug`, `stop`, ...). The console is off automatically under systemd or Docker, and `--no-console` turns it off explicitly.
 

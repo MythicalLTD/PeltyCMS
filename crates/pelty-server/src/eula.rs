@@ -55,7 +55,7 @@ pub fn check(root: &Path, env: Option<&str>) -> Gate {
         Ok(c) => c,
         Err(e) => {
             if !env_accepts(env) {
-                println!(
+                say!(
                     "[PeltyCMS] warning: could not write {}: {e}",
                     path.display()
                 );
@@ -64,7 +64,7 @@ pub fn check(root: &Path, env: Option<&str>) -> Gate {
         }
     };
     if created {
-        println!("[PeltyCMS] created {FILE}");
+        say!("[PeltyCMS] created {FILE}");
     }
     if env_accepts(env) || std::fs::read_to_string(&path).is_ok_and(|t| accepted_in(&t)) {
         Gate::Accepted

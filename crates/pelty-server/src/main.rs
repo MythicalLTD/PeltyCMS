@@ -42,6 +42,19 @@
 //! `--no-setup` skips it and `--yes` runs it without questions. Without a
 //! terminal (Docker, systemd, CI) nothing is asked; in a container a hint
 //! points at `docker run -it ... pelty-server setup`.
+/// `println!` that also goes to `logs/latest.log`.
+macro_rules! say {
+    ($($t:tt)*) => {
+        $crate::logging::say(&format!($($t)*))
+    };
+}
+/// `eprintln!` that also goes to `logs/latest.log`.
+macro_rules! say_err {
+    ($($t:tt)*) => {
+        $crate::logging::say_err(&format!($($t)*))
+    };
+}
+
 mod bootstrap;
 mod console;
 mod embedded;
@@ -68,7 +81,7 @@ fn main() -> ExitCode {
     let headless = match setup::Headless::take_flags(&mut raw) {
         Ok(h) => h,
         Err(e) => {
-            eprintln!("{e}");
+            say_err!("{e}");
             return ExitCode::FAILURE;
         }
     };
@@ -105,10 +118,32 @@ fn main() -> ExitCode {
     let root = match std::env::current_dir() {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("cannot read the current folder: {e}");
+            say_err!("cannot read the current folder: {e}");
             return ExitCode::FAILURE;
         }
     };
+    // Long-running commands keep logs/latest.log (Minecraft style); one-shot
+    // commands (cron, pg, admin, import, ...) leave the folder alone.
+    if matches!(
+        args.iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            .as_slice(),
+        [] | ["serve"] | ["setup"]
+    ) {
+        let file: std::collections::HashMap<String, String> =
+            bootstrap::read_env_file(&root).into_iter().collect();
+        let get = |k: &str| {
+            std::env::var(k)
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .or_else(|| file.get(k).cloned())
+        };
+        match logging::init_file(&logging::FileCfg::from(&root, &get)) {
+            Ok(_) => pelty_pg::set_note_hook(logging::say_err),
+            Err(e) => eprintln!("[PeltyCMS] warning: no log file ({e})"),
+        }
+    }
     let (report, _) = bootstrap::run(&root, &|k| std::env::var(k).ok());
     report.print();
     embedded::install();
@@ -125,7 +160,7 @@ fn main() -> ExitCode {
             // Still single-threaded here.
             Ok(Some(d)) => std::env::set_var("PELTY_ADDONS_DIST", d),
             Ok(None) => {}
-            Err(e) => println!("[PeltyCMS] warning: could not unpack the bundled addons: {e}"),
+            Err(e) => say!("[PeltyCMS] warning: could not unpack the bundled addons: {e}"),
         }
     }
     let argv: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -144,10 +179,10 @@ fn main() -> ExitCode {
         }
     } else if serves && pending && !skip_setup && in_container() {
         // A container never opens the wizard by itself; it is one command away.
-        println!("[PeltyCMS] Not configured yet: run `docker run -it ... pelty-server setup` (or `docker compose run --rm app pelty-server setup`), or set the PELTY_* variables.");
+        say!("[PeltyCMS] Not configured yet: run `docker run -it ... pelty-server setup` (or `docker compose run --rm app pelty-server setup`), or set the PELTY_* variables.");
     } else if setup_cmd || (serves && !skip_setup && interactive && pending) {
         if !interactive {
-            eprintln!(
+            say_err!(
                 "pelty-server setup needs an interactive terminal (edit .env and eula.txt instead)"
             );
             return ExitCode::FAILURE;
@@ -169,7 +204,7 @@ fn main() -> ExitCode {
             .all(|(k, _)| k != setup::MARKER)
         && root.join(bootstrap::ENV_FILE).exists()
     {
-        println!("[PeltyCMS] Tip: `pelty-server setup` walks through the database, web, proxy, admin and email settings.");
+        say!("[PeltyCMS] Tip: `pelty-server setup` walks through the database, web, proxy, admin and email settings.");
     }
     // Still single-threaded: export `.env` values the environment does not set
     // (an empty variable, e.g. `FOO=` from docker compose, counts as unset).
@@ -188,14 +223,26 @@ fn main() -> ExitCode {
             // `PELTY_EULA=true` accepts the EULA without editing eula.txt (containers and CI).
             eula::check(&root, std::env::var("PELTY_EULA").ok().as_deref())
         {
-            println!("{}", eula::refusal_message(&root));
+            say!("{}", eula::refusal_message(&root));
             if created {
-                println!(
+                say!(
                     "First start: also review {} (DATABASE_URL, PELTY_BIND, PELTY_PUBLIC_URL).",
                     root.join(bootstrap::ENV_FILE).display()
                 );
             }
             return ExitCode::FAILURE;
+        }
+    }
+    // Start the managed PostgreSQL while still single-threaded: when its port
+    // has to move, DATABASE_URL is updated for this run (and saved to .env).
+    if (serves || setup_cmd || argv.as_slice() == ["migrate"]) && local_pg::enabled() {
+        match local_pg::ensure_for_serve(&root) {
+            Ok(Some(url)) => std::env::set_var("DATABASE_URL", url),
+            Ok(None) => {}
+            Err(e) => {
+                tracing_free_fatal(&format!("local PostgreSQL: {e}"));
+                return ExitCode::FAILURE;
+            }
         }
     }
     let rt = match tokio::runtime::Builder::new_multi_thread()
@@ -204,11 +251,16 @@ fn main() -> ExitCode {
     {
         Ok(rt) => rt,
         Err(e) => {
-            eprintln!("cannot start the async runtime: {e}");
+            say_err!("cannot start the async runtime: {e}");
             return ExitCode::FAILURE;
         }
     };
     rt.block_on(run(args, console_flag, plan))
+}
+
+/// A fatal error before tracing is set up (console + `logs/latest.log`).
+fn tracing_free_fatal(msg: &str) {
+    say_err!("error: {msg}");
 }
 
 /// Run the interactive wizard, save `.env` / `eula.txt`, and return the
@@ -230,7 +282,7 @@ fn run_wizard(root: &std::path::Path) -> Result<setup::Plan, ExitCode> {
         let mut svc = match setup::term::Live::new() {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("cannot start the setup checks: {e}");
+                say_err!("cannot start the setup checks: {e}");
                 return Err(ExitCode::FAILURE);
             }
         };
@@ -251,15 +303,15 @@ fn run_wizard(root: &std::path::Path) -> Result<setup::Plan, ExitCode> {
     let a = match answers {
         Ok(a) => a,
         Err(setup::Error::Declined) => {
-            println!("{}", eula::refusal_message(root));
+            say!("{}", eula::refusal_message(root));
             return Err(ExitCode::FAILURE);
         }
         Err(setup::Error::Cancelled) => {
-            println!("Setup cancelled; nothing was saved.");
+            say!("Setup cancelled; nothing was saved.");
             return Err(ExitCode::FAILURE);
         }
         Err(setup::Error::Io(e)) => {
-            eprintln!("setup aborted: {e}; nothing was saved.");
+            say_err!("setup aborted: {e}; nothing was saved.");
             return Err(ExitCode::FAILURE);
         }
     };
@@ -287,7 +339,7 @@ fn run_headless(root: &std::path::Path, h: &setup::Headless) -> Result<setup::Pl
     match res {
         Ok(a) => save_answers(root, a),
         Err(e) => {
-            eprintln!("setup --yes: {e}");
+            say_err!("setup --yes: {e}");
             Err(ExitCode::FAILURE)
         }
     }
@@ -302,10 +354,10 @@ fn in_container() -> bool {
 
 fn save_answers(root: &std::path::Path, a: setup::Answers) -> Result<setup::Plan, ExitCode> {
     if let Err(e) = setup::write_env(root, &a.env).and_then(|_| setup::accept_eula(root)) {
-        eprintln!("cannot save the configuration: {e}");
+        say_err!("cannot save the configuration: {e}");
         return Err(ExitCode::FAILURE);
     }
-    println!(
+    say!(
         "[PeltyCMS] saved {} and {}",
         root.join(bootstrap::ENV_FILE).display(),
         root.join(eula::FILE).display()
@@ -313,7 +365,7 @@ fn save_answers(root: &std::path::Path, a: setup::Answers) -> Result<setup::Plan
     // The answers apply to this run even where the environment says otherwise.
     for (k, v) in &a.env {
         if std::env::var(k).is_ok_and(|old| !old.trim().is_empty() && old != *v) {
-            println!("[PeltyCMS] note: {k} is also set in the environment, which overrides .env on later starts");
+            say!("[PeltyCMS] note: {k} is also set in the environment, which overrides .env on later starts");
         }
         std::env::set_var(k, v);
     }
@@ -331,7 +383,7 @@ async fn run(args: Vec<String>, console_flag: Option<bool>, plan: Option<setup::
     let cfg = match Config::from_env() {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("configuration error: {e}");
+            say_err!("configuration error: {e}");
             return failure;
         }
     };
@@ -368,7 +420,7 @@ async fn run(args: Vec<String>, console_flag: Option<bool>, plan: Option<setup::
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             tracing::error!(error = %e, "fatal");
-            eprintln!("error: {e}");
+            say_err!("error: {e}");
             failure
         }
     }
@@ -438,6 +490,7 @@ async fn pipe_email(cfg: Config, department: &str) -> Result<(), BoxErr> {
 async fn setup_db(cfg: &Config) -> Result<pelty_database::Pool, BoxErr> {
     if local_pg::enabled() {
         let root = std::env::current_dir().unwrap_or_default();
+        // A no-op when main() already started it.
         local_pg::ensure_for_serve(&root)?;
     }
     let pool = pelty_database::connect(&cfg.database_url, cfg.db_max_connections).await?;
@@ -458,12 +511,12 @@ async fn apply_addons(state: &AppState, plan: &setup::Plan) {
         )
         .await
         {
-            Ok(()) => println!(
+            Ok(()) => say!(
                 "[PeltyCMS] setup: captcha enabled ({}) for guests on {}",
                 c.label,
                 pelty_api::captcha::SETUP_FORMS.join(", ")
             ),
-            Err(e) => println!(
+            Err(e) => say!(
                 "[PeltyCMS] setup warning: captcha not enabled: {e} (Admin > Security > Captcha)"
             ),
         }
@@ -479,8 +532,8 @@ async fn apply_addons(state: &AppState, plan: &setup::Plan) {
             test_mode: g.test_mode,
         };
         match pelty_api::routes::gateways::configure_from_setup(state, &sg).await {
-            Ok(m) => println!("[PeltyCMS] setup: gateway {m}"),
-            Err(e) => println!(
+            Ok(m) => say!("[PeltyCMS] setup: gateway {m}"),
+            Err(e) => say!(
                 "[PeltyCMS] setup warning: gateway {} not enabled: {e} (Admin > Gateways)",
                 g.label
             ),
@@ -521,7 +574,7 @@ async fn finish_setup(cfg: &Config, plan: Option<setup::Plan>) -> Result<bool, B
     }
     // Only offer to start when nothing else listens on the port.
     if std::net::TcpListener::bind(cfg.bind).is_err() {
-        println!(
+        say!(
             "{} is in use (a server already running?); start PeltyCMS later with `pelty-server`.",
             cfg.bind
         );

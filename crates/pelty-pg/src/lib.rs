@@ -12,6 +12,20 @@ use std::time::{Duration, Instant};
 
 pub type R<T = ()> = Result<T, String>;
 
+static NOTE: std::sync::OnceLock<fn(&str)> = std::sync::OnceLock::new();
+
+/// Route this crate's progress messages (default: stderr), e.g. into a log file.
+pub fn set_note_hook(f: fn(&str)) {
+    let _ = NOTE.set(f);
+}
+
+fn note(msg: &str) {
+    match NOTE.get() {
+        Some(f) => f(msg),
+        None => eprintln!("{msg}"),
+    }
+}
+
 /// How the first `initdb` authenticates the superuser.
 #[derive(Debug, Clone)]
 pub enum Auth {
@@ -287,6 +301,223 @@ pub fn start(cfg: &Config, db: &DbUrl) -> R {
     start_native(cfg, &bin, db.port)
 }
 
+/// Setup wizard: bring up the PeltyCMS-managed cluster in `cfg.home_dir()` for
+/// the `cfg.auth` password user and return the URL that is known to work.
+///
+/// - A listener on `port` that is not this cluster (a system PostgreSQL, a
+///   sidecar from another install folder, an editor port forward) is never
+///   trusted: the managed cluster moves to the next free port instead.
+/// - An existing data directory (an earlier attempt) gets the role password
+///   reset to the new one; if that fails and the cluster holds no databases
+///   besides the defaults it is re-created. A cluster with data is never wiped.
+pub fn provision(cfg: &Config, port: u16) -> R<DbUrl> {
+    let Auth::Password { user, password } = &cfg.auth else {
+        return Err("provision needs a password".into());
+    };
+    let bin = match find_bin(cfg) {
+        Some(b) => b,
+        None => download(cfg)?,
+    };
+    let data = cfg.data_dir();
+    if running_port(cfg).is_some() {
+        // Ours (from an earlier attempt): stop it so the password can be reset.
+        stop(cfg)?;
+    }
+    let port = if port_in_use(port) {
+        let free = free_port(port.saturating_add(1))
+            .ok_or_else(|| format!("127.0.0.1:{port} is in use and no free port was found"))?;
+        note(&format!(
+            "127.0.0.1:{port} is already used by another program (not the PeltyCMS-managed PostgreSQL); using port {free}"
+        ));
+        free
+    } else {
+        port
+    };
+    if data.join("PG_VERSION").exists() {
+        if let Err(e) = set_password(cfg, &bin, user, password) {
+            if cluster_is_empty(&data) {
+                note(&format!(
+                    "could not reset the password of the existing (empty) cluster ({e}); re-creating {}",
+                    data.display()
+                ));
+                std::fs::remove_dir_all(&data)
+                    .map_err(|e| format!("remove {}: {e}", data.display()))?;
+            } else {
+                return Err(format!(
+                    "{} already holds a PostgreSQL cluster with databases and its password could not be reset ({e}).\n  \
+                     Put its working DATABASE_URL in .env (setup: \"use an existing PostgreSQL\"), or move that folder away to start fresh.",
+                    data.display()
+                ));
+            }
+        }
+    }
+    start_native(cfg, &bin, port)?;
+    let db = DbUrl {
+        user: user.clone(),
+        password: password.clone(),
+        host: "127.0.0.1".into(),
+        port,
+        name: "peltycms".into(),
+    };
+    wait_reachable(&db, Duration::from_secs(45))?;
+    Ok(db)
+}
+
+/// `serve`: make sure the managed cluster runs for `db` (from `DATABASE_URL`).
+/// Returns `Some(url)` when the port had to change (the caller saves it).
+///
+/// Never treats some other program on the port as the managed cluster; when
+/// it starts a stopped cluster it first re-applies the URL's password, so a
+/// cluster left behind by an earlier attempt matches `.env` again.
+pub fn ensure_managed(cfg: &Config, db: &DbUrl) -> R<Option<String>> {
+    let mut db = db.clone();
+    if let Some(p) = running_port(cfg) {
+        if p == db.port {
+            return Ok(None);
+        }
+        db.port = p;
+        return Ok(Some(db.to_url()));
+    }
+    let mut changed = false;
+    if port_in_use(db.port) {
+        let free = free_port(db.port.saturating_add(1))
+            .ok_or_else(|| format!("127.0.0.1:{} is in use and no free port was found", db.port))?;
+        note(&format!(
+            "127.0.0.1:{} is already used by another program (not the PeltyCMS-managed PostgreSQL in {}); starting it on port {free}",
+            db.port,
+            cfg.home_dir().display()
+        ));
+        db.port = free;
+        changed = true;
+    }
+    let bin = match find_bin(cfg) {
+        Some(b) => b,
+        None => download(cfg)?,
+    };
+    if let Auth::Password { user, password } = &cfg.auth {
+        if cfg.data_dir().join("PG_VERSION").exists() {
+            if let Err(e) = set_password(cfg, &bin, user, password) {
+                note(&format!(
+                    "warning: could not re-apply the DATABASE_URL password to the local PostgreSQL ({e})"
+                ));
+            }
+        }
+    }
+    start_native(cfg, &bin, db.port)?;
+    wait_reachable(&db, Duration::from_secs(30))?;
+    Ok(changed.then(|| db.to_url()))
+}
+
+/// Port of the managed cluster in `cfg.data_dir()` when it is running.
+pub fn running_port(cfg: &Config) -> Option<u16> {
+    let data = cfg.data_dir();
+    let pid = std::fs::read_to_string(data.join("postmaster.pid")).ok()?;
+    let port = postmaster_port(&pid)?;
+    let bin = find_bin(cfg)?;
+    let running = as_pg(cfg, &bin.join(exe("pg_ctl")))
+        .arg("-D")
+        .arg(&data)
+        .arg("status")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success());
+    running.then_some(port)
+}
+
+/// Line 4 of `postmaster.pid` is the port.
+fn postmaster_port(pid_file: &str) -> Option<u16> {
+    pid_file.lines().nth(3)?.trim().parse().ok()
+}
+
+/// Something accepts connections on, or holds, 127.0.0.1:`port`.
+pub fn port_in_use(port: u16) -> bool {
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    TcpStream::connect_timeout(&addr, Duration::from_millis(500)).is_ok()
+        || std::net::TcpListener::bind(addr).is_err()
+}
+
+/// First port from `start` (20 tries) nothing uses.
+pub fn free_port(start: u16) -> Option<u16> {
+    (start..start.saturating_add(20)).find(|p| *p != 0 && !port_in_use(*p))
+}
+
+/// Set (or create) the superuser `user` with `password` in a stopped cluster,
+/// using single-user mode (no network, no authentication needed).
+pub fn set_password(cfg: &Config, bin: &Path, user: &str, password: &str) -> R {
+    use std::io::Write;
+    let sql = reset_sql(user, password)?;
+    let mut child = as_pg(cfg, &bin.join(exe("postgres")))
+        .arg("--single")
+        .arg("-D")
+        .arg(cfg.data_dir())
+        .args(["-c", "exit_on_error=true", "-c", "log_min_messages=fatal"])
+        .arg("postgres")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("cannot start postgres --single: {e}"))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(sql.as_bytes())
+            .map_err(|e| format!("postgres --single: {e}"))?;
+    }
+    let out = child
+        .wait_with_output()
+        .map_err(|e| format!("postgres --single: {e}"))?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        let err = String::from_utf8_lossy(&out.stderr);
+        Err(format!(
+            "postgres --single failed ({}): {}",
+            out.status,
+            err.trim()
+        ))
+    }
+}
+
+/// One line (single-user mode runs each line): create or update the role.
+fn reset_sql(user: &str, password: &str) -> R<String> {
+    if password.contains(['\n', '\r', '\0'])
+        || user.contains(['\n', '\r', '\0'])
+        || format!("{user}{password}").contains("$pelty$")
+    {
+        return Err("user and password must be one line".into());
+    }
+    let lit = |s: &str| format!("'{}'", s.replace('\'', "''"));
+    let ident = format!("\"{}\"", user.replace('"', "\"\""));
+    // `$pelty$` quoting keeps the literals inside the DO body intact; the
+    // dynamic SQL quotes the identifier and password itself.
+    let pw = lit(password);
+    let name = lit(user);
+    Ok(format!(
+        "DO $pelty$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {name}) THEN \
+         EXECUTE 'ALTER ROLE ' || {qi} || ' WITH LOGIN SUPERUSER PASSWORD ' || quote_literal({pw}); \
+         ELSE EXECUTE 'CREATE ROLE ' || {qi} || ' WITH LOGIN SUPERUSER PASSWORD ' || quote_literal({pw}); \
+         END IF; END $pelty$;\n",
+        qi = lit(&ident),
+    ))
+}
+
+/// A freshly initialised cluster has only template0, template1 and postgres.
+pub fn cluster_is_empty(data: &Path) -> bool {
+    std::fs::read_dir(data.join("base"))
+        .map(|d| d.flatten().filter(|e| e.path().is_dir()).count() <= 3)
+        .unwrap_or(false)
+}
+
+/// What `initdb --pwfile` reads: the password, one line, no BOM or CR.
+fn pwfile_contents(password: &str) -> R<Vec<u8>> {
+    if password.is_empty() || password.contains(['\n', '\r', '\0']) {
+        return Err("the PostgreSQL password must be one non-empty line".into());
+    }
+    let mut v = password.as_bytes().to_vec();
+    v.push(b'\n');
+    Ok(v)
+}
+
 /// Download only (no start). Returns the `dist/bin` path.
 pub fn download(cfg: &Config) -> R<PathBuf> {
     let home = prepare_home(cfg)?;
@@ -320,7 +551,9 @@ pub fn download(cfg: &Config) -> R<PathBuf> {
     let url = format!(
         "https://repo1.maven.org/maven2/io/zonky/test/postgres/{art}/{ver}/{art}-{ver}.jar"
     );
-    eprintln!("PostgreSQL not found; downloading PostgreSQL {ver} binaries ({url})");
+    note(&format!(
+        "PostgreSQL not found; downloading PostgreSQL {ver} binaries ({url})"
+    ));
     let jar = home.join("pg.jar");
     let curl = if cfg!(windows) {
         system32("curl.exe")
@@ -397,7 +630,7 @@ pub fn stop(cfg: &Config) -> R<bool> {
             .arg("-D")
             .arg(&data)
             .args(["-m", "fast", "-w", "stop"]))?;
-        println!("PostgreSQL stopped ({})", data.display());
+        note(&format!("PostgreSQL stopped ({})", data.display()));
     }
     Ok(running)
 }
@@ -520,7 +753,7 @@ fn start_native(cfg: &Config, bin: &Path, port: u16) -> R {
             }
             Auth::Password { user, password } => {
                 let pwfile = home.join("pwfile");
-                std::fs::write(&pwfile, password)
+                std::fs::write(&pwfile, pwfile_contents(password)?)
                     .map_err(|e| format!("write {}: {e}", pwfile.display()))?;
                 #[cfg(unix)]
                 {
@@ -545,11 +778,11 @@ fn start_native(cfg: &Config, bin: &Path, port: u16) -> R {
     } else {
         format!("-p {port} -k /tmp -c listen_addresses=127.0.0.1")
     };
-    eprintln!(
+    note(&format!(
         "starting PostgreSQL ({}) on 127.0.0.1:{port}, data in {}",
         bin.display(),
         data.display()
-    );
+    ));
     let mut c = as_pg(cfg, &bin.join(exe("pg_ctl")));
     c.arg("-D")
         .arg(&data)
@@ -563,7 +796,6 @@ fn start_native(cfg: &Config, bin: &Path, port: u16) -> R {
         c.creation_flags(CREATE_NEW_PROCESS_GROUP);
     }
     let _ = status_cmd(&mut c)?;
-    println!("{}", local_url(&cfg.auth, port, "peltycms"));
     Ok(())
 }
 
@@ -775,7 +1007,8 @@ mod tests {
             pg_ver: None,
             auth: Auth::Trust,
         };
-        if !is_root() {
+        // `/workspace/pg` (a dev convenience) wins when it exists.
+        if !is_root() && !(cfg!(unix) && Path::new("/workspace/pg").is_dir()) {
             assert_eq!(cfg.home_dir(), PathBuf::from("/srv/pelty/data/pg"));
             assert_eq!(cfg.data_dir(), PathBuf::from("/srv/pelty/data/pg/data"));
         }
@@ -818,6 +1051,73 @@ mod tests {
             local_url(&auth, 5432, "peltycms"),
             "postgres://pelty:a%40b%3Ac@127.0.0.1:5432/peltycms"
         );
+    }
+
+    #[test]
+    fn pwfile_is_one_plain_line() {
+        assert_eq!(pwfile_contents("abc").unwrap(), b"abc\n");
+        assert!(pwfile_contents("a\r\nb").is_err());
+        assert!(pwfile_contents("").is_err());
+        let p = generate_password();
+        let c = pwfile_contents(&p).unwrap();
+        assert!(!c.starts_with(&[0xEF, 0xBB, 0xBF]));
+        assert!(!c.contains(&b'\r'));
+    }
+
+    #[test]
+    fn reset_sql_quotes_user_and_password() {
+        let s = reset_sql("pelty", "it's").unwrap();
+        assert!(s.ends_with('\n') && s.matches('\n').count() == 1);
+        assert!(s.contains("rolname = 'pelty'"));
+        assert!(s.contains("quote_literal('it''s')"));
+        assert!(s.contains("'\"pelty\"'"));
+        assert!(reset_sql("pelty", "a\nb").is_err());
+    }
+
+    #[test]
+    fn postmaster_pid_port() {
+        let pid = "1234\n/srv/pg/data\n1700000000\n5433\n/tmp\n127.0.0.1\n";
+        assert_eq!(postmaster_port(pid), Some(5433));
+        assert_eq!(postmaster_port("1\n"), None);
+    }
+
+    #[test]
+    fn busy_port_is_detected_and_skipped() {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        assert!(port_in_use(port));
+        let free = free_port(port).unwrap();
+        assert_ne!(free, port);
+        assert!(!port_in_use(free));
+    }
+
+    #[test]
+    fn url_round_trips_generated_and_odd_passwords() {
+        for pw in [generate_password(), "p@ss:w/rd%?#".to_string()] {
+            let url = local_url(
+                &Auth::Password {
+                    user: "pelty".into(),
+                    password: pw.clone(),
+                },
+                5432,
+                "peltycms",
+            );
+            assert_eq!(DbUrl::parse(&url).unwrap().password, pw);
+        }
+    }
+
+    #[test]
+    fn empty_cluster_detection() {
+        let tmp = std::env::temp_dir().join(format!("pelty-pg-empty-{}", std::process::id()));
+        let base = tmp.join("base");
+        for d in ["1", "4", "5"] {
+            std::fs::create_dir_all(base.join(d)).unwrap();
+        }
+        assert!(cluster_is_empty(&tmp));
+        std::fs::create_dir_all(base.join("16384")).unwrap();
+        assert!(!cluster_is_empty(&tmp));
+        assert!(!cluster_is_empty(&tmp.join("missing")));
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]
