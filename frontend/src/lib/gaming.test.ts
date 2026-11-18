@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { address, slugify } from "./gaming";
+import { address, deliveryQueueQuery, slugify } from "./gaming";
 
 describe("gaming helpers", () => {
   it("slugifies names", () => {
@@ -19,5 +19,14 @@ describe("command placeholders", () => {
     expect(commandPlaceholders("lp user {username} parent add {package}")).toEqual(["username", "package"]);
     expect(unknownPlaceholders("give {username} {nope}", ["username"])).toEqual(["nope"]);
     expect(unknownPlaceholders("say hi", [])).toEqual([]);
+  });
+});
+
+describe("delivery log query", () => {
+  it("adds only the filters that are set", () => {
+    expect(deliveryQueueQuery(null, null)).toBe("");
+    expect(deliveryQueueQuery("failed", null)).toBe("?status=failed");
+    expect(deliveryQueueQuery(null, "abc")).toBe("?server_id=abc");
+    expect(deliveryQueueQuery("delivered", "abc")).toBe("?status=delivered&server_id=abc");
   });
 });

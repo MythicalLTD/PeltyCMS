@@ -27,6 +27,15 @@ export interface GameDelivery {
   require_online?: boolean; status: string; attempts?: number; last_error?: string; response?: string; created_at: string; delivered_at: string | null;
 }
 
+/** Query string for the admin delivery log (`null` = no filter). */
+export function deliveryQueueQuery(status: string | null, serverId: string | null): string {
+  const p = new URLSearchParams();
+  if (status) p.set("status", status);
+  if (serverId) p.set("server_id", serverId);
+  const q = p.toString();
+  return q ? `?${q}` : "";
+}
+
 /** Placeholder names in a command template, e.g. `lp user {username}` → ["username"]. */
 export function commandPlaceholders(tpl: string): string[] {
   return [...tpl.matchAll(/\{([a-z_]+)\}/g)].map((m) => m[1] ?? "");

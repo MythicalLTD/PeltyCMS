@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowClockwiseIcon, PlayIcon, PlusIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -16,8 +17,9 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, ApiError } from "@/lib/api";
-import { DELIVERY_STATUSES, DELIVERY_TRIGGERS, unknownPlaceholders, type GameCommand, type GameDelivery, type GameServer } from "@/lib/gaming";
+import { DELIVERY_STATUSES, DELIVERY_TRIGGERS, deliveryQueueQuery, unknownPlaceholders, type GameCommand, type GameDelivery, type GameServer } from "@/lib/gaming";
 import { useI18n } from "@/lib/i18n";
+import { formatDateTime } from "@/lib/format";
 import type { TranslationKey } from "@/lib/i18n-core";
 
 const ALL = "__all";
@@ -27,10 +29,11 @@ const statusVariant = (s: string) => (s === "delivered" ? "secondary" : s === "f
 /** In-game delivery: package commands, global commands and the delivery queue. */
 export function AdminGameDeliveryPage() {
   const { t } = useI18n();
+  const [params] = useSearchParams();
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title={t("game.delivery.title")} description={t("game.delivery.description")} />
-      <Tabs defaultValue="queue">
+      <Tabs defaultValue="queue" key={params.get("server") ? "server" : "all"}>
         <TabsList>
           <TabsTrigger value="queue">{t("game.delivery.queue")}</TabsTrigger>
           <TabsTrigger value="commands">{t("game.delivery.commands")}</TabsTrigger>
@@ -50,13 +53,18 @@ function useFail() {
 }
 
 function Queue() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const qc = useQueryClient();
   const fail = useFail();
+  const [params, setParams] = useSearchParams();
   const [status, setStatus] = useState<string>(ALL);
+  // `?server=<id>` (the Logs button on Admin > Game servers) opens one server's log.
+  const server = params.get("server") ?? ALL;
+  const setServer = (v: string) => setParams((p) => { const n = new URLSearchParams(p); if (v === ALL) n.delete("server"); else n.set("server", v); return n; }, { replace: true });
+  const servers = useQuery({ queryKey: ["admin", "game-servers"], queryFn: () => api<{ items: GameServer[] }>("/admin/game/servers") });
   const q = useQuery({
-    queryKey: ["admin", "game-delivery", "queue", status],
-    queryFn: () => api<{ items: GameDelivery[]; stats: Record<string, number> }>(`/admin/game/delivery/queue${status === ALL ? "" : `?status=${status}`}`),
+    queryKey: ["admin", "game-delivery", "queue", status, server],
+    queryFn: () => api<{ items: GameDelivery[]; stats: Record<string, number> }>(`/admin/game/delivery/queue${deliveryQueueQuery(status === ALL ? null : status, server === ALL ? null : server)}`),
   });
   const refresh = () => void qc.invalidateQueries({ queryKey: ["admin", "game-delivery", "queue"] });
   const act = useMutation({ mutationFn: ({ id, a }: { id: string; a: "retry" | "cancel" }) => api(`/admin/game/delivery/queue/${id}/${a}`, { method: "POST" }), onSuccess: refresh, onError: fail });
@@ -68,6 +76,10 @@ function Queue() {
           <SelectField id="gd-status" label={t("game.delivery.status")} value={status} onChange={setStatus}
             options={[{ value: ALL, label: t("game.delivery.all") }, ...DELIVERY_STATUSES.map((s) => ({ value: s, label: t(`game.delivery.st.${s}` as TranslationKey) }))]} />
         </div>
+        <div className="w-56">
+          <SelectField id="gd-server" label={t("game.delivery.server")} value={server} onChange={setServer}
+            options={[{ value: ALL, label: t("game.delivery.all_servers") }, ...(servers.data?.items ?? []).map((s) => ({ value: s.id, label: s.name }))]} />
+        </div>
         <Button variant="outline" onClick={() => run.mutate()} disabled={run.isPending}><PlayIcon aria-hidden />{t("game.delivery.run")}</Button>
         <div className="flex flex-wrap gap-2" data-testid="delivery-stats">
           {DELIVERY_STATUSES.map((s) => <Badge key={s} variant={statusVariant(s)}>{t(`game.delivery.st.${s}` as TranslationKey)}: {q.data?.stats[s] ?? 0}</Badge>)}
@@ -77,6 +89,7 @@ function Queue() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>{t("game.delivery.time")}</TableHead>
               <TableHead>{t("game.delivery.server")}</TableHead>
               <TableHead>{t("game.delivery.player")}</TableHead>
               <TableHead>{t("game.delivery.trigger")}</TableHead>
@@ -88,10 +101,11 @@ function Queue() {
           <TableBody>
             {q.data.items.map((d) => (
               <TableRow key={d.id} data-delivery={d.status}>
+                <TableCell className="whitespace-nowrap text-xs">{formatDateTime(d.delivered_at ?? d.created_at, lang)}</TableCell>
                 <TableCell>{d.server_name}{d.package && <div className="text-xs text-muted-foreground">{d.package}</div>}</TableCell>
                 <TableCell className="font-mono text-xs">{d.player || "—"}</TableCell>
                 <TableCell>{t(`game.trigger.${d.trigger}` as TranslationKey)}</TableCell>
-                <TableCell className="max-w-xs break-all font-mono text-xs">{d.command}{d.last_error && <div className="text-destructive">{d.last_error}</div>}</TableCell>
+                <TableCell className="max-w-xs break-all font-mono text-xs">{d.command}{d.last_error && <div className="text-destructive">{d.last_error}</div>}{d.response && <div className="text-muted-foreground" title={t("game.delivery.response")}>↳ {d.response}</div>}</TableCell>
                 <TableCell><Badge variant={statusVariant(d.status)}>{t(`game.delivery.st.${d.status}` as TranslationKey)}</Badge><div className="text-xs text-muted-foreground">{t("game.delivery.attempts", { n: d.attempts ?? 0 })}</div></TableCell>
                 <TableCell className="text-right">
                   {(d.status === "failed" || d.status === "cancelled") && <Button size="sm" variant="ghost" aria-label={t("game.delivery.retry")} onClick={() => act.mutate({ id: d.id, a: "retry" })}><ArrowClockwiseIcon aria-hidden /></Button>}

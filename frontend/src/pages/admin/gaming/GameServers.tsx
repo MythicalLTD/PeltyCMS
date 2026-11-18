@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyIcon, PencilSimpleIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
+import { KeyIcon, ListBulletsIcon, PencilSimpleIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
+import { Link } from "react-router";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
@@ -128,6 +129,7 @@ export function AdminGameServersPage() {
               <CardContent className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="text-muted-foreground">{t("game.servers.packages_count", { n: s.product_ids.length })}</span>
                 <Button size="sm" variant="outline" onClick={() => setPkgs({ id: s.id, ids: s.product_ids })}>{t("game.servers.packages")}</Button>
+                {mods.has("game_delivery") && <Button size="sm" variant="outline" asChild><Link to={`/admin/game-delivery?server=${s.id}`} data-testid="server-logs"><ListBulletsIcon aria-hidden />{t("game.servers.logs")}</Link></Button>}
                 {s.transport === "agent" && <Button size="sm" variant="outline" onClick={() => issue.mutate(s.id)}><KeyIcon aria-hidden />{s.has_agent_token ? t("game.servers.rotate_token") : t("game.servers.issue_token")}</Button>}
               </CardContent>
             </Card>
