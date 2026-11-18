@@ -69,7 +69,7 @@ impl PublicKey {
                 use rsa::pkcs1::DecodeRsaPublicKey;
                 use rsa::traits::PublicKeyParts;
                 let k = rsa::RsaPublicKey::from_pkcs1_der(bits).map_err(|_| Error::Cert("rsa"))?;
-                if k.n().bits() < 2048 {
+                if k.n().bit_width() < 2048 {
                     return Err(Error::Cert("rsa_too_small"));
                 }
                 Ok(PublicKey::Rsa(k))

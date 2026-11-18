@@ -31,7 +31,7 @@ base64 = { workspace = true }
 # kill(2) for process groups: the `kill` program differs between GNU and BSD
 # (macOS) in how it takes negative PIDs.
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.31", default-features = false, features = ["signal"] }
+nix = { version = "0.32", default-features = false, features = ["signal"] }
 
 [features]
 # `cargo run -p xtask --features https -- seed` for an https:// PELTY_URL.

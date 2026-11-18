@@ -10,7 +10,7 @@ semver = "1"
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 futures-util = { version = "0.3", default-features = false }
 redis = { version = "1.8", default-features = false, features = ["tokio-comp", "connection-manager"] }
-sqlparser = { version = "0.63", features = ["visitor"] }
+sqlparser = { version = "0.64", features = ["visitor"] }
 sqlx = { workspace = true }
 pelty-provisioning = { workspace = true }
 pelty-saml = { workspace = true }
@@ -53,7 +53,7 @@ ttf-parser = "0.25"
 subsetter = "0.2.6"
 croner = "4.0.3"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
-maxminddb = "0.32"
+maxminddb = "0.33"
 zip = { workspace = true }
 
 [lints]

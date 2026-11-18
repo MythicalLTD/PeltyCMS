@@ -42,7 +42,7 @@ self-replace = "1"
 
 [target.'cfg(unix)'.dependencies]
 # Restore the terminal if the server stops while the console prompt is active.
-nix = { version = "0.31", default-features = false, features = ["term"] }
+nix = { version = "0.32", default-features = false, features = ["term"] }
 
 [dev-dependencies]
 uuid = { workspace = true }

@@ -202,7 +202,7 @@ pub fn check_sql(addon: &str, sql: &str) -> Result<bool, String> {
                         return ControlFlow::Break(());
                     }
                 }
-                Expr::Subquery(_) | Expr::Exists { .. } | Expr::InSubquery { .. } => {}
+                Expr::Subquery(_) | Expr::Exists { .. } | Expr::In { .. } => {}
                 _ => {}
             }
             ControlFlow::Continue(())
