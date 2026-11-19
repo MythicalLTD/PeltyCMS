@@ -68,7 +68,7 @@ mkdir /srv/pelty && cd /srv/pelty
 
 The first start in a terminal runs a setup wizard. It asks for:
 
-- the License and EULA (Free Tier ≤50 Active Clients; Soft overage notices; see LICENSE, EULA.md, COMMERCIAL.md);
+- the license notice (PeltyCMS is free software under the GNU AGPL v3 or later; see LICENSE, EULA.md, and COMMERCIAL.md for the optional Premium);
 - the database (local download, or an existing URL; a missing database can be created);
 - the listen address, public URL, reverse proxy and HTTPS;
 - company name and email, default currency, language and time zone;

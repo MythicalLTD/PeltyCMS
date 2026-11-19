@@ -87,7 +87,8 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-license = "Proprietary"
+# Official addons: AGPL-3.0-or-later (see ../../LICENSE). The SDK and *-common crates are MIT.
+license = "AGPL-3.0-or-later"
 
 [workspace.dependencies]
 pelty-addon-sdk = { path = "sdk" }

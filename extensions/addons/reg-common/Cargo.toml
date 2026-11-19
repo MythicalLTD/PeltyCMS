@@ -2,7 +2,7 @@
 name = "pelty-addon-registrar-common"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+license = "MIT"
 publish = false
 description = "Shared connection + parsing helpers for the registrar addons (a library, not an addon)."
 

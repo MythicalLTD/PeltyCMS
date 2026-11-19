@@ -2,7 +2,7 @@
 name = "pelty-addon-guide"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+license = "MIT"
 publish = false
 workspace = "../../addons"
 

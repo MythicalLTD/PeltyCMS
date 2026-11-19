@@ -1,84 +1,78 @@
-# PeltyCMS Commercial License
+# PeltyCMS: open source, Premium and commercial licenses
 
-**Licensor:** MythicalSystems Studios LLC  
+**Licensor:** MythicalSystems Studios LLC
 **Product:** PeltyCMS
 
-This document explains when you need a paid Commercial License and what it
-covers. The binding Free Tier rules live in [LICENSE](./LICENSE) and
-[EULA.md](./EULA.md).
+> **Draft.** Prices, plans and order terms may change. Have qualified counsel
+> (Austria/EU) review this page, [`EULA.md`](./EULA.md) and
+> [`LICENSE-ADDON-EXCEPTION.md`](./LICENSE-ADDON-EXCEPTION.md) before public sale.
 
-**Draft for product use.** Pricing pages and order forms may add detail. Have
-counsel review before public sale.
+## The short version
 
-## When Free Tier is enough
+| | Free (open source) | PeltyCMS Premium | Commercial license |
+|---|---|---|---|
+| License of the code | GNU AGPL v3 or later | GNU AGPL v3 or later | Custom terms instead of the AGPL |
+| Production use, any number of clients | Yes | Yes | Yes |
+| All core features | Yes | Yes | Yes |
+| White-label (hide "Powered by PeltyCMS") | Edit the code yourself | One switch in Admin → Premium | As agreed |
+| Exclusive premium addons | No | Yes | As agreed |
+| Priority support | Community | Yes | As agreed |
+| Higher limits on MythicalSystems services | No | Yes | As agreed |
+| Keep modifications closed while serving users over a network | No (AGPL section 13) | No (AGPL section 13) | Yes |
+| Price | Free | Monthly, per installation | On request |
 
-You do **not** need a Commercial License if:
+There is **no client cap** and **no feature lock** in the open source edition.
 
-- the production install has **50 or fewer Active Clients**, or
-- you only run Non-Production copies (dev, staging, evaluation).
+## Open source (GNU AGPL v3 or later)
 
-**Active Client** = a customer with status `active` that is not merged into
-another customer.
+PeltyCMS is free software. You can use, study, change and share it under the
+[GNU Affero General Public License](./LICENSE). The most important rule: if
+you run a **modified** PeltyCMS and let people use it over a network, you must
+offer them the source code of your modified version (AGPL section 13).
 
-## When you need a Commercial License
+Addons, themes and plugins that use only the addon interfaces may use any
+license, including proprietary ones. See the
+[Addon Exception](./LICENSE-ADDON-EXCEPTION.md). The addon SDK, the frame SDK,
+the theme SDK, the examples and the bundled themes are MIT licensed.
 
-You need a Commercial License when a production deployment goes **above 50
-Active Clients**.
+## PeltyCMS Premium
 
-The admin area will show a notice when you cross that line. **PeltyCMS will not
-lock the panel or strip features for overage alone.** The notice exists so you
-can stay compliant and support the project.
+Premium is an optional monthly subscription **per installation**, sold through
+the MyMythical platform (https://my.mythicalsystems.org). The default price is
+EUR 9 per installation per month; the current price is shown on the Premium
+page in MyMythical.
 
-## What a Commercial License buys
+Premium includes:
 
-Typical Commercial License benefits (exact scope is on the order form):
+- **White-label:** hide "Powered by PeltyCMS" on the public site with one switch.
+- **Exclusive premium addons** from the official MythicalSystems marketplace.
+- **Priority support** through MyMythical support tickets.
+- **Higher limits** on MythicalSystems services used by your installation
+  (marketplace/registry API rate limits, open support tickets).
 
-- right to run production above the Free Tier Limit on the licensed deployment;
-- eligibility for official support channels and SLAs when purchased;
-- access to commercial addons or marketplace items marked as paid, when offered;
-- permission for use cases restricted in LICENSE section 5 when the order form
-  explicitly allows them (for example certain multi-tenant hosting of PeltyCMS
-  itself).
+How it works:
 
-## Soft enforcement (important)
+1. Turn on the **PeltyCMS Premium** module in Admin → Modules.
+2. Link the installation to your MyMythical team in Admin → Marketplace
+   (MythicCloud link).
+3. Subscribe in MyMythical (team → PeltyCMS Premium), one unit per installation.
+4. Admin → Premium → **Check now**. The installation receives a signed,
+   short-lived entitlement and refreshes it every day.
 
-| Behavior | Free Tier | Over Free Tier without paid license |
-|----------|-----------|--------------------------------------|
-| Install and run | Yes | Yes (still runs) |
-| Create clients past 50 | Yes | Yes (not blocked in software) |
-| Admin notice | No | Yes (dismissible reminder) |
-| Legal obligation to purchase | No | Yes |
+**Soft verification.** If PeltyCMS cannot reach MyMythical or the entitlement
+has expired, Premium features **keep working** and staff see a warning. Premium
+switches off only when MyMythical answers that the installation has no active
+Premium subscription (for example after you cancel).
 
-We choose Soft enforcement on purpose: hosting businesses should not lose
-billing access because a license reminder is overdue. Compliance is still
-required by the License and EULA.
+The Premium module is off by default. While it is off, PeltyCMS does not
+contact MyMythical for Premium.
 
-## How to purchase
+## Commercial license
 
-1. Open https://peltycms.com/pricing (or contact sales@peltycms.com).
-2. Choose a plan for your Active Client band or deployment.
-3. Complete the order; keep the confirmation with your records.
-4. Optional later: enter a license key in Admin if key validation ships.
-
-Until keys exist, keeping your purchase confirmation and company details on
-file is enough for Soft-enforcement builds.
-
-## Multi-brand and hosting Pelty for others
-
-- One company, one billing brand, one database: one Free Tier or one Commercial
-  License for that deployment.
-- Offering PeltyCMS as a managed panel to unrelated operators generally needs a
-  Commercial License that expressly allows that use. Contact sales.
-
-## Support the project without going over 50
-
-Even under the Free Tier you can:
-
-- buy a Commercial License early;
-- sponsor development;
-- purchase official addons or support retainers when offered;
-- contribute bug reports and addon packages under the project's contribution
-  guidelines.
+If the AGPL does not fit you, for example because you want to ship a modified
+PeltyCMS (or a product built on it) without publishing your changes, you can
+buy a commercial license that replaces the AGPL for your organisation.
+Contact sales@peltycms.com.
 
 ## Contact
 

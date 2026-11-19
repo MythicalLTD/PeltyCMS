@@ -49,6 +49,8 @@ COPY --from=build /src/target/docs /app/docs
 COPY locales/ /app/locales/
 COPY extensions/themes/ /app/themes/
 COPY extensions/plugins/ /app/plugins/
+# License texts (AGPL, addon exception, bundled third-party licenses).
+COPY LICENSE LICENSE-ADDON-EXCEPTION.md THIRD_PARTY_LICENSES.md COMMERCIAL.md EULA.md /app/legal/
 RUN chown -R root:root /app && chmod -R a-w /app
 # /app is read-only. The working folder /data is writable state: the first start
 # writes /data/.env (with a generated PELTY_ENCRYPTION_KEY), /data/eula.txt,

@@ -2,7 +2,7 @@
 name = "pelty-addon-captcha-common"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+license = "MIT"
 publish = false
 description = "Shared siteverify logic for the captcha addons (a library, not an addon)."
 

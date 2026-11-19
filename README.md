@@ -28,31 +28,36 @@ Release archives (also what `pelty-server update` downloads):
 | Windows x64 / ARM64 | `pelty-server-<v>-{x86_64,aarch64}-pc-windows-msvc.zip` |
 | macOS Intel / Apple Silicon | `pelty-server-<v>-{x86_64,aarch64}-apple-darwin.tar.gz` |
 
-## Licensing (how money and Free Tier work)
+## License
 
-PeltyCMS is **source-available**, not OSI Open Source.
+PeltyCMS is **free and open source software** under the
+[GNU Affero General Public License v3.0 or later](./LICENSE)
+(SPDX `AGPL-3.0-or-later`). No client cap, no feature lock.
 
 | Document | What it is |
 |----------|------------|
-| [LICENSE](./LICENSE) | Source Available License (SAL) 1.0 |
-| [EULA.md](./EULA.md) | End User License Agreement (required to run) |
-| [COMMERCIAL.md](./COMMERCIAL.md) | When to buy a Commercial License |
+| [LICENSE](./LICENSE) | GNU AGPL v3 (full text) |
+| [LICENSE-ADDON-EXCEPTION.md](./LICENSE-ADDON-EXCEPTION.md) | Addons, themes and plugins may use any license (draft) |
+| [COMMERCIAL.md](./COMMERCIAL.md) | PeltyCMS Premium and commercial licenses |
+| [EULA.md](./EULA.md) | Install notice and Premium terms (draft) |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) / [CLA.md](./CLA.md) | How to contribute (CLA required) |
+| `THIRD_PARTY_LICENSES.md` | Licenses of bundled dependencies (generated, shipped in release archives) |
 
-**Free in production** while you have **50 or fewer Active Clients** (customer
-status `active`, not merged), and always free for non-production use.
+The addon SDK (`extensions/addons/sdk`, `*-common`), `extensions/sdk`,
+`extensions/frame-sdk`, the examples and the bundled themes are **MIT**.
 
-**Above 50 Active Clients** you need a [Commercial License](./COMMERCIAL.md).
-The panel keeps working and only reminds admins (Soft enforcement). Nothing is
-feature-locked for overage alone.
+**PeltyCMS Premium** (optional, monthly per installation, via
+[MyMythical](https://my.mythicalsystems.org)): white-label, exclusive premium
+addons, priority support and higher limits. Turn on the *PeltyCMS Premium*
+module in Admin → Modules. If the licence check cannot reach MyMythical,
+Premium keeps working and only shows a warning. Details in
+[COMMERCIAL.md](./COMMERCIAL.md).
 
-Accept the EULA on first install (`eula.txt`, setup wizard, or `PELTY_EULA=true`).
-Staff also confirm the License and EULA once in the admin area if that record
-is missing.
+Accept the install notice on first start (`eula.txt`, setup wizard, or
+`PELTY_EULA=true`). It confirms you read the license; it adds no conditions.
 
-Commercial sales: https://peltycms.com/pricing · sales@peltycms.com
-
-> These legal files are product drafts for MythicalSystems Studios LLC. Have a
-> lawyer review them before you publish a release or take payment.
+> The Addon Exception, Premium terms and CLA are drafts for MythicalSystems
+> Studios LLC. Have a lawyer (Austria/EU) review them before you take payment.
 
 ## Stack
 
@@ -93,19 +98,19 @@ frontend/         Admin and client UI
 extensions/       Addon packages and examples
 migrations/       SQL migrations
 locales/          UI translations
-LICENSE EULA.md COMMERCIAL.md
+LICENSE LICENSE-ADDON-EXCEPTION.md COMMERCIAL.md EULA.md CONTRIBUTING.md CLA.md
 ```
 
 ## Contributing
 
-Bug reports and addon work are welcome. By contributing you agree your patches
-are licensed to MythicalSystems Studios LLC under the same License terms as the
-rest of the repository (or under terms we publish for contributors).
+Bug reports, pull requests and addons are welcome. Code contributions need a
+signed [Contributor License Agreement](./CLA.md); see
+[CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Trademark
 
 PeltyCMS and MythicalSystems names and logos are trademarks of MythicalSystems
-Studios LLC. Use them only as allowed in the License.
+Studios LLC. The AGPL does not grant trademark rights; factual references are fine.
 
 ## Contact
 

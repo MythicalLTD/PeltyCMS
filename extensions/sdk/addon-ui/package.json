@@ -1,6 +1,7 @@
 {
   "name": "@peltycms/addon-ui",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "description": "Typed, dependency-free SDK for addon UI frames (sandboxed iframes) talking to the PeltyCMS host over the postMessage bridge.",

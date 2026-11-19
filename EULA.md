@@ -1,119 +1,64 @@
-# PeltyCMS End User License Agreement
+# PeltyCMS notice and Premium terms
 
-**Version 1.0**  
-**Licensor:** MythicalSystems Studios LLC ("we", "us")  
+**Version 2.0**
+**Licensor:** MythicalSystems Studios LLC ("we", "us")
 **Product:** PeltyCMS ("Software")
 
-This End User License Agreement ("EULA") is a legal agreement between you (the
-individual or entity installing or running the Software) and MythicalSystems
-Studios LLC. By setting `eula=true` in `eula.txt`, setting `PELTY_EULA=true`,
-accepting this EULA in the setup wizard or admin area, or otherwise using the
-Software, you agree to this EULA and to the [PeltyCMS Source Available License](./LICENSE)
-("License").
+> **Draft, needs review by an Austrian lawyer.** This text has not been
+> reviewed by counsel yet. Do not rely on it as final terms.
 
-**Draft for product use.** Have qualified counsel review these terms before you
-rely on them in production or public distribution.
+## Part A: the Software (everyone)
 
-Published copy: https://peltycms.com/eula (also this file in the repository).
+1. **License.** The Software is free software licensed under the GNU Affero
+   General Public License, version 3 or (at your option) any later version
+   ([`LICENSE`](./LICENSE)), with the additional permission in
+   [`LICENSE-ADDON-EXCEPTION.md`](./LICENSE-ADDON-EXCEPTION.md). Nothing in
+   this document limits the rights the AGPL gives you. If anything here
+   conflicts with the AGPL, the AGPL wins for the Software.
+2. **What `eula=true` means.** Setting `eula=true` in `eula.txt`, setting
+   `PELTY_EULA=true`, or accepting in the setup wizard or admin area confirms
+   that you have read this notice and the license, including its disclaimer
+   of warranty and limitation of liability (AGPL sections 15 and 16). It does
+   not add conditions to the AGPL.
+3. **Your responsibilities.** You operate your installation. You are
+   responsible for your customers' data, backups, payment provider rules,
+   taxes, invoices, and the terms and privacy policy you publish to your own
+   customers (the Software includes editable site pages for that).
+4. **Network source offer.** If you modify the Software and let users interact
+   with it over a network, AGPL section 13 requires you to offer them the
+   corresponding source code.
+5. **Trademarks.** The AGPL does not grant rights to the PeltyCMS and
+   MythicalSystems names and logos. Factual references ("runs on PeltyCMS")
+   are fine.
 
-## 1. License to use
+## Part B: PeltyCMS Premium and other paid services (only if you buy them)
 
-Subject to this EULA and the License, we grant you a limited right to install
-and run the Software for your internal business operations on systems you
-control.
+These terms apply only when you subscribe to PeltyCMS Premium or another paid
+MythicalSystems service. The purchase itself also follows the MyMythical
+platform terms shown at checkout.
 
-The Software is **source-available**, not OSI Open Source. Rights to copy,
-modify, and redistribute are only those granted in the License.
+1. **What you get.** Premium is a monthly subscription per installation. It
+   gives the linked installation the entitlements listed on the Premium page
+   in MyMythical (white-label switch, exclusive premium addons, priority
+   support, higher service limits).
+2. **Billing.** Premium renews monthly until cancelled. You can cancel in
+   MyMythical; Premium stays active until the end of the paid period.
+3. **Verification.** A Premium installation contacts MyMythical about once a
+   day with its installation id, its linked team and its PeltyCMS version to
+   refresh a signed entitlement. If the check fails, Premium keeps working and
+   staff see a warning. Premium switches off only when MyMythical reports that
+   the installation has no active subscription.
+4. **Premium addons.** Premium addons are licensed to you under their own
+   terms for use on your Premium installations. Do not redistribute them.
+5. **Data.** For the Premium check MyMythical processes the data in point 3
+   and the request IP address, to provide the subscription.
 
-## 2. Free Tier and Commercial License
+## Open points for counsel
 
-1. **Free Tier.** You may use the Software in production without a paid
-   Commercial License while that deployment has **fifty (50) or fewer Active
-   Clients** (customer records with status `active`, not merged), or for
-   non-production evaluation and staging.
-2. **Above Free Tier.** When a production deployment exceeds fifty Active
-   Clients, you must obtain a Commercial License (see [COMMERCIAL.md](./COMMERCIAL.md)
-   and https://peltycms.com/pricing).
-3. **Soft enforcement.** The Software may show administrators that a Commercial
-   License is required once you exceed the Free Tier. **It does not shut down,
-   lock, or feature-limit the panel for that reason alone.** Exceeding the Free
-   Tier without a Commercial License is still a breach of the License and this
-   EULA.
+- Which legal entity sells Premium, and which law and courts apply (EU/Austrian
+  consumer law cannot be excluded for consumers).
+- Withdrawal right for digital services (FAGG), VAT (EU OSS), invoices.
+- Liability and warranty wording for the paid services under Austrian law.
+- Privacy notice for the Premium check (GDPR).
 
-## 3. Your responsibilities
-
-You are responsible for:
-
-- lawful use of the Software in your jurisdiction;
-- your customer data, backups, security of credentials, and payment processing
-  compliance (including card network and payment provider rules);
-- taxes, invoices, and consumer disclosures you issue through the Software;
-- configuring gateways, provisioning, and addons you enable;
-- keeping contact details current for license and security notices.
-
-## 4. Accounts and acceptance records
-
-The first administrator and any staff who accept agreements in the admin area
-confirm they are authorized to bind the entity that operates the deployment.
-Acceptance may be stored locally (for example `eula.txt` and database settings)
-with timestamp and actor information for your records and ours if you purchase
-a Commercial License.
-
-## 5. Privacy and your customers
-
-We do not host your self-hosted deployment by default. You are the controller
-(or equivalent) of personal data you process with the Software. Publish your
-own Terms and Privacy Policy to your end customers (the Software includes
-editable site pages for that purpose).
-
-If you use optional cloud features we offer later (updates check, hosted
-editions, license validation), those services are described at the time you
-enable them.
-
-## 6. Intellectual property
-
-We and our licensors retain all right, title, and interest in the Software,
-trademarks, and branding. This EULA does not sell the Software to you.
-
-Addon packages and third-party services remain under their own terms.
-
-## 7. No warranty
-
-THE SOFTWARE IS PROVIDED "AS IS". WE DISCLAIM ALL WARRANTIES, EXPRESS OR
-IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
-NON-INFRINGEMENT. Billing, provisioning, and payment mistakes can have serious
-consequences; validate your configuration before going live.
-
-## 8. Limitation of liability
-
-TO THE MAXIMUM EXTENT PERMITTED BY LAW, WE ARE NOT LIABLE FOR INDIRECT,
-INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR LOST PROFITS,
-REVENUE, OR DATA, ARISING FROM THE SOFTWARE OR THIS EULA. OUR TOTAL LIABILITY
-FOR ANY CLAIM RELATED TO A SELF-HOSTED DEPLOYMENT IS LIMITED TO THE FEES YOU
-PAID US FOR A COMMERCIAL LICENSE IN THE TWELVE (12) MONTHS BEFORE THE CLAIM,
-OR USD 100 IF YOU ARE ON THE FREE TIER.
-
-## 9. Indemnity
-
-You will defend and indemnify us against claims arising from your use of the
-Software, your customer relationships, your content, or your violation of law
-or this EULA, except to the extent caused by our willful misconduct.
-
-## 10. Termination
-
-We may terminate this EULA if you materially breach it or the License and do
-not cure within thirty (30) days of notice. You may stop using the Software at
-any time. Provisions that by nature should survive (including 6 through 9 and
-11) survive termination.
-
-## 11. General
-
-This EULA, the License, and any Commercial License order form are the entire
-agreement for the Software. If there is a conflict, a signed Commercial License
-order controls for the paid items it covers; otherwise the License and this
-EULA control together.
-
-Governing law: State of Delaware, USA, excluding conflict rules, unless
-mandatory local law for consumers says otherwise.
-
-Contact: legal@peltycms.com · https://peltycms.com
+Published copy: https://peltycms.com/eula · Contact: legal@peltycms.com

@@ -2,7 +2,7 @@
 name = "pelty-addon-sdk"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+license = "MIT"
 description = "Guest SDK for PeltyCMS WASM addons (world pelty:addon/pelty-addon@0.2.0)"
 
 [features]

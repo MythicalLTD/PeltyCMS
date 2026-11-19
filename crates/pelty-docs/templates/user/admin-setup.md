@@ -14,7 +14,7 @@ Each step opens its settings page:
 - Domains (optional): `/admin/domains`
 - Provisioning server (optional): `/admin/servers`
 
-The first required step is **License and EULA**. Accepting records agreement for this deployment under the Source Available License: free in production with **50 or fewer Active Clients**, Soft reminders (no feature lock) above that, and a Commercial License when you grow past Free Tier. See `LICENSE`, `EULA.md` and `COMMERCIAL.md` in the install, or Admin → Getting started.
+The first required step is **License and EULA**. Accepting records that you read the license notice for this deployment. PeltyCMS is free and open source under the GNU AGPL v3 or later: no client cap and no feature lock. If you modify PeltyCMS and serve it over a network, offer your users the source (AGPL section 13). Paid extras are optional (PeltyCMS Premium, see `COMMERCIAL.md` and Admin → Premium). See `LICENSE`, `EULA.md` and `COMMERCIAL.md` in the install, or Admin → Getting started.
 
 {{wizard}}
 

@@ -3,7 +3,7 @@
 //! Dry run by default: bumps the workspace version, builds the assets
 //! (addon zips, docs, web UI; only the UI is embedded, never addons) and `pelty-server` for every target this
 //! machine can build, packages `dist/<version>/` (archives with README / EULA
-//! / LICENSE, `SHA256SUMS`, its ed25519 signature `SHA256SUMS.sig` when a
+//! / LICENSE / THIRD_PARTY_LICENSES, `SHA256SUMS`, its ed25519 signature `SHA256SUMS.sig` when a
 //! signing key is configured, `manifest.json` for the updater, and
 //! `CHANGELOG.md` from git log since the last tag), then restores the
 //! version files. `--publish` keeps the bump, commits it, tags `v<version>`,
@@ -618,6 +618,16 @@ fn build_and_package(
         (ctx.root.join("README.md"), "README.md"),
         (ctx.root.join("EULA.md"), "EULA.md"),
         (ctx.root.join("LICENSE"), "LICENSE"),
+        (
+            ctx.root.join("LICENSE-ADDON-EXCEPTION.md"),
+            "LICENSE-ADDON-EXCEPTION.md",
+        ),
+        (ctx.root.join("COMMERCIAL.md"), "COMMERCIAL.md"),
+        // `scripts/third-party-licenses.sh` (bundled dependency licenses).
+        (
+            ctx.root.join("THIRD_PARTY_LICENSES.md"),
+            "THIRD_PARTY_LICENSES.md",
+        ),
         (notes_file, "CHANGELOG.md"),
     ]
     .into_iter()

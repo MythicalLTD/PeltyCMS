@@ -6,8 +6,8 @@ exclude = ["examples", "addons", "extensions"]
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-# Custom terms in ./LICENSE (PeltyCMS Source Available License). Not OSI Open Source.
-license = "LicenseRef-PeltyCMS-SAL-1.0"
+# GNU AGPL v3 or later (./LICENSE) plus the Addon Exception (./LICENSE-ADDON-EXCEPTION.md).
+license = "AGPL-3.0-or-later"
 authors = ["MythicalSystems Studios LLC"]
 rust-version = "1.87"
 
