@@ -39,8 +39,8 @@ the theme SDK, the examples and the bundled themes are MIT licensed.
 
 Premium is an optional monthly subscription **per installation**, sold through
 the MyMythical platform (https://my.mythicalsystems.org). The default price is
-EUR 9 per installation per month; the current price is shown on the Premium
-page in MyMythical.
+EUR 9 per installation per month plus VAT/taxes (added at checkout); the
+current price is shown on the Premium page in MyMythical.
 
 Premium includes:
 
@@ -74,19 +74,20 @@ any time, with effect at the end of the paid period.
 
 Don't want to run a server? **Serverless** is PeltyCMS hosted by us: your own
 virtual server (Akamai/Linode) in the region you pick, the official PeltyCMS
-Docker image, PostgreSQL, automatic HTTPS for your domain, daily provider
-backups and **Premium included**. Ordered and billed monthly through
-MyMythical (team → PeltyCMS Serverless).
+Docker image, PostgreSQL, automatic HTTPS for your domain, nightly snapshots
+of your database and uploads and **Premium included**. Ordered and billed
+monthly through MyMythical (team → PeltyCMS Serverless).
 
-| Plan | Memory / CPU / disk / traffic | Price per month (excl. VAT) |
+| Plan | Memory / CPU / disk / traffic | Price per month (plus VAT/taxes) |
 |---|---|---|
-| Serverless 1 GB | 1 GB / 1 vCPU / 25 GB / 1 TB | EUR 13.99 |
-| Serverless 2 GB | 2 GB / 1 vCPU / 50 GB / 2 TB | EUR 27.99 |
-| Serverless 4 GB | 4 GB / 2 vCPU / 80 GB / 4 TB | EUR 54.99 |
+| Serverless 1 GB | 1 GB / 1 vCPU / 25 GB / 1 TB | EUR 8.99 |
+| Serverless 2 GB | 2 GB / 1 vCPU / 50 GB / 2 TB | EUR 18.99 |
+| Serverless 4 GB | 4 GB / 2 vCPU / 80 GB / 4 TB | EUR 37.99 |
 
-VAT is added for your country at checkout; Sao Paulo and Jakarta cost 40% and
-20% more. A free trial on the 1 GB plan may be offered (one per team). Hosting
-is best effort with no SLA; terms are in [EULA.md](./EULA.md) Part B, section B9.
+Checkout runs on Tebex, which adds the VAT or sales tax of your country on
+top; Sao Paulo and Jakarta cost 40% and 20% more. A free trial on the 1 GB
+plan may be offered (one per team). Hosting is best effort with no SLA; terms
+are in [EULA.md](./EULA.md) Part B, section B9.
 
 ## Commercial license
 

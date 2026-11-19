@@ -67,7 +67,7 @@ You order by choosing the number of installations (for Serverless: the server si
 
 ### B5. Price, taxes and payment
 
-Prices are shown per installation (for Serverless: per server) per billing period. Serverless servers in some regions cost more; the surcharge is shown before you order. For consumers the price shown includes VAT or other sales tax due in your country. Businesses in the EU with a valid VAT ID may be billed without VAT under the reverse-charge rules. Payment is due in advance for each billing period.
+Prices are shown per installation (for Serverless: per server) per billing period. Serverless servers in some regions cost more; the surcharge is shown before you order. Prices are shown before tax. The VAT or other sales tax due in your country is added on top and shown, with the total you pay, at checkout before you pay (by Tebex when Tebex is the merchant of record). Businesses in the EU with a valid VAT ID may be billed without VAT under the reverse-charge rules. Payment is due in advance for each billing period.
 
 ### B6. Term, renewal and cancellation
 
@@ -132,15 +132,15 @@ If the check cannot reach MyMythical, Premium keeps working and staff see a warn
 
 **Updates and maintenance.** We may update PeltyCMS, the database and the operating system on your server, restart it, or move it within the same region to keep it secure and working. We try to do this outside busy hours and to announce larger changes in advance.
 
-**Backups and your data.** We turn on the provider's automatic backups for every paid Serverless server (usually one daily and two weekly copies). Backups help us recover from failures; they are not an archive and we cannot promise that every change can be restored. Keep your own exports of important data (PeltyCMS has export tools). The content and customer data on your site are yours.
+**Backups and your data.** Every Serverless server makes a nightly snapshot of its database and uploaded files and keeps the last 7 on the server itself. Snapshots help recover from mistakes and software faults; they do not protect against the loss of the whole server, they are not an archive, and we cannot promise that every change can be restored. We may additionally use our provider's backup service. Keep your own exports of important data (PeltyCMS has export tools). The content and customer data on your site are yours.
 
 **Data processing (Art. 28 GDPR).** For personal data on your Serverless site you are the controller and we are your processor; this paragraph is our data processing agreement. We process that data only to host and run your installation and on your documented instructions (these terms and what you configure in PeltyCMS), keep it confidential and bind our staff to confidentiality, protect it with appropriate technical and organisational measures (isolated server per customer, encrypted HTTPS, restricted administrative access, backups), and use only Akamai Technologies / Linode as sub-processor, in the region you chose. We tell you at least 30 days before adding or replacing a sub-processor; you may object by cancelling. We help you answer data subject requests and meet your security and breach-notification duties, tell you without undue delay about a personal data breach on your server, delete the data at the end of the service as described below (unless the law requires us to keep it), and give you the information needed to show compliance. How we handle your own account data is in the [Privacy Policy](https://www.mythicalsystems.org/privacy).
 
 **Fair use.** You may not use Serverless for illegal content, spam, malware, crypto mining, attacks or anything that harms our provider's network. If the monthly traffic of the plan is used up or the server is abused, we may limit or suspend it after telling you, or immediately if needed to stop harm.
 
-**Free trial.** We may offer a free trial on the smallest plan for the number of days shown on the Serverless page. Only one trial per MyMythical team and per person; we may refuse or end trials that look like abuse. The trial does not turn into a paid plan by itself. If you do not buy a plan before it ends, the server stops and is deleted **2 days** later together with its data. Trial servers have no backups.
+**Free trial.** We may offer a free trial on the smallest plan for the number of days shown on the Serverless page. Only one trial per MyMythical team and per person; we may refuse or end trials that look like abuse. The trial does not turn into a paid plan by itself. If you do not buy a plan before it ends, the server stops and is deleted **2 days** later together with its data.
 
-**End of the plan and deletion.** When a paid Serverless plan ends (cancellation, non-payment or withdrawal), the server is stopped. We keep it and its backups for **7 days**, during which you can renew or ask support for an export. After that the server, its disk and its backups are deleted permanently and cannot be recovered. Cancelling takes effect at the end of the paid period, so you keep access until then.
+**End of the plan and deletion.** When a paid Serverless plan ends (cancellation, non-payment or withdrawal), the server is stopped. We keep it and its snapshots for **7 days**, during which you can renew or ask support for an export. After that the server, its disk, its snapshots and any provider backups are deleted permanently and cannot be recovered. Cancelling takes effect at the end of the paid period, so you keep access until then.
 
 ### B10. Conformity and warranty
 
