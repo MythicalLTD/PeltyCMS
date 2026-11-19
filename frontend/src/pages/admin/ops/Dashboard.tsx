@@ -1,5 +1,5 @@
 import { UpdateBanner } from "@/components/admin/UpdateCheck";
-import { LicenseOverageBanner } from "@/components/admin/LicenseGate";
+import { PremiumWarningBanner } from "@/pages/admin/premium/Premium";
 import { SetupWizardBanner } from "@/pages/admin/settings/GettingStarted";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
@@ -71,7 +71,7 @@ export function AdminDashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <UpdateBanner />
-      <LicenseOverageBanner />
+      <PremiumWarningBanner />
       <WelcomeHero title={t("dashboard.welcome", { name: me?.display_name || me?.email || "" })} subtitle={t("admin.dashboard.hero_subtitle")}>
         <Button asChild><Link to="/admin/invoices"><ReceiptIcon aria-hidden />{t("nav.invoices")}</Link></Button>
         <Button asChild variant="outline"><Link to="/admin/customers"><UsersIcon aria-hidden />{t("nav.customers")}</Link></Button>

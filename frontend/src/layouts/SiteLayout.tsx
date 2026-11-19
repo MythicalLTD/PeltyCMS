@@ -89,6 +89,7 @@ export function SiteLayout() {
   const loc = useLocation();
   const n = view?.cart.order_id ? 0 : lineCount(view?.cart);
   const c = site?.config;
+  const sourceHref = site?.white_label.hide_powered_by ? safeHref(site.white_label.source_url) : null;
   useEffect(() => { if (c) applyBrand(c, document.documentElement, window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false); }, [c]);
   // After applyBrand, so the store/marketplace colours win.
   const { mode, storefront: sf } = usePublicTheme(c);
@@ -170,7 +171,11 @@ export function SiteLayout() {
             <div className="flex flex-col gap-1 text-xs text-muted-foreground">
               <p>{c?.copyright || `© ${copyrightYear} ${c?.site_name ?? t("app.name")}. ${t("site.rights")}`}</p>
               {c?.footer_text && <p>{c.footer_text}</p>}
-              <p data-testid="powered-by">{t("pub.powered_by")} <a href={PELTY_URL} target="_blank" rel="noopener noreferrer" className="font-medium text-foreground hover:text-primary">PeltyCMS</a></p>
+              {site?.white_label.hide_powered_by ? (
+                sourceHref && <p data-testid="source-link"><a href={sourceHref} target="_blank" rel="noopener noreferrer" className="hover:text-foreground">{t("pub.source_code")}</a></p>
+              ) : (
+                <p data-testid="powered-by">{t("pub.powered_by")} <a href={PELTY_URL} target="_blank" rel="noopener noreferrer" className="font-medium text-foreground hover:text-primary">PeltyCMS</a></p>
+              )}
             </div>
             {(c?.social ?? []).length > 0 && (
               <div className="flex flex-wrap gap-1">

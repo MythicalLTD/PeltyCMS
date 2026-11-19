@@ -152,6 +152,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(live_chat::router())
         .merge(crate::addons::router())
         .merge(crate::updates::router())
+        .merge(crate::premium::router())
         .merge(crate::translations::router())
         .merge(crate::duo::router())
         .merge(crate::addon_ext::router())

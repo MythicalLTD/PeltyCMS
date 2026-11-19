@@ -60,6 +60,7 @@ pub const GATES: &[(&str, &str)] = &[
     ("/public/reviews", "product_reviews"),
     ("/client/reviews", "product_reviews"),
     ("/admin/reviews", "product_reviews"),
+    ("/admin/premium", "premium"),
 ];
 
 /// Module owning `path` (with or without the `/api/v1` prefix), if any.

@@ -55,6 +55,7 @@ pub use platform::cron;
 pub use platform::csv;
 pub use platform::dev_docs;
 pub use platform::extract;
+pub use platform::premium;
 pub use platform::static_files;
 pub use platform::translations;
 pub use platform::updates;

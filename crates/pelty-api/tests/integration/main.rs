@@ -139,6 +139,7 @@ mod pdf_flow;
 mod permission_levels_flow;
 mod plugin_webhooks_flow;
 mod plugins_flow;
+mod premium_flow;
 mod proforma_flow;
 mod projects_flow;
 mod provisioning_events_flow;

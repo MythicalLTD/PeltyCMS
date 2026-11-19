@@ -4,16 +4,16 @@ use common::*;
 use serde_json::json;
 
 #[tokio::test]
-async fn license_status_accept_and_soft_overage() {
+async fn license_status_accept_no_client_cap() {
     let (app, st) = app().await;
     let admin = sess(&app, &st, "admin").await;
     let ah = admin.h();
 
     let r = call(&app, "GET", "/api/v1/admin/license", None, &ah).await;
     assert_eq!(r.status, StatusCode::OK);
-    assert_eq!(r.body["free_limit"], 50);
-    assert_eq!(r.body["enforcement"], "soft");
-    assert_eq!(r.body["show_accept_gate"], true);
+    assert_eq!(r.body["license"], "AGPL-3.0-or-later");
+    assert_eq!(r.body["version"], "2.0");
+    assert!(r.body.get("free_limit").is_none());
 
     let r = call(
         &app,
@@ -46,23 +46,21 @@ async fn license_status_accept_and_soft_overage() {
         .unwrap();
     assert_eq!(lic_step["done"], true);
 
-    // Soft overage: many active customers, panel still answers; banner shows.
+    // No client cap: many active customers change nothing.
     for i in 0..51 {
         let id = uuid::Uuid::new_v4();
         sqlx::query("INSERT INTO customers (id, email, status) VALUES ($1, $2, 'active')")
             .bind(id)
-            .bind(format!("lic-{i}@example.test"))
+            .bind(format!("lic-{i}-{id}@example.test"))
             .execute(&st.pool)
             .await
             .unwrap();
     }
     let r = call(&app, "GET", "/api/v1/admin/license", None, &ah).await;
     assert_eq!(r.status, StatusCode::OK);
-    assert!(r.body["active_clients"].as_i64().unwrap() >= 51);
-    assert_eq!(r.body["over_free_limit"], true);
-    assert_eq!(r.body["show_overage_banner"], true);
-    assert_eq!(r.body["enforcement"], "soft");
-
+    assert!(r.body.get("over_free_limit").is_none());
+    assert!(r.body.get("show_overage_banner").is_none());
+    assert_eq!(r.body["show_accept_gate"], false);
     let r = call(
         &app,
         "PUT",
@@ -71,8 +69,14 @@ async fn license_status_accept_and_soft_overage() {
         &ah,
     )
     .await;
-    assert_eq!(r.status, StatusCode::OK);
-    assert_eq!(r.body["show_overage_banner"], false);
+    assert!(
+        matches!(
+            r.status,
+            StatusCode::NOT_FOUND | StatusCode::METHOD_NOT_ALLOWED
+        ),
+        "{:?}",
+        r.status
+    );
 
     let cust = sess(&app, &st, "customer").await;
     assert_eq!(

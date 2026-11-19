@@ -10,10 +10,10 @@ pub const URL: &str = "https://peltycms.com/eula";
 /// Contents of a new `eula.txt`; `now` is an RFC 3339 timestamp.
 pub fn template(now: &str) -> String {
     format!(
-        "# PeltyCMS End User License Agreement\n\
-         # By changing the setting below to TRUE you agree to the PeltyCMS License (LICENSE),\n\
-         # EULA (EULA.md / {URL}) and Free Tier rules (≤50 Active Clients; Soft overage notices).\n\
-         # Commercial terms: COMMERCIAL.md. Alternatively set PELTY_EULA=true (Docker / CI).\n\
+        "# PeltyCMS End User License Agreement (install notice)\n\
+         # PeltyCMS is free software under the GNU AGPL v3 or later (LICENSE).\n\
+         # By changing the setting below to TRUE you confirm you read LICENSE and the notice in\n\
+         # EULA.md ({URL}). Premium is optional: COMMERCIAL.md. Or set PELTY_EULA=true (Docker / CI).\n\
          # Created by pelty-server {} on {now}\n\
          eula=false\n",
         env!("CARGO_PKG_VERSION")

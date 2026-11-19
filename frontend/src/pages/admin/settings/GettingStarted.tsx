@@ -73,8 +73,7 @@ export function AdminGettingStartedPage() {
         <Alert>
           <AlertTitle>{t("license.status_title")}</AlertTitle>
           <AlertDescription>
-            {t("license.status_text", { count: lic.data.active_clients, limit: lic.data.free_limit })}
-            {lic.data.over_free_limit ? ` ${t("license.status_over")}` : ` ${t("license.status_ok")}`}
+            {t("license.status_text", { license: lic.data.license })}
           </AlertDescription>
         </Alert>
       )}

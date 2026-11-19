@@ -774,17 +774,19 @@ fn section<P: Prompt + ?Sized, S: Services + ?Sized>(
 }
 
 fn license<P: Prompt + ?Sized>(p: &mut P, ctx: &Ctx, a: &mut Answers) -> Result<(), Error> {
-    header(p, 0, "Source-available Free Tier: production use free with 50 or fewer Active Clients. Above that you need a Commercial License; the panel does not lock features for overage.");
+    header(p, 0, "PeltyCMS is free and open source software (GNU AGPL v3 or later). No client cap, no feature lock; Premium is optional.");
     if ctx.eula_accepted {
         p.say("  EULA already accepted (eula.txt / PELTY_EULA).");
     } else {
         p.say(&format!(
-            "  Read LICENSE, EULA.md and COMMERCIAL.md (published EULA: {}).",
+            "  Read LICENSE (GNU AGPL) and the notice in EULA.md (published: {}).",
             crate::eula::URL
         ));
-        p.say("  Free Tier: ≤50 Active Clients (status active, not merged), or non-production.");
-        p.say("  Above 50 Active Clients: buy a Commercial License. Soft notices only; no feature lock for overage.");
-        p.say("  Accepting records agreement (same as eula=true in eula.txt).");
+        p.say(
+            "  Modified versions served over a network must offer their source (AGPL section 13).",
+        );
+        p.say("  PeltyCMS Premium (white-label, premium addons, priority support) is optional: COMMERCIAL.md.");
+        p.say("  Accepting records that you read the notice (same as eula=true in eula.txt).");
         if !p.confirm("Do you accept the PeltyCMS License and EULA?", false)? {
             return Err(Error::Declined);
         }

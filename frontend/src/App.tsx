@@ -125,6 +125,7 @@ const AdminModulesPage = lazy(() => import("@/pages/admin/gaming/Modules").then(
 const AdminNoticeboardPage = lazy(() => import("@/pages/admin/support/Noticeboard").then((m) => ({ default: m.AdminNoticeboardPage })));
 const AdminKycPage = lazy(() => import("@/pages/admin/clients/Kyc").then((m) => ({ default: m.AdminKycPage })));
 const ClientVerificationPage = lazy(() => import("@/pages/client/account/Verification").then((m) => ({ default: m.ClientVerificationPage })));
+const AdminPremiumPage = lazy(() => import("@/pages/admin/premium/Premium").then((m) => ({ default: m.AdminPremiumPage })));
 const AdminMarketplacePage = lazy(() => import("@/pages/admin/extensions/Marketplace").then((m) => ({ default: m.AdminMarketplacePage })));
 const AdminMarketplaceFinishPage = lazy(() => import("@/pages/admin/extensions/Marketplace").then((m) => ({ default: m.AdminMarketplaceFinishPage })));
 const AdminVendorCatalogPage = lazy(() => import("@/pages/admin/extensions/VendorCatalog").then((m) => ({ default: m.AdminVendorCatalogPage })));
@@ -413,6 +414,7 @@ export function App() {
         <Route path="todos" element={<AdminTodosPage />} />
         <Route path="projects" element={<AdminProjectsPage />} />
         <Route path="marketplace" element={<AdminMarketplacePage />} />
+        <Route path="premium" element={<RequireModule id="premium"><AdminPremiumPage /></RequireModule>} />
         {/* Mythic OAuth appends FeatherPanel's path onto the panel root callback. */}
         <Route path="cloud-management/finish" element={<AdminMarketplaceFinishPage />} />
         <Route path="marketplace/finish" element={<AdminMarketplaceFinishPage />} />

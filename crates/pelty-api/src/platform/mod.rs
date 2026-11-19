@@ -10,6 +10,7 @@ pub mod cron;
 pub mod csv;
 pub mod dev_docs;
 pub mod extract;
+pub mod premium;
 pub mod static_files;
 pub mod translations;
 pub mod updates;

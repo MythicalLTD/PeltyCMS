@@ -17,7 +17,9 @@ export interface SiteConfig {
 export type BlockType = "hero" | "features" | "pricing" | "faq" | "cta" | "text" | "image" | "stats" | "products" | "comparison";
 export interface Block { id?: string; type: BlockType; props: Record<string, unknown> }
 export interface SitePage { id: string; slug: string; title: string; description: string; blocks: Block[]; published: boolean; show_in_nav: boolean; sort_order: number }
-export interface PublicSite { config: SiteConfig; nav_pages: { slug: string; title: string }[] }
+/** Premium white-label (off unless the install has Premium and switched it on). */
+export interface WhiteLabel { hide_powered_by: boolean; source_url: string }
+export interface PublicSite { config: SiteConfig; nav_pages: { slug: string; title: string }[]; white_label: WhiteLabel }
 
 export const BLOCK_TYPES: BlockType[] = ["hero", "features", "pricing", "products", "comparison", "faq", "cta", "text", "image", "stats"];
 export const FONTS: Record<SiteConfig["font"], string> = {
@@ -27,7 +29,7 @@ export const FONTS: Record<SiteConfig["font"], string> = {
 };
 
 export function usePublicSite() {
-  return useQuery({ queryKey: ["public", "site"], queryFn: async (): Promise<PublicSite> => { const r = await api<Partial<PublicSite> | null>("/public/site"); return { config: normalizeConfig(r?.config), nav_pages: arr(r?.nav_pages) }; }, staleTime: 60_000 });
+  return useQuery({ queryKey: ["public", "site"], queryFn: async (): Promise<PublicSite> => { const r = await api<Partial<PublicSite> | null>("/public/site"); const wl = r?.white_label; return { config: normalizeConfig(r?.config), nav_pages: arr(r?.nav_pages), white_label: { hide_powered_by: wl?.hide_powered_by === true, source_url: typeof wl?.source_url === "string" ? wl.source_url : "" } }; }, staleTime: 60_000 });
 }
 
 /** Default props for a freshly added block (editable in the admin). */

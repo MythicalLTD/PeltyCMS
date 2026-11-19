@@ -8,13 +8,13 @@ import { SiteLayout } from "./SiteLayout";
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); localStorage.clear(); });
 
-function mock(cartStatus: number) {
+function mock(cartStatus: number, whiteLabel?: { hide_powered_by: boolean; source_url: string }) {
   const calls: string[] = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     calls.push(url);
     if (url.endsWith("/auth/me")) return new Response(JSON.stringify({ code: "error.unauthorized" }), { status: 401, headers: { "content-type": "application/json" } });
     if (url.includes("/store/carts/")) return new Response(JSON.stringify(cartStatus === 200 ? { cart: { items: [{}, {}], order_id: null }, preview: null, error: null } : { code: "error.not_found" }), { status: cartStatus, headers: { "content-type": "application/json" } });
-    const body = url.endsWith("/i18n") ? { languages: [{ code: "en", name: "English" }] } : url.endsWith("/public/site") ? { nav_pages: [], config: { site_name: "Acme", footer_columns: [{ title: "Legal", links: [{ label: "Terms of Service", href: "/page/terms" }] }], social: [{ network: "github", href: "https://github.com/x" }], copyright: "© Acme Ltd" } } : {};
+    const body = url.endsWith("/i18n") ? { languages: [{ code: "en", name: "English" }] } : url.endsWith("/public/site") ? { nav_pages: [], config: { site_name: "Acme", footer_columns: [{ title: "Legal", links: [{ label: "Terms of Service", href: "/page/terms" }] }], social: [{ network: "github", href: "https://github.com/x" }], copyright: "© Acme Ltd" }, ...(whiteLabel ? { white_label: whiteLabel } : {}) } : {};
     return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
   }));
   return calls;
@@ -27,6 +27,13 @@ describe("SiteLayout footer + cart badge", () => {
     expect(await screen.findByText("Terms of Service")).toBeTruthy();
     expect(screen.getByLabelText("github").getAttribute("href")).toBe("https://github.com/x");
     expect(screen.getByText("© Acme Ltd")).toBeTruthy();
+    expect(screen.getByTestId("powered-by")).toBeTruthy();
+  });
+  it("hides Powered by PeltyCMS when Premium white-label is on and keeps the source link", async () => {
+    mock(404, { hide_powered_by: true, source_url: "https://git.example.test/pelty" }); wrap();
+    await screen.findByText("Terms of Service");
+    expect(screen.queryByTestId("powered-by")).toBeNull();
+    expect(screen.getByTestId("source-link").querySelector("a")?.getAttribute("href")).toBe("https://git.example.test/pelty");
   });
   it("drops a stale stored cart id on 404 and shows no badge", async () => {
     const stale = "11111111-1111-4111-8111-111111111111";

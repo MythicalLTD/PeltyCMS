@@ -189,6 +189,9 @@ async fn handle(s: &AppState, job: &Job) -> Result<Value, JobError> {
         crate::updates::JOB_KIND => Ok(crate::updates::check(s)
             .await
             .map_err(|e| JobError::Retry(e.to_string()))?),
+        crate::premium::JOB_KIND => Ok(crate::premium::check(s)
+            .await
+            .map_err(|e| JobError::Retry(e.to_string()))?),
         crate::exchange_rates::JOB_KIND => crate::exchange_rates::update_now(s, None)
             .await
             .map_err(|e| JobError::Retry(e.to_string())),
@@ -371,6 +374,9 @@ pub async fn schedule_tick(s: &AppState) {
     }
     if let Err(e) = crate::updates::schedule(s).await {
         tracing::error!(error = %e, "schedule update check failed");
+    }
+    if let Err(e) = crate::premium::schedule(s).await {
+        tracing::error!(error = %e, "schedule premium check failed");
     }
     if let Err(e) = crate::exchange_rates::schedule(s).await {
         tracing::error!(error = %e, "schedule exchange rates failed");

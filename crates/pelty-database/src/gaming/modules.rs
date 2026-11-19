@@ -12,7 +12,7 @@ use uuid::Uuid;
 pub struct ModuleDef {
     pub id: &'static str,
     /// Domain pack the module belongs to (`gaming`, `digital`, `marketplace`,
-    /// `commerce`).
+    /// `commerce`, `premium`).
     pub pack: &'static str,
     /// Modules that must be enabled first.
     pub requires: &'static [&'static str],
@@ -84,6 +84,12 @@ pub const MODULES: &[ModuleDef] = &[
         id: "guest_checkout",
         pack: "gaming",
         requires: &["game_profiles"],
+    },
+    // PeltyCMS Premium client: contacts MyMythical only while enabled.
+    ModuleDef {
+        id: "premium",
+        pack: "premium",
+        requires: &[],
     },
 ];
 

@@ -1,9 +1,9 @@
-//! Admin product license: Free Tier status, Soft overage banner, agreement acceptance.
+//! Admin install notice: GNU AGPL license status and one-time acceptance.
 use crate::error::ApiResult;
 use crate::extract::{perms, RequirePermission};
 use crate::AppState;
 use axum::extract::State;
-use axum::routing::{get, post, put};
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use pelty_database::audit;
 use pelty_database::license::{self as lic, Status};
@@ -14,7 +14,6 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/admin/license", get(status))
         .route("/admin/license/accept", post(accept))
-        .route("/admin/license/overage-notice", put(overage_notice))
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/license", responses((status = 200, body = Status), (status = 403)))]
@@ -27,7 +26,7 @@ pub async fn status(
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct AcceptBody {
-    /// Must be true; confirms LICENSE + EULA for this deployment.
+    /// Must be true; confirms the license notice (LICENSE + EULA.md) for this deployment.
     pub accept: bool,
 }
 
@@ -48,30 +47,6 @@ pub async fn accept(
         None,
         u.ip.as_deref(),
         json!({ "version": st.version }),
-    )
-    .await?;
-    Ok(Json(st))
-}
-
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
-pub struct OverageBody {
-    pub dismissed: bool,
-}
-
-#[utoipa::path(put, path = "/api/v1/admin/license/overage-notice", request_body = OverageBody, responses((status = 200, body = Status), (status = 403)))]
-pub async fn overage_notice(
-    State(s): State<AppState>,
-    RequirePermission(u, _): RequirePermission<perms::SettingsManage>,
-    Json(b): Json<OverageBody>,
-) -> ApiResult<Json<Status>> {
-    let st = lic::set_overage_dismissed(&s.pool, b.dismissed).await?;
-    audit::record(
-        &s.pool,
-        Some(u.user_id),
-        "license.overage_notice",
-        None,
-        u.ip.as_deref(),
-        json!({ "dismissed": b.dismissed }),
     )
     .await?;
     Ok(Json(st))

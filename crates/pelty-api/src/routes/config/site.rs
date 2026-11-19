@@ -334,7 +334,10 @@ pub async fn public_site(State(s): State<AppState>) -> ApiResult<Json<Value>> {
         .filter(|p| p.show_in_nav)
         .map(|p| json!({ "slug": p.slug, "title": p.title }))
         .collect();
-    Ok(Json(json!({ "config": c, "nav_pages": pages })))
+    let white_label = crate::premium::white_label(&s).await?;
+    Ok(Json(
+        json!({ "config": c, "nav_pages": pages, "white_label": white_label }),
+    ))
 }
 
 #[utoipa::path(get, path = "/api/v1/public/site/pages/{slug}", responses((status = 200), (status = 404)))]

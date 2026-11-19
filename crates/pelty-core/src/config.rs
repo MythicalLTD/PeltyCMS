@@ -63,6 +63,11 @@ pub struct Config {
     pub addon_trusted_keys: Option<PathBuf>,
     /// Refuse unsigned disk addons (built-in host implementations are trusted code).
     pub addon_require_signatures: bool,
+    /// MyMythical base URL for PeltyCMS Premium entitlements (`PELTY_PREMIUM_URL`).
+    pub premium_url: String,
+    /// Extra trusted Premium entitlement signing keys (`PELTY_PREMIUM_PUBLIC_KEYS`,
+    /// `kid=base64,kid2=base64`), for a staging MyMythical. The official keys are built in.
+    pub premium_public_keys: Vec<(String, String)>,
     /// Optional MaxMind-compatible MMDB (DB-IP Lite or GeoLite2). When unset,
     /// `data/geoip/dbip-city-lite.mmdb` is used if present.
     pub geoip_db: Option<PathBuf>,
@@ -226,6 +231,21 @@ impl Config {
             addon_trusted_keys: var("PELTY_ADDON_TRUSTED_KEYS").map(PathBuf::from),
             addon_require_signatures: parse("PELTY_ADDON_REQUIRE_SIGNATURES", false)?,
             geoip_db: var("PELTY_GEOIP_DB").map(PathBuf::from),
+            premium_url: parse(
+                "PELTY_PREMIUM_URL",
+                "https://market.mythicalsystems.org".to_string(),
+            )?
+            .trim_end_matches('/')
+            .to_string(),
+            premium_public_keys: var("PELTY_PREMIUM_PUBLIC_KEYS")
+                .map(|v| {
+                    v.split([',', ' '])
+                        .filter_map(|p| p.trim().split_once('='))
+                        .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
+                        .filter(|(k, v)| !k.is_empty() && !v.is_empty())
+                        .collect()
+                })
+                .unwrap_or_default(),
             ai: AiConfig {
                 // OpenAI-compatible API base URL including `/v1` (HTTPS, or HTTP on loopback).
                 // AI ticket reply suggestions stay off unless all three PELTY_AI_* are set.
