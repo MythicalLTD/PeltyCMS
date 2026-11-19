@@ -37,9 +37,9 @@ PeltyCMS is **free and open source software** under the
 | Document | What it is |
 |----------|------------|
 | [LICENSE](./LICENSE) | GNU AGPL v3 (full text) |
-| [LICENSE-ADDON-EXCEPTION.md](./LICENSE-ADDON-EXCEPTION.md) | Addons, themes and plugins may use any license (draft) |
+| [LICENSE-ADDON-EXCEPTION.md](./LICENSE-ADDON-EXCEPTION.md) | Addons, themes and plugins may use any license |
 | [COMMERCIAL.md](./COMMERCIAL.md) | PeltyCMS Premium and commercial licenses |
-| [EULA.md](./EULA.md) | Install notice and Premium terms (draft) |
+| [EULA.md](./EULA.md) | Install notice and Premium terms (withdrawal, privacy of the license check) |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) / [CLA.md](./CLA.md) | How to contribute (CLA required) |
 | `THIRD_PARTY_LICENSES.md` | Licenses of bundled dependencies (generated, shipped in release archives) |
 
@@ -55,9 +55,6 @@ Premium keeps working and only shows a warning. Details in
 
 Accept the install notice on first start (`eula.txt`, setup wizard, or
 `PELTY_EULA=true`). It confirms you read the license; it adds no conditions.
-
-> The Addon Exception, Premium terms and CLA are drafts for MythicalSystems
-> Studios LLC. Have a lawyer (Austria/EU) review them before you take payment.
 
 ## Stack
 

@@ -3,9 +3,10 @@
 **Licensor:** MythicalSystems Studios LLC
 **Product:** PeltyCMS
 
-> **Draft.** Prices, plans and order terms may change. Have qualified counsel
-> (Austria/EU) review this page, [`EULA.md`](./EULA.md) and
-> [`LICENSE-ADDON-EXCEPTION.md`](./LICENSE-ADDON-EXCEPTION.md) before public sale.
+This page summarises the licensing model. The binding texts are the
+[GNU AGPL](./LICENSE), the [Addon Exception](./LICENSE-ADDON-EXCEPTION.md)
+and, for Premium, Part B of [`EULA.md`](./EULA.md) (also published at
+https://www.mythicalsystems.org/peltycms-premium).
 
 ## The short version
 
@@ -67,6 +68,10 @@ Premium subscription (for example after you cancel).
 The Premium module is off by default. While it is off, PeltyCMS does not
 contact MyMythical for Premium.
 
+Consumers in the EU/EEA have a 14-day right of withdrawal; the instructions
+and a model withdrawal form are in Part B of [`EULA.md`](./EULA.md). Cancel
+any time, with effect at the end of the paid period.
+
 ## Commercial license
 
 If the AGPL does not fit you, for example because you want to ship a modified
@@ -76,4 +81,5 @@ Contact sales@peltycms.com.
 
 ## Contact
 
-sales@peltycms.com · legal@peltycms.com · https://peltycms.com
+sales@peltycms.com · legal@peltycms.com · Premium orders and withdrawal:
+support@mythical.ltd · https://peltycms.com
