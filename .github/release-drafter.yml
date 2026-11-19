@@ -3,6 +3,13 @@
 name-template: "v$RESOLVED_VERSION"
 tag-template: "v$RESOLVED_VERSION"
 prerelease-identifier: rc
+# Only PeltyCMS releases count as "previous release": MythicalDash left 3.x
+# releases (e.g. 3.5.4-aurora) from an unrelated history, which made the
+# compare step fail with "No common ancestor". PeltyCMS tags are v-prefixed
+# and target develop.
+tag-prefix: "v"
+filter-by-commitish: true
+commitish: develop
 categories:
   - title: Features
     labels: [feature, enhancement]
