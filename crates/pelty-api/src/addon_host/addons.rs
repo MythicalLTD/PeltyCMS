@@ -1239,9 +1239,6 @@ pub struct RegistryItem {
     pub is_free: bool,
     #[serde(default)]
     pub purchase_url: String,
-    /// Exclusive PeltyCMS Premium addon: installs need the `premium_addons` entitlement.
-    #[serde(default)]
-    pub premium: bool,
 }
 
 fn registry_item_free() -> bool {
@@ -1320,7 +1317,6 @@ async fn registry_index(
                 "id": i.id, "name": i.name, "version": i.version, "kind": i.kind, "description": i.description,
                 "author": i.author, "homepage": i.homepage, "sha256": i.sha256,
                 "icon_url": i.icon_url, "price": i.price, "is_free": i.is_free, "purchase_url": i.purchase_url,
-                "premium": i.premium,
                 "local_version": local.map(|e| e.manifest.version.clone()),
                 "builtin": local.is_some_and(|e| e.source == "builtin"),
                 "installed": rows.iter().any(|r| r.id == i.id),
@@ -1341,21 +1337,11 @@ async fn registry_install(
         .into_iter()
         .find(|i| i.id == id)
         .ok_or(AppError::NotFound)?;
-    if !item.is_free || item.premium {
+    if !item.is_free {
         let cfg = load_registry(&s).await?;
         if !panel_is_linked(&cfg) {
             return Err(AppError::Conflict("error.addon_registry_panel_required").into());
         }
-    }
-    // Premium addons: new installs need an active Premium entitlement. Already
-    // installed ones keep running when Premium lapses (Admin → Premium warns).
-    if item.premium
-        && !crate::premium::effective(&s)
-            .await?
-            .entitlements
-            .premium_addons
-    {
-        return Err(AppError::Conflict("error.premium_required").into());
     }
     let cfg = load_registry(&s).await?;
     let hdrs = registry_auth_headers(&cfg);
@@ -1385,9 +1371,6 @@ async fn registry_install(
         json!({ "version": e.manifest.version, "sha256": item.sha256 }),
     )
     .await?;
-    if item.premium {
-        crate::premium::remember_addon(&s, &id).await?;
-    }
     let row = reg::get(&s.pool, &id).await?;
     Ok(Json(entry_json(&e, installed_row(&s, &e, row.as_ref()))))
 }

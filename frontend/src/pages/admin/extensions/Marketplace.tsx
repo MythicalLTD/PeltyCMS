@@ -324,7 +324,6 @@ export function AdminMarketplacePage() {
                   <Badge variant={free ? "muted" : "default"}>
                     {free ? t("addons.market.free") : i.price ? `${i.price}` : t("addons.market.paid")}
                   </Badge>
-                  {i.premium && <Badge variant="default" data-testid="premium-addon">{t("premium.addon_badge")}</Badge>}
                 </div>
                 <div className="mt-auto flex flex-wrap gap-2 pt-1">
                   {(st === "new" || st === "update") && (

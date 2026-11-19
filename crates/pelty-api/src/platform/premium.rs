@@ -35,7 +35,6 @@ pub const JOB_KIND: &str = "system.premium_check";
 const INSTALL: &str = "premium.install";
 const STATE: &str = "premium.state";
 const PREFS: &str = "premium.prefs";
-const ADDONS: &str = "premium.addons";
 /// MyMythical path (below `PELTY_PREMIUM_URL`) that issues entitlements.
 pub const ENTITLEMENT_PATH: &str = "/api/pelty/cloud/premium/entitlement";
 /// Where admins subscribe when MyMythical did not send a team-specific link.
@@ -55,8 +54,6 @@ pub const OFFICIAL_KEYS: &[(&str, &str)] = &[(
 pub struct Entitlements {
     /// Hide "Powered by PeltyCMS" (white-label).
     pub white_label: bool,
-    /// Install exclusive premium addons from the official marketplace.
-    pub premium_addons: bool,
     /// Priority support on MyMythical.
     pub priority_support: bool,
     /// Higher limits on MythicalSystems services for this install.
@@ -113,7 +110,7 @@ pub struct Prefs {
 pub struct Effective {
     pub active: bool,
     pub entitlements: Entitlements,
-    /// `check_failed` | `expired` | `premium_lapsed_addons` (soft warnings only).
+    /// `check_failed` | `expired` (soft warnings only).
     pub warning: Option<String>,
 }
 
@@ -246,11 +243,12 @@ pub async fn effective(s: &AppState) -> AppResult<Effective> {
         return Ok(Effective::default());
     }
     let (c, claims) = cached_claims(s).await?;
-    let mut e = effective_from(true, &c, claims.as_ref(), now().unix_timestamp());
-    if !e.active && e.warning.is_none() && !premium_addons(s).await?.is_empty() {
-        e.warning = Some("premium_lapsed_addons".into());
-    }
-    Ok(e)
+    Ok(effective_from(
+        true,
+        &c,
+        claims.as_ref(),
+        now().unix_timestamp(),
+    ))
 }
 
 /// White-label settings for the public site (all off unless entitled).
@@ -261,24 +259,6 @@ pub async fn white_label(s: &AppState) -> AppResult<Value> {
     Ok(
         json!({ "hide_powered_by": on, "source_url": if on { p.source_url } else { String::new() } }),
     )
-}
-
-async fn premium_addons(s: &AppState) -> AppResult<Vec<String>> {
-    Ok(settings::get(&s.pool, ADDONS)
-        .await?
-        .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or_default())
-}
-
-/// Remember an installed premium addon (soft warning when Premium lapses).
-pub async fn remember_addon(s: &AppState, id: &str) -> AppResult<()> {
-    let mut list = premium_addons(s).await?;
-    if !list.iter().any(|x| x == id) {
-        list.push(id.to_string());
-        list.sort();
-        settings::set(&s.pool, ADDONS, json!(list)).await?;
-    }
-    Ok(())
 }
 
 /// Ask MyMythical for a fresh entitlement and cache it.
@@ -400,7 +380,6 @@ pub async fn status(s: &AppState) -> AppResult<Value> {
         "error": c.error,
         "buy_url": if cl.manage_url.starts_with("https://") { cl.manage_url.clone() } else { DEFAULT_BUY_URL.to_string() },
         "support_url": if eff.entitlements.priority_support && cl.support_url.starts_with("https://") { Some(cl.support_url.clone()) } else { None },
-        "premium_addons": premium_addons(s).await?,
         "prefs": p,
     }))
 }
@@ -502,7 +481,6 @@ mod tests {
             exp,
             entitlements: Entitlements {
                 white_label: true,
-                premium_addons: true,
                 ..Default::default()
             },
             ..Default::default()
@@ -574,7 +552,7 @@ mod tests {
         assert_eq!(cl.install_id, "6f1c1e7a-3c55-4c2a-9d3e-1d8f5b7a9c01");
         assert_eq!(cl.team_name, "Ünïcode Team");
         assert_eq!(cl.seats, 2);
-        assert!(cl.entitlements.white_label && cl.entitlements.premium_addons);
+        assert!(cl.entitlements.white_label && cl.entitlements.priority_support);
         let mut bad = tok.to_string();
         bad.replace_range(10..11, if &tok[10..11] == "A" { "B" } else { "A" });
         assert!(verify_token(&bad, &keys).is_err());

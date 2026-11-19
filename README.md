@@ -47,8 +47,9 @@ The addon SDK (`extensions/addons/sdk`, `*-common`), `extensions/sdk`,
 `extensions/frame-sdk`, the examples and the bundled themes are **MIT**.
 
 **PeltyCMS Premium** (optional, monthly per installation, via
-[MyMythical](https://my.mythicalsystems.org)): white-label, exclusive premium
-addons, priority support and higher limits. Turn on the *PeltyCMS Premium*
+[MyMythical](https://my.mythicalsystems.org)): white-label, priority support and
+higher limits. **PeltyCMS Serverless** is PeltyCMS hosted by us on its own
+server, Premium included. Turn on the *PeltyCMS Premium*
 module in Admin → Modules. If the licence check cannot reach MyMythical,
 Premium keeps working and only shows a warning. Details in
 [COMMERCIAL.md](./COMMERCIAL.md).

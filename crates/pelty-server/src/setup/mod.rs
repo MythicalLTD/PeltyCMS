@@ -785,7 +785,7 @@ fn license<P: Prompt + ?Sized>(p: &mut P, ctx: &Ctx, a: &mut Answers) -> Result<
         p.say(
             "  Modified versions served over a network must offer their source (AGPL section 13).",
         );
-        p.say("  PeltyCMS Premium (white-label, premium addons, priority support) is optional: COMMERCIAL.md.");
+        p.say("  PeltyCMS Premium (white-label, priority support, higher limits) is optional: COMMERCIAL.md.");
         p.say("  Accepting records that you read the notice (same as eula=true in eula.txt).");
         if !p.confirm("Do you accept the PeltyCMS License and EULA?", false)? {
             return Err(Error::Declined);

@@ -12,8 +12,6 @@ export interface RegistryItem {
   icon_url?: string;
   price?: string;
   is_free?: boolean;
-  /** PeltyCMS Premium exclusive (installs need an active Premium). */
-  premium?: boolean;
   purchase_url?: string;
   local_version: string | null;
   builtin: boolean;

@@ -16,7 +16,6 @@ https://www.mythicalsystems.org/peltycms-premium).
 | Production use, any number of clients | Yes | Yes | Yes |
 | All core features | Yes | Yes | Yes |
 | White-label (hide "Powered by PeltyCMS") | Edit the code yourself | One switch in Admin → Premium | As agreed |
-| Exclusive premium addons | No | Yes | As agreed |
 | Priority support | Community | Yes | As agreed |
 | Higher limits on MythicalSystems services | No | Yes | As agreed |
 | Keep modifications closed while serving users over a network | No (AGPL section 13) | No (AGPL section 13) | Yes |
@@ -46,7 +45,6 @@ page in MyMythical.
 Premium includes:
 
 - **White-label:** hide "Powered by PeltyCMS" on the public site with one switch.
-- **Exclusive premium addons** from the official MythicalSystems marketplace.
 - **Priority support** through MyMythical support tickets.
 - **Higher limits** on MythicalSystems services used by your installation
   (marketplace/registry API rate limits, open support tickets).
@@ -71,6 +69,24 @@ contact MyMythical for Premium.
 Consumers in the EU/EEA have a 14-day right of withdrawal; the instructions
 and a model withdrawal form are in Part B of [`EULA.md`](./EULA.md). Cancel
 any time, with effect at the end of the paid period.
+
+## PeltyCMS Serverless (managed hosting)
+
+Don't want to run a server? **Serverless** is PeltyCMS hosted by us: your own
+virtual server (Akamai/Linode) in the region you pick, the official PeltyCMS
+Docker image, PostgreSQL, automatic HTTPS for your domain, daily provider
+backups and **Premium included**. Ordered and billed monthly through
+MyMythical (team → PeltyCMS Serverless).
+
+| Plan | Memory / CPU / disk / traffic | Price per month (excl. VAT) |
+|---|---|---|
+| Serverless 1 GB | 1 GB / 1 vCPU / 25 GB / 1 TB | EUR 13.99 |
+| Serverless 2 GB | 2 GB / 1 vCPU / 50 GB / 2 TB | EUR 27.99 |
+| Serverless 4 GB | 4 GB / 2 vCPU / 80 GB / 4 TB | EUR 54.99 |
+
+VAT is added for your country at checkout; Sao Paulo and Jakarta cost 40% and
+20% more. A free trial on the 1 GB plan may be offered (one per team). Hosting
+is best effort with no SLA; terms are in [EULA.md](./EULA.md) Part B, section B9.
 
 ## Commercial license
 

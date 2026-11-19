@@ -23,7 +23,7 @@ fn token(install_id: &str, active: bool, exp_in: i64) -> String {
         "v": 1, "kid": "it-test", "iss": "mymythical", "product": "peltycms_premium",
         "install_id": install_id, "team_uuid": "team-1", "team_name": "Acme",
         "active": active, "plan": "premium", "reason": if active { "" } else { "no_subscription" },
-        "entitlements": { "white_label": active, "premium_addons": active, "priority_support": active, "higher_limits": active },
+        "entitlements": { "white_label": active, "priority_support": active, "higher_limits": active },
         "seats": 1, "seats_used": 1,
         "manage_url": "https://my.mythicalsystems.org/acme/peltycms-premium",
         "support_url": "https://my.mythicalsystems.org/acme/support",
@@ -140,7 +140,7 @@ async fn premium_entitlement_soft_verification() {
     assert_eq!(s["active"], true, "{s}");
     assert!(s["warning"].is_null());
     assert_eq!(s["entitlements"]["white_label"], true);
-    assert_eq!(s["entitlements"]["premium_addons"], true);
+    assert_eq!(s["entitlements"]["priority_support"], true);
     assert_eq!(
         s["support_url"],
         "https://my.mythicalsystems.org/acme/support"

@@ -1,12 +1,12 @@
 # PeltyCMS notice and Premium terms
 
-**Version 2.0 · Effective date: 2026-11-19**
+**Version 2.1 · Effective date: 2026-11-19**
 **Licensor and seller:** MythicalSystems Studios LLC, a Delaware limited
 liability company ("we", "us")
 **Product:** PeltyCMS ("Software")
 
 Part A applies to everyone who installs the Software. Part B applies only if
-you buy PeltyCMS Premium. Part B is also published on MyMythical at
+you buy PeltyCMS Premium or PeltyCMS Serverless. Part B is also published on MyMythical at
 https://www.mythicalsystems.org/peltycms-premium; both copies have the same
 content.
 
@@ -37,9 +37,9 @@ content.
    MythicalSystems names and logos. Factual references ("runs on PeltyCMS")
    are fine.
 
-## Part B: PeltyCMS Premium Terms (only if you buy Premium)
+## Part B: PeltyCMS Premium and Serverless Terms (only if you buy Premium or Serverless)
 
-These PeltyCMS Premium Terms ("Premium Terms") apply when you buy a PeltyCMS Premium subscription ("Premium") on the MyMythical platform. They add to the MyMythical [Terms of Service](https://www.mythicalsystems.org/terms). If the two conflict, these Premium Terms apply to Premium. The PeltyCMS software itself stays free software under the GNU AGPL v3 or later; nothing here limits your rights under that license.
+These PeltyCMS Premium Terms ("Premium Terms") apply when you buy a PeltyCMS Premium subscription ("Premium") or a PeltyCMS Serverless plan ("Serverless", see section B9) on the MyMythical platform. Everything said about Premium also applies to Serverless unless section B9 says otherwise. They add to the MyMythical [Terms of Service](https://www.mythicalsystems.org/terms). If the two conflict, these Premium Terms apply to Premium. The PeltyCMS software itself stays free software under the GNU AGPL v3 or later; nothing here limits your rights under that license.
 
 ### B1. Seller
 
@@ -56,26 +56,25 @@ You are a **consumer** if you buy mainly for purposes outside your trade, busine
 Premium is a subscription **per PeltyCMS installation** linked to your MyMythical team. For each paid installation it provides, for as long as the subscription is active:
 
 - a **white-label** switch that hides "Powered by PeltyCMS" on the public site;
-- access to **exclusive premium addons** from the official marketplace;
 - **priority support** through MyMythical support tickets; and
 - **higher limits** on MythicalSystems services used by the installation.
 
-The current feature list and price are shown on the Premium page of your team before you order. Premium does not change the license of PeltyCMS. You run your installation yourself; Premium does not include hosting, backups or the operation of your site.
+The current feature list and price are shown on the Premium page of your team before you order. Premium does not change the license of PeltyCMS. You run your installation yourself; Premium does not include hosting, backups or the operation of your site; if you want us to run PeltyCMS for you, that is Serverless (section B9), which includes Premium for the hosted installation.
 
 ### B4. Order and contract
 
-You order by choosing the number of installations and a payment method on the Premium page, accepting these Premium Terms and clicking the pay or subscribe button. The contract is concluded when we (or Tebex) confirm the order. We send the confirmation, including these Premium Terms, by email. The contract language is English.
+You order by choosing the number of installations (for Serverless: the server size, region and domain) and a payment method on the Premium page, accepting these Premium Terms and clicking the pay or subscribe button. The contract is concluded when we (or Tebex) confirm the order. We send the confirmation, including these Premium Terms, by email. The contract language is English.
 
 ### B5. Price, taxes and payment
 
-Prices are shown per installation per billing period. For consumers the price shown includes VAT or other sales tax due in your country. Businesses in the EU with a valid VAT ID may be billed without VAT under the reverse-charge rules. Payment is due in advance for each billing period.
+Prices are shown per installation (for Serverless: per server) per billing period. Serverless servers in some regions cost more; the surcharge is shown before you order. For consumers the price shown includes VAT or other sales tax due in your country. Businesses in the EU with a valid VAT ID may be billed without VAT under the reverse-charge rules. Payment is due in advance for each billing period.
 
 ### B6. Term, renewal and cancellation
 
 - A card or other recurring subscription renews automatically each month until cancelled. A MythicCoins purchase covers the number of days shown at checkout and does not renew automatically.
 - You can cancel at any time on your team's Premium page or in its billing settings, with effect at the end of the current billing period. There is no minimum term and no cancellation fee. Your statutory rights (for example withdrawal under section B7 or termination for good cause) stay unaffected.
 - After the subscription ends, Premium features switch off at the next license check. Your installation, your data and the free PeltyCMS features keep working.
-- We may end the subscription with 30 days' notice by email, or immediately for good cause (for example non-payment, fraud, or redistribution of premium addons). If we end it without your fault, we refund any prepaid amount for the unused period.
+- We may end the subscription with 30 days' notice by email, or immediately for good cause (for example non-payment, fraud or abuse). If we end it without your fault, we refund any prepaid amount for the unused period.
 
 ### B7. Right of withdrawal (consumers)
 
@@ -91,11 +90,9 @@ To exercise the right of withdrawal, you must inform us (MythicalSystems Studios
 
 If you requested to begin the performance of services during the withdrawal period, you shall pay us an amount which is in proportion to what has been provided until you have communicated us your withdrawal from this contract, in comparison with the full coverage of the contract.
 
-#### Early start and premium addons
+#### Early start
 
-At checkout you ask us to start Premium immediately, before the withdrawal period ends. If you then withdraw, you pay only for the days of Premium already provided (pro rata), as described above.
-
-Premium addons are digital content that is not supplied on a tangible medium. You lose the right of withdrawal for a premium addon once its download has started, because you expressly agreed at checkout that supply starts before the withdrawal period ends, you confirmed that you know you lose your right of withdrawal by this, and we sent you the order confirmation.
+At checkout you ask us to start Premium or Serverless immediately, before the withdrawal period ends. If you then withdraw, you pay only for the days already provided (pro rata), as described above. A free Serverless trial costs nothing, so there is nothing to refund; if you then buy a paid plan, the 14 days start again from that purchase.
 
 #### Model withdrawal form
 
@@ -103,7 +100,7 @@ Premium addons are digital content that is not supplied on a tangible medium. Yo
 
 > To MythicalSystems Studios LLC, c/o Entity Protect Registered Agent Services LLC, 1201 N Orange Street, Suite 7665, Wilmington, DE 19801-1186, United States, support@mythical.ltd:
 >
-> I/We (\*) hereby give notice that I/We (\*) withdraw from my/our (\*) contract for the provision of the following service (\*): PeltyCMS Premium
+> I/We (\*) hereby give notice that I/We (\*) withdraw from my/our (\*) contract for the provision of the following service (\*): PeltyCMS Premium / PeltyCMS Serverless
 >
 > Ordered on (\*) / received on (\*):
 >
@@ -125,9 +122,25 @@ When the Premium module is turned on, your installation contacts MyMythical abou
 
 If the check cannot reach MyMythical, Premium keeps working and staff see a warning. Premium switches off only when MyMythical answers that the installation has no active subscription. While the Premium module is off, PeltyCMS does not contact MyMythical for Premium.
 
-### B9. Premium addons
+### B9. PeltyCMS Serverless (managed hosting)
 
-Premium addons are licensed to you for use on your installations while they hold an active Premium seat, under the license shown on the addon's page (if that license gives you more rights, it applies). You may not resell or redistribute premium addons or share them with installations that do not hold a seat. Addons you already installed may stop receiving updates after the subscription ends.
+**What you get.** For each Serverless plan we run one PeltyCMS installation for you on its own virtual server at our infrastructure provider (Akamai Connected Cloud / Linode) in the region you choose, with the official PeltyCMS Docker image, a PostgreSQL database and an HTTPS certificate for your domain. The server size (memory, CPU, disk and monthly traffic) is the one shown for the plan when you order. Premium is included for that installation for as long as the plan is paid. You get administrator access to PeltyCMS, not to the server's operating system.
+
+**Your domain.** You point your domain (an A record) to the server's IP address shown on the Serverless page. HTTPS starts working once the record resolves. You keep the domain; we do not register or renew it for you.
+
+**Availability: best effort, no SLA.** We monitor Serverless and try to fix problems quickly, but we do not promise a minimum uptime, response or repair time, and no service level agreement or service credits apply unless we agree one with you in writing. The availability target in the Hosting Services Agreement does not apply to Serverless. Consumers keep their statutory rights under section B10.
+
+**Updates and maintenance.** We may update PeltyCMS, the database and the operating system on your server, restart it, or move it within the same region to keep it secure and working. We try to do this outside busy hours and to announce larger changes in advance.
+
+**Backups and your data.** We turn on the provider's automatic backups for every paid Serverless server (usually one daily and two weekly copies). Backups help us recover from failures; they are not an archive and we cannot promise that every change can be restored. Keep your own exports of important data (PeltyCMS has export tools). The content and customer data on your site are yours.
+
+**Data processing (Art. 28 GDPR).** For personal data on your Serverless site you are the controller and we are your processor; this paragraph is our data processing agreement. We process that data only to host and run your installation and on your documented instructions (these terms and what you configure in PeltyCMS), keep it confidential and bind our staff to confidentiality, protect it with appropriate technical and organisational measures (isolated server per customer, encrypted HTTPS, restricted administrative access, backups), and use only Akamai Technologies / Linode as sub-processor, in the region you chose. We tell you at least 30 days before adding or replacing a sub-processor; you may object by cancelling. We help you answer data subject requests and meet your security and breach-notification duties, tell you without undue delay about a personal data breach on your server, delete the data at the end of the service as described below (unless the law requires us to keep it), and give you the information needed to show compliance. How we handle your own account data is in the [Privacy Policy](https://www.mythicalsystems.org/privacy).
+
+**Fair use.** You may not use Serverless for illegal content, spam, malware, crypto mining, attacks or anything that harms our provider's network. If the monthly traffic of the plan is used up or the server is abused, we may limit or suspend it after telling you, or immediately if needed to stop harm.
+
+**Free trial.** We may offer a free trial on the smallest plan for the number of days shown on the Serverless page. Only one trial per MyMythical team and per person; we may refuse or end trials that look like abuse. The trial does not turn into a paid plan by itself. If you do not buy a plan before it ends, the server stops and is deleted **2 days** later together with its data. Trial servers have no backups.
+
+**End of the plan and deletion.** When a paid Serverless plan ends (cancellation, non-payment or withdrawal), the server is stopped. We keep it and its backups for **7 days**, during which you can renew or ask support for an export. After that the server, its disk and its backups are deleted permanently and cannot be recovered. Cancelling takes effect at the end of the paid period, so you keep access until then.
 
 ### B10. Conformity and warranty
 
