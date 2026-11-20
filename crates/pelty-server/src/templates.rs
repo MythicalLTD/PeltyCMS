@@ -317,6 +317,15 @@ pub async fn cmd(
         .await
         .unwrap_or_else(|_| "EUR".into());
     vars.insert("currency".into(), currency);
+    // Launch sale of the template: running now, for a week.
+    let rfc = |t: time::OffsetDateTime| {
+        t.format(&time::format_description::well_known::Rfc3339)
+            .unwrap_or_default()
+    };
+    let now = time::OffsetDateTime::now_utc();
+    vars.insert("now".into(), rfc(now - time::Duration::minutes(1)));
+    vars.insert("in_7_days".into(), rfc(now + time::Duration::days(7)));
+    vars.insert("in_30_days".into(), rfc(now + time::Duration::days(30)));
     let default_name = doc["site_name"]
         .as_str()
         .unwrap_or("Game Store")

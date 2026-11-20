@@ -105,6 +105,19 @@ pub struct Config {
     #[serde(default)]
     #[schema(value_type = Object)]
     pub group_layouts: std::collections::BTreeMap<Uuid, String>,
+    /// Small label above the hero title (e.g. "Season 4 is live"); empty for none.
+    #[serde(default)]
+    pub hero_badge: String,
+    /// Packages highlighted at the top of the store homepage, in order (max 8).
+    #[serde(default)]
+    pub featured_ids: Vec<Uuid>,
+    /// Category cards with art on the store homepage.
+    #[serde(default)]
+    pub show_categories: bool,
+    /// Slug of a site page whose blocks are shown below the store on the
+    /// homepage (ranks table, FAQ, reviews...); empty for none.
+    #[serde(default)]
+    pub home_page: String,
 }
 
 fn default_accent() -> String {
@@ -144,6 +157,10 @@ impl Default for Config {
             announcement_link: String::new(),
             announcement_tone: default_tone(),
             group_layouts: Default::default(),
+            hero_badge: String::new(),
+            featured_ids: Vec::new(),
+            show_categories: false,
+            home_page: String::new(),
         }
     }
 }
@@ -192,6 +209,14 @@ impl Config {
                 .group_layouts
                 .values()
                 .any(|l| !["list", "grid"].contains(&l.as_str()))
+            || !short(&self.hero_badge, 60)
+            || self.hero_badge.contains('\n')
+            || self.featured_ids.len() > 8
+            || self.home_page.len() > 80
+            || !self
+                .home_page
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
         {
             return bad;
         }
@@ -447,6 +472,16 @@ mod tests {
         c.group_layouts.insert(Uuid::nil(), "carousel".into());
         assert!(c.validate().is_err());
         c.group_layouts.clear();
+        c.home_page = "store-home".into();
+        c.featured_ids = vec![Uuid::nil(); 8];
+        c.hero_badge = "Season 4 is live".into();
+        assert!(c.validate().is_ok());
+        c.home_page = "../etc".into();
+        assert!(c.validate().is_err());
+        c.home_page = String::new();
+        c.featured_ids.push(Uuid::nil());
+        assert!(c.validate().is_err());
+        c.featured_ids.clear();
         c.announcement = "x".repeat(301);
         assert!(c.validate().is_err());
         // Old saved settings without the new fields still parse.

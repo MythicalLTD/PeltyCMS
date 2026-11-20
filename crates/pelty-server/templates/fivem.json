@@ -95,7 +95,7 @@
     "name": "Bronze VIP",
     "sort_order": 1,
     "image_url": "/templates/fivem/vip-bronze.svg",
-    "description": "Bronze tag in chat, a reserved slot and a weekly paycheck bonus. Renews monthly.",
+    "description": "A great start in the city, renewed every month.\nPerks:\n- Bronze tag in chat and on the scoreboard\n- $25,000 bank bonus every month\n- 10% off at the car dealer\n- Access to the VIP garage",
     "prices": [
      {
       "currency": "${currency}",
@@ -131,7 +131,7 @@
     "name": "Silver VIP",
     "sort_order": 2,
     "image_url": "/templates/fivem/vip-silver.svg",
-    "description": "Everything in Bronze, plus a custom phone number and a bigger apartment storage. Renews monthly.",
+    "description": "More money, more cars, more style.\nPerks:\n- Silver tag in chat and on the scoreboard\n- $60,000 bank bonus every month\n- 20% off at the car dealer\n- 2 extra garage slots\n- Priority queue included\n- All Bronze perks",
     "prices": [
      {
       "currency": "${currency}",
@@ -167,7 +167,7 @@
     "name": "Gold VIP",
     "sort_order": 3,
     "image_url": "/templates/fivem/vip-gold.svg",
-    "description": "Every VIP perk, priority in the queue, a custom plate and a monthly car of your choice. Renews monthly.",
+    "description": "The full VIP life in the city.\nPerks:\n- Gold tag in chat and on the scoreboard\n- $150,000 bank bonus every month\n- 30% off at the car dealer\n- 5 extra garage slots and a free monthly supercar rental\n- Top priority in the queue\n- Custom phone number\n- All Silver perks",
     "prices": [
      {
       "currency": "${currency}",
@@ -211,7 +211,7 @@
     "name": "Sports car",
     "sort_order": 1,
     "image_url": "/templates/fivem/car-sports.svg",
-    "description": "A fully tuned sports car delivered to your garage.",
+    "description": "A fast and reliable sports car for everyday driving.\nSpecs:\n- Fully tuned engine and brakes\n- Delivered to your garage\n- Insured: free repair at the mechanic once a week",
     "prices": [
      {
       "currency": "${currency}",
@@ -236,7 +236,7 @@
     "name": "Supercar",
     "sort_order": 2,
     "image_url": "/templates/fivem/car-super.svg",
-    "description": "The fastest car in the city, with a custom plate.",
+    "description": "Turn heads on every street with the fastest car in the city.\nSpecs:\n- Top speed upgrades included\n- Custom paint and neon underglow\n- Delivered to your garage",
     "prices": [
      {
       "currency": "${currency}",
@@ -256,12 +256,84 @@
   },
   {
    "package": {
+    "group_id": "${g_cars}",
+    "slug": "muscle-car",
+    "name": "Muscle car",
+    "image_url": "/templates/fivem/car-muscle.svg",
+    "description": "Classic power with a loud engine and plenty of style.\nSpecs:\n- Upgraded engine and exhaust\n- Racing stripes in any colour\n- Delivered to your garage",
+    "prices": [
+     {
+      "currency": "${currency}",
+      "cycle": "one_time",
+      "amount": "9.99"
+     }
+    ],
+    "commands": [
+     {
+      "trigger": "purchase",
+      "command": "givecar {license} dominator"
+     }
+    ],
+    "preset": "fivem",
+    "sort_order": 3
+   }
+  },
+  {
+   "package": {
+    "group_id": "${g_cars}",
+    "slug": "offroad-truck",
+    "name": "Off-road truck",
+    "image_url": "/templates/fivem/truck.svg",
+    "description": "Go anywhere: mountains, beaches and the desert.\nSpecs:\n- Lifted suspension and off-road tyres\n- Winch and roof lights\n- Delivered to your garage",
+    "prices": [
+     {
+      "currency": "${currency}",
+      "cycle": "one_time",
+      "amount": "8.99"
+     }
+    ],
+    "commands": [
+     {
+      "trigger": "purchase",
+      "command": "givecar {license} sandking"
+     }
+    ],
+    "preset": "fivem",
+    "sort_order": 4
+   }
+  },
+  {
+   "package": {
+    "group_id": "${g_cars}",
+    "slug": "superbike",
+    "name": "Superbike",
+    "image_url": "/templates/fivem/bike.svg",
+    "description": "Weave through traffic on the fastest bike in the city.\nSpecs:\n- Track tuned engine\n- Custom paint\n- Helmet included",
+    "prices": [
+     {
+      "currency": "${currency}",
+      "cycle": "one_time",
+      "amount": "6.99"
+     }
+    ],
+    "commands": [
+     {
+      "trigger": "purchase",
+      "command": "givecar {license} hakuchou"
+     }
+    ],
+    "preset": "fivem",
+    "sort_order": 5
+   }
+  },
+  {
+   "package": {
     "group_id": "${g_props}",
     "slug": "apartment",
     "name": "Luxury apartment",
     "sort_order": 1,
     "image_url": "/templates/fivem/house.svg",
-    "description": "A downtown apartment with a garage and a wardrobe.",
+    "description": "A penthouse with a view over the whole city.\nIncludes:\n- Furnished interior\n- Wardrobe and 200 kg storage\n- 2-car private garage",
     "prices": [
      {
       "currency": "${currency}",
@@ -281,12 +353,36 @@
   },
   {
    "package": {
+    "group_id": "${g_props}",
+    "slug": "mansion",
+    "name": "Hillside mansion",
+    "image_url": "/templates/fivem/mansion.svg",
+    "description": "The biggest home in the city, with a pool and space for the whole crew.\nIncludes:\n- Fully furnished interior with pool\n- 1,000 kg storage and a safe\n- 10-car garage and helipad\n- Keys for up to 6 friends",
+    "prices": [
+     {
+      "currency": "${currency}",
+      "cycle": "one_time",
+      "amount": "39.99"
+     }
+    ],
+    "commands": [
+     {
+      "trigger": "purchase",
+      "command": "giveproperty {license} mansion_hills"
+     }
+    ],
+    "preset": "fivem",
+    "sort_order": 2
+   }
+  },
+  {
+   "package": {
     "group_id": "${g_extra}",
     "slug": "cash-250k",
     "name": "$250,000 bank money",
     "sort_order": 1,
     "image_url": "/templates/fivem/cash.svg",
-    "description": "Start strong with $250,000 in your bank account.",
+    "description": "A cash boost for your character.\n- Added to your bank account\n- Delivered straight away",
     "prices": [
      {
       "currency": "${currency}",
@@ -307,11 +403,35 @@
   {
    "package": {
     "group_id": "${g_extra}",
+    "slug": "cash-1m",
+    "name": "$1,000,000 bank money",
+    "image_url": "/templates/fivem/cash-big.svg",
+    "description": "Become a millionaire in the city, 25% extra value compared to the small pack.\n- Added to your bank account\n- Delivered straight away",
+    "prices": [
+     {
+      "currency": "${currency}",
+      "cycle": "one_time",
+      "amount": "14.99"
+     }
+    ],
+    "commands": [
+     {
+      "trigger": "purchase",
+      "command": "addmoney {license} bank 1000000"
+     }
+    ],
+    "preset": "fivem",
+    "sort_order": 2
+   }
+  },
+  {
+   "package": {
+    "group_id": "${g_extra}",
     "slug": "priority-queue",
     "name": "Priority queue (30 days)",
-    "sort_order": 2,
+    "sort_order": 3,
     "image_url": "/templates/fivem/priority.svg",
-    "description": "Skip the queue when the city is full. Renews monthly.",
+    "description": "Skip the line and get into the city faster when it is full.\n- Higher place in the queue\n- Renews every month, cancel any time",
     "prices": [
      {
       "currency": "${currency}",
@@ -341,6 +461,78 @@
    }
   },
   {
+   "package": {
+    "group_id": "${g_extra}",
+    "slug": "custom-plate",
+    "name": "Custom licence plate",
+    "image_url": "/templates/fivem/plate.svg",
+    "description": "Put your own text on one of your vehicles.\n- Up to 8 letters and numbers\n- Change it once for free",
+    "prices": [
+     {
+      "currency": "${currency}",
+      "cycle": "one_time",
+      "amount": "3.99"
+     }
+    ],
+    "commands": [
+     {
+      "trigger": "purchase",
+      "command": "giveitem {license} plate_voucher 1"
+     }
+    ],
+    "preset": "fivem",
+    "sort_order": 4
+   }
+  },
+  {
+   "package": {
+    "group_id": "${g_extra}",
+    "slug": "character-slot",
+    "name": "Extra character slot",
+    "image_url": "/templates/fivem/character.svg",
+    "description": "Play a second story in the city.\n- One more character on your account\n- Separate money, job and garage",
+    "prices": [
+     {
+      "currency": "${currency}",
+      "cycle": "one_time",
+      "amount": "5.99"
+     }
+    ],
+    "commands": [
+     {
+      "trigger": "purchase",
+      "command": "addcharslot {license} 1"
+     }
+    ],
+    "preset": "fivem",
+    "sort_order": 5
+   }
+  },
+  {
+   "package": {
+    "group_id": "${g_extra}",
+    "slug": "unban",
+    "name": "Unban appeal",
+    "image_url": "/templates/fivem/unban.svg",
+    "description": "A second chance. Lifts one ban after the staff team has checked it.\nGood to know:\n- Not available for cheating, mod menus or chargebacks\n- A repeat offence means a permanent ban",
+    "prices": [
+     {
+      "currency": "${currency}",
+      "cycle": "one_time",
+      "amount": "19.99"
+     }
+    ],
+    "commands": [
+     {
+      "trigger": "purchase",
+      "command": "unban {license}"
+     }
+    ],
+    "preset": "fivem",
+    "sort_order": 6
+   }
+  },
+  {
    "post": "/api/v1/admin/game/servers",
    "save": "server",
    "body": {
@@ -362,23 +554,51 @@
      "${p_vip_gold}",
      "${p_sports_car}",
      "${p_supercar}",
+     "${p_muscle_car}",
+     "${p_offroad_truck}",
+     "${p_superbike}",
      "${p_apartment}",
+     "${p_mansion}",
      "${p_cash_250k}",
-     "${p_priority_queue}"
+     "${p_cash_1m}",
+     "${p_priority_queue}",
+     "${p_custom_plate}",
+     "${p_character_slot}",
+     "${p_unban}"
     ]
+   }
+  },
+  {
+   "post": "/api/v1/admin/sales",
+   "optional": true,
+   "body": {
+    "name": "City launch sale",
+    "percent": "25",
+    "product_ids": [
+     "${p_supercar}",
+     "${p_muscle_car}",
+     "${p_offroad_truck}",
+     "${p_superbike}",
+     "${p_mansion}",
+     "${p_apartment}"
+    ],
+    "group_ids": [],
+    "starts_at": "${now}",
+    "ends_at": "${in_7_days}",
+    "enabled": true
    }
   },
   {
    "merge": "/api/v1/admin/storefront",
    "body": {
     "theme": "fivem",
-    "accent": "violet",
+    "accent": "default",
     "layout": "grid",
     "sidebar": "right",
     "hero_title": "Welcome to ${site_name}",
     "hero_subtitle": "VIP, cars, properties and more, delivered to your character in seconds. Every purchase keeps the city running.",
     "hero_image": "/templates/fivem/hero.svg",
-    "announcement": "New in the city: supercars and luxury apartments.",
+    "announcement": "Launch week! 25% off every vehicle and property.",
     "announcement_tone": "info",
     "widgets": [
      {
@@ -400,6 +620,179 @@
       "type": "text",
       "title": "How it works",
       "body": "1. Pick a package.\n2. Sign in with your FiveM account or enter your license.\n3. Pay, and the perks arrive in the city automatically."
+     }
+    ],
+    "hero_badge": "Launch week: 25% off cars and homes",
+    "announcement_link": "/store/vehicles",
+    "featured_ids": [
+     "${p_vip_gold}",
+     "${p_supercar}",
+     "${p_mansion}",
+     "${p_cash_1m}"
+    ],
+    "show_categories": true,
+    "home_page": "store-home"
+   }
+  },
+  {
+   "post": "/api/v1/admin/site/pages",
+   "optional": true,
+   "body": {
+    "slug": "store-home",
+    "title": "Store homepage sections",
+    "description": "Sections shown under the store on the homepage.",
+    "published": true,
+    "show_in_nav": false,
+    "sort_order": 1,
+    "blocks": [
+     {
+      "type": "comparison",
+      "props": {
+       "title": "Compare VIP tiers",
+       "subtitle": "Every rank keeps the perks of the ranks below it.",
+       "plans": "Bronze, Silver, Gold",
+       "prices": "4.99 ${currency} / month, 9.99 ${currency} / month, 19.99 ${currency} / month",
+       "highlight": 1,
+       "badge": "Most popular",
+       "links": "/store/vip, /store/vip, /store/vip",
+       "cta_label": "Get it",
+       "rows": [
+        {
+         "feature": "VIP tag",
+         "values": "✓, ✓, ✓"
+        },
+        {
+         "feature": "Monthly bank bonus",
+         "values": "$25K, $60K, $150K"
+        },
+        {
+         "feature": "Car dealer discount",
+         "values": "10%, 20%, 30%"
+        },
+        {
+         "feature": "Extra garage slots",
+         "values": "—, 2, 5"
+        },
+        {
+         "feature": "Priority queue",
+         "values": "—, ✓, Top"
+        },
+        {
+         "feature": "Monthly supercar rental",
+         "values": "—, —, ✓"
+        },
+        {
+         "feature": "Custom phone number",
+         "values": "—, —, ✓"
+        }
+       ]
+      }
+     },
+     {
+      "type": "steps",
+      "props": {
+       "title": "How it works",
+       "subtitle": "From checkout to in-game in under a minute.",
+       "items": [
+        {
+         "icon": "Car",
+         "title": "Choose your perks",
+         "text": "VIP, cars, homes and cash for your character."
+        },
+        {
+         "icon": "Users",
+         "title": "Link your license",
+         "text": "Sign in with FiveM or paste your license at checkout."
+        },
+        {
+         "icon": "Lock",
+         "title": "Pay securely",
+         "text": "Card, PayPal and more. Your payment details never reach us."
+        },
+        {
+         "icon": "Rocket",
+         "title": "Enter the city",
+         "text": "Everything is waiting for you in game within seconds."
+        }
+       ]
+      }
+     },
+     {
+      "type": "testimonials",
+      "props": {
+       "title": "What players say",
+       "subtitle": "Reviews from our community.",
+       "items": [
+        {
+         "name": "Tony_Vercetti",
+         "role": "Gold VIP",
+         "text": "Got the mansion and Gold VIP in the launch sale. Keys for my whole crew, absolutely worth it.",
+         "rating": 5,
+         "avatar": ""
+        },
+        {
+         "name": "LuciaR",
+         "role": "Silver VIP",
+         "text": "The priority queue alone is worth it on Friday nights. Delivery was instant.",
+         "rating": 5,
+         "avatar": ""
+        },
+        {
+         "name": "MikeD",
+         "role": "Player",
+         "text": "Bought the off-road truck as a gift for my brother. Super easy, he had it in his garage straight away.",
+         "rating": 5,
+         "avatar": ""
+        }
+       ]
+      }
+     },
+     {
+      "type": "countdown",
+      "props": {
+       "title": "Launch week ends soon",
+       "text": "25% off every vehicle and property until the timer runs out.",
+       "ends_at": "${in_7_days}",
+       "label": "Shop the sale",
+       "href": "/store"
+      }
+     },
+     {
+      "type": "faq",
+      "props": {
+       "title": "Frequently asked questions",
+       "items": [
+        {
+         "q": "How do I receive my items?",
+         "a": "Join the city with the same FiveM license you used at checkout. Vehicles go to your garage, money to your bank."
+        },
+        {
+         "q": "Can I buy for a friend?",
+         "a": "Yes. Choose \"Buy as a gift\" on any package and enter your friend's license."
+        },
+        {
+         "q": "Can I cancel VIP?",
+         "a": "Any time in your account. You keep the perks until the end of the month you paid for."
+        },
+        {
+         "q": "I was offline when I paid, is that a problem?",
+         "a": "No. Your purchase is delivered the next time you join the city."
+        },
+        {
+         "q": "Can I swap my car for another model?",
+         "a": "Open a ticket within 48 hours of your purchase and we will swap it once for free."
+        }
+       ]
+      }
+     },
+     {
+      "type": "cta",
+      "props": {
+       "title": "Your city, your story",
+       "text": "VIP, cars and homes delivered to your character in seconds.",
+       "label": "Browse the store",
+       "href": "/store"
+      }
      }
     ]
    }
@@ -429,18 +822,140 @@
    "post": "/api/v1/admin/site/pages",
    "optional": true,
    "body": {
+    "slug": "staff",
+    "title": "Staff team",
+    "description": "The people who run the server.",
+    "published": true,
+    "show_in_nav": true,
+    "sort_order": 11,
+    "blocks": [
+     {
+      "type": "staff",
+      "props": {
+       "title": "Meet the staff",
+       "subtitle": "Volunteers who keep the server fair, fun and online every day. Need help? Any of us can point you in the right direction.",
+       "members": [
+        {
+         "name": "Marcus",
+         "role": "Owner",
+         "avatar": "/templates/fivem/staff-1.svg",
+         "text": "Runs the city and writes the big storylines."
+        },
+        {
+         "name": "Elena",
+         "role": "Head admin",
+         "avatar": "/templates/fivem/staff-2.svg",
+         "text": "Staff team, applications and appeals."
+        },
+        {
+         "name": "Dev_Ray",
+         "role": "Developer",
+         "avatar": "/templates/fivem/staff-3.svg",
+         "text": "Scripts, cars and everything under the hood."
+        },
+        {
+         "name": "Jade",
+         "role": "Support",
+         "avatar": "/templates/fivem/staff-4.svg",
+         "text": "First point of contact for tickets and new players."
+        }
+       ]
+      }
+     },
+     {
+      "type": "features",
+      "props": {
+       "title": "Want to join the team?",
+       "columns": 3,
+       "items": [
+        {
+         "icon": "Users",
+         "title": "Be active",
+         "text": "Play regularly and know the community."
+        },
+        {
+         "icon": "ShieldCheck",
+         "title": "Know the rules",
+         "text": "Fair, calm and consistent with every player."
+        },
+        {
+         "icon": "Headset",
+         "title": "Apply on Discord",
+         "text": "Applications open every season in our Discord."
+        }
+       ]
+      }
+     },
+     {
+      "type": "cta",
+      "props": {
+       "title": "Need help from the team?",
+       "text": "Open a ticket and a staff member will get back to you.",
+       "label": "Open a ticket",
+       "href": "/tickets"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "post": "/api/v1/admin/site/pages",
+   "optional": true,
+   "body": {
     "slug": "store-terms",
     "title": "Store terms",
     "description": "What you get when you buy from the store.",
     "published": true,
     "show_in_nav": false,
-    "sort_order": 11,
+    "sort_order": 20,
     "blocks": [
      {
       "type": "text",
       "props": {
        "title": "Store terms",
        "body": "Purchases are virtual items for this FiveM server and have no cash value. They are linked to the FiveM license you use at checkout.\n\nVIP and priority renew every month until you cancel in your account. Vehicles, properties and money are delivered once. If you are banned for breaking the city rules, purchased items are not refunded.\n\nThis server is not affiliated with or endorsed by Rockstar Games or Take-Two Interactive.\n\nQuestions? Open a support ticket and we will help."
+      }
+     }
+    ]
+   }
+  },
+  {
+   "post": "/api/v1/admin/site/pages",
+   "optional": true,
+   "body": {
+    "slug": "refunds",
+    "title": "Refund policy",
+    "description": "When and how you can get your money back.",
+    "published": true,
+    "show_in_nav": false,
+    "sort_order": 21,
+    "blocks": [
+     {
+      "type": "text",
+      "props": {
+       "title": "Refund policy",
+       "body": "Store items are digital and are delivered to your FiveM license straight after payment, so purchases are final once they have been delivered.\n\nWe refund a purchase in full when it could not be delivered and our team cannot fix the delivery within 72 hours, or when you were charged twice for the same order. Open a support ticket with your order number and we will look at it within two working days.\n\nMonthly packages can be cancelled at any time in your account. You keep the perks until the end of the period you already paid for, and you are not charged again.\n\nIf you open a chargeback or payment dispute instead of contacting us, the items of that order are removed and the account may be blocked from the store."
+      }
+     }
+    ]
+   }
+  },
+  {
+   "post": "/api/v1/admin/site/pages",
+   "optional": true,
+   "body": {
+    "slug": "store-privacy",
+    "title": "Privacy policy",
+    "description": "What data the store keeps and why.",
+    "published": true,
+    "show_in_nav": false,
+    "sort_order": 22,
+    "blocks": [
+     {
+      "type": "text",
+      "props": {
+       "title": "Privacy policy",
+       "body": "To deliver your purchases we store your email address, your FiveM license and your order history. Payments are handled by our payment provider; we never see or store your full card details.\n\nWe use this data only to run the store: to deliver items, send receipts, answer support tickets and prevent fraud. We do not sell it or share it with anyone else, except when the law requires it.\n\nOrder records are kept for as long as accounting law requires. You can ask for a copy of your data, or for your account to be deleted, by opening a support ticket.\n\nThe store uses only the cookies it needs to keep you signed in and to remember your basket."
       }
      }
     ]
@@ -466,7 +981,8 @@
        "primary_label": "Visit the store",
        "primary_href": "/store",
        "secondary_label": "City rules",
-       "secondary_href": "/page/rules"
+       "secondary_href": "/page/rules",
+       "image": "/templates/fivem/discord.svg"
       }
      },
      {
@@ -478,17 +994,32 @@
         {
          "icon": "Megaphone",
          "title": "City news",
-         "text": "Updates, events and restarts first."
+         "text": "Updates, new cars and events."
         },
         {
-         "icon": "UsersThree",
+         "icon": "ShieldCheck",
          "title": "Whitelist",
-         "text": "Apply for jobs, gangs and the police force."
+         "text": "Apply for whitelisted jobs and gangs."
         },
         {
          "icon": "Lifebuoy",
          "title": "Support",
-         "text": "Ask the staff team for help any time."
+         "text": "Get help from the staff team quickly."
+        },
+        {
+         "icon": "Car",
+         "title": "Car meets",
+         "text": "Weekly meets and street races."
+        },
+        {
+         "icon": "Users",
+         "title": "Find a crew",
+         "text": "Meet people for your next story."
+        },
+        {
+         "icon": "Gift",
+         "title": "Giveaways",
+         "text": "Win VIP, cars and money every week."
         }
        ]
       }
@@ -516,6 +1047,10 @@
       "href": "/page/rules"
      },
      {
+      "label": "Staff",
+      "href": "/page/staff"
+     },
+     {
       "label": "Discord",
       "href": "/page/discord"
      },
@@ -533,17 +1068,48 @@
         "href": "/page/rules"
        },
        {
+        "label": "Staff team",
+        "href": "/page/staff"
+       },
+       {
         "label": "Discord",
         "href": "/page/discord"
-       },
+       }
+      ]
+     },
+     {
+      "title": "Legal",
+      "links": [
        {
         "label": "Store terms",
         "href": "/page/store-terms"
+       },
+       {
+        "label": "Refund policy",
+        "href": "/page/refunds"
+       },
+       {
+        "label": "Privacy policy",
+        "href": "/page/store-privacy"
        }
       ]
      }
     ],
-    "footer_text": "Not affiliated with Rockstar Games or Take-Two Interactive."
+    "footer_text": "Not affiliated with Rockstar Games or Take-Two Interactive.",
+    "social": [
+     {
+      "network": "discord",
+      "href": "/page/discord"
+     },
+     {
+      "network": "youtube",
+      "href": "https://www.youtube.com"
+     },
+     {
+      "network": "instagram",
+      "href": "https://www.instagram.com"
+     }
+    ]
    }
   }
  ]

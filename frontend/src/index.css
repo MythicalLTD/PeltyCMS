@@ -95,3 +95,103 @@
     @apply bg-background text-foreground;
   }
 }
+
+/*
+ * Game-store looks (data-store-theme on <html>, set by usePublicTheme).
+ * Decoration only: colours come from --primary, so a custom accent still wins.
+ */
+@keyframes store-fade-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes store-shine { from { transform: translateX(-120%) skewX(-18deg); } to { transform: translateX(220%) skewX(-18deg); } }
+@keyframes store-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes store-pan { from { background-position: 0 0; } to { background-position: 0 64px; } }
+@keyframes store-hero-zoom { from { transform: scale(1.08); } to { transform: scale(1); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .store-reveal { animation: store-fade-up 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .store-hero-img { animation: store-hero-zoom 1.6s ease-out both; }
+  .store-sale-shine::after {
+    content: ""; position: absolute; inset: 0 auto 0 0; width: 35%;
+    background: linear-gradient(90deg, transparent, color-mix(in oklab, white 18%, transparent), transparent);
+    animation: store-shine 3.8s ease-in-out infinite;
+  }
+  .store-sale-badge { animation: store-float 3s ease-in-out infinite; }
+  .store-card { transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; }
+  .store-card:hover { transform: translateY(-3px); }
+}
+.store-card:hover { border-color: color-mix(in oklab, var(--primary) 60%, transparent); box-shadow: 0 10px 30px -12px color-mix(in oklab, var(--primary) 55%, transparent); }
+.store-featured-top { border-color: color-mix(in oklab, var(--primary) 55%, transparent); box-shadow: 0 0 0 1px color-mix(in oklab, var(--primary) 35%, transparent), 0 18px 40px -20px color-mix(in oklab, var(--primary) 70%, transparent); }
+.store-hero-title { text-wrap: balance; }
+.store-cta { box-shadow: 0 8px 28px -8px color-mix(in oklab, var(--primary) 80%, transparent); }
+
+html[data-store-theme] body {
+  background-image:
+    radial-gradient(60rem 30rem at 50% -10rem, color-mix(in oklab, var(--primary) 14%, transparent), transparent 70%);
+  background-attachment: fixed;
+}
+
+/* Minecraft: blocky, pixel grid, hard shadows. */
+html[data-store-theme="minecraft"] { --store-radius: 0.25rem; }
+html[data-store-theme="minecraft"] .store-hero-fx {
+  background-image:
+    linear-gradient(color-mix(in oklab, var(--primary) 10%, transparent) 2px, transparent 2px),
+    linear-gradient(90deg, color-mix(in oklab, var(--primary) 10%, transparent) 2px, transparent 2px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(to bottom, black, transparent 85%);
+}
+html[data-store-theme="minecraft"] .store-heading { text-transform: uppercase; letter-spacing: 0.04em; text-shadow: 3px 3px 0 rgb(0 0 0 / 0.55); }
+html[data-store-theme="minecraft"] .store-card,
+html[data-store-theme="minecraft"] .store-sale,
+html[data-store-theme="minecraft"] .store-countdown-cell { border-radius: var(--store-radius); box-shadow: inset 0 -4px 0 rgb(0 0 0 / 0.35), inset 0 2px 0 rgb(255 255 255 / 0.06); }
+html[data-store-theme="minecraft"] .store-card:hover { box-shadow: inset 0 -4px 0 rgb(0 0 0 / 0.35), 0 0 0 2px var(--primary); }
+html[data-store-theme="minecraft"] .store-cta { border-radius: var(--store-radius); box-shadow: inset 0 -4px 0 rgb(0 0 0 / 0.3), 0 6px 0 rgb(0 0 0 / 0.35); }
+html[data-store-theme="minecraft"] body {
+  background-image:
+    radial-gradient(60rem 30rem at 50% -10rem, color-mix(in oklab, var(--primary) 16%, transparent), transparent 70%),
+    linear-gradient(rgb(255 255 255 / 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.018) 1px, transparent 1px);
+  background-size: auto, 16px 16px, 16px 16px;
+}
+
+/* FiveM: night city, neon purple/pink, glass. */
+html[data-store-theme="fivem"] .store-hero-fx {
+  background:
+    radial-gradient(40rem 18rem at 20% 110%, rgb(236 72 153 / 0.28), transparent 70%),
+    radial-gradient(40rem 18rem at 80% 110%, color-mix(in oklab, var(--primary) 35%, transparent), transparent 70%),
+    linear-gradient(transparent 60%, color-mix(in oklab, var(--primary) 10%, transparent)),
+    repeating-linear-gradient(90deg, color-mix(in oklab, var(--primary) 12%, transparent) 0 1px, transparent 1px 64px);
+  mask-image: linear-gradient(to top, black, transparent 90%);
+}
+html[data-store-theme="fivem"] .store-heading {
+  background: linear-gradient(90deg, var(--foreground), color-mix(in oklab, var(--primary) 70%, #f472b6));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+html[data-store-theme="fivem"] .store-hero-title { filter: drop-shadow(0 0 22px color-mix(in oklab, var(--primary) 55%, transparent)); }
+html[data-store-theme="fivem"] .store-card { border-radius: 1rem; background-image: linear-gradient(160deg, rgb(255 255 255 / 0.04), transparent 40%); backdrop-filter: blur(6px); }
+html[data-store-theme="fivem"] .store-card:hover { box-shadow: 0 0 0 1px var(--primary), 0 0 28px -4px color-mix(in oklab, var(--primary) 70%, transparent), 0 0 48px -12px rgb(236 72 153 / 0.6); }
+html[data-store-theme="fivem"] .store-cta { background-image: linear-gradient(90deg, var(--primary), #ec4899); border: 0; }
+html[data-store-theme="fivem"] .store-badge-hot { background-image: linear-gradient(90deg, var(--primary), #ec4899); }
+html[data-store-theme="fivem"] body {
+  background-image:
+    radial-gradient(50rem 26rem at 15% -8rem, color-mix(in oklab, var(--primary) 18%, transparent), transparent 70%),
+    radial-gradient(40rem 22rem at 90% 0, rgb(236 72 153 / 0.10), transparent 70%);
+}
+
+/* Rust: industrial steel, hazard stripes, stencil headings. */
+html[data-store-theme="rust"] .store-hero-fx {
+  background:
+    repeating-linear-gradient(-45deg, color-mix(in oklab, var(--primary) 14%, transparent) 0 14px, transparent 14px 28px) bottom / 100% 10px no-repeat,
+    radial-gradient(45rem 22rem at 50% 120%, color-mix(in oklab, var(--primary) 22%, transparent), transparent 70%),
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.025) 0 1px, transparent 1px 4px);
+}
+html[data-store-theme="rust"] .store-heading { text-transform: uppercase; letter-spacing: 0.08em; font-weight: 900; }
+html[data-store-theme="rust"] .store-card { border-radius: 0.375rem; background-image: linear-gradient(180deg, rgb(255 255 255 / 0.035), transparent 55%); border-top: 2px solid color-mix(in oklab, var(--primary) 55%, var(--border)); }
+html[data-store-theme="rust"] .store-sale { border-radius: 0.375rem; background-image: repeating-linear-gradient(-45deg, color-mix(in oklab, var(--primary) 10%, transparent) 0 12px, transparent 12px 24px); }
+html[data-store-theme="rust"] .store-cta { border-radius: 0.25rem; text-transform: uppercase; letter-spacing: 0.08em; }
+html[data-store-theme="rust"] body {
+  background-image:
+    radial-gradient(60rem 30rem at 50% -10rem, color-mix(in oklab, var(--primary) 12%, transparent), transparent 70%),
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.012) 0 1px, transparent 1px 3px);
+}
+
+/* Blocks embedded on the store homepage: no own section borders. */
+.store-home-blocks > section { border: 0; }

@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { RichDescription } from "@/components/store/RichDescription";
+import { Countdown } from "@/components/store/Countdown";
+import { salePrice, saleFor, useSales } from "@/lib/sales";
 import { PluginSlot } from "@/components/plugin-ui/PluginSlot";
 import { ProductReviews } from "@/components/store/ProductReviews";
 import { PageSkeleton } from "@/components/PageSkeleton";
@@ -152,6 +155,7 @@ export function StoreProductPage() {
   const [addons, setAddons] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const rule = usePackageRules()(id);
+  const sales = useSales();
   const { enabled: mods } = useModules();
   const [pay, setPay] = useState("");
   const [gift, setGift] = useState(false);
@@ -187,16 +191,27 @@ export function StoreProductPage() {
   };
   return (
     <div className="grid gap-4 *:min-w-0 lg:grid-cols-[1fr_20rem]">
-      <Card>
+      <Card className="store-card-static">
         {product.image_url && <div className="mx-6 aspect-[21/9] overflow-hidden rounded-lg border" data-testid="package-art"><ProductArt src={product.image_url} name={product.name} /></div>}
         <CardHeader>
-          <CardTitle className="text-xl">{product.name}</CardTitle>
+          <CardTitle className="store-heading text-2xl font-bold">{product.name}</CardTitle>
           <StockBadge p={product} />
           <PackageRuleBadges r={rule} />
           <UpgradeBadge credit={credit} currency={currency} />
-          {product.description && <CardDescription className="whitespace-pre-line">{product.description}</CardDescription>}
+          {(() => {
+            const sale = saleFor(sales, product.id, product.group_id);
+            return sale && (
+              <div className="col-span-full mt-1 flex w-full flex-wrap items-center gap-3 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2" data-testid="package-sale">
+                <Badge variant="destructive">−{sale.percent}%</Badge>
+                <span className="text-sm font-medium">{sale.name}</span>
+                {price && <span className="text-sm tabular-nums"><s className="mr-1 text-muted-foreground">{formatMoney(price.amount, currency, lang)}</s><b className="text-primary">{formatMoney(salePrice(price.amount, sale.percent), currency, lang)}</b></span>}
+                <Countdown endsAt={sale.ends_at} size="sm" className="sm:ml-auto" />
+              </div>
+            );
+          })()}
           <CardAction><Button asChild variant="ghost" size="sm"><Link to="/store"><ArrowLeftIcon aria-hidden />{t("store.back")}</Link></Button></CardAction>
         </CardHeader>
+        {product.description && <div className="px-6"><RichDescription text={product.description} /></div>}
         <CardContent className="grid gap-4 *:min-w-0 sm:grid-cols-2">
           <div className="grid gap-2 sm:col-span-2"><Label>{t("billing.cycle")}</Label>
             <div role="radiogroup" className="flex flex-wrap gap-2">

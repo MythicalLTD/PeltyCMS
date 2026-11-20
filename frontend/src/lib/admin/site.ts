@@ -14,14 +14,14 @@ export interface SiteConfig {
   /** Public site look: `auto` follows the enabled modules (see lib/publicMode). */
   public_mode: "auto" | "hosting" | "store" | "marketplace";
 }
-export type BlockType = "hero" | "features" | "pricing" | "faq" | "cta" | "text" | "image" | "stats" | "products" | "comparison";
+export type BlockType = "hero" | "features" | "pricing" | "faq" | "cta" | "text" | "image" | "stats" | "products" | "comparison" | "testimonials" | "staff" | "steps" | "countdown";
 export interface Block { id?: string; type: BlockType; props: Record<string, unknown> }
 export interface SitePage { id: string; slug: string; title: string; description: string; blocks: Block[]; published: boolean; show_in_nav: boolean; sort_order: number }
 /** Premium white-label (off unless the install has Premium and switched it on). */
 export interface WhiteLabel { hide_powered_by: boolean; source_url: string }
 export interface PublicSite { config: SiteConfig; nav_pages: { slug: string; title: string }[]; white_label: WhiteLabel }
 
-export const BLOCK_TYPES: BlockType[] = ["hero", "features", "pricing", "products", "comparison", "faq", "cta", "text", "image", "stats"];
+export const BLOCK_TYPES: BlockType[] = ["hero", "features", "pricing", "products", "comparison", "faq", "cta", "text", "image", "stats", "testimonials", "staff", "steps", "countdown"];
 export const FONTS: Record<SiteConfig["font"], string> = {
   manrope: '"Manrope Variable", Manrope, system-ui, sans-serif',
   inter: "Inter, system-ui, sans-serif",
@@ -46,6 +46,10 @@ export function newBlock(type: BlockType): Block {
     stats: { items: [{ value: "", label: "Metric label" }] },
     products: { title: "Choose your plan", subtitle: "", product_ids: [], cycle_toggle: true, default_cycle: "monthly", highlight: -1, badge: "Most popular", cta_label: "Order now" },
     comparison: { title: "Compare plans", plans: "Starter, Pro, Business", rows: [{ feature: "NVMe storage", values: "10 GB, 50 GB, 200 GB" }, { feature: "Daily backups", values: "—, ✓, ✓" }] },
+    testimonials: { title: "What players say", items: [{ name: "Player", role: "", text: "Great server!", rating: 5 }] },
+    staff: { title: "Meet the team", members: [{ name: "Name", role: "Owner", avatar: "", text: "" }] },
+    steps: { title: "How it works", items: [{ title: "Pick a package", text: "" }, { title: "Pay", text: "" }, { title: "Play", text: "" }] },
+    countdown: { title: "Next event", text: "", ends_at: new Date(Date.now() + 7 * 86_400_000).toISOString(), label: "", href: "" },
   };
   return { id, type, props: props[type] };
 }

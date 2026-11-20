@@ -86,7 +86,7 @@
     "name": "VIP",
     "sort_order": 1,
     "image_url": "/templates/rust/vip.svg",
-    "description": "VIP tag, /kit vip every day, 2 extra home points and faster crafting. Renews monthly.",
+    "description": "Monthly VIP for the whole wipe, and the next one.\nPerks:\n- [VIP] tag in chat\n- /kit vip once per wipe\n- 2x gather rate on wood and stone\n- Skip the queue\n- 3 home teleports",
     "prices": [
      {
       "currency": "${currency}",
@@ -122,7 +122,7 @@
     "name": "Elite VIP",
     "sort_order": 2,
     "image_url": "/templates/rust/vip-elite.svg",
-    "description": "Everything in VIP, plus skip the queue, /skin and a bigger backpack. Renews monthly.",
+    "description": "Everything in VIP, with faster crafting and the best kit on the server.\nPerks:\n- [ELITE] tag in chat\n- /kit elite once per wipe\n- 3x gather rate and 50% faster crafting\n- Top of the queue\n- 6 home teleports and /remove\n- All VIP perks",
     "prices": [
      {
       "currency": "${currency}",
@@ -161,12 +161,48 @@
   },
   {
    "package": {
+    "group_id": "${g_vip}",
+    "slug": "vip-warlord",
+    "name": "Warlord VIP",
+    "image_url": "/templates/rust/vip-warlord.svg",
+    "description": "The top tier for the most dedicated survivors.\nPerks:\n- Animated [WARLORD] tag\n- /kit warlord once per wipe and /kit daily\n- 5x gather rate and instant crafting of tier 1 items\n- Unlimited home teleports and /skin\n- All Elite and VIP perks",
+    "prices": [
+     {
+      "currency": "${currency}",
+      "cycle": "monthly",
+      "amount": "19.99"
+     }
+    ],
+    "commands": [
+     {
+      "trigger": "purchase",
+      "command": "oxide.usergroup add {steamid} warlord"
+     },
+     {
+      "trigger": "expiry",
+      "command": "oxide.usergroup remove {steamid} warlord"
+     },
+     {
+      "trigger": "refund",
+      "command": "oxide.usergroup remove {steamid} warlord"
+     },
+     {
+      "trigger": "chargeback",
+      "command": "oxide.usergroup remove {steamid} warlord"
+     }
+    ],
+    "preset": "steam",
+    "sort_order": 3
+   }
+  },
+  {
+   "package": {
     "group_id": "${g_kits}",
     "slug": "kit-starter",
     "name": "Starter kit",
     "sort_order": 1,
     "image_url": "/templates/rust/kit-starter.svg",
-    "description": "Stone tools, a bow, arrows and food to survive your first night.",
+    "description": "Get going right after you wake up on the beach.\nContains:\n- Stone hatchet and pickaxe\n- Hunting bow with 30 arrows\n- Bandages and food",
     "prices": [
      {
       "currency": "${currency}",
@@ -211,7 +247,7 @@
     "name": "Builder kit",
     "sort_order": 2,
     "image_url": "/templates/rust/kit-builder.svg",
-    "description": "Wood, stone, metal fragments and a tool cupboard for your first base.",
+    "description": "Everything for your first real base.\nContains:\n- 5,000 wood and 5,000 stone\n- 1,500 metal fragments\n- Hammer, tool cupboard and code locks",
     "prices": [
      {
       "currency": "${currency}",
@@ -256,7 +292,7 @@
     "name": "Raider kit",
     "sort_order": 3,
     "image_url": "/templates/rust/kit-raider.svg",
-    "description": "Satchel charges, a semi-auto rifle and medical supplies.",
+    "description": "Hit your neighbours where it hurts.\nContains:\n- 4 satchel charges\n- Semi-automatic rifle with 128 rounds\n- Medical syringes",
     "prices": [
      {
       "currency": "${currency}",
@@ -291,12 +327,92 @@
   },
   {
    "package": {
+    "group_id": "${g_kits}",
+    "slug": "kit-medic",
+    "name": "Medic kit",
+    "image_url": "/templates/rust/kit-medic.svg",
+    "description": "Keep your team alive in every fight.\nContains:\n- 10 medical syringes\n- 5 large medkits\n- 20 bandages",
+    "prices": [
+     {
+      "currency": "${currency}",
+      "cycle": "one_time",
+      "amount": "2.99"
+     }
+    ],
+    "commands": [
+     {
+      "trigger": "purchase",
+      "command": "inventory.giveto {steamid} syringe.medical 10",
+      "require_online": true
+     },
+     {
+      "trigger": "purchase",
+      "command": "inventory.giveto {steamid} largemedkit 5",
+      "require_online": true
+     },
+     {
+      "trigger": "purchase",
+      "command": "inventory.giveto {steamid} bandage 20",
+      "require_online": true
+     }
+    ],
+    "preset": "steam",
+    "sort_order": 4
+   }
+  },
+  {
+   "package": {
+    "group_id": "${g_kits}",
+    "slug": "kit-resources",
+    "name": "Resource pack",
+    "image_url": "/templates/rust/resources.svg",
+    "description": "Skip the grind and start building big.\nContains:\n- 20,000 wood and 15,000 stone\n- 5,000 metal fragments\n- 500 high quality metal and 1,000 low grade fuel",
+    "prices": [
+     {
+      "currency": "${currency}",
+      "cycle": "one_time",
+      "amount": "5.99"
+     }
+    ],
+    "commands": [
+     {
+      "trigger": "purchase",
+      "command": "inventory.giveto {steamid} wood 20000",
+      "require_online": true
+     },
+     {
+      "trigger": "purchase",
+      "command": "inventory.giveto {steamid} stones 15000",
+      "require_online": true
+     },
+     {
+      "trigger": "purchase",
+      "command": "inventory.giveto {steamid} metal.fragments 5000",
+      "require_online": true
+     },
+     {
+      "trigger": "purchase",
+      "command": "inventory.giveto {steamid} metal.refined 500",
+      "require_online": true
+     },
+     {
+      "trigger": "purchase",
+      "command": "inventory.giveto {steamid} lowgradefuel 1000",
+      "require_online": true
+     }
+    ],
+    "preset": "steam",
+    "sort_order": 5
+   }
+  },
+  {
+   "package": {
     "group_id": "${g_extra}",
     "slug": "skip-queue",
     "name": "Skip the queue (30 days)",
     "sort_order": 1,
     "image_url": "/templates/rust/skip-queue.svg",
-    "description": "Join the server first when it is full. Renews monthly.",
+    "description": "Join the server instantly, even on wipe day.\n- Highest place in the queue\n- Renews every month, cancel any time",
     "prices": [
      {
       "currency": "${currency}",
@@ -332,7 +448,7 @@
     "name": "Loot crate",
     "sort_order": 2,
     "image_url": "/templates/rust/crate.svg",
-    "description": "A random elite crate with weapons, armour and components.",
+    "description": "A random crate of mid-tier loot.\nCan contain:\n- Rifle ammo\n- Metal facemask and road sign armour\n- Components and scrap",
     "prices": [
      {
       "currency": "${currency}",
@@ -367,7 +483,7 @@
     "name": "Wipe day kit",
     "sort_order": 3,
     "image_url": "/templates/rust/wipe-kit.svg",
-    "description": "Everything you need on wipe day: tools, a sleeping bag and building supplies.",
+    "description": "Win the first hour of every wipe.\nContains:\n- Hatchet and pickaxe\n- 2 sleeping bags\n- Furnace and 1,000 low grade fuel",
     "prices": [
      {
       "currency": "${currency}",
@@ -406,6 +522,58 @@
    }
   },
   {
+   "package": {
+    "group_id": "${g_extra}",
+    "slug": "clan-upgrade",
+    "name": "Clan upgrade",
+    "image_url": "/templates/rust/clan.svg",
+    "description": "Bigger and stronger together.\nPerks:\n- Clan tag in chat\n- Shared map markers and team chat\n- Clan leaderboard entry",
+    "prices": [
+     {
+      "currency": "${currency}",
+      "cycle": "one_time",
+      "amount": "4.99"
+     }
+    ],
+    "commands": [
+     {
+      "trigger": "purchase",
+      "command": "oxide.grant user {steamid} clans.premium"
+     },
+     {
+      "trigger": "refund",
+      "command": "oxide.revoke user {steamid} clans.premium"
+     }
+    ],
+    "preset": "steam",
+    "sort_order": 4
+   }
+  },
+  {
+   "package": {
+    "group_id": "${g_extra}",
+    "slug": "unban",
+    "name": "Unban",
+    "image_url": "/templates/rust/unban.svg",
+    "description": "A second chance. Lifts one ban after the staff team has checked it.\nGood to know:\n- Not available for cheating, scripting or chargebacks\n- A repeat offence means a permanent ban",
+    "prices": [
+     {
+      "currency": "${currency}",
+      "cycle": "one_time",
+      "amount": "14.99"
+     }
+    ],
+    "commands": [
+     {
+      "trigger": "purchase",
+      "command": "unban {steamid}"
+     }
+    ],
+    "preset": "steam",
+    "sort_order": 5
+   }
+  },
+  {
    "post": "/api/v1/admin/game/servers",
    "save": "server",
    "body": {
@@ -424,26 +592,51 @@
     "product_ids": [
      "${p_vip}",
      "${p_vip_elite}",
+     "${p_vip_warlord}",
      "${p_kit_starter}",
      "${p_kit_builder}",
      "${p_kit_raider}",
+     "${p_kit_medic}",
+     "${p_kit_resources}",
      "${p_skip_queue}",
      "${p_loot_crate}",
-     "${p_wipe_kit}"
+     "${p_wipe_kit}",
+     "${p_clan_upgrade}",
+     "${p_unban}"
     ]
+   }
+  },
+  {
+   "post": "/api/v1/admin/sales",
+   "optional": true,
+   "body": {
+    "name": "Wipe day sale",
+    "percent": "20",
+    "product_ids": [
+     "${p_vip}",
+     "${p_vip_elite}",
+     "${p_vip_warlord}",
+     "${p_kit_raider}",
+     "${p_kit_resources}",
+     "${p_kit_builder}"
+    ],
+    "group_ids": [],
+    "starts_at": "${now}",
+    "ends_at": "${in_7_days}",
+    "enabled": true
    }
   },
   {
    "merge": "/api/v1/admin/storefront",
    "body": {
     "theme": "rust",
-    "accent": "amber",
+    "accent": "default",
     "layout": "grid",
     "sidebar": "right",
     "hero_title": "Support ${site_name}",
     "hero_subtitle": "VIP, kits and queue skips delivered to your Steam account in seconds. Every purchase keeps the server online.",
     "hero_image": "/templates/rust/hero.svg",
-    "announcement": "Wipe every first Thursday. Grab your wipe day kit.",
+    "announcement": "Fresh wipe! 20% off VIP and the best kits until the timer runs out.",
     "announcement_tone": "warning",
     "widgets": [
      {
@@ -465,6 +658,179 @@
       "type": "text",
       "title": "How it works",
       "body": "1. Pick a package.\n2. Sign in with Steam or enter your SteamID64.\n3. Pay, and the items arrive in game automatically."
+     }
+    ],
+    "hero_badge": "Wipe day sale: 20% off VIP and kits",
+    "announcement_link": "/store/vip",
+    "featured_ids": [
+     "${p_vip_elite}",
+     "${p_vip_warlord}",
+     "${p_kit_raider}",
+     "${p_kit_resources}"
+    ],
+    "show_categories": true,
+    "home_page": "store-home"
+   }
+  },
+  {
+   "post": "/api/v1/admin/site/pages",
+   "optional": true,
+   "body": {
+    "slug": "store-home",
+    "title": "Store homepage sections",
+    "description": "Sections shown under the store on the homepage.",
+    "published": true,
+    "show_in_nav": false,
+    "sort_order": 1,
+    "blocks": [
+     {
+      "type": "comparison",
+      "props": {
+       "title": "Compare VIP tiers",
+       "subtitle": "Every rank keeps the perks of the ranks below it.",
+       "plans": "VIP, Elite, Warlord",
+       "prices": "4.99 ${currency} / month, 9.99 ${currency} / month, 19.99 ${currency} / month",
+       "highlight": 1,
+       "badge": "Most popular",
+       "links": "/store/vip, /store/vip, /store/vip",
+       "cta_label": "Get it",
+       "rows": [
+        {
+         "feature": "Chat tag",
+         "values": "✓, ✓, ✓"
+        },
+        {
+         "feature": "Kit per wipe",
+         "values": "VIP, Elite, Warlord"
+        },
+        {
+         "feature": "Gather rate",
+         "values": "2x, 3x, 5x"
+        },
+        {
+         "feature": "Faster crafting",
+         "values": "—, 50%, Instant T1"
+        },
+        {
+         "feature": "Skip the queue",
+         "values": "✓, Top, Top"
+        },
+        {
+         "feature": "Home teleports",
+         "values": "3, 6, Unlimited"
+        },
+        {
+         "feature": "/remove and /skin",
+         "values": "—, /remove, Both"
+        }
+       ]
+      }
+     },
+     {
+      "type": "steps",
+      "props": {
+       "title": "How it works",
+       "subtitle": "From checkout to in-game in under a minute.",
+       "items": [
+        {
+         "icon": "Package",
+         "title": "Choose a package",
+         "text": "VIP, kits and extras for the current wipe."
+        },
+        {
+         "icon": "Users",
+         "title": "Link your Steam account",
+         "text": "Sign in with Steam or paste your SteamID at checkout."
+        },
+        {
+         "icon": "Lock",
+         "title": "Pay securely",
+         "text": "Card, PayPal and more. Your payment details never reach us."
+        },
+        {
+         "icon": "Rocket",
+         "title": "Wake up geared",
+         "text": "Kits arrive in your inventory the next time you are online."
+        }
+       ]
+      }
+     },
+     {
+      "type": "testimonials",
+      "props": {
+       "title": "What players say",
+       "subtitle": "Reviews from our community.",
+       "items": [
+        {
+         "name": "RoofCamper",
+         "role": "Elite VIP",
+         "text": "Elite saved me hours of farming on wipe day. The resource pack is a must.",
+         "rating": 5,
+         "avatar": ""
+        },
+        {
+         "name": "NakedOnBeach",
+         "role": "Player",
+         "text": "Fair server, admins actually answer tickets. Raider kit got delivered while I was in my base.",
+         "rating": 5,
+         "avatar": ""
+        },
+        {
+         "name": "BaseBuilderBen",
+         "role": "Warlord",
+         "text": "Instant crafting is a game changer. Cancelling was easy when I took a break.",
+         "rating": 4,
+         "avatar": ""
+        }
+       ]
+      }
+     },
+     {
+      "type": "countdown",
+      "props": {
+       "title": "Wipe day sale ends soon",
+       "text": "20% off VIP and the best kits. Grab them before the next wipe.",
+       "ends_at": "${in_7_days}",
+       "label": "Shop the sale",
+       "href": "/store"
+      }
+     },
+     {
+      "type": "faq",
+      "props": {
+       "title": "Frequently asked questions",
+       "items": [
+        {
+         "q": "When are kits delivered?",
+         "a": "When you are online on the server. If you are offline, they are given the next time you join."
+        },
+        {
+         "q": "Do VIP perks reset on wipe?",
+         "a": "No. VIP stays for as long as your subscription runs. Kits can be claimed again every wipe."
+        },
+        {
+         "q": "Can I gift a kit?",
+         "a": "Yes. Choose \"Buy as a gift\" on any package and enter your friend's SteamID."
+        },
+        {
+         "q": "Is this pay-to-win?",
+         "a": "Kits save time but everything in them can be found by playing. Group limits apply to everyone."
+        },
+        {
+         "q": "When is the next wipe?",
+         "a": "Every Thursday at 20:00 for the map. Blueprints wipe on the first Thursday of the month."
+        }
+       ]
+      }
+     },
+     {
+      "type": "cta",
+      "props": {
+       "title": "Survive the next wipe",
+       "text": "VIP and kits delivered straight to your inventory.",
+       "label": "Browse the store",
+       "href": "/store"
+      }
      }
     ]
    }
@@ -494,18 +860,140 @@
    "post": "/api/v1/admin/site/pages",
    "optional": true,
    "body": {
+    "slug": "staff",
+    "title": "Staff team",
+    "description": "The people who run the server.",
+    "published": true,
+    "show_in_nav": true,
+    "sort_order": 11,
+    "blocks": [
+     {
+      "type": "staff",
+      "props": {
+       "title": "Meet the staff",
+       "subtitle": "Volunteers who keep the server fair, fun and online every day. Need help? Any of us can point you in the right direction.",
+       "members": [
+        {
+         "name": "Grimm",
+         "role": "Owner",
+         "avatar": "/templates/rust/staff-1.svg",
+         "text": "Runs the servers and the wipe schedule."
+        },
+        {
+         "name": "Ash",
+         "role": "Admin",
+         "avatar": "/templates/rust/staff-2.svg",
+         "text": "Ban appeals, reports and events."
+        },
+        {
+         "name": "Rivet",
+         "role": "Developer",
+         "avatar": "/templates/rust/staff-3.svg",
+         "text": "Plugins, maps and server performance."
+        },
+        {
+         "name": "Scrap",
+         "role": "Moderator",
+         "avatar": "/templates/rust/staff-4.svg",
+         "text": "Watches chat and helps fresh spawns."
+        }
+       ]
+      }
+     },
+     {
+      "type": "features",
+      "props": {
+       "title": "Want to join the team?",
+       "columns": 3,
+       "items": [
+        {
+         "icon": "Users",
+         "title": "Be active",
+         "text": "Play regularly and know the community."
+        },
+        {
+         "icon": "ShieldCheck",
+         "title": "Know the rules",
+         "text": "Fair, calm and consistent with every player."
+        },
+        {
+         "icon": "Headset",
+         "title": "Apply on Discord",
+         "text": "Applications open every season in our Discord."
+        }
+       ]
+      }
+     },
+     {
+      "type": "cta",
+      "props": {
+       "title": "Need help from the team?",
+       "text": "Open a ticket and a staff member will get back to you.",
+       "label": "Open a ticket",
+       "href": "/tickets"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "post": "/api/v1/admin/site/pages",
+   "optional": true,
+   "body": {
     "slug": "store-terms",
     "title": "Store terms",
     "description": "What you get when you buy from the store.",
     "published": true,
     "show_in_nav": false,
-    "sort_order": 11,
+    "sort_order": 20,
     "blocks": [
      {
       "type": "text",
       "props": {
        "title": "Store terms",
        "body": "Purchases are virtual items for this Rust server and have no cash value. They are linked to the SteamID you use at checkout.\n\nVIP and queue skips renew every month until you cancel in your account. Kits and crates are delivered once, when you are online. Items are lost on wipe like any other item. If you are banned for breaking the server rules, purchases are not refunded.\n\nThis server is not affiliated with or endorsed by Facepunch Studios.\n\nQuestions? Open a support ticket and we will help."
+      }
+     }
+    ]
+   }
+  },
+  {
+   "post": "/api/v1/admin/site/pages",
+   "optional": true,
+   "body": {
+    "slug": "refunds",
+    "title": "Refund policy",
+    "description": "When and how you can get your money back.",
+    "published": true,
+    "show_in_nav": false,
+    "sort_order": 21,
+    "blocks": [
+     {
+      "type": "text",
+      "props": {
+       "title": "Refund policy",
+       "body": "Store items are digital and are delivered to your Steam account straight after payment, so purchases are final once they have been delivered.\n\nWe refund a purchase in full when it could not be delivered and our team cannot fix the delivery within 72 hours, or when you were charged twice for the same order. Open a support ticket with your order number and we will look at it within two working days.\n\nMonthly packages can be cancelled at any time in your account. You keep the perks until the end of the period you already paid for, and you are not charged again.\n\nIf you open a chargeback or payment dispute instead of contacting us, the items of that order are removed and the account may be blocked from the store."
+      }
+     }
+    ]
+   }
+  },
+  {
+   "post": "/api/v1/admin/site/pages",
+   "optional": true,
+   "body": {
+    "slug": "store-privacy",
+    "title": "Privacy policy",
+    "description": "What data the store keeps and why.",
+    "published": true,
+    "show_in_nav": false,
+    "sort_order": 22,
+    "blocks": [
+     {
+      "type": "text",
+      "props": {
+       "title": "Privacy policy",
+       "body": "To deliver your purchases we store your email address, your Steam account and your order history. Payments are handled by our payment provider; we never see or store your full card details.\n\nWe use this data only to run the store: to deliver items, send receipts, answer support tickets and prevent fraud. We do not sell it or share it with anyone else, except when the law requires it.\n\nOrder records are kept for as long as accounting law requires. You can ask for a copy of your data, or for your account to be deleted, by opening a support ticket.\n\nThe store uses only the cookies it needs to keep you signed in and to remember your basket."
       }
      }
     ]
@@ -531,7 +1019,8 @@
        "primary_label": "Visit the store",
        "primary_href": "/store",
        "secondary_label": "Server rules",
-       "secondary_href": "/page/rules"
+       "secondary_href": "/page/rules",
+       "image": "/templates/rust/discord.svg"
       }
      },
      {
@@ -543,7 +1032,7 @@
         {
          "icon": "Megaphone",
          "title": "Wipe news",
-         "text": "Wipe times and map previews first."
+         "text": "Wipe times, map seeds and updates first."
         },
         {
          "icon": "Gift",
@@ -553,7 +1042,22 @@
         {
          "icon": "Lifebuoy",
          "title": "Support",
-         "text": "Ask the staff team for help any time."
+         "text": "Report cheaters and get help fast."
+        },
+        {
+         "icon": "Users",
+         "title": "Find a group",
+         "text": "Team up for the next wipe."
+        },
+        {
+         "icon": "Trophy",
+         "title": "Events",
+         "text": "Raid events, airdrops and arena fights."
+        },
+        {
+         "icon": "Wrench",
+         "title": "Suggestions",
+         "text": "Vote on new plugins and changes."
         }
        ]
       }
@@ -581,6 +1085,10 @@
       "href": "/page/rules"
      },
      {
+      "label": "Staff",
+      "href": "/page/staff"
+     },
+     {
       "label": "Discord",
       "href": "/page/discord"
      },
@@ -598,17 +1106,48 @@
         "href": "/page/rules"
        },
        {
+        "label": "Staff team",
+        "href": "/page/staff"
+       },
+       {
         "label": "Discord",
         "href": "/page/discord"
-       },
+       }
+      ]
+     },
+     {
+      "title": "Legal",
+      "links": [
        {
         "label": "Store terms",
         "href": "/page/store-terms"
+       },
+       {
+        "label": "Refund policy",
+        "href": "/page/refunds"
+       },
+       {
+        "label": "Privacy policy",
+        "href": "/page/store-privacy"
        }
       ]
      }
     ],
-    "footer_text": "Not affiliated with Facepunch Studios."
+    "footer_text": "Not affiliated with Facepunch Studios.",
+    "social": [
+     {
+      "network": "discord",
+      "href": "/page/discord"
+     },
+     {
+      "network": "youtube",
+      "href": "https://www.youtube.com"
+     },
+     {
+      "network": "x",
+      "href": "https://x.com"
+     }
+    ]
    }
   }
  ]

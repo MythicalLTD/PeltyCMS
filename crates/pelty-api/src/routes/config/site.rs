@@ -25,6 +25,10 @@ pub const BLOCK_TYPES: &[&str] = &[
     "stats",
     "products",
     "comparison",
+    "testimonials",
+    "staff",
+    "steps",
+    "countdown",
 ];
 pub const FONTS: &[&str] = &["manrope", "inter", "system"];
 pub const MODES: &[&str] = &["dark", "light", "system"];

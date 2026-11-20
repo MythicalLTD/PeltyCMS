@@ -104,6 +104,10 @@ pub async fn public_layout(State(s): State<AppState>) -> ApiResult<Json<Value>> 
         "announcement_link": cfg.announcement_link,
         "announcement_tone": cfg.announcement_tone,
         "group_layouts": cfg.group_layouts,
+        "hero_badge": cfg.hero_badge,
+        "featured_ids": cfg.featured_ids,
+        "show_categories": cfg.show_categories,
+        "home_page": cfg.home_page,
     })))
 }
 

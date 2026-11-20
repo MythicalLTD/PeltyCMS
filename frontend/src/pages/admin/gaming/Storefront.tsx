@@ -21,6 +21,7 @@ import { normalizeTheme, THEMES } from "@/lib/publicMode";
 import { PackageRulesCard, StoreBansCard } from "@/components/admin/StoreRules";
 import { ACCENTS, PERIODS, TONES, type AnnouncementTone, WIDGET_TYPES, discordUrlValid, heroImageValid, move, newWidget, widgetValid, type StorefrontConfig, type WidgetConfig, type WidgetType } from "@/lib/storefront";
 import { useCatalog } from "@/pages/store/Store";
+import { normalizePages } from "@/lib/admin/site";
 
 /** Storefront look: hero, accent, layout and the sidebar widget list. */
 export function AdminStorefrontPage() {
@@ -53,6 +54,7 @@ function Editor({ initial }: { initial: StorefrontConfig }) {
   const setW = (i: number, w: WidgetConfig) => set({ widgets: f.widgets.map((x, j) => (j === i ? w : x)) });
   const products = catalog.data?.products ?? [];
   const groups = catalog.data?.groups ?? [];
+  const pages = useQuery({ queryKey: ["admin", "site", "pages", "storefront"], queryFn: () => api<unknown>("/admin/site/pages").then(normalizePages) });
   const servers = useQuery({ queryKey: ["admin", "game-servers"], queryFn: () => api<{ items: { id: string; name: string }[] }>("/admin/game/servers"), enabled: enabled.has("game_profiles") });
   const valid = heroImageValid(f.hero_image) && heroImageValid(f.announcement_link ?? "") && heroImageValid(f.logo_url) && discordUrlValid(f.discord_url) && f.widgets.length <= 12 && f.widgets.every(widgetValid);
   const save = useMutation({
@@ -120,6 +122,31 @@ function Editor({ initial }: { initial: StorefrontConfig }) {
               ))}
             </fieldset>
           )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle>{t("storefront.home_title")}</CardTitle><CardDescription>{t("storefront.home_hint")}</CardDescription></CardHeader>
+        <CardContent className="grid gap-3">
+          <Field id="sf-badge" label={t("storefront.hero_badge")} maxLength={60} value={f.hero_badge ?? ""} onChange={(e) => set({ hero_badge: e.target.value.replace(/\n/g, " ") })} />
+          <div className="flex items-center gap-2"><Switch id="sf-cats" checked={!!f.show_categories} onCheckedChange={(v) => set({ show_categories: v })} /><Label htmlFor="sf-cats">{t("storefront.show_categories")}</Label></div>
+          <SelectField id="sf-home-page" label={t("storefront.home_page")} value={f.home_page || "none"} onChange={(v) => set({ home_page: v === "none" ? "" : v })}
+            options={[{ value: "none", label: t("storefront.home_page_none") }, ...(pages.data ?? []).map((p) => ({ value: p.slug, label: p.title }))]} />
+          <fieldset className="grid gap-2">
+            <legend className="mb-1 text-sm font-medium">{t("storefront.featured")}</legend>
+            <p className="text-xs text-muted-foreground">{t("storefront.featured_hint")}</p>
+            <div className="grid max-h-48 gap-1 overflow-y-auto rounded-md border p-2 sm:grid-cols-2">
+              {products.map((p) => {
+                const on = (f.featured_ids ?? []).includes(p.id);
+                return (
+                  <label key={p.id} className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-muted">
+                    <input type="checkbox" checked={on} disabled={!on && (f.featured_ids ?? []).length >= 8}
+                      onChange={() => set({ featured_ids: on ? (f.featured_ids ?? []).filter((x) => x !== p.id) : [...(f.featured_ids ?? []), p.id] })} />
+                    <span className="min-w-0 truncate">{p.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
         </CardContent>
       </Card>
       <Card>

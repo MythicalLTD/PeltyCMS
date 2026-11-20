@@ -7,6 +7,7 @@ import { useI18n } from "@/lib/i18n";
 import { connectText } from "@/lib/publicMode";
 import { cn } from "@/lib/utils";
 import type { HeroServer, PublicStorefront } from "@/lib/storefront";
+import { BrowseButton } from "@/components/store/StoreHomeSections";
 
 /** Copy-to-clipboard server address (`connect host:port` for FiveM/RedM). */
 export function ServerAddress({ server, className }: { server: HeroServer; className?: string }) {
@@ -60,16 +61,19 @@ export function StoreHero({ sf, siteName, big }: { sf: PublicStorefront; siteNam
     <section aria-label={title} data-testid="store-hero"
       className={cn("relative isolate overflow-hidden bg-card text-card-foreground", big ? "border-b" : "rounded-xl border shadow-sm")}>
       {sf.hero_image && <>
-        <img src={sf.hero_image} alt="" className="absolute inset-0 -z-10 size-full object-cover" />
-        <div aria-hidden className="absolute inset-0 -z-10 bg-background/80" />
+        <img src={sf.hero_image} alt="" className={cn("absolute inset-0 -z-10 size-full object-cover", big && "store-hero-img")} />
+        <div aria-hidden className={cn("absolute inset-0 -z-10", big ? "bg-gradient-to-b from-background/40 via-background/60 to-background" : "bg-background/80")} />
       </>}
-      <div className={cn("mx-auto flex w-full max-w-6xl flex-col items-center gap-4 px-4 text-center", big ? "py-12 md:py-20" : "py-8")}>
+      {big && <div aria-hidden className="store-hero-fx pointer-events-none absolute inset-0 -z-10" />}
+      <div className={cn("mx-auto flex w-full max-w-6xl flex-col items-center gap-4 px-4 text-center", big ? "store-reveal py-14 md:py-24" : "py-8")}>
+        {big && sf.hero_badge && <Badge className="store-hero-badge rounded-full px-3 py-1 text-xs uppercase tracking-widest" data-testid="hero-badge">{sf.hero_badge}</Badge>}
         {big && (sf.logo_url
           ? <img src={sf.logo_url} alt="" className="h-16 w-auto max-w-[16rem] object-contain md:h-24" />
           : <span className="[&_img]:h-12 [&_svg]:h-12"><Logo /></span>)}
-        <h1 className={cn("font-semibold tracking-tight", big ? "text-3xl md:text-5xl" : "text-2xl md:text-3xl")}>{title}</h1>
+        <h1 className={cn("store-heading store-hero-title font-bold tracking-tight text-balance", big ? "text-4xl md:text-6xl" : "text-2xl md:text-3xl")}>{title}</h1>
         {sf.hero_subtitle && <p className="max-w-2xl text-muted-foreground md:text-lg">{sf.hero_subtitle}</p>}
-        <div className="mt-2 flex w-full flex-col items-stretch justify-center gap-3 sm:w-auto sm:flex-row sm:items-center">
+        <div className="mt-2 flex w-full flex-col flex-wrap items-stretch justify-center gap-3 sm:w-auto sm:flex-row sm:items-center">
+          {big && <BrowseButton />}
           {sf.server && <ServerAddress server={sf.server} />}
           {sf.server && <PlayerCount server={sf.server} />}
           {sf.discord_url && (

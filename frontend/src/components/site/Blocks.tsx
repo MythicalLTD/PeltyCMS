@@ -1,6 +1,11 @@
 import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CaretDownIcon, CheckIcon, CloudIcon, CpuIcon, DatabaseIcon, GameControllerIcon, GlobeIcon, HardDrivesIcon, HeadsetIcon, LifebuoyIcon, LightningIcon, LockIcon, RocketIcon, ShieldCheckIcon, GaugeIcon, UsersIcon, type Icon } from "@phosphor-icons/react";
+import {
+  CaretDownIcon, CarIcon, CheckIcon, CloudIcon, CoinsIcon, CpuIcon, CrownIcon, DatabaseIcon, DiamondIcon, FireIcon, GameControllerIcon, GiftIcon, GlobeIcon,
+  HardDrivesIcon, HeadsetIcon, HeartIcon, HouseIcon, KeyIcon, LifebuoyIcon, LightningIcon, LockIcon, MegaphoneIcon, PackageIcon, QuotesIcon, RocketIcon,
+  ShieldCheckIcon, SparkleIcon, StarIcon, SwordIcon, TrophyIcon, GaugeIcon, UsersIcon, WrenchIcon, type Icon,
+} from "@phosphor-icons/react";
+import { Countdown, useSecondsLeft } from "@/components/store/Countdown";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,6 +21,8 @@ export const BLOCK_ICONS: Record<string, Icon> = {
   Lightning: LightningIcon, ShieldCheck: ShieldCheckIcon, Lifebuoy: LifebuoyIcon, Rocket: RocketIcon, Cloud: CloudIcon, Cpu: CpuIcon,
   Database: DatabaseIcon, GameController: GameControllerIcon, Globe: GlobeIcon, HardDrives: HardDrivesIcon, Headset: HeadsetIcon,
   Lock: LockIcon, Gauge: GaugeIcon, Users: UsersIcon, Check: CheckIcon,
+  Megaphone: MegaphoneIcon, Gift: GiftIcon, Trophy: TrophyIcon, Star: StarIcon, Sword: SwordIcon, Crown: CrownIcon, Car: CarIcon, House: HouseIcon,
+  Heart: HeartIcon, Sparkle: SparkleIcon, Fire: FireIcon, Key: KeyIcon, Coins: CoinsIcon, Diamond: DiamondIcon, Package: PackageIcon, Wrench: WrenchIcon,
 };
 
 function SmartLink({ href, children, variant = "default", size = "lg" }: { href: unknown; children: React.ReactNode; variant?: "default" | "outline" | "ghost"; size?: "default" | "lg" }) {
@@ -36,7 +43,7 @@ function Heading({ title, subtitle }: { title: string; subtitle?: string }) {
   if (!title && !subtitle) return null;
   return (
     <div className="mx-auto mb-8 flex max-w-2xl flex-col gap-2 text-center">
-      {title && <h2 className="text-2xl font-bold tracking-tight text-balance md:text-3xl">{title}</h2>}
+      {title && <h2 className="store-heading text-2xl font-bold tracking-tight text-balance md:text-3xl">{title}</h2>}
       {subtitle && <p className="text-muted-foreground text-pretty">{subtitle}</p>}
     </div>
   );
@@ -162,9 +169,9 @@ function Faq({ p }: { p: Record<string, unknown> }) {
 function Cta({ p }: { p: Record<string, unknown> }) {
   return (
     <Section>
-      <div className="flex flex-col items-start gap-4 rounded-xl border bg-card p-6 shadow-xs md:flex-row md:items-center md:justify-between md:p-10">
+      <div className="store-sale flex flex-col items-start gap-4 rounded-xl border bg-gradient-to-r from-primary/15 via-card to-card p-6 shadow-xs md:flex-row md:items-center md:justify-between md:p-10">
         <div className="flex flex-col gap-1">
-          <p className="text-xl font-bold tracking-tight md:text-2xl">{str(p.title)}</p>
+          <p className="store-heading text-xl font-bold tracking-tight md:text-2xl">{str(p.title)}</p>
           {str(p.text) && <p className="text-muted-foreground">{str(p.text)}</p>}
         </div>
         {str(p.label) && <SmartLink href={p.href}>{str(p.label)}</SmartLink>}
@@ -280,20 +287,39 @@ function mark(v: string): React.ReactNode {
 
 /** Feature matrix: one column per plan, values comma-separated per row. */
 function Comparison({ p }: { p: Record<string, unknown> }) {
+  const { t } = useI18n();
   const plans = cells(p.plans).filter(Boolean);
   const rows = arr<Record<string, unknown>>(p.rows);
+  const hot = Number(p.highlight ?? -1);
+  const prices = cells(p.prices);
+  const links = cells(p.links);
   if (!plans.length) return null;
+  const col = (j: number) => (j === hot ? "bg-primary/10" : undefined);
   return (
     <Section>
       <Heading title={str(p.title)} subtitle={str(p.subtitle)} />
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm" data-testid="comparison">
-          <thead className="bg-muted/50"><tr><th className="p-3 text-left font-medium"><span className="sr-only">{str(p.title)}</span></th>{plans.map((pl) => <th key={pl} className="p-3 text-center font-semibold">{pl}</th>)}</tr></thead>
+          <thead className="bg-muted/50">
+            <tr>
+              <th className="p-3 text-left font-medium"><span className="sr-only">{str(p.title)}</span></th>
+              {plans.map((pl, j) => (
+                <th key={pl} className={cn("p-3 text-center align-bottom font-semibold", col(j))}>
+                  {j === hot && <Badge className="mb-1">{str(p.badge) || t("site.popular")}</Badge>}
+                  <span className="store-heading block">{pl}</span>
+                  {prices[j] && <span className="block text-lg font-black text-primary tabular-nums">{prices[j]}</span>}
+                </th>
+              ))}
+            </tr>
+          </thead>
           <tbody>
             {rows.map((r, i) => {
               const vals = cells(r.values);
-              return <tr key={i} className="border-t"><td className="p-3 font-medium">{str(r.feature)}</td>{plans.map((pl, j) => <td key={pl} className="p-3 text-center tabular-nums">{mark(vals[j] ?? "")}</td>)}</tr>;
+              return <tr key={i} className="border-t"><td className="p-3 font-medium">{str(r.feature)}</td>{plans.map((pl, j) => <td key={pl} className={cn("p-3 text-center tabular-nums", col(j))}>{mark(vals[j] ?? "")}</td>)}</tr>;
             })}
+            {links.some((l) => safeHref(l)) && (
+              <tr className="border-t"><td><span className="sr-only">{str(p.cta_label) || t("site.order_now")}</span></td>{plans.map((pl, j) => <td key={pl} className={cn("p-3 text-center", col(j))}>{safeHref(links[j]) && <SmartLink href={links[j]} size="default" variant={j === hot ? "default" : "outline"}>{str(p.cta_label) || t("site.order_now")}</SmartLink>}</td>)}</tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -301,8 +327,109 @@ function Comparison({ p }: { p: Record<string, unknown> }) {
   );
 }
 
+function initials(name: string) {
+  return name.split(/\s+/).map((w) => w[0] ?? "").join("").slice(0, 2).toUpperCase() || "?";
+}
+
+function Avatar({ src, name, className }: { src: unknown; name: string; className?: string }) {
+  const h = safeHref(src);
+  return h
+    ? <img src={h} alt="" className={cn("rounded-full border object-cover", className)} />
+    : <span aria-hidden className={cn("flex items-center justify-center rounded-full border bg-primary/15 font-bold text-primary", className)}>{initials(name)}</span>;
+}
+
+/** Player reviews / quotes with optional 1-5 stars. */
+function Testimonials({ p }: { p: Record<string, unknown> }) {
+  const items = arr<Record<string, unknown>>(p.items);
+  if (!items.length) return null;
+  return (
+    <Section>
+      <Heading title={str(p.title)} subtitle={str(p.subtitle)} />
+      <ul className="grid gap-4 md:grid-cols-3" data-testid="testimonials">
+        {items.map((it, i) => {
+          const stars = Math.max(0, Math.min(5, Math.round(Number(it.rating ?? 0))));
+          return (
+            <li key={i} className="store-card relative flex flex-col gap-3 rounded-xl border bg-card p-5 text-card-foreground shadow-xs">
+              <QuotesIcon aria-hidden weight="fill" className="absolute right-4 top-4 size-8 text-primary/20" />
+              {stars > 0 && <p className="flex gap-0.5 text-primary" aria-label={`${stars}/5`}>{Array.from({ length: 5 }, (_, j) => <StarIcon key={j} aria-hidden weight={j < stars ? "fill" : "regular"} className="size-4" />)}</p>}
+              <blockquote className="text-sm text-pretty">{str(it.text)}</blockquote>
+              <div className="mt-auto flex items-center gap-3 pt-2">
+                <Avatar src={it.avatar} name={str(it.name)} className="size-9 text-xs" />
+                <div><p className="text-sm font-semibold">{str(it.name)}</p>{str(it.role) && <p className="text-xs text-muted-foreground">{str(it.role)}</p>}</div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </Section>
+  );
+}
+
+/** Staff / team cards. */
+function Staff({ p }: { p: Record<string, unknown> }) {
+  const members = arr<Record<string, unknown>>(p.members);
+  if (!members.length) return null;
+  return (
+    <Section>
+      <Heading title={str(p.title)} subtitle={str(p.subtitle)} />
+      <ul className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4" data-testid="staff">
+        {members.map((m, i) => (
+          <li key={i} className="store-card flex flex-col items-center gap-2 rounded-xl border bg-card p-5 text-center text-card-foreground shadow-xs">
+            <Avatar src={m.avatar} name={str(m.name)} className="size-20 text-xl" />
+            <p className="store-heading font-bold">{str(m.name)}</p>
+            {str(m.role) && <Badge variant="secondary">{str(m.role)}</Badge>}
+            {str(m.text) && <p className="text-xs text-muted-foreground">{str(m.text)}</p>}
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
+/** Numbered "how it works" steps. */
+function Steps({ p }: { p: Record<string, unknown> }) {
+  const items = arr<Record<string, unknown>>(p.items);
+  if (!items.length) return null;
+  return (
+    <Section>
+      <Heading title={str(p.title)} subtitle={str(p.subtitle)} />
+      <ol className={cn("grid gap-4 sm:grid-cols-2", items.length >= 3 && "lg:grid-cols-3", items.length >= 4 && "xl:grid-cols-4")} data-testid="steps">
+        {items.map((it, i) => {
+          const I = BLOCK_ICONS[str(it.icon)];
+          return (
+            <li key={i} className="store-card relative flex flex-col gap-2 overflow-hidden rounded-xl border bg-card p-5 text-card-foreground shadow-xs">
+              <span aria-hidden className="absolute -right-2 -top-4 text-7xl font-black text-primary/10 tabular-nums">{i + 1}</span>
+              <span className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">{I ? <I aria-hidden className="size-5" /> : <b>{i + 1}</b>}</span>
+              <p className="font-semibold">{str(it.title)}</p>
+              {str(it.text) && <p className="text-sm text-muted-foreground">{str(it.text)}</p>}
+            </li>
+          );
+        })}
+      </ol>
+    </Section>
+  );
+}
+
+/** Event / launch countdown; hidden once it is over. */
+function CountdownBlock({ p }: { p: Record<string, unknown> }) {
+  const left = useSecondsLeft(str(p.ends_at));
+  if (left <= 0) return null;
+  return (
+    <Section>
+      <div className="store-sale relative flex flex-col items-center gap-4 overflow-hidden rounded-2xl border border-primary/40 bg-gradient-to-br from-primary/20 via-card to-card p-8 text-center" data-testid="countdown-block">
+        <div aria-hidden className="store-sale-shine pointer-events-none absolute inset-0" />
+        {str(p.title) && <h2 className="store-heading relative text-2xl font-bold md:text-3xl">{str(p.title)}</h2>}
+        {str(p.text) && <p className="relative max-w-xl text-muted-foreground">{str(p.text)}</p>}
+        <Countdown endsAt={str(p.ends_at)} className="relative" />
+        {str(p.label) && <span className="relative"><SmartLink href={p.href}>{str(p.label)}</SmartLink></span>}
+      </div>
+    </Section>
+  );
+}
+
 const RENDER: Record<Block["type"], (x: { p: Record<string, unknown> }) => React.ReactNode> = {
   hero: Hero, features: Features, pricing: Pricing, faq: Faq, cta: Cta, text: Text, image: ImageBlock, stats: Stats, products: Products, comparison: Comparison,
+  testimonials: Testimonials, staff: Staff, steps: Steps, countdown: CountdownBlock,
 };
 
 /** Native renderer for declarative page blocks; unknown types are skipped. */

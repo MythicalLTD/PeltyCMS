@@ -36,6 +36,9 @@ export interface StorefrontConfig {
   announcement?: string; announcement_link?: string; announcement_tone?: AnnouncementTone;
   /** Per-category layout overriding `layout` (group id → list | grid). */
   group_layouts?: Record<string, "list" | "grid">;
+  /** Homepage extras (all optional): label above the hero title, highlighted
+   * packages, category cards and the blocks of a site page below the store. */
+  hero_badge?: string; featured_ids?: string[]; show_categories?: boolean; home_page?: string;
 }
 
 export const TONES = ["info", "sale", "warning"] as const;

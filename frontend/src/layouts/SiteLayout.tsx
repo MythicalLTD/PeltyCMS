@@ -98,6 +98,8 @@ export function SiteLayout() {
     <Button asChild variant="outline" size="sm"><a href={join} rel="noopener noreferrer"><PlugsConnectedIcon aria-hidden />{t("game.connect")}</a></Button>
   ) : null;
   const themed = mode !== "hosting";
+  // Discord band above the footer: the store's invite, else a "discord" site page.
+  const discordHref = safeHref(sf?.discord_url) || ((site?.nav_pages ?? []).some((p) => p.slug === "discord") ? "/page/discord" : null);
   const base = themed ? modeNav(mode, t, { enabled, discord: sf?.discord_url }) : (c?.nav ?? []);
   const links: SiteLink[] = [
     ...base,
@@ -147,6 +149,20 @@ export function SiteLayout() {
       </header>
       <main className="flex-1"><PageErrorBoundary resetKey={loc.pathname}><Outlet /></PageErrorBoundary></main>
       <ChatWidget />
+      {mode === "store" && discordHref && loc.pathname !== "/cart" && loc.pathname !== "/page/discord" && (
+        <section aria-label={t("pub.discord")} className="mx-auto w-full max-w-6xl px-4 pb-10" data-testid="discord-cta">
+          <div className="store-card relative flex flex-col items-center justify-between gap-4 overflow-hidden rounded-2xl border bg-gradient-to-r from-[#5865f2]/30 via-[#5865f2]/10 to-transparent p-6 text-center md:flex-row md:text-left">
+            <div className="flex flex-col items-center gap-4 md:flex-row">
+              <span className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-[#5865f2] text-white shadow-lg"><DiscordLogoIcon aria-hidden weight="fill" className="size-8" /></span>
+              <div>
+                <p className="store-heading text-xl font-bold">{t("store.discord_cta_title")}</p>
+                <p className="text-sm text-muted-foreground">{t("store.discord_cta_text")}</p>
+              </div>
+            </div>
+            <Button asChild size="lg" className="bg-[#5865f2] text-white hover:bg-[#4752c4]"><a href={discordHref} target={isInternal(discordHref) ? undefined : "_blank"} rel="noopener noreferrer"><DiscordLogoIcon aria-hidden />{t("store.discord_join")}</a></Button>
+          </div>
+        </section>
+      )}
       <footer className="border-t bg-muted/30">
         <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-10 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
           <div className="flex flex-col gap-3 sm:col-span-2 md:col-span-3 lg:col-span-1">

@@ -19,7 +19,9 @@ import { PackageRuleBadges, ruleBlocks } from "@/components/store/PackageRuleBad
 import { UpgradeBadge } from "@/components/store/UpgradeBadge";
 import { upgradePrice, useTierUpgrades } from "@/lib/tiers";
 import { StoreAnnouncement } from "@/components/store/StoreAnnouncement";
-import { salePrice, saleFor, timeLeft, useSales } from "@/lib/sales";
+import { salePrice, saleFor, useSales } from "@/lib/sales";
+import { SaleBanner } from "@/components/store/StoreHomeSections";
+import { descriptionSummary } from "@/components/store/RichDescription";
 import { formatMoney } from "@/lib/billing/billing";
 import { useI18n } from "@/lib/i18n";
 import { fromPrice, lineCount, useStoreCart, type StoreLine } from "@/lib/store/storefront";
@@ -88,7 +90,7 @@ export function GameStorePage({ home = false }: { home?: boolean }) {
   const main = (
     <div className="flex min-w-0 flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {home ? <h2 className="text-2xl font-semibold tracking-tight">{t("pub.packages")}</h2> : <h1 className="text-2xl font-semibold tracking-tight">{active?.name ?? t("store.title")}</h1>}
+        {home ? <h2 className="store-heading text-2xl font-bold tracking-tight">{t("pub.packages")}</h2> : <h1 className="text-2xl font-semibold tracking-tight">{active?.name ?? t("store.title")}</h1>}
         <CurrencySelect />
       </div>
 
@@ -103,17 +105,7 @@ export function GameStorePage({ home = false }: { home?: boolean }) {
         </nav>
       )}
 
-      {sales.length > 0 && (
-        <section aria-label={t("sales.discount")} className="flex flex-col gap-1 rounded-xl border border-primary/40 bg-primary/10 px-4 py-3 text-sm">
-          {sales.map((x) => {
-            const left = timeLeft(x.ends_at);
-            return left && (
-              <p key={x.id}><span className="font-semibold">{t("sales.banner", { name: x.name, percent: x.percent })}</span>{" "}
-                <span className="text-muted-foreground">{left.d > 0 ? t("sales.ends_days", { d: left.d, h: left.h }) : t("sales.ends_hours", { h: left.h, m: left.m })}</span></p>
-            );
-          })}
-        </section>
-      )}
+      {sales.length > 0 && !home && <SaleBanner sales={sales} />}
 
       {count > 0 && view?.preview && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3 shadow-sm">
@@ -141,11 +133,11 @@ export function GameStorePage({ home = false }: { home?: boolean }) {
             const out = stockState(p) === "out" || ruleBlocks(rule);
             const n = inCart(p.id);
             return (
-              <li key={p.id} data-testid="package" className={grid ? "relative grid grid-cols-[3.5rem_minmax(0,1fr)] content-start gap-x-3 gap-y-2 overflow-hidden rounded-xl border bg-card p-4 text-card-foreground shadow-sm transition-colors hover:border-primary/60" : "grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-3 py-3 sm:grid-cols-[3.5rem_minmax(0,1fr)_auto] sm:gap-x-4 sm:px-4"}>
+              <li key={p.id} data-testid="package" className={grid ? "store-card relative grid grid-cols-[3.5rem_minmax(0,1fr)] content-start gap-x-3 gap-y-2 overflow-hidden rounded-xl border bg-card p-4 text-card-foreground shadow-sm transition-colors hover:border-primary/60" : "grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-3 py-3 sm:grid-cols-[3.5rem_minmax(0,1fr)_auto] sm:gap-x-4 sm:px-4"}>
                 {grid ? <Cover src={p.image_url} name={p.name} sale={saleFor(sales, p.id, p.group_id)?.percent} /> : <Thumb src={p.image_url} name={p.name} />}
                 <div className={grid ? "col-span-2 min-w-0" : "min-w-0"}>
                   <h2 className="truncate text-base font-medium"><Link to={`/store/p/${p.id}`} className="rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{p.name}</Link></h2>
-                  {p.description && <p className="line-clamp-2 text-sm text-muted-foreground sm:line-clamp-1">{p.description}</p>}
+                  {p.description && <p className="line-clamp-2 text-sm text-muted-foreground sm:line-clamp-1">{descriptionSummary(p.description) || p.description}</p>}
                   <PackageRuleBadges r={rule} />
                   <UpgradeBadge credit={credits[p.id]} currency={currency} />
                 </div>
@@ -171,7 +163,7 @@ export function GameStorePage({ home = false }: { home?: boolean }) {
                   {out ? (
                     <Button variant="outline" disabled className="sm:min-w-32">{ruleBlocks(rule) && rule?.user_left === 0 ? t("rules.limit_reached") : t("stock.out")}</Button>
                   ) : quick && !rule?.pay_what_you_want && rule?.requirement_met !== false ? (
-                    <Button variant="outline" className="sm:min-w-32" disabled={save.isPending} onClick={() => add(p.id, p.name, quick)}>
+                    <Button variant={grid ? "default" : "outline"} className="sm:min-w-32" disabled={save.isPending} onClick={() => add(p.id, p.name, quick)}>
                       {adding === p.id ? t("game.adding") : t("cart.add")}
                     </Button>
                   ) : (
@@ -189,7 +181,7 @@ export function GameStorePage({ home = false }: { home?: boolean }) {
   if (!sf) return main;
   return (
     <div className="flex flex-col gap-6" style={accentStyle(sf.accent)} data-accent={sf.accent}>
-      <StoreAnnouncement sf={sf} />
+      {!home && <StoreAnnouncement sf={sf} />}
       {!home && (sf.hero_title || sf.hero_image || sf.server) && <StoreHero sf={sf} siteName={site.data?.config.site_name ?? ""} />}
       {sidebar ? (
         <div className={sf.sidebar === "left" ? "grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]" : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]"}>

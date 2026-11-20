@@ -62,7 +62,7 @@ const accent = (primary: string, fg: string): Record<string, string> => ({
 /** Game presets: accent colour only (inspired by the games, no official branding). */
 export const THEME_VARS: Record<Exclude<StoreTheme, "panel">, Record<string, string>> = {
   minecraft: accent("#62c94a", "#0b1407"),
-  fivem: accent("#f59e0b", "#1a1003"),
+  fivem: accent("#b15cff", "#12041f"),
   rust: accent("#d9622b", "#1a0b03"),
   // Monochrome: follows the current light/dark surfaces.
   dark: accent("var(--foreground)", "var(--background)"),
@@ -102,6 +102,13 @@ export function usePublicTheme(brand?: unknown) {
   const sf = useStorefront(storeOn && mode === "store");
   const vars = themeVars(mode, sf.data, accentVars);
   const key = JSON.stringify(vars);
+  // Game look (backgrounds, card glow, headings) for the CSS in index.css.
+  const look = mode === "store" && sf.data ? normalizeTheme(sf.data.theme) : "";
+  useEffect(() => {
+    if (typeof document === "undefined" || !look || look === "panel") return;
+    document.documentElement.dataset.storeTheme = look;
+    return () => { delete document.documentElement.dataset.storeTheme; };
+  }, [look]);
   useEffect(() => {
     // Runs again whenever `brand` changes, after applyBrand has reset the colours.
     if (typeof document === "undefined" || brand === null) return;
