@@ -15,6 +15,9 @@ tower-http = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 serde_json = { workspace = true }
+# In-process admin API calls of `pelty-server template apply`.
+tower = { workspace = true }
+uuid = { workspace = true }
 time = { workspace = true }
 pelty-import = { workspace = true }
 pelty-pg = { workspace = true }
@@ -45,7 +48,6 @@ self-replace = "1"
 nix = { version = "0.32", default-features = false, features = ["term"] }
 
 [dev-dependencies]
-uuid = { workspace = true }
 
 [features]
 # Compile the web UI build (frontend/dist) and the default themes into the

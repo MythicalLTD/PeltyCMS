@@ -85,6 +85,13 @@ pelty-server setup --yes --accept-eula \
 # production-style binary: pelty-server setup --yes --accept-eula --local-pg ...
 ```
 
+Ready-made game stores: `pelty-server template apply minecraft|fivem|rust`
+(after the first admin exists) turns a fresh install into a themed store with
+example ranks, kits or VIP packages, delivery commands, a server, rules and a
+Discord page. Game server addresses, RCON passwords and payment gateways are
+left for you to fill in. `pelty-server template list` shows the choices; a
+second apply needs `--force`.
+
 Release archives ship `docs/` next to the binary. See `crates/pelty-docs` / the
 built `/docs` site for install details (`admin-install`).
 

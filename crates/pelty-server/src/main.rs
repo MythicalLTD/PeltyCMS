@@ -62,6 +62,7 @@ mod eula;
 mod local_pg;
 mod logging;
 mod setup;
+mod templates;
 mod update;
 mod whmcs_import;
 
@@ -412,9 +413,10 @@ async fn run(args: Vec<String>, console_flag: Option<bool>, plan: Option<setup::
         ["cron", "run", rest @ ..] => cron_run(cfg, rest).await,
         ["mail", "pipe", "--department", department] => pipe_email(cfg, department).await,
         ["update", rest @ ..] => update_cmd(&cfg, rest).await,
+        ["template", rest @ ..] => template_cmd(cfg, rest).await,
         ["import", "whmcs", rest @ ..] => import_whmcs(&cfg, rest).await,
         ["import", src @ ("blesta" | "paymenter"), rest @ ..] => import_json(&cfg, src, rest).await,
-        _ => Err("usage: pelty-server [--version | serve [--console|--no-console] [--no-setup|--yes] | setup [--yes] [--local-pg] | pg start|stop|status|download | migrate | update [--check] [--version x.y.z] [--yes] [--no-backup] | admin create <email> [--name <name>] | mail pipe --department <uuid> | cron run [<task> | --schedule-only] | import whmcs --file <whmcs.sql> | --dsn <mysql-url> [--cc-hash <hash>] [--dry-run] | import blesta|paymenter --file <export.json> [--dry-run]]".into()),
+        _ => Err("usage: pelty-server [--version | serve [--console|--no-console] [--no-setup|--yes] | setup [--yes] [--local-pg] | pg start|stop|status|download | migrate | template list | template apply <minecraft|fivem|rust|blank> [--name <site name>] [--force] | update [--check] [--version x.y.z] [--yes] [--no-backup] | admin create <email> [--name <name>] | mail pipe --department <uuid> | cron run [<task> | --schedule-only] | import whmcs --file <whmcs.sql> | --dsn <mysql-url> [--cc-hash <hash>] [--dry-run] | import blesta|paymenter --file <export.json> [--dry-run]]".into()),
     };
     match res {
         Ok(()) => ExitCode::SUCCESS,
@@ -427,6 +429,15 @@ async fn run(args: Vec<String>, console_flag: Option<bool>, plan: Option<setup::
 }
 
 type BoxErr = Box<dyn std::error::Error + Send + Sync>;
+
+/// `pelty-server template ...`: ready-made store (see `templates.rs`).
+async fn template_cmd(cfg: Config, rest: &[&str]) -> Result<(), BoxErr> {
+    if rest.first() == Some(&"list") {
+        return templates::cmd(cfg, None, rest).await;
+    }
+    let pool = setup_db(&cfg).await?;
+    templates::cmd(cfg, Some(pool), rest).await
+}
 
 /// `pelty-server update ...`: the database is only needed for the saved feed
 /// URL and the pre-update backup, so a check works without one.

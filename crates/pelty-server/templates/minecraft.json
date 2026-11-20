@@ -1,0 +1,126 @@
+{
+  "id": "minecraft",
+  "site_name": "Minecraft Network",
+  "steps": [
+    {"put": "/api/v1/admin/modules/game_profiles", "body": {"enabled": true}},
+    {"put": "/api/v1/admin/modules/game_delivery", "body": {"enabled": true}},
+    {"put": "/api/v1/admin/modules/server_community", "body": {"enabled": true, "settings": {"goal_amount": "150", "goal_currency": "${currency}", "goal_label": "Monthly server costs"}}},
+    {"put": "/api/v1/admin/modules/gaming_storefront", "body": {"enabled": true}},
+    {"put": "/api/v1/admin/modules/guest_checkout", "body": {"enabled": true}, "optional": true},
+    {"put": "/api/v1/admin/modules/timed_sales", "body": {"enabled": true}, "optional": true},
+    {"put": "/api/v1/admin/modules/creator_codes", "body": {"enabled": true}, "optional": true},
+
+    {"post": "/api/v1/admin/catalog/groups", "body": {"name": "Ranks", "slug": "ranks", "sort_order": 1}, "save": "g_ranks"},
+    {"post": "/api/v1/admin/catalog/groups", "body": {"name": "Subscriptions", "slug": "subscriptions", "sort_order": 2}, "save": "g_subs"},
+    {"post": "/api/v1/admin/catalog/groups", "body": {"name": "Crate keys", "slug": "crate-keys", "sort_order": 3}, "save": "g_keys"},
+    {"post": "/api/v1/admin/catalog/groups", "body": {"name": "Coins", "slug": "coins", "sort_order": 4}, "save": "g_coins"},
+
+    {"package": {"group_id": "${g_ranks}", "slug": "vip", "name": "VIP", "sort_order": 1, "image_url": "/templates/minecraft/vip.svg",
+      "description": "Green name tag, /kit vip every day, 2 homes and access to the VIP lounge.",
+      "prices": [{"currency": "${currency}", "cycle": "one_time", "amount": "4.99"}],
+      "preset": "minecraft_java",
+      "commands": [
+        {"trigger": "purchase", "command": "lp user {username} parent add vip", "require_online": false},
+        {"trigger": "purchase", "command": "broadcast {username} just became VIP! Thank you for supporting the server.", "require_online": false},
+        {"trigger": "refund", "command": "lp user {username} parent remove vip"},
+        {"trigger": "chargeback", "command": "lp user {username} parent remove vip"}
+      ]}},
+    {"package": {"group_id": "${g_ranks}", "slug": "mvp", "name": "MVP", "sort_order": 2, "image_url": "/templates/minecraft/mvp.svg",
+      "description": "Everything in VIP, plus /fly in the lobby, /nick, 5 homes and a monthly crate key.",
+      "prices": [{"currency": "${currency}", "cycle": "one_time", "amount": "9.99"}],
+      "preset": "minecraft_java",
+      "commands": [
+        {"trigger": "purchase", "command": "lp user {username} parent add mvp"},
+        {"trigger": "purchase", "command": "broadcast {username} just became MVP! Thank you for supporting the server."},
+        {"trigger": "refund", "command": "lp user {username} parent remove mvp"},
+        {"trigger": "chargeback", "command": "lp user {username} parent remove mvp"}
+      ]}},
+    {"package": {"group_id": "${g_ranks}", "slug": "legend", "name": "Legend", "sort_order": 3, "image_url": "/templates/minecraft/legend.svg",
+      "description": "The top rank: every perk, unlimited homes, a custom chat colour and a pet.",
+      "prices": [{"currency": "${currency}", "cycle": "one_time", "amount": "19.99"}],
+      "preset": "minecraft_java",
+      "commands": [
+        {"trigger": "purchase", "command": "lp user {username} parent add legend"},
+        {"trigger": "purchase", "command": "broadcast {username} is now a LEGEND! Thank you for supporting the server."},
+        {"trigger": "refund", "command": "lp user {username} parent remove legend"},
+        {"trigger": "chargeback", "command": "lp user {username} parent remove legend"}
+      ]}},
+    {"package": {"group_id": "${g_subs}", "slug": "vip-plus-monthly", "name": "VIP+ (monthly)", "sort_order": 1, "image_url": "/templates/minecraft/vip-plus.svg",
+      "description": "All VIP perks plus double vote rewards, renewed every month. Cancel any time.",
+      "prices": [{"currency": "${currency}", "cycle": "monthly", "amount": "2.99"}],
+      "preset": "minecraft_java",
+      "commands": [
+        {"trigger": "purchase", "command": "lp user {username} parent add vipplus"},
+        {"trigger": "renewal", "command": "tell {username} Thanks for renewing VIP+!", "require_online": true},
+        {"trigger": "expiry", "command": "lp user {username} parent remove vipplus"},
+        {"trigger": "refund", "command": "lp user {username} parent remove vipplus"},
+        {"trigger": "chargeback", "command": "lp user {username} parent remove vipplus"}
+      ]}},
+    {"package": {"group_id": "${g_keys}", "slug": "vote-keys-5", "name": "5 Vote keys", "sort_order": 1, "image_url": "/templates/minecraft/key-vote.svg",
+      "description": "Five keys for the vote crate at spawn.",
+      "prices": [{"currency": "${currency}", "cycle": "one_time", "amount": "1.99"}],
+      "preset": "minecraft_java",
+      "commands": [{"trigger": "purchase", "command": "crates key give {username} vote 5", "require_online": true}]}},
+    {"package": {"group_id": "${g_keys}", "slug": "legendary-keys-3", "name": "3 Legendary keys", "sort_order": 2, "image_url": "/templates/minecraft/key-legendary.svg",
+      "description": "Three keys for the legendary crate: enchanted gear, spawners and rare cosmetics.",
+      "prices": [{"currency": "${currency}", "cycle": "one_time", "amount": "4.99"}],
+      "preset": "minecraft_java",
+      "commands": [{"trigger": "purchase", "command": "crates key give {username} legendary 3", "require_online": true}]}},
+    {"package": {"group_id": "${g_coins}", "slug": "coins-1000", "name": "1,000 Coins", "sort_order": 1, "image_url": "/templates/minecraft/coins.svg",
+      "description": "In-game money for the shop, auctions and plots.",
+      "prices": [{"currency": "${currency}", "cycle": "one_time", "amount": "2.49"}],
+      "preset": "minecraft_java",
+      "commands": [{"trigger": "purchase", "command": "eco give {username} 1000"}]}},
+    {"package": {"group_id": "${g_coins}", "slug": "coins-5000", "name": "5,000 Coins", "sort_order": 2, "image_url": "/templates/minecraft/coins-big.svg",
+      "description": "A big pouch of in-game money, 20% more than five small packs.",
+      "prices": [{"currency": "${currency}", "cycle": "one_time", "amount": "9.99"}],
+      "preset": "minecraft_java",
+      "commands": [{"trigger": "purchase", "command": "eco give {username} 5000"}]}},
+
+    {"post": "/api/v1/admin/game/servers", "save": "server", "body": {
+      "game": "minecraft_java", "name": "Survival", "slug": "survival", "port": 25565, "transport": "none", "guest_checkout": true,
+      "description": "Our main survival server. Add its address and RCON password under Admin, Game servers, to deliver purchases automatically."}},
+    {"put": "/api/v1/admin/game/servers/${server}/products", "body": {"product_ids": ["${p_vip}", "${p_mvp}", "${p_legend}", "${p_vip_plus_monthly}", "${p_vote_keys_5}", "${p_legendary_keys_3}", "${p_coins_1000}", "${p_coins_5000}"]}},
+
+    {"merge": "/api/v1/admin/storefront", "body": {
+      "theme": "minecraft", "accent": "emerald", "layout": "grid", "sidebar": "right",
+      "hero_title": "Support ${site_name}",
+      "hero_subtitle": "Ranks, crate keys and coins delivered to your account in seconds. Every purchase keeps the server online.",
+      "hero_image": "/templates/minecraft/hero.svg",
+      "announcement": "Grand opening! New ranks are live in the store.", "announcement_tone": "sale",
+      "widgets": [
+        {"type": "server_status"},
+        {"type": "goal"},
+        {"type": "top_customer", "period": "month", "show_amount": false},
+        {"type": "recent_payments", "limit": 5},
+        {"type": "text", "title": "How it works", "body": "1. Pick a package.\n2. Enter your Minecraft username.\n3. Pay, and the perks arrive in game automatically."}
+      ]}},
+
+    {"post": "/api/v1/admin/site/pages", "optional": true, "body": {"slug": "rules", "title": "Server rules", "description": "Rules for everyone playing on the server.", "published": true, "show_in_nav": true, "sort_order": 10,
+      "blocks": [
+        {"type": "text", "props": {"title": "Server rules", "body": "1. Be respectful. No harassment, hate speech or spam.\n2. No cheating, hacked clients, x-ray or duplication glitches.\n3. No griefing or stealing outside of PvP areas.\n4. Keep chat in English in public channels.\n5. Do not advertise other servers.\n6. Staff decisions are final. Appeals go through a ticket.\n\nBreaking the rules can lead to a mute, kick or ban without a refund of purchased perks."}}
+      ]}},
+    {"post": "/api/v1/admin/site/pages", "optional": true, "body": {"slug": "store-terms", "title": "Store terms", "description": "What you get when you buy from the store.", "published": true, "show_in_nav": false, "sort_order": 11,
+      "blocks": [
+        {"type": "text", "props": {"title": "Store terms", "body": "Purchases are virtual perks for this Minecraft server and have no cash value. They are linked to the username you enter at checkout, so check it before you pay.\n\nRanks stay on your account for as long as the server runs them. Monthly subscriptions renew until you cancel in your account. If you are banned for breaking the server rules, purchased perks are not refunded.\n\nThis server is not affiliated with or endorsed by Mojang or Microsoft.\n\nQuestions? Open a support ticket and we will help."}}
+      ]}},
+    {"post": "/api/v1/admin/site/pages", "optional": true, "body": {"slug": "discord", "title": "Join our Discord", "description": "Chat with the community and the staff team.", "published": true, "show_in_nav": true, "sort_order": 12,
+      "blocks": [
+        {"type": "hero", "props": {"eyebrow": "Community", "title": "Join our Discord", "subtitle": "Events, giveaways, support and the latest news from the server.", "primary_label": "Visit the store", "primary_href": "/store", "secondary_label": "Server rules", "secondary_href": "/page/rules"}},
+        {"type": "features", "props": {"title": "What you will find", "columns": 3, "items": [
+          {"icon": "Megaphone", "title": "Announcements", "text": "Updates, maintenance and new seasons first."},
+          {"icon": "Gift", "title": "Giveaways", "text": "Weekly giveaways for ranks and crate keys."},
+          {"icon": "Lifebuoy", "title": "Support", "text": "Ask the staff team for help any time."}
+        ]}}
+      ]}},
+
+    {"merge": "/api/v1/admin/site", "pointer": "/config", "body": {
+      "site_name": "${site_name}", "tagline": "Ranks, keys and coins for our Minecraft server.",
+      "store_mode": "game", "public_mode": "store", "default_mode": "dark", "show_store_in_nav": true,
+      "nav": [{"label": "Store", "href": "/store"}, {"label": "Rules", "href": "/page/rules"}, {"label": "Discord", "href": "/page/discord"}, {"label": "Support", "href": "/tickets"}],
+      "footer_columns": [
+        {"title": "Community", "links": [{"label": "Server rules", "href": "/page/rules"}, {"label": "Discord", "href": "/page/discord"}, {"label": "Store terms", "href": "/page/store-terms"}]}
+      ],
+      "footer_text": "Not affiliated with Mojang or Microsoft."}}
+  ]
+}
