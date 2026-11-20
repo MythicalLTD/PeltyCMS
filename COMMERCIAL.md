@@ -19,7 +19,7 @@ https://www.mythicalsystems.org/peltycms-premium).
 | Priority support | Community | Yes | As agreed |
 | Higher limits on MythicalSystems services | No | Yes | As agreed |
 | Keep modifications closed while serving users over a network | No (AGPL section 13) | No (AGPL section 13) | Yes |
-| Price | Free | Monthly, per installation | On request |
+| Price | Free | Monthly or yearly, per installation | On request |
 
 There is **no client cap** and **no feature lock** in the open source edition.
 
@@ -37,9 +37,10 @@ the theme SDK, the examples and the bundled themes are MIT licensed.
 
 ## PeltyCMS Premium
 
-Premium is an optional monthly subscription **per installation**, sold through
+Premium is an optional subscription **per installation**, sold through
 the MyMythical platform (https://my.mythicalsystems.org). The default price is
-EUR 9 per installation per month plus VAT/taxes (added at checkout); the
+EUR 9 per installation per month, or EUR 90 per installation per year (12
+months for the price of 10), plus VAT/taxes (added at checkout); the
 current price is shown on the Premium page in MyMythical.
 
 Premium includes:

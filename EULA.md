@@ -1,6 +1,6 @@
 # PeltyCMS notice and Premium terms
 
-**Version 2.2 · Effective date: 2026-11-20**
+**Version 2.3 · Effective date: 2026-11-20**
 **Licensor and seller:** MythicalSystems Studios LLC, a Delaware limited
 liability company ("we", "us")
 **Product:** PeltyCMS ("Software")
@@ -69,12 +69,15 @@ You order by choosing the number of installations (for Serverless: the server si
 
 Prices are shown per installation (for Serverless: per server) per billing period. Serverless servers in some regions cost more; the surcharge is shown before you order. Prices are shown before tax. The VAT or other sales tax due in your country is added on top and shown, with the total you pay, at checkout before you pay (by Tebex when Tebex is the merchant of record). Businesses in the EU with a valid VAT ID may be billed without VAT under the reverse-charge rules. Payment is due in advance for each billing period.
 
+A Premium subscription paid by card or another recurring payment method is billed **monthly** or **yearly**, as you choose before you order. The yearly plan is charged once a year in advance and costs less than twelve monthly payments; the yearly price and the saving are shown before you order. Serverless hosting, Premium added to a Serverless server and MythicCoins purchases are billed monthly.
+
 **Hosting is not refundable.** A Serverless plan reserves a dedicated virtual server for you. We rent that server from our infrastructure provider and pay for it in advance as soon as it is created, whether or not you use it. For this reason, payments for Serverless hosting (including region surcharges and plan upgrades) are final: we do not refund them, in whole or in part, for cancellation, unused time, a downgrade, a move to another region, deleting the server, suspension for a breach of these terms, or a change of mind. The only exceptions are the cases where these Premium Terms promise a refund (we end the plan without your fault, or a change under section B12) and refunds that mandatory consumer law requires (section B7).
 
 ### B6. Term, renewal and cancellation
 
-- A card or other recurring subscription renews automatically each month until cancelled. A MythicCoins purchase covers the number of days shown at checkout and does not renew automatically. New Serverless servers are paid by card or another recurring payment method; MythicCoins can still be used to renew existing ones.
-- You can cancel at any time on your team's Premium page or in its billing settings, with effect at the end of the current billing period. There is no minimum term and no cancellation fee. Your statutory rights (for example withdrawal under section B7 or termination for good cause) stay unaffected.
+- A card or other recurring subscription renews automatically at the end of each billing period (each month, or each year for the yearly Premium plan) until cancelled. A MythicCoins purchase covers the number of days shown at checkout and does not renew automatically. New Serverless servers are paid by card or another recurring payment method; MythicCoins can still be used to renew existing ones.
+- You can cancel at any time on your team's Premium page or in its billing settings, with effect at the end of the current billing period (for the yearly plan, at the end of the paid year). There is no minimum term beyond the period you paid for and no cancellation fee.
+- Consumers: once a yearly Premium subscription has renewed automatically, you may also end it at any time with one month's notice through a support ticket. We then refund the prepaid amount for the full months left after the notice period. Your statutory rights (for example withdrawal under section B7 or termination for good cause) stay unaffected.
 - After the subscription ends, Premium features switch off at the next license check. Your installation, your data and the free PeltyCMS features keep working.
 - We may end the subscription with 30 days' notice by email, or immediately for good cause (for example non-payment, fraud or abuse). If we end it without your fault, we refund any prepaid amount for the unused period.
 
