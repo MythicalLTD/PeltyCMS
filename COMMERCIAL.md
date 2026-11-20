@@ -73,21 +73,22 @@ any time, with effect at the end of the paid period.
 ## PeltyCMS Serverless (managed hosting)
 
 Don't want to run a server? **Serverless** is PeltyCMS hosted by us: your own
-virtual server (Akamai/Linode) in the region you pick, the official PeltyCMS
-Docker image, PostgreSQL, automatic HTTPS for your domain, nightly snapshots
-of your database and uploads and **Premium included**. Ordered and billed
-monthly through MyMythical (team → PeltyCMS Serverless).
+virtual server in the region you pick, the official PeltyCMS Docker image,
+PostgreSQL, automatic HTTPS for your domain, free nightly backups of your
+database and uploads kept on the server (manual backups, restore and download
+from the dashboard), region moves, reverse DNS and updates. Premium can be
+added for EUR 5 per month. Ordered and billed monthly through MyMythical
+(team → Tenants).
 
-| Plan | Memory / CPU / disk / traffic | Price per month (plus VAT/taxes) |
+| Plan | Memory / CPU / disk / traffic | Price per month |
 |---|---|---|
-| Serverless 1 GB | 1 GB / 1 vCPU / 25 GB / 1 TB | EUR 8.99 |
-| Serverless 2 GB | 2 GB / 1 vCPU / 50 GB / 2 TB | EUR 18.99 |
-| Serverless 4 GB | 4 GB / 2 vCPU / 80 GB / 4 TB | EUR 37.99 |
+| Serverless 1 GB | 1 GB / 1 vCPU / 25 GB / 1 TB | EUR 9.99 |
+| Serverless 2 GB | 2 GB / 1 vCPU / 50 GB / 2 TB | EUR 19.99 |
+| Serverless 4 GB | 4 GB / 2 vCPU / 80 GB / 4 TB | EUR 39.99 |
 
-Checkout runs on Tebex, which adds the VAT or sales tax of your country on
-top; Sao Paulo and Jakarta cost 40% and 20% more. A free trial on the 1 GB
-plan may be offered (one per team). Hosting is best effort with no SLA; terms
-are in [EULA.md](./EULA.md) Part B, section B9.
+VAT or sales tax of your country is added at checkout; Sao Paulo and Jakarta
+cost 40% and 20% more. Hosting is not refundable and is best effort with no
+SLA; terms are in [EULA.md](./EULA.md) Part B, sections B5 and B9.
 
 ## Commercial license
 
