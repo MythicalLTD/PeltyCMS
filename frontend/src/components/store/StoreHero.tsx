@@ -42,7 +42,7 @@ export function PlayerCount({ server }: { server: HeroServer }) {
   if (!st) return null;
   return (
     <Badge variant="outline" className="h-10 gap-2 bg-background px-3 text-sm font-normal" data-testid="player-count">
-      <span aria-hidden className={cn("size-2 rounded-full", st.online ? "bg-success motion-safe:animate-pulse" : "bg-destructive")} />
+      <span aria-hidden className={cn("size-2 rounded-full", st.online ? "bg-success" : "bg-destructive")} />
       <UsersThreeIcon aria-hidden className="text-muted-foreground" />
       {st.online ? <span className="tabular-nums"><b>{st.players}</b>/{st.max_players} {t("pub.players_online")}</span> : <span>{t("community.offline")}</span>}
     </Badge>

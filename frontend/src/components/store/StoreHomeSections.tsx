@@ -39,11 +39,10 @@ export function SaleBanner({ sales }: { sales: PublicSale[] }) {
   if (!top) return null;
   return (
     <section aria-label={t("sales.discount")} data-testid="sale-banner"
-      className="store-sale store-reveal relative overflow-hidden rounded-2xl border border-primary/40 bg-gradient-to-r from-primary/25 via-primary/10 to-transparent p-4 md:p-6">
-      <div aria-hidden className="store-sale-shine pointer-events-none absolute inset-0" />
+      className="store-sale store-reveal relative overflow-hidden rounded-2xl border border-primary/40 bg-card p-4 md:p-6">
       <div className="relative flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div className="flex items-center gap-4">
-          <span className="store-sale-badge flex size-16 shrink-0 flex-col items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg">
+          <span className="store-sale-badge flex size-16 shrink-0 flex-col items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <span className="text-2xl font-black leading-none">−{top.percent}%</span>
           </span>
           <div>
@@ -124,8 +123,8 @@ export function CategoryCards() {
         {groups.map(({ g, items, art }) => (
           <li key={g.id}>
             <Link to={`/store/${g.slug}`} className="store-card group relative flex aspect-[4/3] flex-col justify-end overflow-hidden rounded-xl border bg-card p-3 text-card-foreground shadow-sm sm:aspect-video">
-              <span className="absolute inset-0 -z-0"><ProductArt src={art} name={g.name} imgClassName="origin-[50%_35%] scale-[1.3] transition-transform duration-500 group-hover:scale-[1.4]" /></span>
-              <span aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/50 to-transparent" />
+              <span className="absolute inset-x-0 top-0 -z-0 h-[145%]"><ProductArt src={art} name={g.name} imgClassName="object-cover" /></span>
+              <span aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
               <span className="relative flex items-end justify-between gap-2 text-white">
                 <span>
                   <span className="store-heading block text-base font-bold md:text-lg">{g.name}</span>
@@ -155,7 +154,7 @@ export function HomePageBlocks({ slug }: { slug: string }) {
 /** "Browse the store" CTA for the hero. */
 export function BrowseButton() {
   const { t } = useI18n();
-  return <Button asChild size="lg" className="store-cta shadow-lg"><a href="#packages">{t("store.browse_store")}<ArrowRightIcon aria-hidden /></a></Button>;
+  return <Button asChild size="lg" className="store-cta"><a href="#packages">{t("store.browse_store")}<ArrowRightIcon aria-hidden /></a></Button>;
 }
 
 export type { PublicStorefront };

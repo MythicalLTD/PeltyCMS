@@ -30,7 +30,7 @@ export function Countdown({ endsAt, className, size = "md" }: { endsAt: string; 
   return (
     <div className={cn("flex items-center gap-1.5", className)} role="timer" aria-live="off" data-testid="countdown">
       {parts.map(([n, label]) => (
-        <span key={label} className={cn("store-countdown-cell flex flex-col items-center rounded-md border bg-background/70 tabular-nums backdrop-blur", size === "sm" ? "min-w-10 px-1.5 py-1" : "min-w-14 px-2 py-1.5")}>
+        <span key={label} className={cn("store-countdown-cell flex flex-col items-center rounded-md border bg-background tabular-nums", size === "sm" ? "min-w-10 px-1.5 py-1" : "min-w-14 px-2 py-1.5")}>
           <b className={size === "sm" ? "text-sm leading-none" : "text-xl leading-none"}>{String(n).padStart(2, "0")}</b>
           <span className="mt-0.5 text-[0.625rem] uppercase tracking-wider text-muted-foreground">{label}</span>
         </span>

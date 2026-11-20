@@ -169,7 +169,7 @@ function Faq({ p }: { p: Record<string, unknown> }) {
 function Cta({ p }: { p: Record<string, unknown> }) {
   return (
     <Section>
-      <div className="store-sale flex flex-col items-start gap-4 rounded-xl border bg-gradient-to-r from-primary/15 via-card to-card p-6 shadow-xs md:flex-row md:items-center md:justify-between md:p-10">
+      <div className="store-sale flex flex-col items-start gap-4 rounded-xl border bg-card p-6 shadow-xs md:flex-row md:items-center md:justify-between md:p-10">
         <div className="flex flex-col gap-1">
           <p className="store-heading text-xl font-bold tracking-tight md:text-2xl">{str(p.title)}</p>
           {str(p.text) && <p className="text-muted-foreground">{str(p.text)}</p>}
@@ -416,8 +416,7 @@ function CountdownBlock({ p }: { p: Record<string, unknown> }) {
   if (left <= 0) return null;
   return (
     <Section>
-      <div className="store-sale relative flex flex-col items-center gap-4 overflow-hidden rounded-2xl border border-primary/40 bg-gradient-to-br from-primary/20 via-card to-card p-8 text-center" data-testid="countdown-block">
-        <div aria-hidden className="store-sale-shine pointer-events-none absolute inset-0" />
+      <div className="store-sale relative flex flex-col items-center gap-4 overflow-hidden rounded-2xl border border-primary/40 bg-card p-8 text-center" data-testid="countdown-block">
         {str(p.title) && <h2 className="store-heading relative text-2xl font-bold md:text-3xl">{str(p.title)}</h2>}
         {str(p.text) && <p className="relative max-w-xl text-muted-foreground">{str(p.text)}</p>}
         <Countdown endsAt={str(p.ends_at)} className="relative" />

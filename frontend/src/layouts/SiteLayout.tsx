@@ -151,9 +151,9 @@ export function SiteLayout() {
       <ChatWidget />
       {mode === "store" && discordHref && loc.pathname !== "/cart" && loc.pathname !== "/page/discord" && (
         <section aria-label={t("pub.discord")} className="mx-auto w-full max-w-6xl px-4 pb-10" data-testid="discord-cta">
-          <div className="store-card relative flex flex-col items-center justify-between gap-4 overflow-hidden rounded-2xl border bg-gradient-to-r from-[#5865f2]/30 via-[#5865f2]/10 to-transparent p-6 text-center md:flex-row md:text-left">
+          <div className="store-card relative flex flex-col items-center justify-between gap-4 overflow-hidden rounded-2xl border bg-card p-6 text-center md:flex-row md:text-left">
             <div className="flex flex-col items-center gap-4 md:flex-row">
-              <span className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-[#5865f2] text-white shadow-lg"><DiscordLogoIcon aria-hidden weight="fill" className="size-8" /></span>
+              <span className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-[#5865f2] text-white"><DiscordLogoIcon aria-hidden weight="fill" className="size-8" /></span>
               <div>
                 <p className="store-heading text-xl font-bold">{t("store.discord_cta_title")}</p>
                 <p className="text-sm text-muted-foreground">{t("store.discord_cta_text")}</p>
