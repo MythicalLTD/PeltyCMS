@@ -20,8 +20,8 @@ serde_json = { workspace = true }
 semver = "1"
 thiserror = { workspace = true }
 tracing = { workspace = true }
-wasmtime = { version = "50", default-features = false, features = ["runtime", "cranelift", "component-model", "std", "cache"] }
-wasmtime-wasi = { version = "50", default-features = false }
+wasmtime = { version = "51", default-features = false, features = ["runtime", "cranelift", "component-model", "std", "cache"] }
+wasmtime-wasi = { version = "51", default-features = false }
 
 
 [dev-dependencies]

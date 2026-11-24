@@ -326,13 +326,17 @@ mod resource_tests {
         for _ in 0..2 {
             let mut store = Store::new(&engine, store_limits(sandbox, 4));
             store.limiter(|limits| limits);
-            let memory =
-                wasmtime::Memory::new(&mut store, wasmtime::MemoryType::new(1, None)).unwrap();
+            let memory = wasmtime::Memory::new(
+                &mut store,
+                wasmtime::MemoryType::new(1, None).expect("valid memory type"),
+            )
+            .unwrap();
             assert!(memory.grow(&mut store, 1).is_err());
             assert_eq!(memory.size(&store), 1);
             let table = wasmtime::Table::new(
                 &mut store,
-                wasmtime::TableType::new(wasmtime::RefType::FUNCREF, 0, None),
+                wasmtime::TableType::new(wasmtime::RefType::FUNCREF, 0, None)
+                    .expect("valid table type"),
                 wasmtime::Ref::Func(None),
             )
             .unwrap();

@@ -11,7 +11,7 @@
     "build": "pnpm --dir ../../../frontend exec tsc -p \"$PWD\" && cp dist/index.js ../../themes/minimal/dist/pelty-sdk.js",
     "test": "pnpm --dir ../../../frontend exec vitest run --root \"$PWD\""
   },
-  "packageManager": "pnpm@12.16.1",
+  "packageManager": "pnpm@12.23.0",
   "engines": {
     "node": ">=20",
     "pnpm": ">=10"

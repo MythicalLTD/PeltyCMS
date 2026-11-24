@@ -51,7 +51,7 @@ aws-lc-rs = "1"
 pdf-writer = "0.15"
 ttf-parser = "0.25"
 subsetter = "0.2.6"
-croner = "4.0.3"
+croner = "5"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 maxminddb = "0.33"
 zip = { workspace = true }
